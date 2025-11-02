@@ -21,6 +21,11 @@ from binance.ws.streams import (
     BinanceSocketType,  # noqa
 )
 
+from binance.ws.orderbook_manager import (
+    OrderBookManager,  # noqa
+    create_orderbook_manager,  # noqa
+)
+
 from binance.ws.keepalive_websocket import KeepAliveWebsocket  # noqa
 
 from binance.ws.reconnecting_websocket import ReconnectingWebsocket  # noqa
