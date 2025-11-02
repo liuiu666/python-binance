@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Callable, Any, Union
 from binance.async_client import AsyncClient
 from binance.ws.streams import BinanceSocketManager
 from binance.ws.reconnecting_websocket import ReconnectingWebsocket
+from binance.ws.constants import WSListenerState
 from binance.enums import FuturesType
 
 
@@ -67,6 +68,7 @@ class OrderBookManager:
         self.start_time = None
         self.last_refresh_time = None
         self.is_running = False
+        self.is_paused = False  # 交易暂停标记：数据异常或连接异常时置为 True
         
         # 抑制deprecation警告
         warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -94,8 +96,6 @@ class OrderBookManager:
             # 创建socket管理器
             self.bm = BinanceSocketManager(self.client)
             
-            # 测试期货API连接
-            server_time = await self.client.futures_time()
             
             return True
             
@@ -406,11 +406,47 @@ class OrderBookManager:
                 
                 while self.is_running:
                     try:
+                        # 看门狗：检查数据延迟与WS状态
+                        now = time.time()
+                        ts = self.orderbook.get('timestamp')
+                        stale = (ts is None) or (now - ts > 0.5)
+                        ws_state = getattr(ws, 'ws_state', None)
+                        if stale or (ws_state is not None and ws_state != WSListenerState.STREAMING):
+                            if not self.is_paused:
+                                self.is_paused = True
+                                print("⚠️ 数据异常：延迟>500ms或WS非STREAMING，暂停交易并尝试重连…")
+                            # 触发重连（去重：仅当非正在重连时）
+                            if ws_state != WSListenerState.RECONNECTING:
+                                try:
+                                    ws._reconnect()  # 设置为RECONNECTING状态
+                                except Exception:
+                                    pass
+                            # 等待重连完成或退出
+                            try:
+                                await ws._wait_for_reconnect()
+                            except Exception:
+                                pass
+                            # 尝试下一轮循环（避免继续使用陈旧连接）
+                            continue
+
                         # 接收WebSocket消息
                         msg = await ws.recv()
                         
+                        # 检测错误消息并重连
+                        if isinstance(msg, dict) and msg.get('e') == 'error':
+                            self.is_paused = True
+                            print(f"⚠️ WebSocket错误：{msg.get('type')}({msg.get('m')})，暂停交易并尝试重连…")
+                            try:
+                                ws._reconnect()
+                                await ws._wait_for_reconnect()
+                            except Exception:
+                                pass
+                            continue
+
                         # 处理深度更新
                         self.process_depth_update(msg)
+                        # 收到有效更新后解除暂停
+                        self.is_paused = False
                         
                         # 检查运行时长
                         if end_time and time.time() >= end_time:
@@ -418,14 +454,31 @@ class OrderBookManager:
                             
                     except asyncio.TimeoutError:
                         # 超时继续循环
+                        # 在超时场景下也执行延迟检查
+                        now = time.time()
+                        ts = self.orderbook.get('timestamp')
+                        if (ts is None) or (now - ts > 0.5):
+                            self.is_paused = True
+                            print("⚠️ 数据延迟超过500ms（超时触发），暂停交易并尝试重连…")
+                            try:
+                                ws._reconnect()
+                                await ws._wait_for_reconnect()
+                            except Exception:
+                                pass
                         continue
                     except Exception as e:
                         try:
                             cur_state = getattr(ws, 'ws_state', 'unknown')
                         except Exception:
                             cur_state = 'unknown'
-                        print(f"❌ 接收消息失败: {e.__class__.__name__}({e}), state={cur_state}")
-                        break
+                        print(f"❌ 接收消息失败: {e.__class__.__name__}({e}), state={cur_state}，暂停交易并尝试重连…")
+                        self.is_paused = True
+                        try:
+                            ws._reconnect()
+                            await ws._wait_for_reconnect()
+                        except Exception:
+                            pass
+                        continue
             
             return True
             

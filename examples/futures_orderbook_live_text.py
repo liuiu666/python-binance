@@ -19,16 +19,12 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from binance.ws.orderbook_manager import OrderBookManager
-
-
-def render_orderbook(ob):
-    """禁用终端渲染：不在控制台打印任何内容。"""
-    return
+from binance.async_client import AsyncClient
 
 
 async def main():
     # 从环境变量读取 HTTP 代理地址，例如：PROXY_URL=http://127.0.0.1:7897
-    proxy_url = os.getenv('PROXY_URL')
+    proxy_url = os.getenv('PROXY_URL','http://127.0.0.1:7897')
     # CSV 路径（保存在 examples 目录下）
     csv_path = os.path.join(os.path.dirname(__file__), 'orderbook_BTCUSDT.csv')
 
@@ -36,25 +32,161 @@ async def main():
     csv_file = open(csv_path, 'w+', newline='', encoding='utf-8')
     csv_writer = csv.writer(csv_file)
 
-    # 组合更新回调：渲染到终端 + 追加写入CSV
+    # 动态区间状态：由K线“平均百分比振幅”驱动，每30分钟更新一次
+    interval_state = {
+        'size': 0.001,             # 初始占位为比例(≈0.1%)，启动后会立刻用K线计算覆盖
+    }
+
+    async def compute_avg_amplitude(client: AsyncClient) -> float:
+        """获取BTCUSDT最近100根1分钟K线的平均百分比振幅 ((高-低)/收盘价)，并取其10%。"""
+        try:
+            klines = await client.futures_klines(
+                symbol='BTCUSDT',
+                interval=AsyncClient.KLINE_INTERVAL_1MINUTE,
+                limit=100,
+            )
+            if not klines:
+                return interval_state['size']
+            total = 0.0
+            count = 0
+            for k in klines:
+                # kline结构: [openTime, open, high, low, close, volume, closeTime, ...]
+                high = float(k[2])
+                low = float(k[3])
+                close = float(k[4])
+                if close <= 0:
+                    continue
+                ratio = max(0.0, (high - low) / close)
+                total += ratio
+                count += 1
+            if count == 0:
+                return interval_state['size']
+            avg_ratio = total / count
+            return avg_ratio * 0.1
+        except Exception:
+            # 网络或API异常时保持上次区间，不引入假数据
+            return interval_state['size']
+
+    async def interval_updater(client: AsyncClient):
+        """每30分钟更新一次聚合区间大小。"""
+        while True:
+            new_size = await compute_avg_amplitude(client)
+            interval_state['size'] = new_size
+            await asyncio.sleep(30 * 60)  # 30分钟
+
+    # 组合更新回调：区间聚合写入CSV（无终端输出）
     def on_update(ob):
-        # 不进行任何终端输出，仅写入CSV
+        import time
 
-        # 覆盖写入 CSV（仅保存最新1000档买单与卖单）
-        csv_file.seek(0)
-        csv_file.truncate()
-        csv_writer.writerow(['timestamp', 'last_update_id', 'side', 'level', 'price', 'quantity'])
+        # 最近60根K线的平均“百分比振幅”
+        avg_ratio = float(interval_state['size'])
 
+        # 读取订单簿数据
         ts = ob.get('timestamp', time.time())
         last_id = ob.get('last_update_id', 0)
-        bids = ob.get('bids', [])[:1000]
-        asks = ob.get('asks', [])[:1000]
+        bids = ob.get('bids', [])[:1000]  # 降序
+        asks = ob.get('asks', [])[:1000]  # 升序
 
-        for i, (price, qty) in enumerate(bids, 1):
-            csv_writer.writerow([ts, last_id, 'bid', i, f"{price:.8f}", f"{qty:.8f}"])
-        for i, (price, qty) in enumerate(asks, 1):
-            csv_writer.writerow([ts, last_id, 'ask', i, f"{price:.8f}", f"{qty:.8f}"])
+        # 当前价用订单簿中间价
+        def derive_last_price(bids, asks):
+            if bids and asks:
+                return (bids[0][0] + asks[0][0]) / 2.0
+            elif bids:
+                return bids[0][0]
+            elif asks:
+                return asks[0][0]
+            else:
+                return 0.0
+
+        current_price = derive_last_price(bids, asks)
+        if current_price <= 0:
+            return
+
+        # 区间宽度 = 当前价 × 百分比振幅
+        interval_width = current_price * avg_ratio
+
+        # 价格→区间起点映射（左闭右开），用千分位缩放避免浮点误差与浮点步长问题
+        scaled_interval = max(1, int(round(interval_width * 1000)))  # 步长（千分之一为单位），至少1避免为0
+
+        def price_to_interval_scaled(price):
+            sp = int(price * 1000)
+            return (sp // scaled_interval) * scaled_interval
+
+        # 以当前订单簿1000档的完整价格范围生成区间
+        if not bids and not asks:
+            return  # 无数据则不写
+
+        # 全局最小/最大价格（覆盖买卖两侧的1000档）
+        candidates_min = []
+        candidates_max = []
+        if bids:
+            candidates_min.append(bids[-1][0])   # 买单最低价（列表末尾）
+            candidates_max.append(bids[0][0])    # 买单最高价（列表首位）
+        if asks:
+            candidates_min.append(asks[0][0])    # 卖单最低价（列表首位）
+            candidates_max.append(asks[-1][0])   # 卖单最高价（列表末尾）
+
+        global_min = min(candidates_min)
+        global_max = max(candidates_max)
+
+        # 区间起止（缩放后向下取整至区间起点，右端加一个区间保证左闭右开）
+        start_range_scaled = (int(global_min * 1000) // scaled_interval) * scaled_interval
+        end_range_scaled = (int(global_max * 1000) // scaled_interval) * scaled_interval + scaled_interval
+
+        # 生成覆盖整个范围的区间列表（缩放坐标）
+        intervals_scaled = list(range(int(start_range_scaled), int(end_range_scaled), scaled_interval))
+        if not intervals_scaled:
+            return
+        min_start_scaled = intervals_scaled[0]
+        max_end_scaled = intervals_scaled[-1] + scaled_interval
+
+        # 准备聚合容器
+        volumes = {start: {'bid': 0.0, 'ask': 0.0} for start in intervals_scaled}
+
+        # 买单聚合：降序遍历，价格低于最小区间起点则提前停止
+        for price, qty in bids:
+            sp = int(price * 1000)
+            if sp < min_start_scaled:
+                break
+            start_scaled = price_to_interval_scaled(price)
+            if start_scaled in volumes and sp < start_scaled + scaled_interval:  # 左闭右开
+                volumes[start_scaled]['bid'] += qty
+
+        # 卖单聚合：升序遍历，价格达到最大区间右端则提前停止
+        for price, qty in asks:
+            sp = int(price * 1000)
+            if sp >= max_end_scaled:
+                break
+            start_scaled = price_to_interval_scaled(price)
+            if start_scaled in volumes and sp < start_scaled + scaled_interval:  # 左闭右开
+                volumes[start_scaled]['ask'] += qty
+
+        # 覆盖写入 CSV（仅保存最新聚合结果）
+        csv_file.seek(0)
+        csv_file.truncate()
+        csv_writer.writerow(['timestamp', 'last_update_id', 'interval_start', 'interval_end', 'bid_volume', 'ask_volume'])
+        for start_scaled in intervals_scaled:
+            start_v = start_scaled / 1000.0
+            end_v = (start_scaled + scaled_interval) / 1000.0
+            csv_writer.writerow([
+                ts,
+                last_id,
+                f"{start_v:.3f}",
+                f"{end_v:.3f}",
+                f"{volumes[start_scaled]['bid']:.8f}",
+                f"{volumes[start_scaled]['ask']:.8f}",
+            ])
         csv_file.flush()
+
+    # 初始化REST客户端并计算首个动态区间（直接构造，避免现货域名 ping）
+    client = AsyncClient(https_proxy=proxy_url)
+    try:
+        interval_state['size'] = await compute_avg_amplitude(client)
+    except Exception:
+        pass  # 启动失败时沿用默认值
+
+    # 启动30分钟更新任务
+    asyncio.create_task(interval_updater(client))
 
     manager = OrderBookManager(
         symbol="BTCUSDT",
@@ -69,6 +201,10 @@ async def main():
         pass
     finally:
         await manager.close()
+        try:
+            await client.close_connection()
+        except Exception:
+            pass
         try:
             csv_file.close()
         except Exception:
