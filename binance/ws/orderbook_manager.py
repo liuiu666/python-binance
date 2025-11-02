@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Callable, Any, Union
 from binance.async_client import AsyncClient
 from binance.ws.streams import BinanceSocketManager
 from binance.ws.reconnecting_websocket import ReconnectingWebsocket
+from binance.enums import FuturesType
 
 
 class OrderBookManager:
@@ -62,6 +63,7 @@ class OrderBookManager:
         
         # 统计信息
         self.update_count = 0
+        self.rest_snapshot_count = 0
         self.start_time = None
         self.last_refresh_time = None
         self.is_running = False
@@ -85,14 +87,15 @@ class OrderBookManager:
             if self.proxy_url:
                 client_kwargs['https_proxy'] = self.proxy_url
                 
-            self.client = await AsyncClient.create(**client_kwargs)
+            # 直接构造异步客户端，避免 AsyncClient.create() 在现货域名进行 ping 和时间校验
+            # 这里仅使用期货相关接口，因此无需依赖 api.binance.com 的可达性
+            self.client = AsyncClient(**client_kwargs)
             
             # 创建socket管理器
             self.bm = BinanceSocketManager(self.client)
             
             # 测试期货API连接
             server_time = await self.client.futures_time()
-            print(f"✅ 期货API连接成功，服务器时间: {server_time}")
             
             return True
             
@@ -113,6 +116,7 @@ class OrderBookManager:
                 return False
                 
             # 获取1000档订单簿 - 使用期货API
+            self.rest_snapshot_count += 1
             depth = await self.client.futures_order_book(symbol=self.symbol, limit=1000)
             
             # 构建买单字典和列表（买单按价格降序排列）
@@ -142,7 +146,6 @@ class OrderBookManager:
             })
             
             self.last_refresh_time = time.time()
-            print(f"✅ 获取初始订单簿成功: {len(self.orderbook['bids'])}档买单, {len(self.orderbook['asks'])}档卖单")
             
             return True
             
@@ -163,9 +166,12 @@ class OrderBookManager:
                 return False
                 
             # 创建期货深度更新WebSocket连接
-            self.ws_conn = self.bm.futures_depth_socket(symbol=self.symbol)
-            
-            print(f"✅ 期货WebSocket连接已建立: {self.symbol}")
+            path = f"{self.symbol.lower()}@depth@100ms"
+            self.ws_conn = self.bm._get_futures_socket(
+                path=path,
+                prefix="ws/",
+                futures_type=FuturesType.USD_M,
+            )
             return True
             
         except Exception as e:
@@ -183,11 +189,20 @@ class OrderBookManager:
             if msg.get('e') != 'depthUpdate':
                 return
                 
-            # 检查更新ID连续性
+            # 检查更新ID连续性（期货：优先使用 pu，其次 U<=last<=u 容错）
             first_update_id = msg.get('U')
             final_update_id = msg.get('u')
-            
-            if first_update_id <= self.orderbook['last_update_id'] + 1 <= final_update_id:
+            prev_update_id = msg.get('pu')
+            last_id = self.orderbook['last_update_id']
+
+            contiguous_by_pu = prev_update_id is not None and last_id == prev_update_id
+            bridging_by_range = (
+                first_update_id is not None and final_update_id is not None and
+                first_update_id <= last_id <= final_update_id
+            )
+            should_apply = contiguous_by_pu or bridging_by_range
+
+            if should_apply:
                 # 标记是否需要重建排序列表
                 bids_changed = False
                 asks_changed = False
@@ -232,7 +247,7 @@ class OrderBookManager:
                 # 调用回调函数
                 if self.update_callback:
                     self.update_callback(self.orderbook)
-                    
+                
         except Exception as e:
             print(f"❌ 处理深度更新失败: {e}")
     
@@ -349,8 +364,6 @@ class OrderBookManager:
             self._rebuild_bids_list()
             self._rebuild_asks_list()
             
-            print("✅ 订单簿数据同步完成")
-            
         except Exception as e:
             print(f"❌ 数据同步失败: {e}")
     
@@ -365,17 +378,15 @@ class OrderBookManager:
             bool: 运行是否成功
         """
         try:
-            # 初始化
-            if not await self.initialize():
-                return False
-                
-            # 获取初始快照
-            if not await self.get_initial_snapshot():
-                return False
-                
-            # 启动WebSocket
-            if not await self.start_websocket():
-                return False
+            # 根据当前状态执行最小必要步骤，避免重复初始化/快照/WS
+            if not self.client:
+                if not await self.initialize():
+                    return False
+
+            # 仅在未建立 WS 对象时创建连接对象
+            if not self.ws_conn:
+                if not await self.start_websocket():
+                    return False
             
             if not self.ws_conn:
                 print("❌ WebSocket连接未建立")
@@ -384,10 +395,13 @@ class OrderBookManager:
             self.is_running = True
             self.start_time = time.time()
             
-            print(f"🚀 订单簿管理器启动成功: {self.symbol}")
-            
             # 运行主循环
             async with self.ws_conn as ws:
+                # 仅在未有有效快照时获取初始快照（调整为先连WS再取快照）
+                if not self.orderbook.get('last_update_id', 0):
+                    if not await self.get_initial_snapshot():
+                        return False
+
                 end_time = time.time() + duration if duration else None
                 
                 while self.is_running:
@@ -406,7 +420,11 @@ class OrderBookManager:
                         # 超时继续循环
                         continue
                     except Exception as e:
-                        print(f"❌ 接收消息失败: {e}")
+                        try:
+                            cur_state = getattr(ws, 'ws_state', 'unknown')
+                        except Exception:
+                            cur_state = 'unknown'
+                        print(f"❌ 接收消息失败: {e.__class__.__name__}({e}), state={cur_state}")
                         break
             
             return True
@@ -430,8 +448,6 @@ class OrderBookManager:
             if self.client:
                 await self.client.close_connection()
                 self.client = None
-                
-            print("✅ 资源清理完成")
             
         except Exception as e:
             print(f"❌ 清理资源失败: {e}")

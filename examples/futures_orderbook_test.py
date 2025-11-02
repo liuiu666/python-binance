@@ -21,10 +21,11 @@ async def test_futures_orderbook():
     print("=" * 50)
     
     # 创建订单簿管理器实例
+    # 从环境变量读取 HTTP 代理地址，例如：PROXY_URL=http://127.0.0.1:7897
+    proxy_url = os.getenv("PROXY_URL")
     manager = OrderBookManager(
         symbol="BTCUSDT",
-        # 如果需要代理，取消下面这行的注释
-        proxy_url="http://127.0.0.1:7897"
+        proxy_url=proxy_url
     )
     
     try:
