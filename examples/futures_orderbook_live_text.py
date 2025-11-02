@@ -14,12 +14,17 @@ import os
 import sys
 import csv
 import time
+ # 本地直接导入不使用 importlib.util
 
 # 允许从 examples 目录运行并正确导入项目包
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from binance.ws.orderbook_manager import OrderBookManager
 from binance.async_client import AsyncClient
+
+# 顶层本地直接导入信号检测模块
+import futures_signal_detector as sd_module
+SignalDetector = sd_module.SignalDetector
 
 
 async def main():
@@ -74,7 +79,11 @@ async def main():
             interval_state['size'] = new_size
             await asyncio.sleep(30 * 60)  # 30分钟
 
-    # 组合更新回调：区间聚合写入CSV（无终端输出）
+    # 使用顶层导入的 SignalDetector
+
+    detector = None
+
+    # 组合更新回调：区间聚合写入CSV，并计算动态窗口传入检测器
     def on_update(ob):
         import time
 
@@ -165,6 +174,7 @@ async def main():
         csv_file.seek(0)
         csv_file.truncate()
         csv_writer.writerow(['timestamp', 'last_update_id', 'interval_start', 'interval_end', 'bid_volume', 'ask_volume'])
+        snapshot_rows = []  # [(start, end, bid_vol, ask_vol)]
         for start_scaled in intervals_scaled:
             start_v = start_scaled / 1000.0
             end_v = (start_scaled + scaled_interval) / 1000.0
@@ -176,7 +186,32 @@ async def main():
                 f"{volumes[start_scaled]['bid']:.8f}",
                 f"{volumes[start_scaled]['ask']:.8f}",
             ])
+            snapshot_rows.append((start_v, end_v, volumes[start_scaled]['bid'], volumes[start_scaled]['ask']))
         csv_file.flush()
+
+        # 动态窗口大小（基于本次快照真实量分布）：活动越强，窗口越小；活动越弱，窗口越大
+        if detector and snapshot_rows:
+            combined = [r[2] + r[3] for r in snapshot_rows]
+            count = len(combined)
+            mean_vol = sum(combined) / count if count > 0 else 0.0
+            sorted_comb = sorted(combined)
+            idx95 = max(0, min(count - 1, int(0.95 * count)))
+            p95 = sorted_comb[idx95] if count > 0 else 0.0
+            activity_ratio = (p95 / mean_vol) if mean_vol > 0 else 0.0
+            base_window = 10
+            min_window = 4
+            max_window = 40
+            gamma = 0.8
+            scale = 1.0 + gamma * max(0.0, min(activity_ratio - 1.0, 9.0))
+            window_size = int(max(min_window, min(max_window, round(base_window / scale))))
+            window_size = max(window_size, 2)
+
+
+            try:
+                detector.process_snapshot(snapshot_rows=snapshot_rows, window_size=window_size, timestamp=ts)
+            except Exception:
+                # 保持主流程稳定；检测器内部异常不影响CSV输出
+                pass
 
     # 初始化REST客户端并计算首个动态区间（直接构造，避免现货域名 ping）
     client = AsyncClient(https_proxy=proxy_url)
@@ -187,6 +222,13 @@ async def main():
 
     # 启动30分钟更新任务
     asyncio.create_task(interval_updater(client))
+
+    # 启动信号检测器（aggTrade 成交量确认），与现有客户端共享连接
+    try:
+        detector = SignalDetector(symbol="BTCUSDT")
+        await detector.start(client)
+    except Exception:
+        detector = None
 
     manager = OrderBookManager(
         symbol="BTCUSDT",
@@ -201,6 +243,12 @@ async def main():
         pass
     finally:
         await manager.close()
+        # 关闭检测器任务
+        try:
+            if detector:
+                await detector.stop()
+        except Exception:
+            pass
         try:
             await client.close_connection()
         except Exception:
