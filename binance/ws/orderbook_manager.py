@@ -73,6 +73,38 @@ class OrderBookManager:
         # 抑制deprecation警告
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         
+    async def _safe_reconnect(self, ws: ReconnectingWebsocket, timeout: float = 15.0) -> bool:
+        """在读循环可能已停止的情况下安全重连，并重新对齐快照。
+
+        - 若内部读循环已停止（_handle_read_loop 为 None），主动调用 connect() 重启。
+        - 若读循环仍在，设置为 RECONNECTING 并限时等待恢复到 STREAMING。
+        - 重连成功后重新获取快照，确保 last_update_id 与新流对齐。
+        """
+        try:
+            handle = getattr(ws, "_handle_read_loop", None)
+            if handle is None:
+                # 读循环已退出，手动重连并重启读循环
+                try:
+                    await ws.before_reconnect()
+                except Exception:
+                    pass
+                await ws.connect()
+            else:
+                # 正常重连流程，限时等待以避免无限挂起
+                try:
+                    ws._reconnect()
+                except Exception:
+                    pass
+                await asyncio.wait_for(ws._wait_for_reconnect(), timeout=timeout)
+
+            # 重连后重新拉取快照以对齐增量更新
+            await self.get_initial_snapshot()
+            self.is_paused = False
+            return True
+        except Exception as e:
+            print(f"❌ 重连失败: {e}")
+            return False
+
     async def initialize(self) -> bool:
         """
         初始化客户端连接
@@ -415,17 +447,7 @@ class OrderBookManager:
                             if not self.is_paused:
                                 self.is_paused = True
                                 print("⚠️ 数据异常：延迟>500ms或WS非STREAMING，暂停交易并尝试重连…")
-                            # 触发重连（去重：仅当非正在重连时）
-                            if ws_state != WSListenerState.RECONNECTING:
-                                try:
-                                    ws._reconnect()  # 设置为RECONNECTING状态
-                                except Exception:
-                                    pass
-                            # 等待重连完成或退出
-                            try:
-                                await ws._wait_for_reconnect()
-                            except Exception:
-                                pass
+                            await self._safe_reconnect(ws)
                             # 尝试下一轮循环（避免继续使用陈旧连接）
                             continue
 
@@ -436,11 +458,7 @@ class OrderBookManager:
                         if isinstance(msg, dict) and msg.get('e') == 'error':
                             self.is_paused = True
                             print(f"⚠️ WebSocket错误：{msg.get('type')}({msg.get('m')})，暂停交易并尝试重连…")
-                            try:
-                                ws._reconnect()
-                                await ws._wait_for_reconnect()
-                            except Exception:
-                                pass
+                            await self._safe_reconnect(ws)
                             continue
 
                         # 处理深度更新
@@ -460,11 +478,7 @@ class OrderBookManager:
                         if (ts is None) or (now - ts > 0.5):
                             self.is_paused = True
                             print("⚠️ 数据延迟超过500ms（超时触发），暂停交易并尝试重连…")
-                            try:
-                                ws._reconnect()
-                                await ws._wait_for_reconnect()
-                            except Exception:
-                                pass
+                            await self._safe_reconnect(ws)
                         continue
                     except Exception as e:
                         try:
@@ -473,11 +487,7 @@ class OrderBookManager:
                             cur_state = 'unknown'
                         print(f"❌ 接收消息失败: {e.__class__.__name__}({e}), state={cur_state}，暂停交易并尝试重连…")
                         self.is_paused = True
-                        try:
-                            ws._reconnect()
-                            await ws._wait_for_reconnect()
-                        except Exception:
-                            pass
+                        await self._safe_reconnect(ws)
                         continue
             
             return True
