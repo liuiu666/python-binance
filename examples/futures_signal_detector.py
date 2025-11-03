@@ -34,15 +34,15 @@ from binance.enums import FuturesType
 
 
 # ======= 参数（可按需求调整，默认遵循你的阈值说明） =======
-PERSIST_SAMPLES = 3           # 连续满足次数（噪声过滤）
+PERSIST_SAMPLES = 2           # 连续满足次数（噪声过滤）
 
 BUY_RATE_THRESHOLD = 1.4      # 买单变化率阈值（如20%增加）
 ASK_DROP_THRESHOLD = 0.7      # 卖单变化率不足（如<10%增加，或下降）
 SELL_RATE_THRESHOLD = 1.4     # 卖单变化率阈值（如20%增加）
 BID_DROP_THRESHOLD = 0.7      # 买单变化率不足（如<10%增加，或下降）
 
-CONFIRM_WINDOW_SEC = 10.0      # 成交量确认窗口（秒）
-CONFIRM_TRADE_RATE_THRESHOLD = 1.4  # 成交确认变化率阈值（当前/历史均值）
+CONFIRM_WINDOW_SEC = 45.0      # 成交量确认窗口（秒）
+CONFIRM_TRADE_RATE_THRESHOLD = 1.2  # 成交确认变化率阈值（当前/历史均值）
 
 MAX_BUFFER_SIZE = 200         # 每区间最多保留的历史样本数（用于动态窗口取后N）
 
@@ -85,8 +85,14 @@ class SignalDetector:
         # 最近一次快照的区间列表与按区间的成交量缓冲
         self._last_intervals: List[Tuple[float, float]] = []  # [(start, end)]
         self._agg_by_interval: Dict[float, Deque[Tuple[float, float]]] = defaultdict(deque)  # start -> deque[(ts_sec, qty)]
-        # 区间成交量历史（用于变化率确认）
+        # 按方向的区间成交量缓冲（用于方向确认）
+        self._agg_buy_by_interval: Dict[float, Deque[Tuple[float, float]]] = defaultdict(deque)  # start -> deque[(ts_sec, qty)]
+        self._agg_sell_by_interval: Dict[float, Deque[Tuple[float, float]]] = defaultdict(deque)  # start -> deque[(ts_sec, qty)]
+        # 区间成交量历史（旧：总量，保留诊断）
         self._trade_hist: Dict[float, Deque[float]] = {}
+        # 按方向的区间成交量历史（用于方向确认变化率）
+        self._trade_hist_buy: Dict[float, Deque[float]] = {}
+        self._trade_hist_sell: Dict[float, Deque[float]] = {}
 
         # Binance 客户端与WS
         self._client: Optional[AsyncClient] = None
@@ -125,11 +131,16 @@ class SignalDetector:
                     ts_ms = float(payload.get("T", payload.get("E", time.time() * 1000)))
                     ts_sec = ts_ms / 1000.0
                     now = time.time()
+                    # 方向：m=True 表示买家是做市商 => 主动卖；m=False => 主动买
+                    is_sell = bool(payload.get("m", False))
                     # 将成交分配到最近一次快照的对应区间（左闭右开）
                     assigned = False
                     for start, end in self._last_intervals:
                         if start <= price < end:
-                            dq = self._agg_by_interval[start]
+                            if is_sell:
+                                dq = self._agg_sell_by_interval[start]
+                            else:
+                                dq = self._agg_buy_by_interval[start]
                             dq.append((ts_sec, qty))
                             assigned = True
                             # 裁剪该区间的滚动窗口
@@ -155,6 +166,53 @@ class SignalDetector:
         if not dq:
             return 0.0
         return sum(q for ts, q in dq if now - ts <= CONFIRM_WINDOW_SEC)
+
+    def _current_interval_step(self) -> Optional[float]:
+        """返回最近一次快照的区间步长（end - start）。若不可用则返回 None。"""
+        if not self._last_intervals:
+            return None
+        s0, e0 = self._last_intervals[0]
+        step = e0 - s0
+        return step if step > 0 else None
+
+    def _recent_buy_volume_for(self, start_price: float) -> float:
+        """按当前区间起点检索最近买成交量；若精确键未命中，则回退到最近键（距离<=step/2）。"""
+        now = time.time()
+        dq = self._agg_buy_by_interval.get(start_price)
+        if dq:
+            return sum(q for ts, q in dq if now - ts <= CONFIRM_WINDOW_SEC)
+        step = self._current_interval_step()
+        if step is None or not self._agg_buy_by_interval:
+            return 0.0
+        # 寻找最近的区间键
+        try:
+            nearest_key = min(self._agg_buy_by_interval.keys(), key=lambda k: abs(k - start_price))
+        except ValueError:
+            return 0.0
+        if abs(nearest_key - start_price) <= (step / 2.0):
+            dq2 = self._agg_buy_by_interval.get(nearest_key)
+            if dq2:
+                return sum(q for ts, q in dq2 if now - ts <= CONFIRM_WINDOW_SEC)
+        return 0.0
+
+    def _recent_sell_volume_for(self, start_price: float) -> float:
+        """按当前区间起点检索最近卖成交量；若精确键未命中，则回退到最近键（距离<=step/2）。"""
+        now = time.time()
+        dq = self._agg_sell_by_interval.get(start_price)
+        if dq:
+            return sum(q for ts, q in dq if now - ts <= CONFIRM_WINDOW_SEC)
+        step = self._current_interval_step()
+        if step is None or not self._agg_sell_by_interval:
+            return 0.0
+        try:
+            nearest_key = min(self._agg_sell_by_interval.keys(), key=lambda k: abs(k - start_price))
+        except ValueError:
+            return 0.0
+        if abs(nearest_key - start_price) <= (step / 2.0):
+            dq2 = self._agg_sell_by_interval.get(nearest_key)
+            if dq2:
+                return sum(q for ts, q in dq2 if now - ts <= CONFIRM_WINDOW_SEC)
+        return 0.0
 
     # 已移除绝对量阈值确认方法，成交确认改为变化率逻辑
 
@@ -185,6 +243,8 @@ class SignalDetector:
             if not win:
                 continue
             bid_rate, ask_rate = self._compute_rates(win, window_size)
+            # 邻近区间（用于方向成交量合并确认：买合并左邻，卖合并右邻）
+            left, right = self._neighbors(starts, idx)
 
             # 单一区间条件
             buy_ok = (
@@ -207,21 +267,27 @@ class SignalDetector:
             else:
                 self._persist_sell[start] = 0
 
+            # 方向成交量（用于日志与确认）：合并邻近区间
+            tv_buy_cur = self._recent_buy_volume_for(start)
+            tv_sell_cur = self._recent_sell_volume_for(start)
+            tv_buy_adj = self._recent_buy_volume_for(left) if left is not None else 0.0
+            tv_sell_adj = self._recent_sell_volume_for(right) if right is not None else 0.0
+            trade_vol_buy_combined = tv_buy_cur + tv_buy_adj
+            trade_vol_sell_combined = tv_sell_cur + tv_sell_adj
+
             # 候选阶段调试日志（仅当满足单区间条件时记录）
             if buy_ok:
                 self._write_log(
                     f"CANDIDATE BUY start={start:.3f} step={interval_step:.3f} "
                     f"bid_rate={bid_rate:.3f} ask_rate={ask_rate:.3f} bid_vol={win.last_bid:.6f} "
-                    f"persist={self._persist_buy[start]}/{PERSIST_SAMPLES} trade_vol={self._recent_trade_volume_for(start):.6f}"
+                    f"persist={self._persist_buy[start]}/{PERSIST_SAMPLES} trade_vol={trade_vol_buy_combined:.6f}"
                 )
             if sell_ok:
                 self._write_log(
                     f"CANDIDATE SELL start={start:.3f} step={interval_step:.3f} "
                     f"ask_rate={ask_rate:.3f} bid_rate={bid_rate:.3f} ask_vol={win.last_ask:.6f} "
-                    f"persist={self._persist_sell[start]}/{PERSIST_SAMPLES} trade_vol={self._recent_trade_volume_for(start):.6f}"
+                    f"persist={self._persist_sell[start]}/{PERSIST_SAMPLES} trade_vol={trade_vol_sell_combined:.6f}"
                 )
-
-            left, right = self._neighbors(starts, idx)
             left_win = self._windows.get(left) if left is not None else None
             right_win = self._windows.get(right) if right is not None else None
 
@@ -232,26 +298,43 @@ class SignalDetector:
             strong_sell = sell_ok and adj_dn_ok
 
             ts_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            trade_vol = self._recent_trade_volume_for(start)
-            # 成交确认采用变化率：当前成交量 / 历史均值（排除当前样本，取最近 window_size-1 个样本）
-            confirm_ok = False
-            hist = self._trade_hist.get(start)
-            if hist is not None and len(hist) > 1:
-                k = min(window_size, len(hist))
-                prev_samples = list(hist)[-k:-1]
+            trade_vol_buy = trade_vol_buy_combined
+            trade_vol_sell = trade_vol_sell_combined
+            # 成交确认采用方向变化率：当前该方向成交量 / 该方向历史均值
+            confirm_ok_buy = False
+            confirm_ok_sell = False
+            hist_b = self._trade_hist_buy.get(start)
+            if hist_b is not None and len(hist_b) > 1:
+                k = min(window_size, len(hist_b))
+                prev_samples = list(hist_b)[-k:-1]
                 if len(prev_samples) > 0:
                     avg_prev = sum(prev_samples) / len(prev_samples)
-                    trade_rate = (trade_vol / avg_prev) if avg_prev > 0 else 0.0
-                    confirm_ok = trade_rate >= CONFIRM_TRADE_RATE_THRESHOLD
+                    trade_rate_b = (trade_vol_buy / avg_prev) if avg_prev > 0 else 0.0
+                    confirm_ok_buy = trade_rate_b >= CONFIRM_TRADE_RATE_THRESHOLD
+            hist_s = self._trade_hist_sell.get(start)
+            if hist_s is not None and len(hist_s) > 1:
+                k = min(window_size, len(hist_s))
+                prev_samples = list(hist_s)[-k:-1]
+                if len(prev_samples) > 0:
+                    avg_prev = sum(prev_samples) / len(prev_samples)
+                    trade_rate_s = (trade_vol_sell / avg_prev) if avg_prev > 0 else 0.0
+                    confirm_ok_sell = trade_rate_s >= CONFIRM_TRADE_RATE_THRESHOLD
 
             # 单行合并格式日志（中文输出）：仅在出现候选或可能发出时记录
             if buy_ok or sell_ok:
                 # 发出类型（可能为无、买入/强买入、卖出/强卖出；若两者同时满足则以买入优先显示）
                 emit = "无"
-                if self._persist_buy[start] >= PERSIST_SAMPLES and confirm_ok:
+                # 根据方向选择要显示的成交量和确认标志（买入优先）
+                display_trade_vol = trade_vol_buy if buy_ok else (trade_vol_sell if sell_ok else 0.0)
+                display_confirm = confirm_ok_buy if buy_ok else (confirm_ok_sell if sell_ok else False)
+                if self._persist_buy[start] >= PERSIST_SAMPLES and confirm_ok_buy:
                     emit = "强买入" if strong_buy else "买入"
-                elif self._persist_sell[start] >= PERSIST_SAMPLES and confirm_ok:
+                    display_trade_vol = trade_vol_buy
+                    display_confirm = True
+                elif self._persist_sell[start] >= PERSIST_SAMPLES and confirm_ok_sell:
                     emit = "强卖出" if strong_sell else "卖出"
+                    display_trade_vol = trade_vol_sell
+                    display_confirm = True
 
                 self._write_log(
                     (
@@ -261,12 +344,12 @@ class SignalDetector:
                         f"上邻卖压下降={'是' if (right_win is not None and adj_up_ok) else ('无' if right_win is None else '否')} "
                         f"下邻买压下降={'是' if (left_win is not None and adj_dn_ok) else ('无' if left_win is None else '否')} "
                         f"买持续={self._persist_buy[start]}/{PERSIST_SAMPLES} 卖持续={self._persist_sell[start]}/{PERSIST_SAMPLES} "
-                        f"成交量={trade_vol:.6f} 成交确认={'是' if confirm_ok else '否'} 发出={emit}"
+                        f"成交量={display_trade_vol:.6f} 成交确认={'是' if display_confirm else '否'} 发出={emit}"
                     )
                 )
 
             # 发出信号：需连续满足且真实成交量确认
-            if self._persist_buy[start] >= PERSIST_SAMPLES and confirm_ok:
+            if self._persist_buy[start] >= PERSIST_SAMPLES and confirm_ok_buy:
                 level = "STRONG_BUY" if strong_buy else "BUY"
                 print(
                     f"[{ts_str}] {level} @ [{start:.3f} - {start + interval_step:.3f}] "
@@ -274,7 +357,7 @@ class SignalDetector:
                 )
                 self._persist_buy[start] = 0
 
-            if self._persist_sell[start] >= PERSIST_SAMPLES and confirm_ok:
+            if self._persist_sell[start] >= PERSIST_SAMPLES and confirm_ok_sell:
                 level = "STRONG_SELL" if strong_sell else "SELL"
                 print(
                     f"[{ts_str}] {level} @ [{start:.3f} - {start + interval_step:.3f}] "
@@ -324,22 +407,33 @@ class SignalDetector:
             win.push(bid, ask)
 
             # 记录该区间最近 1 秒真实成交量到历史（用于变化率确认）
-            tv = self._recent_trade_volume_for(start)
-            hist = self._trade_hist.get(start)
-            if hist is None:
-                hist = deque(maxlen=MAX_BUFFER_SIZE)
-                self._trade_hist[start] = hist
-            hist.append(tv)
+            tv_buy = self._recent_buy_volume_for(start)
+            hist_b = self._trade_hist_buy.get(start)
+            if hist_b is None:
+                hist_b = deque(maxlen=MAX_BUFFER_SIZE)
+                self._trade_hist_buy[start] = hist_b
+            hist_b.append(tv_buy)
+
+            tv_sell = self._recent_sell_volume_for(start)
+            hist_s = self._trade_hist_sell.get(start)
+            if hist_s is None:
+                hist_s = deque(maxlen=MAX_BUFFER_SIZE)
+                self._trade_hist_sell[start] = hist_s
+            hist_s.append(tv_sell)
 
         # 更新最近一次快照的区间列表，并同步清理过期区间的成交量缓冲
         self._last_intervals = [(s, s + interval_step) for s in starts]
-        current_starts = set(starts)
-        for key in list(self._agg_by_interval.keys()):
-            if key not in current_starts:
-                # 移除不再存在的区间以避免缓冲无限增长
-                del self._agg_by_interval[key]
-        for key in list(self._trade_hist.keys()):
-            if key not in current_starts:
-                del self._trade_hist[key]
+        # 仅按时间裁剪方向缓冲；当队列为空时删除键（不因快照区间变化而直接删除）
+        now = time.time()
+        for key, dq in list(self._agg_buy_by_interval.items()):
+            while dq and (now - dq[0][0] > CONFIRM_WINDOW_SEC):
+                dq.popleft()
+            if not dq:
+                del self._agg_buy_by_interval[key]
+        for key, dq in list(self._agg_sell_by_interval.items()):
+            while dq and (now - dq[0][0] > CONFIRM_WINDOW_SEC):
+                dq.popleft()
+            if not dq:
+                del self._agg_sell_by_interval[key]
 
         self._check_and_emit(starts, window_size=window_size, interval_step=interval_step)

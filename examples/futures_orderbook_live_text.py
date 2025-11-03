@@ -43,10 +43,10 @@ async def main():
     }
 
     async def compute_avg_amplitude(client: AsyncClient) -> float:
-        """获取BTCUSDT最近100根1分钟K线的平均百分比振幅 ((高-低)/收盘价)，并取其10%。"""
+        """获取MINAUSDT最近100根1分钟K线的平均百分比振幅 ((高-低)/收盘价)，并取其10%。"""
         try:
             klines = await client.futures_klines(
-                symbol='BTCUSDT',
+                symbol='MINAUSDT',
                 interval=AsyncClient.KLINE_INTERVAL_1MINUTE,
                 limit=100,
             )
@@ -67,7 +67,7 @@ async def main():
             if count == 0:
                 return interval_state['size']
             avg_ratio = total / count
-            return avg_ratio * 0.1
+            return avg_ratio * 0.5
         except Exception:
             # 网络或API异常时保持上次区间，不引入假数据
             return interval_state['size']
@@ -225,13 +225,13 @@ async def main():
 
     # 启动信号检测器（aggTrade 成交量确认），与现有客户端共享连接
     try:
-        detector = SignalDetector(symbol="BTCUSDT")
+        detector = SignalDetector(symbol="MINAUSDT")
         await detector.start(client)
     except Exception:
         detector = None
 
     manager = OrderBookManager(
-        symbol="BTCUSDT",
+        symbol="MINAUSDT",
         proxy_url=proxy_url,
         update_callback=on_update,
     )
