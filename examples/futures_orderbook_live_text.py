@@ -7,14 +7,12 @@
 使用 OrderBookManager 提供的 update_callback，在每次订单簿更新时重绘终端文本。
 可选读取环境变量：
   PROXY_URL=http://127.0.0.1:7897           # HTTP 代理
-  AGG_INTERVAL_UNIT=0.005                   # 区间宽度（绝对价格单位，优先）
-  AGG_INTERVAL_PCT=0.005                    # 区间宽度（百分比，相对当前价），示例0.005=0.5%
+  SYMBOL=BTCUSDT                            # 交易对（默认BTCUSDT）
 """
 
 import asyncio
 import os
 import sys
-import csv
 import time
  # 本地直接导入不使用 importlib.util
 
@@ -23,143 +21,183 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from binance.ws.orderbook_manager import OrderBookManager
 from binance.async_client import AsyncClient
+from orderbook_analyzer import OrderBookAnalyzer
 
 
 async def main():
     # 从环境变量读取 HTTP 代理地址，例如：PROXY_URL=http://127.0.0.1:7897
     proxy_url = os.getenv('PROXY_URL','http://127.0.0.1:7897')
-    # CSV 路径（保存在 examples 目录下）
-    csv_path = os.path.join(os.path.dirname(__file__), 'orderbook_BTCUSDT.csv')
+    symbol = os.getenv('SYMBOL', 'BTCUSDT').upper()
 
-    # 以覆盖模式打开 CSV 文件，始终只保存最新一次更新的1000档（买+卖）
-    csv_file = open(csv_path, 'w+', newline='', encoding='utf-8')
-    csv_writer = csv.writer(csv_file)
+    # 初始化分析器
+    analyzer = OrderBookAnalyzer(symbol)
+    # 输出文件路径（默认 examples/orderbook_<SYMBOL>_1000.txt，可用环境变量覆盖）
+    output_path = os.getenv('ORDERBOOK_TEXT_SAVE_PATH', os.path.join(os.path.dirname(__file__), f'orderbook_{symbol}_1000.txt'))
+    output_file = open(output_path, 'w+', encoding='utf-8')
+    # 运行统计
+    start_time = time.time()
+    update_counter = 0
+    def _fmt_num(v, places=8):
+        try:
+            return f"{float(v):.{places}f}"
+        except Exception:
+            return "N/A"
+
+    # 手续费（需要API密钥），默认不设置则为 None
+    api_key = os.getenv('BINANCE_API_KEY') or os.getenv('API_KEY','Pj4PyMhS6GmElbhQVi0n48WvFBEaGHEsT9njacTuBejXLYk7yWyQIDttI0tFLoIf')
+    api_secret = os.getenv('BINANCE_API_SECRET') or os.getenv('API_SECRET','8ELgLtB7IFLEbek3DAOtw9orZkXeKbSQpnAL6o4gmi8GDlnsZT1kxZINQqEYVKWb')
+    maker_rate = None
+    taker_rate = None
+    # 24h ticker REST快照（USDT-M），在启动时获取并用于摘要展示
+    latest_ticker = {}
+
+    def execute_trading_strategy(analysis):
+        """执行交易策略"""
+        signal = analysis['trading_signals']
+        
+        print(f"信号: {signal['signal']}, 置信度: {signal['confidence']:.2%}")
+        
+        if signal['signal'] == 'BUY' and signal['confidence'] > 0.7:
+            # 执行买入逻辑
+            print("执行买入操作")
+            # place_buy_order()
+            
+        elif signal['signal'] == 'SELL' and signal['confidence'] > 0.7:
+            # 执行卖出逻辑
+            print("执行卖出操作")
+            # place_sell_order()
 
 
 
-    # 组合更新回调：区间聚合写入CSV，并计算动态窗口传入检测器
+    # 更新回调：写入未聚合的1000档（买+卖）到文件
     def on_update(ob):
-        import time
-        # 读取订单簿数据
+        nonlocal update_counter, start_time
+        update_counter += 1
         ts = ob.get('timestamp', time.time())
         last_id = ob.get('last_update_id', 0)
         bids = ob.get('bids', [])[:1000]  # 降序
         asks = ob.get('asks', [])[:1000]  # 升序
+        # 计算常用统计
+        best_bid_price = bids[0][0] if bids else None
+        best_bid_qty = bids[0][1] if bids else None
+        best_ask_price = asks[0][0] if asks else None
+        best_ask_qty = asks[0][1] if asks else None
+        mid_price = ((best_bid_price + best_ask_price) / 2) if (best_bid_price is not None and best_ask_price is not None) else None
+        spread = (best_ask_price - best_bid_price) if (best_bid_price is not None and best_ask_price is not None) else None
+        spread_pct = ((spread / best_ask_price) * 100) if (spread is not None and best_ask_price) else 0.0
+        total_bid_vol = sum(qty for _, qty in bids) if bids else 0.0
+        total_ask_vol = sum(qty for _, qty in asks) if asks else 0.0
+        bid_vwap = (sum(price * qty for price, qty in bids) / total_bid_vol) if total_bid_vol > 0 else 0.0
+        ask_vwap = (sum(price * qty for price, qty in asks) / total_ask_vol) if total_ask_vol > 0 else 0.0
+        denom = (total_bid_vol + total_ask_vol)
+        imbalance = ((total_bid_vol - total_ask_vol) / denom) if denom > 0 else 0.0
+        # 档位范围
+        highest_bid_price = bids[0][0] if bids else None
+        lowest_bid_price = bids[-1][0] if bids else None
+        lowest_ask_price = asks[0][0] if asks else None
+        highest_ask_price = asks[-1][0] if asks else None
+        # 人类可读时间
+        ts_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts))
+        elapsed = time.time() - start_time
+        freq = (update_counter / elapsed) if elapsed > 0 else 0.0
 
-        # 当前价用订单簿中间价
-        def derive_last_price(bids, asks):
-            if bids and asks:
-                return (bids[0][0] + asks[0][0]) / 2.0
-            elif bids:
-                return bids[0][0]
-            elif asks:
-                return asks[0][0]
-            else:
-                return 0.0
 
-        current_price = derive_last_price(bids, asks)
-        if current_price <= 0:
-            return
+        analyzer.update_orderbook(bids,asks)
+            
+        # 生成分析报告
+        analysis = analyzer.comprehensive_analysis()
+        
+            
+        # 基于信号执行交易逻辑
+        execute_trading_strategy(analysis)
 
-        # 动态可配置的区间宽度：
-        # - 绝对价格单位：环境变量 AGG_INTERVAL_UNIT（例如 "0.005" 表示每0.005一个区间）
-        # - 百分比（相对当前价）：环境变量 AGG_INTERVAL_PCT（例如 "0.005" 表示0.5%）
-        # 优先级：AGG_INTERVAL_UNIT > AGG_INTERVAL_PCT > 默认 0.01
-        interval_width = 0.001
-        unit_str = os.getenv('AGG_INTERVAL_UNIT')
-        pct_str = os.getenv('AGG_INTERVAL_PCT')
-        try:
-            if unit_str:
-                iw = float(unit_str)
-                if iw > 0:
-                    interval_width = iw
-            elif pct_str:
-                pr = float(pct_str)
-                if pr > 0:
-                    interval_width = current_price * pr
-        except Exception:
-            # 非法环境变量值时回退默认
-            interval_width = 0.01
+        # 覆盖写入文件头部信息
+        output_file.seek(0)
+        output_file.truncate()
+        output_file.write(f"=== {symbol} 订单簿（未聚合，前1000档）===\n")
+        output_file.write(f"更新时间: {ts_str}  (epoch: {ts:.3f})  更新序号: {update_counter}  最后更新ID: {last_id}\n")
+        output_file.write(f"- 运行时长: {elapsed:.1f}s  更新频率: {freq:.2f}/s\n")
+        output_file.write(f"- 最优买价: {_fmt_num(best_bid_price)} x {_fmt_num(best_bid_qty)}    最优卖价: {_fmt_num(best_ask_price)} x {_fmt_num(best_ask_qty)}\n")
+        output_file.write(f"- 中间价: {_fmt_num(mid_price)}    价差: {_fmt_num(spread)}    价差%: {spread_pct:.6f}%\n")
+        output_file.write(f"- 买盘档位: {len(bids)}  卖盘档位: {len(asks)}\n")
+        output_file.write(f"- 买盘总量: {_fmt_num(total_bid_vol)}  卖盘总量: {_fmt_num(total_ask_vol)}  深度不平衡: {imbalance:.6f}\n")
+        output_file.write(f"- 买盘价区间: {_fmt_num(lowest_bid_price)} ~ {_fmt_num(highest_bid_price)}  卖盘价区间: {_fmt_num(lowest_ask_price)} ~ {_fmt_num(highest_ask_price)}\n")
+        output_file.write(f"- 买盘VWAP: {_fmt_num(bid_vwap)}  卖盘VWAP: {_fmt_num(ask_vwap)}\n")
+        # 写入最新24h Ticker（REST快照，USDT-M）
+        if latest_ticker:
+            try:
+                lp = _fmt_num(latest_ticker.get('last_price'))
+                op = _fmt_num(latest_ticker.get('open'))
+                hp = _fmt_num(latest_ticker.get('high'))
+                lw = _fmt_num(latest_ticker.get('low'))
+                ch = _fmt_num(latest_ticker.get('price_change'))
+                ch_pct = float(latest_ticker.get('price_change_percent') or 0.0)
+                bv = _fmt_num(latest_ticker.get('base_volume'))
+                qv = _fmt_num(latest_ticker.get('quote_volume'))
+                te = latest_ticker.get('event_time')
+                te_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(te/1000)) if te else 'N/A'
+                output_file.write(
+                    f"- Ticker(24h): last {lp}  open {op}  high {hp}  low {lw}  change {ch} ({ch_pct:.4f}%)  vol {bv}  quote {qv}  [E:{te_str}]\n"
+                )
+            except Exception:
+                output_file.write(f"- Ticker(24h): N/A（解析失败）\n")
+        else:
+            output_file.write(f"- Ticker(24h): N/A（尚未获取REST快照）\n")
+        # 写入手续费（UM合约）
+        if maker_rate is not None and taker_rate is not None:
+            output_file.write(f"- 手续费(UM): maker: {maker_rate:.6f} ({maker_rate*100:.4f}%)  taker: {taker_rate:.6f} ({taker_rate*100:.4f}%)\n\n")
+        else:
+            output_file.write(f"- 手续费(UM): N/A（未配置API密钥或查询失败）\n\n")
 
-        # 价格→区间起点映射（左闭右开），用千分位缩放避免浮点误差与浮点步长问题
-        scaled_interval = max(1, int(round(interval_width * 1000)))  # 步长（千分之一为单位），至少1避免为0
 
-        def price_to_interval_scaled(price):
-            sp = int(price * 1000)
-            return (sp // scaled_interval) * scaled_interval
-
-        # 以当前订单簿1000档的完整价格范围生成区间
-        if not bids and not asks:
-            return  # 无数据则不写
-
-        # 全局最小/最大价格（覆盖买卖两侧的1000档）
-        candidates_min = []
-        candidates_max = []
-        if bids:
-            candidates_min.append(bids[-1][0])   # 买单最低价（列表末尾）
-            candidates_max.append(bids[0][0])    # 买单最高价（列表首位）
-        if asks:
-            candidates_min.append(asks[0][0])    # 卖单最低价（列表首位）
-            candidates_max.append(asks[-1][0])   # 卖单最高价（列表末尾）
-
-        global_min = min(candidates_min)
-        global_max = max(candidates_max)
-
-        # 区间起止（缩放后向下取整至区间起点，右端加一个区间保证左闭右开）
-        start_range_scaled = (int(global_min * 1000) // scaled_interval) * scaled_interval
-        end_range_scaled = (int(global_max * 1000) // scaled_interval) * scaled_interval + scaled_interval
-
-        # 生成覆盖整个范围的区间列表（缩放坐标）
-        intervals_scaled = list(range(int(start_range_scaled), int(end_range_scaled), scaled_interval))
-        if not intervals_scaled:
-            return
-        min_start_scaled = intervals_scaled[0]
-        max_end_scaled = intervals_scaled[-1] + scaled_interval
-
-        # 准备聚合容器
-        volumes = {start: {'bid': 0.0, 'ask': 0.0} for start in intervals_scaled}
-
-        # 买单聚合：降序遍历，价格低于最小区间起点则提前停止
-        for price, qty in bids:
-            sp = int(price * 1000)
-            if sp < min_start_scaled:
-                break
-            start_scaled = price_to_interval_scaled(price)
-            if start_scaled in volumes and sp < start_scaled + scaled_interval:  # 左闭右开
-                volumes[start_scaled]['bid'] += qty
-
-        # 卖单聚合：升序遍历，价格达到最大区间右端则提前停止
-        for price, qty in asks:
-            sp = int(price * 1000)
-            if sp >= max_end_scaled:
-                break
-            start_scaled = price_to_interval_scaled(price)
-            if start_scaled in volumes and sp < start_scaled + scaled_interval:  # 左闭右开
-                volumes[start_scaled]['ask'] += qty
-
-        # 覆盖写入 CSV（仅保存最新聚合结果）
-        csv_file.seek(0)
-        csv_file.truncate()
-        csv_writer.writerow(['timestamp', 'last_update_id', 'interval_start', 'interval_end', 'bid_volume', 'ask_volume'])
-        for start_scaled in intervals_scaled:
-            start_v = start_scaled / 1000.0
-            end_v = (start_scaled + scaled_interval) / 1000.0
-            csv_writer.writerow([
-                ts,
-                last_id,
-                f"{start_v:.3f}",
-                f"{end_v:.3f}",
-                f"{volumes[start_scaled]['bid']:.8f}",
-                f"{volumes[start_scaled]['ask']:.8f}",
-            ])
-        csv_file.flush()
+        # 写入卖盘（从高到低）
+        output_file.write("\nASKS (price, quantity):\n")
+        for i, (price, qty) in enumerate(reversed(asks), start=1):
+            output_file.write(f"{i:4d}  {price:.8f}  {qty:.8f}\n")
+          
+        # 写入买盘（从高到低）
+        output_file.write("BIDS (price, quantity):\n")
+        for i, (price, qty) in enumerate(bids, start=1):
+            output_file.write(f"{i:4d}  {price:.8f}  {qty:.8f}\n")
+            
+        output_file.flush()
+      
 
     # 初始化REST客户端并计算首个动态区间（直接构造，避免现货域名 ping）
-    client = AsyncClient(https_proxy=proxy_url)
+    client = AsyncClient(api_key=api_key, api_secret=api_secret, https_proxy=proxy_url)
+    # 拉取用户期货手续费（需要API密钥），失败则保持为 None
+    try:
+        if api_key and api_secret:
+            commission = await client.futures_commission_rate(symbol=symbol)
+            mr = commission.get('makerCommissionRate')
+            tr = commission.get('takerCommissionRate')
+            maker_rate = float(mr) if mr is not None else None
+            taker_rate = float(tr) if tr is not None else None
+    except Exception:
+        maker_rate = None
+        taker_rate = None
+    # 拉取24h ticker REST快照（USDT-M）
+    try:
+        ticker = await client.futures_ticker(symbol=symbol)
+        # 映射REST字段到通用结构
+        latest_ticker.update({
+            'event_time': ticker.get('closeTime'),
+            'last_price': ticker.get('lastPrice'),
+            'open': ticker.get('openPrice'),
+            'high': ticker.get('highPrice'),
+            'low': ticker.get('lowPrice'),
+            'price_change': ticker.get('priceChange'),
+            'price_change_percent': ticker.get('priceChangePercent'),
+            'base_volume': ticker.get('volume'),
+            'quote_volume': ticker.get('quoteVolume'),
+        })
+    except Exception as e:
+        # 保持为空以在摘要中显示N/A
+        print(f"Failed to fetch REST ticker snapshot: {e}")
  
 
     manager = OrderBookManager(
-        symbol="MINAUSDT",
+        symbol=symbol,
         proxy_url=proxy_url,
         update_callback=on_update,
     )
@@ -177,7 +215,7 @@ async def main():
         except Exception:
             pass
         try:
-            csv_file.close()
+            output_file.close()
         except Exception:
             pass
 

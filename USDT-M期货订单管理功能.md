@@ -1,3 +1,6 @@
+python -m venv .venv 
+
+.\.venv\Scripts\Activate.ps1
 # USDT-M期货订单管理功能
 
 ## 概述
