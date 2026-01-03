@@ -1,9 +1,0 @@
-{
-	"include": [
-		"binance"
-	],
-	"reportMissingImports": false,
-	"reportMissingModuleSource": false,
-	"typeCheckingMode": "basic",
-	"reportWildcardImportFromLibrary": false
-}
