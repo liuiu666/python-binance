@@ -6,19 +6,17 @@ from strategy import Strategy
 
 def main():
     logger.info(f"自动交易系统启动 | 交易对: {config.SYMBOL} | 仓位管理: 动态风险 ({config.RISK_PERCENT*100}%)")
-    logger.info(f"策略: SuperTrend趋势追踪 | 周期: {config.TIMEFRAME}")
+    logger.info(f"策略: {config.STRATEGY_NAME} | 周期: {config.TIMEFRAME}")
     
     # 初始化
     executor = TradeExecutor()
     executor.connect()
     strategy = Strategy()
     
-    # 获取交易对精度信息 (简化处理，假设数量精度为0，即整数)
-    # 实际应用中应从 executor.get_symbol_info() 获取 stepSize
-    
     # 记录最高/最低价用于移动止盈
     highest_price = 0
     lowest_price = 99999999
+    stop_loss_price = 0 # 记录固定止损价
 
     while True:
         try:
@@ -32,33 +30,95 @@ def main():
             if position == 0:
                 highest_price = 0
                 lowest_price = 99999999
+                stop_loss_price = 0
             
             # 2. 获取数据
-            klines = executor.get_klines(limit=100)
+            if config.HFT_MODE:
+                # --- 高频模式 (基于盘口) ---
+                depth = executor.get_orderbook(limit=config.DEPTH_LIMIT)
+                hft_signal, imbalance = strategy.analyze_orderbook(depth)
+                
+                # 获取最新价格用于计算
+                klines = executor.get_klines(limit=1)
+                if klines:
+                    current_price = float(klines[-1][4])
+                else:
+                    time.sleep(1)
+                    continue
+
+                # 高频开仓逻辑
+                if position == 0 and hft_signal != 0:
+                    balance = executor.get_balance()
+                    quantity = int((balance * 0.95) / current_price) # 高频几近满仓(需谨慎)
+                    # 也可以用固定小仓位刷单
+                    # quantity = int(100 / current_price) # 固定 100U
+                    
+                    if quantity * current_price < 6: quantity = int(6 / current_price) + 1
+
+                    if hft_signal == 1:
+                        logger.info(f"盘口强买 ({imbalance:.2f}) -> 高频开多")
+                        executor.place_order(side=1, quantity=quantity)
+                        entry_price = current_price # 模拟更新，实际下个循环会更新
+                    elif hft_signal == -1:
+                        logger.info(f"盘口强卖 ({imbalance:.2f}) -> 高频开空")
+                        executor.place_order(side=-1, quantity=quantity)
+                        entry_price = current_price
+
+                # 高频平仓逻辑 (止盈止损)
+                if abs(position) > 0:
+                    # 计算浮动盈亏 (百分比)
+                    pnl_pct = 0
+                    if position > 0: pnl_pct = (current_price - entry_price) / entry_price
+                    elif position < 0: pnl_pct = (entry_price - current_price) / entry_price
+                    
+                    # 扣除手续费后的净利
+                    net_pnl = pnl_pct - (config.FEE_RATE * 2)
+                    
+                    # 止盈
+                    if net_pnl > config.SCALP_TP:
+                        logger.success(f"高频止盈 ({net_pnl*100:.2f}%)")
+                        executor.place_order(side=-1 if position > 0 else 1, quantity=abs(position))
+                    
+                    # 止损
+                    elif net_pnl < -config.SCALP_SL:
+                        logger.warning(f"高频止损 ({net_pnl*100:.2f}%)")
+                        executor.place_order(side=-1 if position > 0 else 1, quantity=abs(position))
+                
+                logger.info("--------------------------------")
+                time.sleep(config.HFT_INTERVAL)
+                continue # 跳过后续的波段逻辑
+
+            # --- 波段模式 (原有逻辑) ---
+            klines = executor.get_klines(limit=300)
             if not klines:
-                time.sleep(10)
+                time.sleep(3)
                 continue
                 
             current_price = float(klines[-1][4]) # 最新收盘价
             
-            # 3. 策略分析 (获取信号和当前ATR, RSI)
-            signal, current_atr, st_value, current_rsi = strategy.check_signal(klines)
+            # 3. 策略分析
+            # 返回: 信号, ATR, 布林中轨, RSI
+            signal, current_atr, middle_band, current_rsi = strategy.check_signal(klines)
             
-            # 动态计算当前理论满仓数量 (用于判断是否处于做T减仓状态)
-            target_quantity = 0
+            # 恢复持仓时的止损价初始化
+            if abs(position) > 0 and stop_loss_price == 0 and current_atr > 0:
+                if position > 0:
+                    stop_loss_price = entry_price - 2.5 * current_atr
+                else:
+                    stop_loss_price = entry_price + 2.5 * current_atr
+                logger.info(f"恢复持仓监控 | 估算硬止损价: {stop_loss_price:.4f}")
+
+            # 动态计算当前理论满仓数量 (用于显示或调试)
             balance = executor.get_balance()
-            if balance > 0 and current_atr > 0:
-                dist = abs(current_price - st_value)
-                if dist < current_atr: dist = current_atr
-                raw_qty = (balance * config.RISK_PERCENT) / dist
-                target_quantity = int(raw_qty)
-                if target_quantity * current_price < 6: target_quantity = int(6 / current_price) + 1
             
-            # --- 动态止盈止损逻辑 (SuperTrend + 利润锁定) ---
-            # SuperTrend 是天然的止损线：
-            # 持多单时，如果价格收盘跌破 SuperTrend，平多
-            # 持空单时，如果价格收盘涨破 SuperTrend，平空
+            # --- 动态止盈止损逻辑 (RSI + ATR 利润锁定) ---
             if abs(position) > 0:
+                # 初始化追踪价格 (针对程序重启或刚开仓的情况)
+                if position > 0 and highest_price == 0:
+                    highest_price = max(entry_price, current_price)
+                if position < 0 and lowest_price == 99999999:
+                    lowest_price = min(entry_price, current_price)
+
                 # 更新最高/最低价 (用于移动止盈)
                 if current_price > highest_price: highest_price = current_price
                 if current_price < lowest_price: lowest_price = current_price
@@ -77,16 +137,13 @@ def main():
                 if current_atr > 0:
                     max_profit_dist = 0
                     if position > 0: 
-                        # 如果刚启动/重启，highest_price 可能刚初始化，确保它至少是 entry_price
-                        if highest_price < entry_price: highest_price = current_price
-                        max_profit_dist = highest_price - entry_price
+                        max_profit_dist = max(0, highest_price - entry_price)
                     elif position < 0: 
-                        if lowest_price > entry_price: lowest_price = current_price
-                        max_profit_dist = entry_price - lowest_price
+                        max_profit_dist = max(0, entry_price - lowest_price)
                     
                     max_profit_atr_multiple = max_profit_dist / current_atr
 
-                logger.info(f"持仓 | 价格:{current_price} | 盈亏:{unrealized_pnl:.2f}U ({net_pnl_pct*100:.2f}%) | 最大盈利ATR:{max_profit_atr_multiple:.1f} | ST:{st_value:.5f}")
+                logger.info(f"持仓 | 价格:{current_price} | 盈亏:{unrealized_pnl:.2f}U ({net_pnl_pct*100:.2f}%) | 最大盈利ATR:{max_profit_atr_multiple:.1f} | 中轨:{middle_band:.5f}")
 
                 # 1. 利润保护逻辑 (保本 + 移动止盈)
                 if config.PROFIT_LOCK_ENABLE and current_atr > 0:
@@ -119,123 +176,76 @@ def main():
                             executor.place_order(side=1, quantity=abs(position))
                             continue
 
-                # 2. 做T 逻辑 (高抛低吸)
-                # 仅在有盈利且未触发止盈止损时执行
-                if config.DO_T_ENABLE and target_quantity > 0:
-                    t_qty = int(target_quantity * config.T_RATIO)
-                    if t_qty < 1: t_qty = 1
-                    
-                    # 多单做T
-                    if position > 0:
-                        # 高抛: RSI 超买 (>70) 且 仓位接近满仓 -> 卖出一半
-                        if current_rsi > config.RSI_OVERBOUGHT and abs(position) >= target_quantity * 0.8:
-                            logger.info(f"RSI 超买 ({current_rsi:.1f}) -> 高抛减仓做T ({t_qty})")
-                            executor.place_order(side=-1, quantity=t_qty)
-                            continue
-                        
-                        # 低吸: RSI 回调 (<50) 且 仓位已减半 -> 接回一半
-                        if current_rsi < config.RSI_BUY_BACK and abs(position) <= target_quantity * 0.6:
-                            logger.info(f"RSI 回调到位 ({current_rsi:.1f}) -> 低吸接回做T ({t_qty})")
-                            executor.place_order(side=1, quantity=t_qty)
-                            continue
+                # 2. 均值回归特定止盈 (回归中轨即平仓)
+                # 震荡策略不贪，回归均值就跑 (或者可以设置减仓，这里先全平)
+                if position > 0 and current_price >= middle_band:
+                     # 只有当 RSI 也比较高或者单纯回归中轨就平？
+                     # 激进一点：回归中轨就平一半，或者全平。
+                     # 为了稳健获利，回归中轨且有利润就走
+                     if net_pnl_pct > 0.002: # 至少赚 0.2%
+                        logger.success(f"价格回归布林中轨 ({middle_band:.5f})，且有利润，止盈离场")
+                        executor.place_order(side=-1, quantity=abs(position))
+                        continue
 
-                    # 空单做T
-                    if position < 0:
-                        # 高抛 (空单的高抛是平空): RSI 超卖 (<30) 且 仓位接近满仓 -> 平空一半
-                        if current_rsi < config.RSI_OVERSOLD and abs(position) >= target_quantity * 0.8:
-                            logger.info(f"RSI 超卖 ({current_rsi:.1f}) -> 高抛(平空)减仓做T ({t_qty})")
-                            executor.place_order(side=1, quantity=t_qty)
-                            continue
-                        
-                        # 低吸 (空单的低吸是开空): RSI 反弹 (>50) 且 仓位已减半 -> 接回一半
-                        if current_rsi > config.RSI_BUY_BACK and abs(position) <= target_quantity * 0.6:
-                            logger.info(f"RSI 反弹到位 ({current_rsi:.1f}) -> 低吸(开空)接回做T ({t_qty})")
-                            executor.place_order(side=-1, quantity=t_qty)
-                            continue
+                if position < 0 and current_price <= middle_band:
+                     if net_pnl_pct > 0.002:
+                        logger.success(f"价格回归布林中轨 ({middle_band:.5f})，且有利润，止盈离场")
+                        executor.place_order(side=1, quantity=abs(position))
+                        continue
 
-                # 3. SuperTrend 止盈/止损 (只要趋势反转就走人)
-                # 多单：当前价格跌破 SuperTrend (且 st_value > current_price 表示趋势已变空)
-                # 注意：strategy.check_signal 返回的 st_value 是当前周期的值。
-                # 如果 check_signal 已经给出了反向信号，这里可以直接用 signal 判断，或者自己判断价格与ST的关系
-                
-                # 简单逻辑：如果持有多单，但 SuperTrend 指示做空 (signal == -1)，则平多
-                if position > 0 and signal == -1:
-                    logger.warning(f"SuperTrend 翻空，多单止盈/止损离场！")
+                # 3. 止损逻辑 (硬止损)
+                # 如果做多，价格跌破 (开仓价 - 2ATR)，认赔
+                if position > 0 and current_price < (entry_price - 2.5 * current_atr):
+                    logger.warning(f"触发硬止损 (亏损 > 2.5 ATR)！平多离场")
                     executor.place_order(side=-1, quantity=abs(position))
-                    # 可以在平仓后立即反手开空，但为了稳健，下个循环再开
                     continue
-
-                # 如果持有空单，但 SuperTrend 指示做多 (signal == 1)，则平空
-                if position < 0 and signal == 1:
-                    logger.warning(f"SuperTrend 翻多，空单止盈/止损离场！")
+                
+                if position < 0 and current_price > (entry_price + 2.5 * current_atr):
+                    logger.warning(f"触发硬止损 (亏损 > 2.5 ATR)！平空离场")
                     executor.place_order(side=1, quantity=abs(position))
                     continue
 
             # 4. 执行开仓交易
-            if position == 0:
-                # 策略逻辑升级：不仅在反转时买，如果当前是趋势中且位置合适，也顺势上车
-                # 判断当前趋势
-                is_bullish = current_price > st_value
-                is_bearish = current_price < st_value
+            if position == 0 and signal != 0:
+                # 计算动态仓位
+                # 均值回归策略止损通常设为 2.5 ATR (给足波动空间)
+                stop_loss_dist = 2.5 * current_atr
                 
-                # 如果没有反转信号，检查是否可以顺势进场
-                if signal == 0:
-                    dist = abs(current_price - st_value)
-                    # 如果距离止损线在 4倍 ATR 以内 (风险可控)，且趋势明确，强行上车
-                    if dist < 4 * current_atr:
-                        if is_bullish:
-                            logger.info(f"检测到多头趋势 (距止损 {dist/current_atr:.1f} ATR) -> 顺势开多补票")
-                            signal = 1
-                        elif is_bearish:
-                            logger.info(f"检测到空头趋势 (距止损 {dist/current_atr:.1f} ATR) -> 顺势开空补票")
-                            signal = -1
-                    else:
-                        logger.info(f"趋势明确但偏离止损线太远 ({dist/current_atr:.1f} ATR)，等待回调再上车")
+                if balance > 0 and current_atr > 0:
+                    risk_amount = balance * config.RISK_PERCENT
+                    
+                    # 仓位 = 风险金额 / 止损距离
+                    raw_qty = risk_amount / stop_loss_dist
+                    quantity = int(raw_qty) # 向下取整
+                    
+                    # 最小下单数量检查 (假设最小 6 U)
+                    if quantity * current_price < 6:
+                        quantity = int(6 / current_price) + 1
+                        
+                    logger.info(f"资金: {balance:.2f} U | 风险额: {risk_amount:.2f} U | 止损距(2.5ATR): {stop_loss_dist:.5f} | 计算仓位: {quantity}")
+                    
+                    if signal == 1:
+                        logger.info("RSI超卖+下轨突破 -> 抄底开多")
+                        executor.place_order(side=1, quantity=quantity)
+                        highest_price = current_price # 重置追踪
+                        stop_loss_price = current_price - stop_loss_dist # 记录止损价
+                    elif signal == -1:
+                        logger.info("RSI超买+上轨突破 -> 摸顶开空")
+                        executor.place_order(side=-1, quantity=quantity)
+                        lowest_price = current_price # 重置追踪
+                        stop_loss_price = current_price + stop_loss_dist # 记录止损价
+                else:
+                    logger.warning("无法计算仓位 (余额或ATR不足)")
 
-                if signal != 0:
-                    # 计算动态仓位
-                    # 止损距离 = |价格 - SuperTrend|
-                    # 为了防止刚突破时距离太近导致仓位过大，设置最小止损距离为 1*ATR
-                    balance = executor.get_balance()
-                    if balance > 0 and current_atr > 0:
-                        risk_amount = balance * config.RISK_PERCENT
-                        
-                        dist = abs(current_price - st_value)
-                        if dist < current_atr:
-                            dist = current_atr # 最小止损距离
-                            
-                        raw_qty = risk_amount / dist
-                        quantity = int(raw_qty) # 向下取整
-                        
-                        # 最小下单数量检查 (假设最小 6 U)
-                        if quantity * current_price < 6:
-                            quantity = int(6 / current_price) + 1
-                            
-                        logger.info(f"资金: {balance:.2f} U | 风险额: {risk_amount:.2f} U | 止损距: {dist:.5f} | 计算仓位: {quantity}")
-                        
-                        if signal == 1:
-                            logger.info("买入信号 -> 开多")
-                            executor.place_order(side=1, quantity=quantity)
-                            highest_price = current_price # 重置追踪
-                        elif signal == -1:
-                            logger.info("卖出信号 -> 开空")
-                            executor.place_order(side=-1, quantity=quantity)
-                            lowest_price = current_price # 重置追踪
-                    else:
-                        logger.warning("无法计算仓位 (余额或ATR不足)")
-
-            # 5. 反手逻辑 (如果持有反向仓位且出现强反转信号)
-            # (为了稳健，暂时先平仓再开仓，分两步走，这里先不自动反手，避免双倍亏损)
-            
             logger.info("--------------------------------")
-            time.sleep(15)
+            time.sleep(3)
             
         except KeyboardInterrupt:
             logger.info("系统停止")
             break
         except Exception as e:
             logger.error(f"发生错误: {e}")
-            time.sleep(10)
+            time.sleep(3)
 
 if __name__ == "__main__":
     main()

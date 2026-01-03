@@ -82,3 +82,11 @@ class TradeExecutor:
         except Exception as e:
             logger.error(f"获取 K 线数据失败: {e}")
             return []
+
+    def get_orderbook(self, symbol=config.SYMBOL, limit=config.DEPTH_LIMIT):
+        try:
+            depth = self.client.futures_order_book(symbol=symbol, limit=limit)
+            return depth
+        except Exception as e:
+            logger.error(f"获取深度数据失败: {e}")
+            return None
