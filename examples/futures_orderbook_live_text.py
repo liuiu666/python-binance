@@ -26,7 +26,7 @@ from orderbook_analyzer import OrderBookAnalyzer
 
 async def main():
     # 从环境变量读取 HTTP 代理地址，例如：PROXY_URL=http://127.0.0.1:7897
-    proxy_url = os.getenv('PROXY_URL','http://127.0.0.1:7897')
+    proxy_url = os.getenv('PROXY_URL')
     symbol = os.getenv('SYMBOL', 'BTCUSDT').upper()
 
     # 初始化分析器
@@ -44,28 +44,85 @@ async def main():
             return "N/A"
 
     # 手续费（需要API密钥），默认不设置则为 None
-    api_key = os.getenv('BINANCE_API_KEY') or os.getenv('API_KEY','Pj4PyMhS6GmElbhQVi0n48WvFBEaGHEsT9njacTuBejXLYk7yWyQIDttI0tFLoIf')
-    api_secret = os.getenv('BINANCE_API_SECRET') or os.getenv('API_SECRET','8ELgLtB7IFLEbek3DAOtw9orZkXeKbSQpnAL6o4gmi8GDlnsZT1kxZINQqEYVKWb')
+    api_key = os.getenv('BINANCE_API_KEY') or os.getenv('API_KEY')
+    api_secret = os.getenv('BINANCE_API_SECRET') or os.getenv('API_SECRET')
+    trade_mode = os.getenv('TRADE_MODE', 'testnet').lower()
+    use_testnet = False if trade_mode == 'live' else True
+    risk_pct = float(os.getenv('RISK_PCT', '0.005'))
+    stop_loss_pct = float(os.getenv('STOP_LOSS_PCT', '0.01'))
+    min_conf = float(os.getenv('MIN_CONF', '0.7'))
+    cooldown_sec = int(os.getenv('COOLDOWN_SEC', '60'))
+    leverage = int(os.getenv('LEVERAGE', '3'))
+    enable_flag = os.getenv('ENABLE_TRADING', '0')
+    trading_enabled = bool(api_key and api_secret and enable_flag == '1')
     maker_rate = None
     taker_rate = None
     # 24h ticker REST快照（USDT-M），在启动时获取并用于摘要展示
     latest_ticker = {}
 
-    def execute_trading_strategy(analysis):
+    async def execute_trading_strategy(analysis):
         """执行交易策略"""
         signal = analysis['trading_signals']
         
         print(f"信号: {signal['signal']}, 置信度: {signal['confidence']:.2%}")
-        
-        if signal['signal'] == 'BUY' and signal['confidence'] > 0.7:
-            # 执行买入逻辑
-            print("执行买入操作")
-            # place_buy_order()
-            
-        elif signal['signal'] == 'SELL' and signal['confidence'] > 0.7:
-            # 执行卖出逻辑
-            print("执行卖出操作")
-            # place_sell_order()
+        if not trading_enabled:
+            return
+        if signal['confidence'] < min_conf:
+            return
+        basic = analysis.get('basic_metrics') or {}
+        price = basic.get('mid_price')
+        if not price:
+            return
+        now_ts = time.time()
+        if now_ts - state['last_order_ts'] < cooldown_sec:
+            return
+        try:
+            pos = await client.futures_position_information(symbol=symbol)
+            qty_open = 0.0
+            for p in pos:
+                if p.get('symbol') == symbol:
+                    qty_open = float(p.get('positionAmt') or 0.0)
+                    break
+            if qty_open != 0.0:
+                return
+            bals = await client.futures_account_balance()
+            usdt_bal = 0.0
+            for b in bals:
+                if b.get('asset') == 'USDT':
+                    usdt_bal = float(b.get('availableBalance') or 0.0)
+                    break
+            if usdt_bal <= 0:
+                return
+            risk_usdt = usdt_bal * risk_pct
+            qty = risk_usdt / (stop_loss_pct * price)
+            info = await client.futures_exchange_info()
+            step = 0.0
+            min_qty = 0.0
+            min_notional = 0.0
+            for s in info.get('symbols', []):
+                if s.get('symbol') == symbol:
+                    for f in s.get('filters', []):
+                        if f.get('filterType') == 'LOT_SIZE':
+                            step = float(f.get('stepSize') or 0.0)
+                            min_qty = float(f.get('minQty') or 0.0)
+                        if f.get('filterType') == 'MIN_NOTIONAL':
+                            mn = f.get('notional') or f.get('minNotional')
+                            min_notional = float(mn or 0.0)
+                    break
+            def round_step(x, s):
+                if s <= 0:
+                    return x
+                return (int(x / s) * s)
+            qty = max(min_qty, round_step(qty, step))
+            side = 'BUY' if signal['signal'] == 'BUY' else 'SELL'
+            opposite = 'SELL' if side == 'BUY' else 'BUY'
+            order = await client.futures_market_order(symbol=symbol, side=side, quantity=qty)
+            avg_price = float(order.get('avgPrice') or price)
+            stop_price = avg_price * (1.0 - stop_loss_pct) if side == 'BUY' else avg_price * (1.0 + stop_loss_pct)
+            await client.futures_create_order(symbol=symbol, side=opposite, type='STOP_MARKET', stopPrice=stop_price, closePosition=True)
+            state['last_order_ts'] = now_ts
+        except Exception as e:
+            print(f"下单失败: {e}")
 
 
 
@@ -109,7 +166,7 @@ async def main():
         
             
         # 基于信号执行交易逻辑
-        execute_trading_strategy(analysis)
+        asyncio.create_task(execute_trading_strategy(analysis))
 
         # 覆盖写入文件头部信息
         output_file.seek(0)
@@ -164,7 +221,8 @@ async def main():
       
 
     # 初始化REST客户端并计算首个动态区间（直接构造，避免现货域名 ping）
-    client = AsyncClient(api_key=api_key, api_secret=api_secret, https_proxy=proxy_url)
+    client = AsyncClient(api_key=api_key, api_secret=api_secret, https_proxy=proxy_url, testnet=use_testnet)
+    state = {'last_order_ts': 0}
     # 拉取用户期货手续费（需要API密钥），失败则保持为 None
     try:
         if api_key and api_secret:
@@ -176,6 +234,12 @@ async def main():
     except Exception:
         maker_rate = None
         taker_rate = None
+    try:
+        if api_key and api_secret:
+            await client.futures_change_position_mode(dualSidePosition='false')
+            await client.futures_change_leverage(symbol=symbol, leverage=leverage)
+    except Exception:
+        pass
     # 拉取24h ticker REST快照（USDT-M）
     try:
         ticker = await client.futures_ticker(symbol=symbol)
@@ -198,8 +262,11 @@ async def main():
 
     manager = OrderBookManager(
         symbol=symbol,
+        api_key=api_key,
+        api_secret=api_secret,
         proxy_url=proxy_url,
         update_callback=on_update,
+        testnet=use_testnet,
     )
 
     try:

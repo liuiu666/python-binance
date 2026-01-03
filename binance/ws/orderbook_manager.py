@@ -28,7 +28,9 @@ class OrderBookManager:
         api_key: Optional[str] = None,
         api_secret: Optional[str] = None,
         proxy_url: Optional[str] = None,
-        update_callback: Optional[Callable] = None
+        update_callback: Optional[Callable] = None,
+        testnet: Optional[bool] = False,
+        demo: Optional[bool] = False,
     ):
         """
         初始化期货订单簿管理器
@@ -45,6 +47,8 @@ class OrderBookManager:
         self.api_secret = api_secret
         self.proxy_url = proxy_url
         self.update_callback = update_callback
+        self.testnet = bool(testnet)
+        self.demo = bool(demo)
         
         # 客户端和连接管理
         self.client: Optional[AsyncClient] = None
@@ -72,6 +76,16 @@ class OrderBookManager:
         
         # 抑制deprecation警告
         warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+    def _log(self, msg: str):
+        try:
+            print(msg)
+        except UnicodeEncodeError:
+            try:
+                safe = msg.replace("❌", "[ERROR]").replace("⚠️", "[WARN]")
+                print(safe)
+            except Exception:
+                pass
         
     async def _safe_reconnect(self, ws: ReconnectingWebsocket, timeout: float = 15.0) -> bool:
         """在读循环可能已停止的情况下安全重连，并重新对齐快照。
@@ -102,7 +116,7 @@ class OrderBookManager:
             self.is_paused = False
             return True
         except Exception as e:
-            print(f"❌ 重连失败: {e}")
+            self._log(f"❌ 重连失败: {e}")
             return False
 
     async def initialize(self) -> bool:
@@ -121,8 +135,8 @@ class OrderBookManager:
             if self.proxy_url:
                 client_kwargs['https_proxy'] = self.proxy_url
                 
-            # 直接构造异步客户端，避免 AsyncClient.create() 在现货域名进行 ping 和时间校验
-            # 这里仅使用期货相关接口，因此无需依赖 api.binance.com 的可达性
+            client_kwargs['testnet'] = self.testnet
+            client_kwargs['demo'] = self.demo
             self.client = AsyncClient(**client_kwargs)
             
             # 创建socket管理器
@@ -132,7 +146,7 @@ class OrderBookManager:
             return True
             
         except Exception as e:
-            print(f"❌ 初始化失败: {e}")
+            self._log(f"❌ 初始化失败: {e}")
             return False
     
     async def get_initial_snapshot(self) -> bool:
@@ -144,7 +158,7 @@ class OrderBookManager:
         """
         try:
             if not self.client:
-                print("❌ 客户端未初始化")
+                self._log("❌ 客户端未初始化")
                 return False
                 
             # 获取1000档订单簿 - 使用期货API
@@ -182,7 +196,7 @@ class OrderBookManager:
             return True
             
         except Exception as e:
-            print(f"❌ 获取初始订单簿失败: {e}")
+            self._log(f"❌ 获取初始订单簿失败: {e}")
             return False
     
     async def start_websocket(self) -> bool:
@@ -207,7 +221,7 @@ class OrderBookManager:
             return True
             
         except Exception as e:
-            print(f"❌ WebSocket连接失败: {e}")
+            self._log(f"❌ WebSocket连接失败: {e}")
             return False
     
     def process_depth_update(self, msg: Dict[str, Any]):
@@ -281,7 +295,7 @@ class OrderBookManager:
                     self.update_callback(self.orderbook)
                 
         except Exception as e:
-            print(f"❌ 处理深度更新失败: {e}")
+            self._log(f"❌ 处理深度更新失败: {e}")
     
     def _rebuild_bids_list(self):
         """重建买单排序列表（按价格降序）"""
@@ -397,7 +411,7 @@ class OrderBookManager:
             self._rebuild_asks_list()
             
         except Exception as e:
-            print(f"❌ 数据同步失败: {e}")
+            self._log(f"❌ 数据同步失败: {e}")
     
     async def run(self, duration: Optional[int] = None) -> bool:
         """
@@ -446,7 +460,7 @@ class OrderBookManager:
                         if stale or (ws_state is not None and ws_state != WSListenerState.STREAMING):
                             if not self.is_paused:
                                 self.is_paused = True
-                                print("⚠️ 数据异常：延迟>500ms或WS非STREAMING，暂停交易并尝试重连…")
+                                self._log("⚠️ 数据异常：延迟>500ms或WS非STREAMING，暂停交易并尝试重连…")
                             await self._safe_reconnect(ws)
                             # 尝试下一轮循环（避免继续使用陈旧连接）
                             continue
@@ -457,7 +471,7 @@ class OrderBookManager:
                         # 检测错误消息并重连
                         if isinstance(msg, dict) and msg.get('e') == 'error':
                             self.is_paused = True
-                            print(f"⚠️ WebSocket错误：{msg.get('type')}({msg.get('m')})，暂停交易并尝试重连…")
+                            self._log(f"⚠️ WebSocket错误：{msg.get('type')}({msg.get('m')})，暂停交易并尝试重连…")
                             await self._safe_reconnect(ws)
                             continue
 
@@ -477,7 +491,7 @@ class OrderBookManager:
                         ts = self.orderbook.get('timestamp')
                         if (ts is None) or (now - ts > 0.5):
                             self.is_paused = True
-                            print("⚠️ 数据延迟超过500ms（超时触发），暂停交易并尝试重连…")
+                            self._log("⚠️ 数据延迟超过500ms（超时触发），暂停交易并尝试重连…")
                             await self._safe_reconnect(ws)
                         continue
                     except Exception as e:
@@ -485,7 +499,7 @@ class OrderBookManager:
                             cur_state = getattr(ws, 'ws_state', 'unknown')
                         except Exception:
                             cur_state = 'unknown'
-                        print(f"❌ 接收消息失败: {e.__class__.__name__}({e}), state={cur_state}，暂停交易并尝试重连…")
+                        self._log(f"❌ 接收消息失败: {e.__class__.__name__}({e}), state={cur_state}，暂停交易并尝试重连…")
                         self.is_paused = True
                         await self._safe_reconnect(ws)
                         continue
@@ -493,7 +507,7 @@ class OrderBookManager:
             return True
             
         except Exception as e:
-            print(f"❌ 运行失败: {e}")
+            self._log(f"❌ 运行失败: {e}")
             return False
         finally:
             self.is_running = False
