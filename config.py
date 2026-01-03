@@ -42,6 +42,11 @@ RSI_PERIOD = 14      # RSI 周期
 RSI_OVERBOUGHT = 70  # RSI 超买阈值 (做空信号)
 RSI_OVERSOLD = 30    # RSI 超卖阈值 (做多信号)
 
+# 自适应策略参数 (Strategy V6)
+ADX_PERIOD = 14      # ADX 周期
+ADX_THRESHOLD = 25   # ADX 阈值 (大于此值视为趋势，小于视为震荡)
+CCI_PERIOD = 20      # CCI 周期 (用于震荡辅助)
+
 # 辅助风控 (ATR)
 ATR_PERIOD = 14      # ATR 周期
 MIN_VOLATILITY = 0.0005 # 最小波动率 0.05% (1m 周期降低阈值，避免不交易)

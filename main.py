@@ -117,8 +117,8 @@ def main():
             current_price = float(klines[-1][4]) # 最新收盘价
             
             # 3. 策略分析
-            # 返回: 信号, ATR, 布林中轨, RSI
-            signal, current_atr, middle_band, current_rsi = strategy.check_signal(klines)
+            # 返回: 信号, ATR, 布林中轨, RSI, ADX, 市场模式
+            signal, current_atr, middle_band, current_rsi, adx, market_mode = strategy.check_signal(klines)
             
             # 恢复持仓时的止损价初始化
             if abs(position) > 0 and stop_loss_price == 0 and current_atr > 0:
@@ -168,6 +168,20 @@ def main():
 
                 # 1. 利润保护逻辑 (保本 + 移动止盈)
                 if config.PROFIT_LOCK_ENABLE and current_atr > 0:
+                    
+                    # === 新增：震荡模式下的快速止盈 (中轨止盈) ===
+                    if market_mode == "震荡":
+                        # 多单: 价格回归中轨 (说明反弹到位)
+                        if position > 0 and current_price > middle_band:
+                            logger.success(f"震荡模式中轨止盈 (RSI {current_rsi:.1f})！落袋为安")
+                            executor.place_order(side=-1, quantity=abs(position))
+                            continue
+                        # 空单: 价格回归中轨
+                        if position < 0 and current_price < middle_band:
+                            logger.success(f"震荡模式中轨止盈 (RSI {current_rsi:.1f})！落袋为安")
+                            executor.place_order(side=1, quantity=abs(position))
+                            continue
+                    
                     # A. 移动止盈 (优先): 曾经盈利超过 TP_TRIGGER_ATR，启用回调止盈
                     if max_profit_atr_multiple > config.TP_TRIGGER_ATR:
                         # 多单: 最高价回撤超过 TP_CALLBACK_ATR
