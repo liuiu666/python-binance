@@ -32,9 +32,17 @@ ATR_MULTIPLIER = 3.0 # SuperTrend 倍数 (3.0 是标准趋势倍数)
 
 # 利润保护配置 (新增)
 PROFIT_LOCK_ENABLE = True    # 是否开启利润保护
-BREAKEVEN_ATR = 0.8          # 盈利达 0.8 ATR 时 -> 开启保本 (原 1.5 太慢)
-TP_TRIGGER_ATR = 2.0         # 盈利达 2.0 ATR 时 -> 启动移动止盈 (原 3.0 太贪)
-TP_CALLBACK_ATR = 0.8        # 移动止盈回调 0.8 ATR -> 止盈出局 (原 1.0 太宽)
+BREAKEVEN_ATR = 0.4          # 盈利达 0.4 ATR 时 -> 开启保本 (原 0.8 太慢)
+TP_TRIGGER_ATR = 1.0         # 盈利达 1.0 ATR 时 -> 启动移动止盈 (原 2.0 太贪)
+TP_CALLBACK_ATR = 0.4        # 移动止盈回调 0.4 ATR -> 止盈出局 (原 0.8 太宽)
+
+# 做T 配置 (RSI 高抛低吸)
+DO_T_ENABLE = True           # 是否开启做T
+RSI_PERIOD = 14              # RSI 周期
+RSI_OVERBOUGHT = 70          # 超买阈值 (多单减仓)
+RSI_OVERSOLD = 30            # 超卖阈值 (空单减仓)
+RSI_BUY_BACK = 50            # 接回阈值 (RSI 回归中轴接回)
+T_RATIO = 0.5                # 做T仓位比例 (50% 底仓不动，50% 做波段)
 
 FEE_RATE = 0.0004       # 币安合约 Taker 费率 (0.04%)
 SLIPPAGE = 0.001        # 预估滑点 (0.1%)

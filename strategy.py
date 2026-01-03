@@ -63,11 +63,20 @@ class Strategy:
         # 赋值 SuperTrend 具体数值
         df['supertrend'] = np.where(df['trend_dir'], df['final_lower'], df['final_upper'])
         
+        # 3. 计算 RSI (14) - 用于做T高抛低吸
+        delta = df['close'].diff()
+        gain = (delta.where(delta > 0, 0)).fillna(0)
+        loss = (-delta.where(delta < 0, 0)).fillna(0)
+        avg_gain = gain.rolling(window=14, min_periods=1).mean()
+        avg_loss = loss.rolling(window=14, min_periods=1).mean()
+        rs = avg_gain / avg_loss
+        df['rsi'] = 100 - (100 / (1 + rs))
+
         return df
 
     def check_signal(self, klines):
         if not klines or len(klines) < 60:
-            return 0, 0.0, 0.0
+            return 0, 0.0, 0.0, 50.0 # 默认 RSI 50
             
         # 转换为 DataFrame
         df = pd.DataFrame(klines, columns=[
@@ -90,25 +99,26 @@ class Strategy:
         current_atr = curr['atr']
         st_value = curr['supertrend']
         is_bullish = curr['trend_dir']
+        current_rsi = curr['rsi']
         
         status = "看跌 (价格在趋势线下方)"
         if is_bullish:
             status = "看涨 (价格在趋势线上方)"
 
-        logger.info(f"价格:{curr['close']} | SuperTrend:{st_value:.5f} | ATR:{current_atr:.4f}")
+        logger.info(f"价格:{curr['close']} | SuperTrend:{st_value:.5f} | ATR:{current_atr:.4f} | RSI:{current_rsi:.1f}")
         logger.info(f"状态: {status}")
         
         # --- 策略逻辑 (SuperTrend 趋势追踪) ---
         
         # 1. 趋势反转开多: 之前是空头，现在变多头 (价格上穿 SuperTrend)
         if prev['trend_dir'] == False and curr['trend_dir'] == True:
-             return 1, current_atr, st_value
+             return 1, current_atr, st_value, current_rsi
 
         # 2. 趋势反转开空: 之前是多头，现在变空头 (价格下穿 SuperTrend)
         if prev['trend_dir'] == True and curr['trend_dir'] == False:
-            return -1, current_atr, st_value
+            return -1, current_atr, st_value, current_rsi
             
         # 3. 趋势延续 (不发开仓信号，但返回当前趋势状态供持仓管理)
         # 如果持仓方向与 SuperTrend 不符，应该平仓 (由 main.py 处理)
         
-        return 0, current_atr, st_value
+        return 0, current_atr, st_value, current_rsi

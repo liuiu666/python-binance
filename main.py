@@ -41,8 +41,18 @@ def main():
                 
             current_price = float(klines[-1][4]) # 最新收盘价
             
-            # 3. 策略分析 (获取信号和当前ATR)
-            signal, current_atr, st_value = strategy.check_signal(klines)
+            # 3. 策略分析 (获取信号和当前ATR, RSI)
+            signal, current_atr, st_value, current_rsi = strategy.check_signal(klines)
+            
+            # 动态计算当前理论满仓数量 (用于判断是否处于做T减仓状态)
+            target_quantity = 0
+            balance = executor.get_balance()
+            if balance > 0 and current_atr > 0:
+                dist = abs(current_price - st_value)
+                if dist < current_atr: dist = current_atr
+                raw_qty = (balance * config.RISK_PERCENT) / dist
+                target_quantity = int(raw_qty)
+                if target_quantity * current_price < 6: target_quantity = int(6 / current_price) + 1
             
             # --- 动态止盈止损逻辑 (SuperTrend + 利润锁定) ---
             # SuperTrend 是天然的止损线：
@@ -80,15 +90,18 @@ def main():
 
                 # 1. 利润保护逻辑 (保本 + 移动止盈)
                 if config.PROFIT_LOCK_ENABLE and current_atr > 0:
-                    # A. 保本损: 曾经盈利超过 BREAKEVEN_ATR，现在必须保本
+                    # A. 保本损: 曾经盈利超过 BREAKEVEN_ATR，现在必须保本(含微利)
                     if max_profit_atr_multiple > config.BREAKEVEN_ATR:
-                        # 多单保本: 价格跌破开仓价 (加一点点利润保护手续费)
-                        if position > 0 and current_price < entry_price * 1.002:
+                        # 多单保本: 价格跌破 开仓价 + 0.1 ATR (确保不亏手续费)
+                        stop_price_long = entry_price + 0.1 * current_atr
+                        if position > 0 and current_price < stop_price_long:
                             logger.warning(f"触发保本止损 (曾盈利 {max_profit_atr_multiple:.1f} ATR)！平多离场")
                             executor.place_order(side=-1, quantity=abs(position))
                             continue
-                        # 空单保本: 价格涨破开仓价
-                        if position < 0 and current_price > entry_price * 0.998:
+                        
+                        # 空单保本: 价格涨破 开仓价 - 0.1 ATR
+                        stop_price_short = entry_price - 0.1 * current_atr
+                        if position < 0 and current_price > stop_price_short:
                             logger.warning(f"触发保本止损 (曾盈利 {max_profit_atr_multiple:.1f} ATR)！平空离场")
                             executor.place_order(side=1, quantity=abs(position))
                             continue
@@ -106,7 +119,41 @@ def main():
                             executor.place_order(side=1, quantity=abs(position))
                             continue
 
-                # 2. SuperTrend 止盈/止损 (只要趋势反转就走人)
+                # 2. 做T 逻辑 (高抛低吸)
+                # 仅在有盈利且未触发止盈止损时执行
+                if config.DO_T_ENABLE and target_quantity > 0:
+                    t_qty = int(target_quantity * config.T_RATIO)
+                    if t_qty < 1: t_qty = 1
+                    
+                    # 多单做T
+                    if position > 0:
+                        # 高抛: RSI 超买 (>70) 且 仓位接近满仓 -> 卖出一半
+                        if current_rsi > config.RSI_OVERBOUGHT and abs(position) >= target_quantity * 0.8:
+                            logger.info(f"RSI 超买 ({current_rsi:.1f}) -> 高抛减仓做T ({t_qty})")
+                            executor.place_order(side=-1, quantity=t_qty)
+                            continue
+                        
+                        # 低吸: RSI 回调 (<50) 且 仓位已减半 -> 接回一半
+                        if current_rsi < config.RSI_BUY_BACK and abs(position) <= target_quantity * 0.6:
+                            logger.info(f"RSI 回调到位 ({current_rsi:.1f}) -> 低吸接回做T ({t_qty})")
+                            executor.place_order(side=1, quantity=t_qty)
+                            continue
+
+                    # 空单做T
+                    if position < 0:
+                        # 高抛 (空单的高抛是平空): RSI 超卖 (<30) 且 仓位接近满仓 -> 平空一半
+                        if current_rsi < config.RSI_OVERSOLD and abs(position) >= target_quantity * 0.8:
+                            logger.info(f"RSI 超卖 ({current_rsi:.1f}) -> 高抛(平空)减仓做T ({t_qty})")
+                            executor.place_order(side=1, quantity=t_qty)
+                            continue
+                        
+                        # 低吸 (空单的低吸是开空): RSI 反弹 (>50) 且 仓位已减半 -> 接回一半
+                        if current_rsi > config.RSI_BUY_BACK and abs(position) <= target_quantity * 0.6:
+                            logger.info(f"RSI 反弹到位 ({current_rsi:.1f}) -> 低吸(开空)接回做T ({t_qty})")
+                            executor.place_order(side=-1, quantity=t_qty)
+                            continue
+
+                # 3. SuperTrend 止盈/止损 (只要趋势反转就走人)
                 # 多单：当前价格跌破 SuperTrend (且 st_value > current_price 表示趋势已变空)
                 # 注意：strategy.check_signal 返回的 st_value 是当前周期的值。
                 # 如果 check_signal 已经给出了反向信号，这里可以直接用 signal 判断，或者自己判断价格与ST的关系
