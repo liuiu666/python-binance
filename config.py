@@ -47,11 +47,11 @@ ATR_PERIOD = 14      # ATR 周期
 MIN_VOLATILITY = 0.0005 # 最小波动率 0.05% (1m 周期降低阈值，避免不交易)
 
 
-# 利润保护配置 (极速回本模式)
+# 利润保护配置 (趋势跟随模式)
 PROFIT_LOCK_ENABLE = True    # 是否开启利润保护
-BREAKEVEN_ATR = 0.5          # 盈利达 0.5 ATR 时 -> 开启保本 (快速保本)
-TP_TRIGGER_ATR = 1.2         # 盈利达 1.2 ATR 时 -> 启动移动止盈 (不贪多)
-TP_CALLBACK_ATR = 0.3        # 移动止盈回调 0.3 ATR -> 止盈出局 (利润不回撤)
+BREAKEVEN_ATR = 0.8          # 盈利达 0.8 ATR 时 -> 开启保本 (给点波动空间)
+TP_TRIGGER_ATR = 2.5         # 盈利达 2.5 ATR 时 -> 启动移动止盈 (让利润奔跑)
+TP_CALLBACK_ATR = 0.8        # 移动止盈回调 0.8 ATR -> 止盈出局 (耐受正常回调)
 
 # 做T配置 (波段策略本身就是做T，此开关可辅助)
 DO_T_ENABLE = False          # 关闭额外的做T，策略本身即为震荡策略

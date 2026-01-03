@@ -34,7 +34,7 @@ class TradeExecutor:
             return {"amt": 0.0, "entryPrice": 0.0, "unRealizedProfit": 0.0}
         except Exception as e:
             logger.error(f"获取持仓失败: {e}")
-            return {"amt": 0.0, "entryPrice": 0.0, "unRealizedProfit": 0.0}
+            return None # 返回 None 表示失败，避免误判为空仓
 
     def get_balance(self):
         try:
@@ -45,7 +45,7 @@ class TradeExecutor:
             return 0.0
         except Exception as e:
             logger.error(f"获取余额失败: {e}")
-            return 0.0
+            return None # 返回 None 表示失败
 
     def get_symbol_info(self, symbol=config.SYMBOL):
         try:

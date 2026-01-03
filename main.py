@@ -17,11 +17,30 @@ def main():
     highest_price = 0
     lowest_price = 99999999
     stop_loss_price = 0 # 记录固定止损价
+    
+    # 网络错误计数器
+    error_count = 0
 
     while True:
         try:
             # 1. 获取持仓信息
             pos_info = executor.get_position()
+            
+            # 错误处理与自动重连
+            if pos_info is None:
+                error_count += 1
+                logger.warning(f"获取持仓失败 (连续错误: {error_count})")
+                if error_count > 3:
+                    logger.warning("连续失败超过 3 次，尝试重新连接 API...")
+                    executor.connect()
+                    error_count = 0 # 重置计数
+                    time.sleep(5)
+                time.sleep(3)
+                continue
+                
+            # 重置错误计数 (如果成功获取)
+            error_count = 0
+            
             position = pos_info['amt']
             entry_price = pos_info['entryPrice']
             unrealized_pnl = pos_info['unRealizedProfit'] # 币安计算的未实现盈亏(U)
@@ -91,6 +110,7 @@ def main():
             # --- 波段模式 (原有逻辑) ---
             klines = executor.get_klines(limit=300)
             if not klines:
+                logger.warning("获取 K 线数据失败")
                 time.sleep(3)
                 continue
                 
@@ -110,6 +130,7 @@ def main():
 
             # 动态计算当前理论满仓数量 (用于显示或调试)
             balance = executor.get_balance()
+            if balance is None: balance = 0 # 获取余额失败则视为 0，跳过开仓
             
             # --- 动态止盈止损逻辑 (RSI + ATR 利润锁定) ---
             if abs(position) > 0:
@@ -143,27 +164,11 @@ def main():
                     
                     max_profit_atr_multiple = max_profit_dist / current_atr
 
-                logger.info(f"持仓 | 价格:{current_price} | 盈亏:{unrealized_pnl:.2f}U ({net_pnl_pct*100:.2f}%) | 最大盈利ATR:{max_profit_atr_multiple:.1f} | 中轨:{middle_band:.5f}")
+                logger.info(f"持仓 | 价格:{current_price} | 盈亏:{unrealized_pnl:.2f}U ({net_pnl_pct*100:.2f}%) | 移动止损:{stop_loss_price:.4f} | 最大盈利ATR:{max_profit_atr_multiple:.1f}")
 
                 # 1. 利润保护逻辑 (保本 + 移动止盈)
                 if config.PROFIT_LOCK_ENABLE and current_atr > 0:
-                    # A. 保本损: 曾经盈利超过 BREAKEVEN_ATR，现在必须保本(含微利)
-                    if max_profit_atr_multiple > config.BREAKEVEN_ATR:
-                        # 多单保本: 价格跌破 开仓价 + 0.1 ATR (确保不亏手续费)
-                        stop_price_long = entry_price + 0.1 * current_atr
-                        if position > 0 and current_price < stop_price_long:
-                            logger.warning(f"触发保本止损 (曾盈利 {max_profit_atr_multiple:.1f} ATR)！平多离场")
-                            executor.place_order(side=-1, quantity=abs(position))
-                            continue
-                        
-                        # 空单保本: 价格涨破 开仓价 - 0.1 ATR
-                        stop_price_short = entry_price - 0.1 * current_atr
-                        if position < 0 and current_price > stop_price_short:
-                            logger.warning(f"触发保本止损 (曾盈利 {max_profit_atr_multiple:.1f} ATR)！平空离场")
-                            executor.place_order(side=1, quantity=abs(position))
-                            continue
-
-                    # B. 移动止盈: 曾经盈利超过 TP_TRIGGER_ATR，启用回调止盈
+                    # A. 移动止盈 (优先): 曾经盈利超过 TP_TRIGGER_ATR，启用回调止盈
                     if max_profit_atr_multiple > config.TP_TRIGGER_ATR:
                         # 多单: 最高价回撤超过 TP_CALLBACK_ATR
                         if position > 0 and current_price < (highest_price - config.TP_CALLBACK_ATR * current_atr):
@@ -176,34 +181,53 @@ def main():
                             executor.place_order(side=1, quantity=abs(position))
                             continue
 
-                # 2. 均值回归特定止盈 (回归中轨即平仓)
-                # 震荡策略不贪，回归均值就跑 (或者可以设置减仓，这里先全平)
-                if position > 0 and current_price >= middle_band:
-                     # 只有当 RSI 也比较高或者单纯回归中轨就平？
-                     # 激进一点：回归中轨就平一半，或者全平。
-                     # 为了稳健获利，回归中轨且有利润就走
-                     if net_pnl_pct > 0.002: # 至少赚 0.2%
-                        logger.success(f"价格回归布林中轨 ({middle_band:.5f})，且有利润，止盈离场")
-                        executor.place_order(side=-1, quantity=abs(position))
-                        continue
+                    # B. 保本损: 曾经盈利超过 BREAKEVEN_ATR，现在必须保本(含微利)
+                    if max_profit_atr_multiple > config.BREAKEVEN_ATR:
+                        # 计算保本止损缓冲 (确保覆盖手续费 0.08% + 滑点)
+                        # 使用 max(0.1 ATR, 0.15% 价格) 确保不亏本
+                        safe_buffer = max(0.1 * current_atr, entry_price * 0.0015)
+                        
+                        # 多单保本
+                        stop_price_long = entry_price + safe_buffer
+                        if position > 0 and current_price < stop_price_long:
+                            logger.warning(f"触发保本止损 (曾盈利 {max_profit_atr_multiple:.1f} ATR)！平多离场")
+                            executor.place_order(side=-1, quantity=abs(position))
+                            continue
+                        
+                        # 空单保本
+                        stop_price_short = entry_price - safe_buffer
+                        if position < 0 and current_price > stop_price_short:
+                            logger.warning(f"触发保本止损 (曾盈利 {max_profit_atr_multiple:.1f} ATR)！平空离场")
+                            executor.place_order(side=1, quantity=abs(position))
+                            continue
 
-                if position < 0 and current_price <= middle_band:
-                     if net_pnl_pct > 0.002:
-                        logger.success(f"价格回归布林中轨 ({middle_band:.5f})，且有利润，止盈离场")
-                        executor.place_order(side=1, quantity=abs(position))
-                        continue
-
-                # 3. 止损逻辑 (硬止损)
-                # 如果做多，价格跌破 (开仓价 - 2ATR)，认赔
-                if position > 0 and current_price < (entry_price - 2.5 * current_atr):
-                    logger.warning(f"触发硬止损 (亏损 > 2.5 ATR)！平多离场")
-                    executor.place_order(side=-1, quantity=abs(position))
-                    continue
+                # 2. 均值回归特定止盈 (已禁用：趋势模式下不轻易中轨止盈)
+                # 原逻辑：回归中轨且微利即跑，这在单边行情中会卖飞
+                # 现逻辑：完全依赖 ATR 移动止盈来锁定大利润
+                pass
                 
-                if position < 0 and current_price > (entry_price + 2.5 * current_atr):
-                    logger.warning(f"触发硬止损 (亏损 > 2.5 ATR)！平空离场")
-                    executor.place_order(side=1, quantity=abs(position))
-                    continue
+                # 3. 止损逻辑 (移动硬止损 - 吊灯止损)
+                # 随着价格有利移动，止损线也跟着移动 (始终保持 2.5 ATR 的距离，直到触发保本)
+                if current_atr > 0:
+                    if position > 0:
+                        # 多单止损价 = 最高价 - 2.5 ATR (只升不降)
+                        new_stop = highest_price - 2.5 * current_atr
+                        if new_stop > stop_loss_price: stop_loss_price = new_stop
+                        
+                        if current_price < stop_loss_price:
+                            logger.warning(f"触发移动硬止损 (价格 {current_price} < {stop_loss_price:.4f})！平多离场")
+                            executor.place_order(side=-1, quantity=abs(position))
+                            continue
+                            
+                    elif position < 0:
+                        # 空单止损价 = 最低价 + 2.5 ATR (只降不升)
+                        new_stop = lowest_price + 2.5 * current_atr
+                        if stop_loss_price == 0 or new_stop < stop_loss_price: stop_loss_price = new_stop
+                        
+                        if current_price > stop_loss_price:
+                            logger.warning(f"触发移动硬止损 (价格 {current_price} > {stop_loss_price:.4f})！平空离场")
+                            executor.place_order(side=1, quantity=abs(position))
+                            continue
 
             # 4. 执行开仓交易
             if position == 0 and signal != 0:
