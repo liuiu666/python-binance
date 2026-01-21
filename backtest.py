@@ -59,21 +59,31 @@ def backtest():
         middle_band = curr['bb_middle']
         bb_upper = curr['bb_upper']
         bb_lower = curr['bb_lower']
-        ema_trend = curr['ema_trend']
+        ema_fast = curr['ema_fast']
+        ema_slow = curr['ema_slow']
+        k, d = curr['k'], curr['d']
+        adx = curr['adx']
+        volume = curr['volume']
+        vol_ma = curr['vol_ma20']
         timestamp = curr['timestamp']
         
-        # 模拟 check_signal 逻辑 (需要传入切片数据，但为了回测效率直接用已计算的指标)
-        # 这里复刻 strategy.check_signal 的核心判断逻辑
+        # 模拟 check_signal 逻辑 (Strategy V8.3: 顺势回调 - Trend Pullback)
         signal = 0
         
-        # 多头趋势 (价格 > EMA200) 只做多
-        if current_price > ema_trend:
-            if current_price < bb_lower and current_rsi < config.RSI_OVERSOLD:
-                signal = 1
-                
-        # 空头趋势 (价格 < EMA200) 只做空
-        elif current_price < ema_trend:
-            if current_price > bb_upper and current_rsi > config.RSI_OVERBOUGHT:
+        # 趋势定义
+        trend_long = ema_fast > ema_slow
+        trend_short = ema_fast < ema_slow
+        
+        # 1. 多头趋势找回调
+        if trend_long:
+            # RSI 回调到低位 + KDJ 金叉
+            if (current_rsi < 45 and prev['k'] < prev['d'] and k > d):
+                 signal = 1
+
+        # 2. 空头趋势找反弹
+        elif trend_short:
+            # RSI 反弹到高位 + KDJ 死叉
+            if (current_rsi > 55 and prev['k'] > prev['d'] and k < d):
                 signal = -1
             
         # --- 止盈止损逻辑 (复刻 main.py) ---
@@ -114,14 +124,7 @@ def backtest():
                     action = "close_short"
                     reason = f"移动止盈(回撤{config.TP_CALLBACK_ATR})"
                     
-            # 2. 回归中轨止盈 (有利润才走)
-            net_pnl_pct = pnl_pct - (config.FEE_RATE * 2)
-            if position > 0 and current_price >= middle_band and net_pnl_pct > 0.002:
-                action = "close_long"
-                reason = "回归中轨止盈"
-            elif position < 0 and current_price <= middle_band and net_pnl_pct > 0.002:
-                action = "close_short"
-                reason = "回归中轨止盈"
+            # 2. 移除中轨止盈 (V7 策略让利润奔跑)
                 
             # 3. 硬止损 (使用开仓时确定的固定止损价)
             # 检查是否在 K 线内触发

@@ -17,10 +17,10 @@ PROXY = {
 # 交易配置
 SYMBOL = "WETUSDT"   # 交易对
 # 策略配置
-STRATEGY_NAME = "RSI_Bollinger_Mean_Reversion" # 策略名称
-TIMEFRAME = "1m"    # 时间周期 (1m 适合超短线)
+STRATEGY_NAME = "Trend_Fast_V8" # 策略名称
+TIMEFRAME = "1m"    # 时间周期 (1m 极速版)
 
-# 高频交易配置 (已禁用，回归波段策略)
+# 高频交易配置 (已禁用)
 HFT_MODE = False          # 是否开启高频模式
 HFT_INTERVAL = 1.0        # 高频轮询间隔 (秒)
 DEPTH_LIMIT = 5           # 深度获取档位
@@ -49,19 +49,19 @@ CCI_PERIOD = 20      # CCI 周期 (用于震荡辅助)
 
 # 辅助风控 (ATR)
 ATR_PERIOD = 14      # ATR 周期
-MIN_VOLATILITY = 0.0005 # 最小波动率 0.05% (1m 周期降低阈值，避免不交易)
+MIN_VOLATILITY = 0.001 # 最小波动率 0.1% (1m 周期)
 
 
-# 利润保护配置 (趋势跟随模式)
+# 利润保护配置 (1m 顺势极速版)
 PROFIT_LOCK_ENABLE = True    # 是否开启利润保护
-BREAKEVEN_ATR = 0.8          # 盈利达 0.8 ATR 时 -> 开启保本 (给点波动空间)
-TP_TRIGGER_ATR = 2.5         # 盈利达 2.5 ATR 时 -> 启动移动止盈 (让利润奔跑)
-TP_CALLBACK_ATR = 0.8        # 移动止盈回调 0.8 ATR -> 止盈出局 (耐受正常回调)
+BREAKEVEN_ATR = 1.5          # 盈利达 1.5 ATR (约0.3%) -> 开启保本
+TP_TRIGGER_ATR = 4.0         # 盈利达 4.0 ATR (约0.8%) -> 启动移动止盈
+TP_CALLBACK_ATR = 1.0        # 移动止盈回调 1.0 ATR -> 止盈出局
 
 # 做T配置 (波段策略本身就是做T，此开关可辅助)
 DO_T_ENABLE = False          # 关闭额外的做T，策略本身即为震荡策略
 T_RATIO = 0.5                # 做T仓位比例
 RSI_BUY_BACK = 50            # 做T接回阈值
 
-FEE_RATE = 0.0004       # 币安合约 Taker 费率 (0.04%)
-SLIPPAGE = 0.001        # 预估滑点 (0.1%)
+FEE_RATE = 0.0005       # 币安合约 Taker 费率 (0.05%)
+SLIPPAGE = 0.0005        # 预估滑点 (0.05%)

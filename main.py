@@ -169,18 +169,7 @@ def main():
                 # 1. 利润保护逻辑 (保本 + 移动止盈)
                 if config.PROFIT_LOCK_ENABLE and current_atr > 0:
                     
-                    # === 新增：震荡模式下的快速止盈 (中轨止盈) ===
-                    if market_mode == "震荡":
-                        # 多单: 价格回归中轨 (说明反弹到位)
-                        if position > 0 and current_price > middle_band:
-                            logger.success(f"震荡模式中轨止盈 (RSI {current_rsi:.1f})！落袋为安")
-                            executor.place_order(side=-1, quantity=abs(position))
-                            continue
-                        # 空单: 价格回归中轨
-                        if position < 0 and current_price < middle_band:
-                            logger.success(f"震荡模式中轨止盈 (RSI {current_rsi:.1f})！落袋为安")
-                            executor.place_order(side=1, quantity=abs(position))
-                            continue
+                    # 趋势策略无需中轨止盈，让利润奔跑
                     
                     # A. 移动止盈 (优先): 曾经盈利超过 TP_TRIGGER_ATR，启用回调止盈
                     if max_profit_atr_multiple > config.TP_TRIGGER_ATR:
@@ -263,12 +252,12 @@ def main():
                     logger.info(f"资金: {balance:.2f} U | 风险额: {risk_amount:.2f} U | 止损距(2.5ATR): {stop_loss_dist:.5f} | 计算仓位: {quantity}")
                     
                     if signal == 1:
-                        logger.info("RSI超卖+下轨突破 -> 抄底开多")
+                        logger.info("趋势回调 -> 顺势开多")
                         executor.place_order(side=1, quantity=quantity)
                         highest_price = current_price # 重置追踪
                         stop_loss_price = current_price - stop_loss_dist # 记录止损价
                     elif signal == -1:
-                        logger.info("RSI超买+上轨突破 -> 摸顶开空")
+                        logger.info("趋势反弹 -> 顺势开空")
                         executor.place_order(side=-1, quantity=quantity)
                         lowest_price = current_price # 重置追踪
                         stop_loss_price = current_price + stop_loss_dist # 记录止损价

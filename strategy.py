@@ -80,31 +80,21 @@ class Strategy:
         tr3 = pd.DataFrame(low_close)
         frames = [tr1, tr2, tr3]
         tr = pd.concat(frames, axis=1, join='inner').max(axis=1)
-        atr = tr.rolling(config.ADX_PERIOD).mean()
+        atr = tr.rolling(14).mean()
         
-        plus_di = 100 * (plus_dm.ewm(alpha=1/config.ADX_PERIOD).mean() / atr)
-        minus_di = 100 * (abs(minus_dm).ewm(alpha=1/config.ADX_PERIOD).mean() / atr)
+        plus_di = 100 * (plus_dm.ewm(alpha=1/14).mean() / atr)
+        minus_di = 100 * (abs(minus_dm).ewm(alpha=1/14).mean() / atr)
         dx = (abs(plus_di - minus_di) / abs(plus_di + minus_di)) * 100
-        df['adx'] = dx.rolling(config.ADX_PERIOD).mean()
-
+        df['adx'] = dx.rolling(14).mean()
+        
+        # 计算成交量均线 (Volume MA)
+        df['vol_ma20'] = df['volume'].rolling(window=20).mean()
+        
         return df
 
-    def check_signal(self, klines):
-        if not klines or len(klines) < 200: # 需要更多数据计算 EMA200
-            return 0, 0.0, 0.0, 50.0, 0.0, "未知" # 增加 ADX 和 Mode 返回
-            
-        # 转换为 DataFrame
-        df = pd.DataFrame(klines, columns=[
-            'timestamp', 'open', 'high', 'low', 'close', 'volume',
-            'close_time', 'quote_asset_volume', 'number_of_trades',
-            'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
-        ])
-        
-        # 转换数据类型
-        df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
-        
-        # 计算指标
-        df = self.calculate_indicators(df)
+    def check_signal(self, df):
+        if len(df) < 100:
+            return 0, 0.0, 0.0, 50.0, 0.0, "数据不足"
         
         # 获取最新数据
         curr = df.iloc[-1]
@@ -121,49 +111,67 @@ class Strategy:
         ema_fast = curr['ema_fast']
         k, d = curr['k'], curr['d']
         adx = curr['adx']
+        volume = curr['volume']
+        vol_ma = curr['vol_ma20']
         
         # 市场状态判定
-        market_mode = "趋势" if adx > config.ADX_THRESHOLD else "震荡"
+        trend_strength = adx
+        is_trending = trend_strength > 20
+        is_vol_valid = volume > vol_ma # 确认有成交量支持
+        
+        # 均线趋势定义
         trend_dir = "多头" if ema_fast > ema_slow else "空头"
         
-        logger.info(f"价格:{current_price} | RSI:{current_rsi:.1f} | ADX:{adx:.1f}({market_mode}) | 趋势:{trend_dir}")
+        logger.info(f"价格:{current_price} | EMA20:{ema_fast:.4f} | RSI:{current_rsi:.1f} | ADX:{adx:.1f} | 趋势:{trend_dir}")
         
         # 0. 波动率过滤
         if current_atr < (current_price * config.MIN_VOLATILITY):
             logger.info("波动率过低，不交易")
-            return 0, current_atr, bb_middle, current_rsi, adx, market_mode
-
-        # --- 策略分支 ---
+            return 0, current_atr, bb_middle, current_rsi, adx, "低波"
         
-        # 分支 A: 震荡市场 (ADX < 25) -> 布林带回归策略
-        if market_mode == "震荡":
-            # 震荡做多: 跌破下轨 + RSI超卖 (<30)
-            if current_price < bb_lower and current_rsi < 30:
-                logger.success(f"震荡触底 (RSI {current_rsi:.1f}) -> 逆势开多")
-                return 1, current_atr, bb_middle, current_rsi, adx, market_mode
-            
-            # 震荡做空: 突破上轨 + RSI超买 (>70)
-            if current_price > bb_upper and current_rsi > 70:
-                logger.success(f"震荡触顶 (RSI {current_rsi:.1f}) -> 逆势开空")
-                return -1, current_atr, bb_middle, current_rsi, adx, market_mode
+        # --- 策略 V7: 5m 趋势回调策略 (只顺势，不逆势) ---
+        
+        # 如果没有趋势 (ADX < 20)，休息
+        if not is_trending:
+            logger.info(f"ADX过低 ({adx:.1f} < 20) -> 市场无序，休息观望")
+            return 0, current_atr, bb_middle, current_rsi, adx, "震荡"
 
-        # 分支 B: 趋势市场 (ADX >= 25) -> 双均线顺势策略
-        else:
-            # 趋势做多: 多头排列 + KDJ金叉 + 并非严重超买
-            if (ema_fast > ema_slow and 
-                prev['k'] < prev['d'] and k > d and 
-                current_rsi < 70):
-                 logger.success(f"趋势金叉 (ADX {adx:.1f}) -> 顺势开多")
-                 return 1, current_atr, bb_middle, current_rsi, adx, market_mode
-
-            # 趋势做空: 空头排列 + KDJ死叉 + 并非严重超卖
-            if (ema_fast < ema_slow and 
-                prev['k'] > prev['d'] and k < d and 
-                current_rsi > 30):
-                logger.success(f"趋势死叉 (ADX {adx:.1f}) -> 顺势开空")
-                return -1, current_atr, bb_middle, current_rsi, adx, market_mode
+        # 1. 做多逻辑
+        # 条件A: 长期多头 (EMA20 > EMA120)
+        # 条件B: 价格回调到位 (KDJ金叉)
+        # 条件C: 拒绝追高 (RSI < 60, 价格距离 EMA20 不超过 0.5%)
+        # 条件D: 成交量确认 (Volume > 0.8 * MA20)
+        # 条件E: 动能确认 (RSI > 45)
+        if trend_dir == "多头":
+            # 计算乖离率
+            bias = (current_price - ema_fast) / ema_fast
             
-        return 0, current_atr, bb_middle, current_rsi, adx, market_mode
+            # 1. KDJ 金叉 (K 上穿 D)
+            # 2. K < 60 (回调区域)
+            # 3. 乖离率 < 0.5% (放宽至 0.5%)
+            # 4. 成交量 > 0.8 * MA20
+            if (prev['k'] < prev['d'] and k > d and k < 60 and bias < 0.005 and volume > 0.8 * vol_ma and current_rsi > 45):
+                 logger.success(f"趋势多头 + 回调金叉 + 放量 (Bias {bias*100:.2f}%) -> 顺势低吸")
+                 return 1, current_atr, bb_middle, current_rsi, adx, "趋势多"
+
+        # 2. 做空逻辑
+        # 条件A: 长期空头 (EMA20 < EMA120)
+        # 条件B: 价格反弹到位
+        # 条件C: 拒绝追低 (RSI > 40, 价格距离 EMA20 不超过 0.5%)
+        # 条件D: 成交量确认
+        # 条件E: 动能确认 (RSI < 55)
+        elif trend_dir == "空头":
+            bias = (ema_fast - current_price) / ema_fast
+            
+            # 1. KDJ 死叉 (K 下穿 D)
+            # 2. K > 40 (反弹区域)
+            # 3. 乖离率 < 0.5%
+            # 4. 成交量 > 0.8 * MA20
+            if (prev['k'] > prev['d'] and k < d and k > 40 and bias < 0.005 and volume > 0.8 * vol_ma and current_rsi < 55):
+                logger.success(f"趋势空头 + 反弹死叉 + 放量 (Bias {bias*100:.2f}%) -> 顺势高空")
+                return -1, current_atr, bb_middle, current_rsi, adx, "趋势空"
+            
+        return 0, current_atr, bb_middle, current_rsi, adx, "观察"
 
     def analyze_orderbook(self, depth):
         if not depth:
