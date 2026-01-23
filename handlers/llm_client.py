@@ -39,7 +39,7 @@ class LLMClient:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "你是一个专业的加密货币日内交易员。根据用户提供的技术指标和市场数据，判断未来的短期走势。请只输出 JSON 格式，包含字段: signal (BUY/SELL/HOLD), reason (简短理由), confidence (0-100)."},
+                    {"role": "system", "content": "你是一个专业的加密货币日内交易员。根据用户提供的技术指标和市场数据，判断未来的短期走势。请只输出 JSON 格式，包含字段: signal (BUY/SELL/HOLD), reason (简短理由), confidence (0-100), stop_loss (建议止损价), take_profit (建议止盈价)."},
                     {"role": "user", "content": prompt}
                 ],
                 response_format={"type": "json_object"}
@@ -163,5 +163,12 @@ class LLMClient:
         请只输出 JSON 格式，包含字段: 
         - signal (BUY/SELL/HOLD)
         - confidence (0-100)
+        - stop_loss (建议止损价格，数值类型)
+        - take_profit (建议止盈价格，数值类型)
         - reason (简短理由，必须包含对费率或持仓量的分析)
+        
+        [止盈止损建议]
+        - 请根据 ATR 或 支撑压力位 给出具体的止盈止损价格。
+        - 针对小市值/高波动币种，建议设置较宽的止损 (如 3倍 ATR) 以防被震仓。
+        - 止盈应至少是止损距离的 1.5 倍 (盈亏比 > 1.5)。
         """

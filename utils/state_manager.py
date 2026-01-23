@@ -75,8 +75,8 @@ class StateManager:
     def get_position(self):
         return self.state.get('current_position')
         
-    def is_in_cooldown(self, symbol, cooldown_seconds=3600):
-        """检查是否在冷却期"""
+    def is_in_cooldown(self, symbol, cooldown_seconds=600):
+        """检查是否在冷却期 (默认 10分钟)"""
         if 'cooldowns' not in self.state:
             return False
             

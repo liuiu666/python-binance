@@ -1,6 +1,7 @@
 from handlers.llm_client import LLMClient
 from handlers.binance_client import BinanceClient
 import pandas as pd
+import time
 
 class AIStrategy:
     def __init__(self):
@@ -90,25 +91,39 @@ class AIStrategy:
             "atr": current.get('ATR', 0)
         }
         
-        # 6. 计算止盈止损 (基于 ATR)
+        # 6. 计算止盈止损 (使用 LLM 返回的建议值，如果 LLM 未返回则使用默认 ATR 逻辑兜底)
         if signal:
             atr = current.get('ATR', 0)
             price = current['收盘价']
-            if atr > 0:
+            
+            # 优先使用 LLM 建议的止盈止损
+            llm_sl = llm_result.get('stop_loss')
+            llm_tp = llm_result.get('take_profit')
+            
+            if llm_sl and llm_tp:
+                info['stop_loss'] = float(llm_sl)
+                info['take_profit'] = float(llm_tp)
+                print(f"   [AI 建议] 使用 AI 提供的风控点位: SL {llm_sl}, TP {llm_tp}")
+            elif atr > 0:
+                # [兜底] 针对小币种/高波动币种，扩大止盈止损范围
                 if signal == 'BUY':
-                    info['stop_loss'] = price - (2 * atr)
-                    info['take_profit'] = price + (3 * atr)
+                    # 止损 3.0 ATR (原 2.0)，止盈 5.0 ATR (原 3.0)
+                    info['stop_loss'] = price - (3.0 * atr)
+                    info['take_profit'] = price + (5.0 * atr)
                 elif signal == 'SELL':
-                    info['stop_loss'] = price + (2 * atr)
-                    info['take_profit'] = price - (3 * atr)
+                    info['stop_loss'] = price + (3.0 * atr)
+                    info['take_profit'] = price - (5.0 * atr)
+                print(f"   [AI 未提供点位] 使用 ATR 兜底策略: SL {info['stop_loss']:.4f}, TP {info['take_profit']:.4f}")
             else:
-                # 如果没有 ATR，使用固定百分比 (例如 1% 止损, 2% 止盈)
+                # [兜底] 如果没有 ATR，使用固定百分比 (针对小币种扩大波动容忍)
+                # 止损 3%，止盈 6%
                 if signal == 'BUY':
-                    info['stop_loss'] = price * 0.99
-                    info['take_profit'] = price * 1.02
+                    info['stop_loss'] = price * 0.97
+                    info['take_profit'] = price * 1.06
                 elif signal == 'SELL':
-                    info['stop_loss'] = price * 1.01
-                    info['take_profit'] = price * 0.98
+                    info['stop_loss'] = price * 1.03
+                    info['take_profit'] = price * 0.94
+                print(f"   [AI 未提供点位且无 ATR] 使用固定百分比兜底: SL {info['stop_loss']:.4f}, TP {info['take_profit']:.4f}")
         
         print("-" * 50)
         print(f"   [AI 分析结果] {symbol}")
@@ -132,6 +147,19 @@ class AIStrategy:
         if df is None or len(df) < 5:
             return 'HOLD', {}
             
+        # [新增] 最小持仓时间保护 (15分钟)
+        # 避免开仓后因短期波动立即平仓
+        current_ts = int(time.time() * 1000)
+        last_update = position.get('update_time', 0)
+        
+        # 如果获取不到 update_time (比如旧代码兼容)，则默认不保护
+        if last_update > 0:
+            holding_ms = current_ts - last_update
+            # 15分钟 = 900000 毫秒
+            if holding_ms < 900000:
+                print(f">>> [持仓保护] {position['symbol']} 持仓时间不足 15 分钟 ({holding_ms/1000/60:.1f} min)，跳过 AI 评估")
+                return 'HOLD', {"reason": "持仓保护期", "confidence": 100}
+
         current = df.iloc[-1]
         
         market_data = {

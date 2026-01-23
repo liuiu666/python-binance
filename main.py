@@ -14,7 +14,14 @@ def run_bot():
     print(">>> 正在加载 Skills...")
     
     # 初始化模块
-    client = BinanceClient()
+    client = None
+    while client is None:
+        try:
+            client = BinanceClient()
+        except Exception:
+            print(">>> [System] 初始化失败，5秒后重试...")
+            time.sleep(5)
+            
     scanner = MarketScanner()
     analyzer = MarketAnalyzer()
     sentiment = SentimentAnalyzer()
@@ -152,13 +159,18 @@ def run_bot():
                 continue
 
             # 2. 选币
-            top_coins = scanner.scan_market(min_volume=10000000, max_spread=0.005, top_n=10) # 扩大筛选范围，应对冷却过滤
+            # [优化] 针对小币种调整参数: 
+            # 最小成交额降低到 50万 USDT (原 1000万)
+            # 允许更大价差 1% (原 0.5%)
+            # 扩大候选列表 top_n=15
+            top_coins = scanner.scan_market(min_volume=500000, max_spread=0.01, top_n=15)
             target_symbol = None
             
             if top_coins is not None and not top_coins.empty:
                 for _, row in top_coins.iterrows():
                     sym = row['symbol']
-                    if not state_manager.is_in_cooldown(sym):
+                    # [优化] 冷却时间恢复为 10分钟 (600秒)
+                    if not state_manager.is_in_cooldown(sym, cooldown_seconds=600):
                         target_symbol = sym
                         break
                     else:

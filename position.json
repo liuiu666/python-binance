@@ -3,11 +3,14 @@
     "daily_stats": {
         "date": "2026-01-23",
         "initial_balance": 43.35376139,
-        "realized_pnl": -0.38541504000000004,
-        "trade_count": 2
+        "realized_pnl": -0.94828842,
+        "trade_count": 9
     },
     "cooldowns": {
-        "RIVERUSDT": 1769165194.592743,
-        "ACUUSDT": 1769165759.0169141
+        "RIVERUSDT": 1769168811.8705013,
+        "ACUUSDT": 1769169359.9865322,
+        "INUSDT": 1769168205.785398,
+        "SKRUSDT": 1769168480.4430702,
+        "SENTUSDT": 1769170163.4349034
     }
 }

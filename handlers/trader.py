@@ -152,15 +152,29 @@ class TradeExecutor:
                     else:
                         sl_price = round(sl_price, filters['price_precision'])
                         
+                    # 计算保证成交的限价单价格 (Buy Stop -> Higher Price, Sell Stop -> Lower Price)
+                    limit_price = sl_price
+                    if close_side == 'SELL':
+                         limit_price = sl_price * 0.95
+                    else:
+                         limit_price = sl_price * 1.05
+                         
+                    # 对 limit_price 进行精度处理
+                    if tick_size > 0:
+                        limit_price = round(limit_price, precision)
+                    else:
+                        limit_price = round(limit_price, filters['price_precision'])
+
                     self.client.place_order(
                         symbol=symbol,
                         side=close_side,
                         quantity=quantity, # 使用开仓数量 + reduce_only
-                        order_type='STOP_MARKET',
+                        order_type='STOP',
                         stop_price=str(sl_price),
+                        price=str(limit_price),
                         reduce_only=True
                     )
-                    print(f"   已挂止损单: {sl_price}")
+                    print(f"   已挂止损单(STOP): 触发 {sl_price}, 限价 {limit_price}")
 
                 # 止盈单
                 if take_profit:
@@ -353,12 +367,26 @@ class TradeExecutor:
                     else:
                         quantity = round(quantity, filters['quantity_precision'])
                 
+                # 计算 Limit Price
+                limit_price = new_sl
+                if close_side == 'SELL':
+                     limit_price = new_sl * 0.95
+                else:
+                     limit_price = new_sl * 1.05
+                     
+                if filters:
+                    if filters['tick_size'] > 0:
+                        limit_price = round(limit_price, precision)
+                    else:
+                        limit_price = round(limit_price, filters['price_precision'])
+
                 self.client.place_order(
                     symbol=symbol,
                     side=close_side,
                     quantity=quantity,
-                    order_type='STOP_MARKET',
+                    order_type='STOP',
                     stop_price=str(new_sl),
+                    price=str(limit_price),
                     reduce_only=True
                 )
                 
@@ -436,12 +464,25 @@ class TradeExecutor:
                 
             # 4. 挂新止损单 (针对总仓位)
             close_side = 'SELL' if side == 'BUY' else 'BUY'
+            # 计算 Limit Price
+            limit_price = new_sl
+            if close_side == 'SELL':
+                    limit_price = new_sl * 0.95
+            else:
+                    limit_price = new_sl * 1.05
+                    
+            if filters['tick_size'] > 0:
+                limit_price = round(limit_price, precision)
+            else:
+                limit_price = round(limit_price, filters['price_precision'])
+
             self.client.place_order(
                 symbol=symbol,
                 side=close_side,
                 quantity=total_quantity,
-                order_type='STOP_MARKET',
+                order_type='STOP',
                 stop_price=str(new_sl),
+                price=str(limit_price),
                 reduce_only=True
             )
             print(f"   已更新止损 (总仓位 {total_quantity}): {new_sl}")

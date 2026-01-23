@@ -2,9 +2,13 @@ from handlers.binance_client import BinanceClient
 import pandas as pd
 import time
 
+import re
+
 class MarketScanner:
     def __init__(self):
         self.client = BinanceClient()
+        # 预编译正则，只允许大写字母和数字
+        self.symbol_pattern = re.compile(r'^[A-Z0-9]+$')
 
     def scan_market(self, min_volume=10000000, max_spread=0.005, top_n=5):
         """
@@ -43,6 +47,11 @@ class MarketScanner:
             
             # 过滤非 USDT 合约
             if not symbol.endswith('USDT'):
+                continue
+
+            # [新增] 严格过滤非法字符 (防止乱码或恶意数据)
+            if not self.symbol_pattern.match(symbol):
+                print(f"   [Scanner] 忽略非法交易对名称: {symbol}")
                 continue
 
             # 过滤非交易状态的币种

@@ -16,24 +16,27 @@ class BinanceClient:
         self.https_proxy = os.getenv('HTTPS_PROXY')
 
         # 配置代理
-        requests_params = None
+        requests_params = {'timeout': 30}
         if self.http_proxy:
             print(f">>> [System] 检测到代理配置: {self.http_proxy}")
-            requests_params = {
-                'proxies': {
-                    'http': self.http_proxy,
-                    'https': self.https_proxy or self.http_proxy
-                }
+            requests_params['proxies'] = {
+                'http': self.http_proxy,
+                'https': self.https_proxy or self.http_proxy
             }
         else:
             print(">>> [System] 未检测到代理配置，将直连币安 API")
 
         # 初始化币安客户端
-        self.client = Client(
-            self.api_key, 
-            self.api_secret, 
-            requests_params=requests_params
-        )
+        try:
+            self.client = Client(
+                self.api_key, 
+                self.api_secret, 
+                requests_params=requests_params
+            )
+        except Exception as e:
+            print(f">>> [System] 致命错误: 无法连接币安 API (Timeout/Proxy Error)")
+            print(f"    详情: {e}")
+            raise e
 
     def get_account_info(self):
         """
@@ -184,7 +187,8 @@ class BinanceClient:
                         'entry_price': float(pos['entryPrice']),
                         'unrealized_pnl': float(pos['unrealizedProfit']),
                         'leverage': int(pos['leverage']),
-                        'side': 'BUY' if amt > 0 else 'SELL'
+                        'side': 'BUY' if amt > 0 else 'SELL',
+                        'update_time': int(pos['updateTime'])
                     })
             return positions
         except Exception as e:
@@ -219,6 +223,9 @@ class BinanceClient:
             # lastFundingRate 是最近一期的费率
             return float(funding['lastFundingRate'])
         except Exception as e:
+            # 忽略 -4108 (币种不可用) 错误，避免刷屏
+            if hasattr(e, 'code') and int(e.code) == -4108:
+                return 0.0
             print(f"获取费率失败 {symbol}: {e}")
             return 0.0
 
@@ -230,6 +237,9 @@ class BinanceClient:
             oi = self.client.futures_open_interest(symbol=symbol)
             return float(oi['openInterest'])
         except Exception as e:
+            # 忽略 -4108 (币种不可用) 错误，避免刷屏
+            if hasattr(e, 'code') and int(e.code) == -4108:
+                return 0.0
             print(f"获取持仓量失败 {symbol}: {e}")
             return 0.0
 
@@ -296,6 +306,16 @@ class BinanceClient:
                 if reduce_only:
                     params['reduceOnly'] = True
                 
+            elif order_type in ['STOP', 'TAKE_PROFIT']:
+                if stop_price is None or price is None:
+                    print(f"{order_type} 必须指定触发价格(stop_price)和执行价格(price)")
+                    return None
+                params['stopPrice'] = stop_price
+                params['price'] = price
+                params['workingType'] = 'MARK_PRICE'
+                if reduce_only:
+                    params['reduceOnly'] = True
+
             elif order_type in ['STOP_MARKET', 'TAKE_PROFIT_MARKET']:
                 if stop_price is None:
                     print(f"{order_type} 必须指定触发价格")
