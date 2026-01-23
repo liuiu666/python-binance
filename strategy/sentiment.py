@@ -2,8 +2,8 @@ from handlers.binance_client import BinanceClient
 import pandas as pd
 
 class SentimentAnalyzer:
-    def __init__(self):
-        self.client = BinanceClient()
+    def __init__(self, client=None):
+        self.client = client or BinanceClient()
 
     def check_market_sentiment(self, symbol='BTCUSDT', crash_threshold=-0.01):
         """

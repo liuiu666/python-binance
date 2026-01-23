@@ -1,43 +1,46 @@
 ---
 name: "market-analysis"
-description: "对特定币种进行深度市场分析，包括 K 线形态、技术指标 (MA, RSI, ATR) 和资金流向。当选定目标币种后调用。"
+description: "对指定币种做多周期趋势与资金面分析，输出趋势方向与可交易性。当确定候选币后调用。"
 ---
 
-# Market Analysis Skill
+# 市场分析技能
 
-此技能用于对单一币种进行全方位的技术面和资金面分析，为交易决策提供数据支持。
+此技能用于对单一币种进行多周期趋势与资金面评估，给出清晰的趋势结论与是否可交易。
 
-## 功能特性
-1. **技术指标计算**：自动计算 MA (均线), RSI (强弱指标), MACD, ATR (波动率)。
-2. **资金流向分析**：分析 1小时/4小时 的主动买入卖出量，判断主力意图。
-3. **K 线数据获取**：获取最近 100 根 K 线数据。
+## 核心输出
+- 趋势方向与强度：多头、空头或震荡
+- 趋势一致性：5m、1h 与 4h 是否同向
+- 波动与成交状态：ATR、量能是否健康
+- 资金面：资金费率、持仓量变化、主动买卖偏向
+- 可交易性结论：可做多、可做空、观望
 
-## 使用方法
+## 需要的数据
+- 5m、1h 与 4h 的 K 线数据与指标：MA20/50/200、ATR、成交量与均量
+- 当前价格与 24h 涨跌幅
+- 资金费率、持仓量变化
+- 主动买入卖出量与买卖比
+- 盘口价差与流动性
 
-### 代码调用
+## 输出结构
+必须输出 JSON，字段如下：
+- trend_bias: BUY_ONLY 或 SELL_ONLY 或 NONE
+- trend_strength: 0-100
+- tradeable: YES 或 NO
+- reasons: 精炼的要点列表
+- key_levels: 支撑与压力位
 
-```python
-from handlers.binance_client import BinanceClient
-from strategy.analysis import MarketAnalyzer
+## 提示词模板
+请以专业币圈交易员身份完成分析，严格按 JSON 输出：
+{
+  "trend_bias": "BUY_ONLY/SELL_ONLY/NONE",
+  "trend_strength": 0-100,
+  "tradeable": "YES/NO",
+  "reasons": ["要点1", "要点2", "要点3"],
+  "key_levels": {"support": "数值", "resistance": "数值"}
+}
 
-client = BinanceClient()
-analyzer = MarketAnalyzer()
-symbol = 'BTCUSDT'
-
-# 1. 获取 K 线数据
-df = client.get_klines(symbol, '1h', limit=100)
-
-# 2. 计算技术指标
-df_indicators = analyzer.calculate_indicators(df)
-print(df_indicators.tail())
-
-# 3. 获取资金流向
-flow_data = client.get_money_flow(symbol, '1h')
-flow_analysis = analyzer.analyze_money_flow(flow_data)
-print(flow_analysis)
-```
-
-## 输出解读
-- **ATR**: 用于设定止损位 (通常 2倍 ATR)。
-- **RSI**: >70 超买 (可能回调), <30 超卖 (可能反弹)。
-- **资金流向**: "净流入 > 0" 且 "买卖比 > 1" 通常表示多头强势。
+判断规则重点：
+1. 4h 趋势优先，1h 与 5m 需同向才可交易
+2. MA50 与 MA200 定义大趋势，MA20 用于趋势内节奏
+3. 资金流向与持仓量变化必须支持趋势方向
+4. 价差过大或量能萎缩视为不可交易

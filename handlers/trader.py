@@ -2,44 +2,202 @@ from handlers.binance_client import BinanceClient
 import math
 
 class TradeExecutor:
-    def __init__(self):
-        self.client = BinanceClient()
+    def __init__(self, client=None, state_manager=None):
+        self.client = client or BinanceClient()
+        self.state_manager = state_manager
+        self._local_trailing_stops = {}
 
-    def execute_trade(self, symbol, side, amount_usdt, leverage=5, slippage=0.002, stop_loss=None, take_profit=None):
+    def _get_local_stop(self, symbol):
+        if self.state_manager:
+            meta = self.state_manager.get_position_meta(symbol) or {}
+            val = meta.get('local_stop')
+            if val is not None:
+                try:
+                    return float(val)
+                except Exception:
+                    return None
+            return None
+        return self._local_trailing_stops.get(symbol)
+
+    def _set_local_stop(self, symbol, side, stop_price):
+        try:
+            stop_price = float(stop_price)
+        except Exception:
+            return
+
+        old_val = self._get_local_stop(symbol)
+        if old_val is None:
+            new_val = stop_price
+        else:
+            if side == 'BUY':
+                new_val = max(float(old_val), stop_price)
+            else:
+                new_val = min(float(old_val), stop_price)
+
+        if self.state_manager:
+            self.state_manager.set_position_meta(symbol, local_stop=new_val, local_stop_side=side)
+        else:
+            self._local_trailing_stops[symbol] = new_val
+
+    def _clear_local_stop(self, symbol):
+        if self.state_manager:
+            self.state_manager.set_position_meta(symbol, local_stop=None, local_stop_side=None)
+        if symbol in self._local_trailing_stops:
+            del self._local_trailing_stops[symbol]
+
+    def _place_stop_protection(self, symbol, side, stop_price):
+        if not self.client.is_algo_available():
+            self._set_local_stop(symbol, side, stop_price)
+            print(f"   [本地止损] 条件单不可用，本地止损价: {self._get_local_stop(symbol):.4f}")
+            return False
+
+        close_side = 'SELL' if side == 'BUY' else 'BUY'
+        order = self.client.place_order(
+            symbol=symbol,
+            side=close_side,
+            order_type='STOP_MARKET',
+            stop_price=str(stop_price),
+            close_position=True
+        )
+        if not order:
+            self._set_local_stop(symbol, side, stop_price)
+            print(f"   [本地止损] 条件单下单失败，本地止损价: {self._get_local_stop(symbol):.4f}")
+            return False
+        return True
+
+    def _quantize_price(self, price, filters):
+        tick_size = float(filters.get('tick_size', 0) or 0)
+        if tick_size > 0:
+            precision = int(round(-math.log(tick_size, 10), 0))
+            return round(float(price), precision)
+        return round(float(price), int(filters.get('price_precision', 8) or 8))
+
+    def _quantize_quantity(self, quantity, filters):
+        step_size = float(filters.get('step_size', 0) or 0)
+        if step_size > 0:
+            inv_step = 1.0 / step_size
+            qty = math.floor(float(quantity) * inv_step) / inv_step
+            qty_precision = int(round(-math.log(step_size, 10), 0))
+            return round(qty, qty_precision)
+        return round(float(quantity), int(filters.get('quantity_precision', 8) or 8))
+
+    def _place_split_take_profit(self, symbol, open_side, entry_price, take_profit, total_quantity, filters):
+        try:
+            entry_price = float(entry_price)
+            take_profit = float(take_profit)
+            total_quantity = float(total_quantity)
+        except Exception:
+            return False
+
+        if total_quantity <= 0 or entry_price <= 0 or take_profit <= 0:
+            return False
+
+        is_long = (open_side == 'BUY')
+        delta = abs(take_profit - entry_price)
+        if delta <= 0:
+            return False
+
+        ratios = [0.4, 0.3, 0.3]
+        if is_long:
+            raw_prices = [entry_price + 0.5 * delta, entry_price + 0.8 * delta, take_profit]
+        else:
+            raw_prices = [entry_price - 0.5 * delta, entry_price - 0.8 * delta, take_profit]
+
+        tick_size = float(filters.get('tick_size', 0) or 0)
+        prices = []
+        for p in raw_prices:
+            q = self._quantize_price(p, filters)
+            prices.append(q)
+
+        if tick_size > 0:
+            if is_long:
+                if prices[1] <= prices[0]:
+                    prices[1] = self._quantize_price(prices[0] + tick_size, filters)
+                if prices[2] <= prices[1]:
+                    prices[2] = self._quantize_price(prices[1] + tick_size, filters)
+            else:
+                if prices[1] >= prices[0]:
+                    prices[1] = self._quantize_price(prices[0] - tick_size, filters)
+                if prices[2] >= prices[1]:
+                    prices[2] = self._quantize_price(prices[1] - tick_size, filters)
+
+        min_qty = float(filters.get('min_qty', 0) or 0)
+        targets = []
+        used = 0.0
+
+        for i in range(len(ratios) - 1):
+            raw_qty = total_quantity * ratios[i]
+            qty = self._quantize_quantity(raw_qty, filters)
+            if qty < min_qty:
+                continue
+            if used + qty > total_quantity:
+                qty = self._quantize_quantity(max(total_quantity - used, 0), filters)
+            if qty >= min_qty:
+                targets.append((prices[i], qty))
+                used += qty
+
+        remaining = self._quantize_quantity(max(total_quantity - used, 0), filters)
+        if remaining >= min_qty:
+            targets.append((prices[-1], remaining))
+            used += remaining
+
+        close_side = 'SELL' if is_long else 'BUY'
+        if not targets:
+            qty = self._quantize_quantity(total_quantity, filters)
+            if qty >= min_qty:
+                targets = [(prices[-1], qty)]
+            else:
+                return False
+
+        ok_any = False
+        for tp_price, tp_qty in targets:
+            order = self.client.place_order(
+                symbol=symbol,
+                side=close_side,
+                quantity=tp_qty,
+                order_type='LIMIT',
+                price=str(tp_price),
+                reduce_only=True
+            )
+            if order:
+                ok_any = True
+                print(f"   已挂分批止盈单: 价 {tp_price}，量 {tp_qty}")
+
+        return ok_any
+
+    def execute_trade(self, symbol, side, amount_usdt, leverage=5, slippage=0.01, stop_loss=None, take_profit=None):
         """
         执行安全交易 (使用限价单防止滑点，含风控和杠杆设置，支持止盈止损)
         :param symbol: 交易对
         :param side: 'BUY' 或 'SELL'
         :param amount_usdt: 交易金额 (USDT)
         :param leverage: 杠杆倍数 (默认 5x)
-        :param slippage: 允许滑点 (默认 0.2%)
+        :param slippage: 允许滑点 (默认 1.0% - 针对小币优化)
         :param stop_loss: 止损价格 (可选)
         :param take_profit: 止盈价格 (可选)
         """
-        print(f">>> [Trader] 准备对 {symbol} 执行 {side} 操作，金额: {amount_usdt} USDT, 杠杆: {leverage}x")
+        side_text = "做多" if side == 'BUY' else "做空"
+        print(f">>>【交易执行】准备对 {symbol} 执行 {side_text} 操作，金额: {amount_usdt}，杠杆: {leverage}倍")
         
         # 0. 风控检查
         account = self.client.get_account_info()
         if not account:
-            print(">>> [Trader] 错误: 无法获取账户信息，中止交易")
+            print(">>>【交易执行】错误: 无法获取账户信息，中止交易")
             return None
             
         avail_balance = account['balance']['available_balance']
         if avail_balance < amount_usdt:
-            print(f">>> [Trader] 余额不足! 可用: {avail_balance:.2f}, 需要: {amount_usdt}")
+            print(f">>>【交易执行】余额不足! 可用: {avail_balance:.2f}, 需要: {amount_usdt}")
             return None
 
         # 1. 调整杠杆
         self.client.change_leverage(symbol, leverage)
         
         # 2. 获取最新盘口价格
-        # 改为直接获取指定 symbol，避免遍历整个列表
         book_ticker = self.client.get_book_tickers(symbol=symbol)
         
-        # 兼容处理：如果返回的是 dict (指定 symbol)，直接使用
-        # 如果返回 None 或 空，说明获取失败
         if not book_ticker or 'symbol' not in book_ticker:
-            print(f">>> [Trader] 错误: 无法获取 {symbol} 的盘口数据")
+            print(f">>>【交易执行】错误: 无法获取 {symbol} 的盘口数据")
             return None
             
         target_book = book_ticker
@@ -48,18 +206,14 @@ class TradeExecutor:
         bid_price = float(target_book['bidPrice'])
         
         if ask_price == 0 or bid_price == 0:
-            print(f">>> [Trader] 错误: 盘口价格异常 (Ask: {ask_price}, Bid: {bid_price})")
-            print(f"   调试信息: {target_book}")
+            print(f">>>【交易执行】错误: 盘口价格异常（卖一: {ask_price}, 买一: {bid_price}）")
             
             # 尝试使用最新成交价作为替代
-            print(">>> [Trader] 尝试使用最新成交价作为替代...")
+            print(">>>【交易执行】尝试使用最新成交价作为替代...")
             ticker = self.client.get_symbol_ticker(symbol)
             if ticker and float(ticker['price']) > 0:
                 last_price = float(ticker['price'])
                 print(f"   最新成交价: {last_price}")
-                # 既然盘口异常，说明流动性极差或数据问题，为了成交，我们基于最新价给一点溢价
-                # 这里的风险是：最新价可能也很旧，或者与真实盘口偏离极大
-                # 稳妥起见，如果盘口为0，最好不要硬做。但为了演示流程，我们给一个较大的滑点
                 ask_price = last_price
                 bid_price = last_price
             else:
@@ -70,22 +224,25 @@ class TradeExecutor:
         if side == 'BUY':
             # 买入：挂在卖一价上方一点点，确保成交但不吃太深
             exec_price = ask_price * (1 + slippage)
-            print(f"   当前卖一价: {ask_price}, 挂单价格: {exec_price:.4f} (滑点保护 {slippage*100}%)")
+            print(f"   当前卖一价: {ask_price}, 挂单价格: {exec_price:.4f}（滑点保护 {slippage*100:.2f}%）")
         elif side == 'SELL':
             # 卖出：挂在买一价下方一点点
             exec_price = bid_price * (1 - slippage)
-            print(f"   当前买一价: {bid_price}, 挂单价格: {exec_price:.4f} (滑点保护 {slippage*100}%)")
+            print(f"   当前买一价: {bid_price}, 挂单价格: {exec_price:.4f}（滑点保护 {slippage*100:.2f}%）")
             
-        # 3. 计算数量 (需处理精度)
+        # 3. 计算数量
         filters = self.client.get_symbol_filters(symbol)
         if not filters:
-            print(f">>> [Trader] 错误: 无法获取 {symbol} 的交易规则")
+            print(f">>>【交易执行】错误: 无法获取 {symbol} 的交易规则")
             return None
-            
-        print(f"   交易规则: {filters}")
+        
+        try:
+            min_notional = float(filters.get('min_notional', 5.0) or 5.0)
+            print(f"   交易规则: 最小数量 {filters.get('min_qty')}, 数量步进 {filters.get('step_size')}, 价格步进 {filters.get('tick_size')}, 最小金额 {min_notional}")
+        except Exception:
+            print("   交易规则: 已获取")
 
         # 3.1 价格精度处理
-        # 价格必须是 tick_size 的整数倍
         tick_size = filters['tick_size']
         if tick_size > 0:
             precision = int(round(-math.log(tick_size, 10), 0))
@@ -93,19 +250,14 @@ class TradeExecutor:
         else:
             exec_price = round(exec_price, filters['price_precision'])
             
-        # 3.2 数量计算与精度处理
+        # 3.2 数量精度处理
         raw_quantity = amount_usdt / exec_price
         step_size = filters['step_size']
         
         if step_size > 0:
-            # 数量必须是 step_size 的整数倍
-            # 比如 step_size = 0.001, raw = 0.0056 -> 0.005
-            # 算法: floor(raw / step) * step
-            # 使用 decimal 防止浮点误差
             inv_step = 1.0 / step_size
             quantity = math.floor(raw_quantity * inv_step) / inv_step
             
-            # 再次确保精度 (防止 1.0000000001 这种情况)
             qty_precision = int(round(-math.log(step_size, 10), 0))
             quantity = round(quantity, qty_precision)
         else:
@@ -113,17 +265,16 @@ class TradeExecutor:
             
         # 最小数量检查
         if quantity < filters['min_qty']:
-            print(f">>> [Trader] 错误: 计算数量 {quantity} 小于最小允许数量 {filters['min_qty']}")
+            print(f">>>【交易执行】错误: 计算数量 {quantity} 小于最小允许数量 {filters['min_qty']}")
             return None
             
-        # 最小名义价值检查 (Min Notional)
         notional_value = quantity * exec_price
         min_notional = filters.get('min_notional', 5.0)
         if notional_value < min_notional:
-            print(f">>> [Trader] 错误: 订单金额 {notional_value:.2f} 小于最小允许金额 {min_notional}")
+            print(f">>>【交易执行】错误: 订单金额 {notional_value:.2f} 小于最小允许金额 {min_notional}")
             return None
 
-        print(f"   计算下单数量: {quantity} (StepSize: {step_size})")
+        print(f"   计算下单数量: {quantity}")
         
         # 4. 下单
         order = self.client.place_order(
@@ -135,13 +286,11 @@ class TradeExecutor:
         )
         
         if order:
-            print(f">>> [Trader] 交易成功! 订单ID: {order.get('orderId')}")
+            print(f">>>【交易执行】交易成功! 订单号: {order.get('orderId')}")
             
             # 5. 挂止盈止损单
             if stop_loss or take_profit:
-                print(f">>> [Trader] 正在设置止盈止损 (SL: {stop_loss}, TP: {take_profit})...")
-                # 计算反向方向
-                close_side = 'SELL' if side == 'BUY' else 'BUY'
+                print(f">>>【交易执行】正在设置止盈止损（止损: {stop_loss}, 止盈: {take_profit}）...")
                 
                 # 止损单
                 if stop_loss:
@@ -151,59 +300,43 @@ class TradeExecutor:
                         sl_price = round(sl_price, precision)
                     else:
                         sl_price = round(sl_price, filters['price_precision'])
-                        
-                    # 计算保证成交的限价单价格 (Buy Stop -> Higher Price, Sell Stop -> Lower Price)
-                    limit_price = sl_price
-                    if close_side == 'SELL':
-                         limit_price = sl_price * 0.95
-                    else:
-                         limit_price = sl_price * 1.05
-                         
-                    # 对 limit_price 进行精度处理
-                    if tick_size > 0:
-                        limit_price = round(limit_price, precision)
-                    else:
-                        limit_price = round(limit_price, filters['price_precision'])
-
-                    self.client.place_order(
-                        symbol=symbol,
-                        side=close_side,
-                        order_type='STOP_MARKET',
-                        stop_price=str(sl_price),
-                        close_position=True
-                    )
-                    print(f"   已挂止损单(STOP_MARKET): 触发 {sl_price}")
+                    ok = self._place_stop_protection(symbol, side, sl_price)
+                    if ok:
+                        print(f"   已设置止损触发价: {sl_price}")
 
                 # 止盈单
                 if take_profit:
-                    # 精度处理
-                    tp_price = take_profit
-                    if tick_size > 0:
-                        tp_price = round(tp_price, precision)
-                    else:
-                        tp_price = round(tp_price, filters['price_precision'])
-                        
-                    # 改用 LIMIT 单作为止盈 (规避 API -4120 错误，且 LIMIT 单手续费更低)
-                    self.client.place_order(
+                    tp_price = self._quantize_price(take_profit, filters)
+                    ok = self._place_split_take_profit(
                         symbol=symbol,
-                        side=close_side,
-                        quantity=quantity, # 使用开仓数量 + reduce_only
-                        order_type='LIMIT',
-                        price=str(tp_price),
-                        reduce_only=True
+                        open_side=side,
+                        entry_price=exec_price,
+                        take_profit=tp_price,
+                        total_quantity=quantity,
+                        filters=filters
                     )
-                    print(f"   已挂止盈单(限价): {tp_price}")
+                    if not ok:
+                        close_side = 'SELL' if side == 'BUY' else 'BUY'
+                        self.client.place_order(
+                            symbol=symbol,
+                            side=close_side,
+                            quantity=quantity,
+                            order_type='LIMIT',
+                            price=str(tp_price),
+                            reduce_only=True
+                        )
+                        print(f"   已挂止盈单: {tp_price}")
 
         else:
-            print(">>> [Trader] 交易失败")
+            print(">>>【交易执行】交易失败")
             
         return order
 
     def close_position(self, symbol):
         """
-        平掉指定交易对的所有仓位 (包括撤销所有挂单)
+        平掉指定交易对的所有仓位（包括撤销所有挂单）
         """
-        print(f">>> [Trader] 正在强平 {symbol} 所有仓位...")
+        print(f">>>【交易执行】正在平掉 {symbol} 所有仓位...")
         
         # 1. 撤销所有挂单 (止盈止损单)
         try:
@@ -226,7 +359,7 @@ class TradeExecutor:
             
         # 3. 市价全平
         close_side = 'SELL' if target_pos['side'] == 'BUY' else 'BUY'
-        quantity = abs(float(target_pos['amount'])) # 确保是正数 float
+        quantity = abs(float(target_pos['amount']))
         
         try:
             self.client.place_order(
@@ -236,7 +369,8 @@ class TradeExecutor:
                 order_type='MARKET',
                 reduce_only=True
             )
-            print(f"   >>> {symbol} 强平成功!")
+            print(f"   {symbol} 平仓成功")
+            self._clear_local_stop(symbol)
             return True
         except Exception as e:
             print(f"   强平失败: {e}")
@@ -244,16 +378,27 @@ class TradeExecutor:
 
     def check_trailing_stop(self, position, current_price, atr=0):
         """
-        检查并更新移动止损 (Trailing Stop)
+        检查并更新移动止损
         策略:
-        1. 盈利 > 1.5 * ATR: 将止损上移到 开仓价 (保本)
-        2. 盈利 > 3.0 * ATR: 将止损上移到 当前价 - 2 * ATR (锁定利润)
+        1. 盈利 > 1.5 倍波动率：将止损上移到开仓价（保本）
+        2. 盈利 > 3.0 倍波动率：将止损上移到更接近当前价（锁定利润）
         """
         symbol = position['symbol']
         entry_price = position['entry_price']
         side = position['side']
+
+        local_sl = self._get_local_stop(symbol)
+        if local_sl is not None:
+            if side == 'BUY' and current_price <= local_sl:
+                print(f">>>【本地止损】{symbol} 触发止损价 {local_sl:.4f}，执行市价平仓")
+                self.close_position(symbol)
+                return
+            if side == 'SELL' and current_price >= local_sl:
+                print(f">>>【本地止损】{symbol} 触发止损价 {local_sl:.4f}，执行市价平仓")
+                self.close_position(symbol)
+                return
         
-        # 如果没有 ATR，使用价格百分比估算 (默认 ATR 约为 2%)
+        # 如果没有波动率，使用价格百分比估算
         if atr <= 0:
             atr = current_price * 0.02
             
@@ -268,11 +413,11 @@ class TradeExecutor:
             orders = self.client.client.futures_get_open_orders(symbol=symbol)
             stop_order = None
             
-            # [新增] 检查并清理错误的挂单 (例如 STOP 限价单)，并确保止损单唯一
+            # 检查并清理错误的挂单，并确保止损单唯一
             stop_orders = []
             for o in orders:
                 if o['type'] == 'STOP':
-                    print(f">>> [System] 发现不支持的 STOP 限价止损单 (ID: {o['orderId']})，正在撤销...")
+                    print(f">>>【系统】发现不支持的止损挂单（订单号: {o['orderId']}），正在撤销...")
                     try:
                         self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'], recvWindow=10000)
                     except Exception as e:
@@ -280,23 +425,18 @@ class TradeExecutor:
                 elif o['type'] == 'STOP_MARKET':
                     stop_orders.append(o)
             
-            # 确保只有一个 STOP_MARKET 单
+            # 确保只有一个止损单
             if len(stop_orders) > 1:
-                print(f">>> [System] 发现 {len(stop_orders)} 个 STOP_MARKET 止损单，正在清理多余委托...")
-                # 策略：保留触发价格最有利的那个 (对于BUY持仓，保留最高的止损价；对于SELL持仓，保留最低的止损价)
-                # 这样可以最大程度保护利润
+                print(f">>>【系统】发现 {len(stop_orders)} 个止损单，正在清理多余委托...")
                 if side == 'BUY':
-                    # 降序排列，取最大的 stopPrice
                     stop_orders.sort(key=lambda x: float(x['stopPrice']), reverse=True)
                 else:
-                    # 升序排列，取最小的 stopPrice
                     stop_orders.sort(key=lambda x: float(x['stopPrice']), reverse=False)
                 
-                # 保留第一个，撤销其余的
                 keep_order = stop_orders[0]
                 for o in stop_orders[1:]:
                     try:
-                        print(f"   撤销冗余止损单 (Price: {o['stopPrice']})")
+                        print(f"   撤销冗余止损单（触发价: {o['stopPrice']}）")
                         self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'], recvWindow=10000)
                     except Exception as e:
                         print(f"   撤销失败: {e}")
@@ -308,64 +448,91 @@ class TradeExecutor:
                 stop_order = None
 
             if not stop_order:
-                # [新增] 如果没有止损单，尝试补挂
-                print(f">>> [Trailing Stop] ⚠️ {symbol} 未检测到止损单，正在计算补单...")
+                print(f">>>【移动止损】{symbol} 未检测到止损单，正在计算补单...")
                 
-                # 1. 计算初始止损位 (Entry +/- 2 ATR)
                 if atr <= 0: atr = current_price * 0.02
                 
                 if side == 'BUY':
                     base_sl = entry_price - (2 * atr)
-                    # 如果当前价格已经跌破初始止损，则以当前价格为基准重设 (防止立即触发/报错)
                     if base_sl >= current_price:
                         base_sl = current_price - (2 * atr)
-                        print(f"   [风险] 已跌破原始止损，重设为现价 - 2ATR: {base_sl:.4f}")
+                        print(f"   【风险】已跌破原始止损，重设为更低止损: {base_sl:.4f}")
                 else:
                     base_sl = entry_price + (2 * atr)
                     if base_sl <= current_price:
                         base_sl = current_price + (2 * atr)
-                        print(f"   [风险] 已涨破原始止损，重设为现价 + 2ATR: {base_sl:.4f}")
+                        print(f"   【风险】已涨破原始止损，重设为更高止损: {base_sl:.4f}")
 
-                current_sl = base_sl #以此作为当前止损基准
-                new_sl = base_sl     # 默认新止损就是基准
+                current_sl = base_sl
+                new_sl = base_sl
                 
-                # 标记需要挂新单
-                stop_order = {'orderId': None} # 伪造一个对象以便进入后续逻辑 (orderId None 表示不需要撤单)
+                stop_order = {'orderId': None}
             else:
                 current_sl = float(stop_order['stopPrice'])
                 new_sl = None
             
             action_desc = ""
             
-            # 移动止损逻辑 (计算是否有更好的止损位)
+            # 混合移动止损逻辑：波动率跟踪 + 收益率锁定
+            roi_pct = (current_price - entry_price) / entry_price if side == 'BUY' else (entry_price - current_price) / entry_price
+            
+            # 临时变量，用于比较最优止损位
+            candidate_sl = current_sl 
+            
             if side == 'BUY':
-                # ... 保持原有逻辑 ...
-                # 1. 保本检查: 盈利 > 1.5 ATR 且 当前止损 < 开仓价
-                if profit > 1.5 * atr and current_sl < entry_price:
-                    new_sl = entry_price * 1.001 # 略微高于开仓价 (抵消手续费)
+                # 放宽保本止损触发条件，避免频繁被打掉
+                if (profit > 2.5 * atr or roi_pct > 0.03) and candidate_sl < entry_price:
+                    candidate_sl = entry_price * 1.002 # 保本 + 手续费
                     action_desc = "触发保本止损"
                 
-                # 2. 趋势跟踪: 盈利 > 3 ATR 且 当前止损 < (现价 - 2 ATR)
-                trail_price = current_price - (2 * atr)
-                if profit > 3 * atr and current_sl < trail_price:
-                    new_sl = trail_price
-                    action_desc = "触发移动止损 (锁定利润)"
+                atr_trail = current_price - (3 * atr) # 从 2 放宽到 3
+                if profit > 4 * atr and atr_trail > candidate_sl: # 必须有显著盈利才开始移动止损
+                    candidate_sl = atr_trail
+                    action_desc = "触发波动率移动止损"
                     
-            else: # SELL
-                # 1. 保本检查
-                if profit > 1.5 * atr and current_sl > entry_price:
-                    new_sl = entry_price * 0.999
+                if roi_pct > 0.08: # 放宽到 8%
+                    roi_lock = entry_price * 1.01
+                    if roi_lock > candidate_sl:
+                        candidate_sl = roi_lock
+                        action_desc = "触发收益率锁定利润（>8%）"
+                        
+                if roi_pct > 0.15: # 放宽到 15%
+                    profit_lock = entry_price + (current_price - entry_price) * 0.6
+                    if profit_lock > candidate_sl:
+                        candidate_sl = profit_lock
+                        action_desc = "触发利润回撤保护（>10%）"
+                        
+                # 确认是否更新
+                if candidate_sl > current_sl:
+                    new_sl = candidate_sl
+
+            else:
+                if (profit > 2.5 * atr or roi_pct > 0.03) and candidate_sl > entry_price:
+                    candidate_sl = entry_price * 0.998
                     action_desc = "触发保本止损"
                     
-                # 2. 趋势跟踪
-                trail_price = current_price + (2 * atr)
-                if profit > 3 * atr and current_sl > trail_price:
-                    new_sl = trail_price
-                    action_desc = "触发移动止损 (锁定利润)"
+                atr_trail = current_price + (3 * atr)
+                if profit > 4 * atr and atr_trail < candidate_sl:
+                    candidate_sl = atr_trail
+                    action_desc = "触发波动率移动止损"
+                    
+                if roi_pct > 0.08:
+                    roi_lock = entry_price * 0.99
+                    if roi_lock < candidate_sl:
+                        candidate_sl = roi_lock
+                        action_desc = "触发收益率锁定利润（>8%）"
+                        
+                if roi_pct > 0.15:
+                    profit_lock = entry_price + (current_price - entry_price) * 0.6
+                    if profit_lock < candidate_sl:
+                        candidate_sl = profit_lock
+                        action_desc = "触发利润回撤保护 (>10%)"
+                
+                if candidate_sl < current_sl:
+                    new_sl = candidate_sl
             
-            # 执行修改
             if new_sl:
-                print(f">>> [Trailing Stop] {symbol} {action_desc}")
+                print(f">>>【移动止损】{symbol} {action_desc}")
                 print(f"   原止损: {current_sl} -> 新止损: {new_sl:.4f}")
                 
                 # 1. 撤销旧单 (如果有)
@@ -375,7 +542,7 @@ class TradeExecutor:
                     except Exception as e:
                         print(f"   撤销旧止损单失败: {e}")
                 else:
-                    print(f"   [补单] 正在挂初始/补救止损单")
+                    print("   正在挂初始止损单")
                 
                 # 2. 挂新单
                 close_side = 'SELL' if side == 'BUY' else 'BUY'
@@ -400,7 +567,6 @@ class TradeExecutor:
                     else:
                         quantity = round(quantity, filters['quantity_precision'])
                 
-                # 计算 Limit Price
                 limit_price = new_sl
                 if close_side == 'SELL':
                      limit_price = new_sl * 0.95
@@ -413,13 +579,9 @@ class TradeExecutor:
                     else:
                         limit_price = round(limit_price, filters['price_precision'])
 
-                self.client.place_order(
-                    symbol=symbol,
-                    side=close_side,
-                    order_type='STOP_MARKET',
-                    stop_price=str(new_sl),
-                    close_position=True
-                )
+                ok = self._place_stop_protection(symbol, side, new_sl)
+                if not ok:
+                    return
                 
         except Exception as e:
             print(f"移动止损检查失败: {e}")

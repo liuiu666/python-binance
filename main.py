@@ -10,8 +10,8 @@ from handlers.trader import TradeExecutor
 from utils.state_manager import StateManager
 
 def run_bot():
-    print("=== 量化自动交易系统启动 (Daemon Mode + AI) ===")
-    print(">>> 正在加载 Skills...")
+    print("=== 量化自动交易系统启动 ===")
+    print(">>> 正在加载模块...")
     
     # 初始化模块
     client = None
@@ -19,15 +19,15 @@ def run_bot():
         try:
             client = BinanceClient()
         except Exception:
-            print(">>> [System] 初始化失败，5秒后重试...")
+            print(">>>【系统】初始化失败，5秒后重试...")
             time.sleep(5)
             
-    scanner = MarketScanner()
-    analyzer = MarketAnalyzer()
-    sentiment = SentimentAnalyzer()
-    ai_strategy = AIStrategy()
-    trader = TradeExecutor()
     state_manager = StateManager()
+    scanner = MarketScanner(client=client)
+    analyzer = MarketAnalyzer()
+    sentiment = SentimentAnalyzer(client=client)
+    ai_strategy = AIStrategy(client=client)
+    trader = TradeExecutor(client=client, state_manager=state_manager)
     
     while True:
         try:
@@ -50,28 +50,18 @@ def run_bot():
                         break
                 
                 if not is_still_open:
-                    print(f">>> [System] 检测到 {local_pos['symbol']} 仓位已平 (可能是触发止盈止损)，清除本地状态")
+                    print(f">>>【系统】检测到 {local_pos['symbol']} 仓位已平（可能触发止盈止损），清除本地状态")
                     state_manager.clear_position()
                     local_pos = None
-            
-            # 0.5 每日风控检查 (用户要求取消)
-            # balance_info = client.get_balance()
-            # if balance_info:
-            #     is_safe_daily, reason_daily = state_manager.check_daily_risk(balance_info['总权益'])
-            #     if not is_safe_daily:
-            #          print(f"[每日风控] {reason_daily} -> 今日停止开新仓")
-            #          if len(real_positions) == 0:
-            #              time.sleep(3600) # 休息1小时
-            #              continue
             
             # [新增] 清理“无关委托” (无持仓的挂单)
             try:
                 open_orders = client.get_all_open_orders()
                 if open_orders:
-                    # 获取当前持仓的 symbol 列表
+                    # 获取当前持仓的交易对列表
                     holding_symbols = [p['symbol'] for p in real_positions]
                     
-                    # 按 symbol 分组挂单
+                    # 按交易对分组挂单
                     orders_by_symbol = {}
                     for o in open_orders:
                         s = o['symbol']
@@ -82,33 +72,49 @@ def run_bot():
                     # 检查是否有无持仓的挂单
                     for s, orders in orders_by_symbol.items():
                         if s not in holding_symbols:
-                            print(f">>> [System] 发现 {s} 无持仓但有 {len(orders)} 个挂单，正在清理无关委托...")
+                            print(f">>>【系统】发现 {s} 无持仓但有 {len(orders)} 个挂单，正在清理无关委托...")
                             try:
                                 client.client.futures_cancel_all_open_orders(symbol=s, recvWindow=10000)
                                 print(f"   已撤销 {s} 所有挂单")
                             except Exception as e:
                                 print(f"   清理失败: {e}")
             except Exception as e:
-                print(f"[System] 挂单清理检查出错: {e}")
+                print(f"【系统】挂单清理检查出错: {e}")
 
             # 再次检查是否有真实持仓 (强制单向持仓限制)
+            # [修复] 结合本地状态，防止 API 延迟导致误判空仓
+            has_position = len(real_positions) > 0
+            if not has_position and local_pos:
+                print(f">>>【系统】警告: 本地显示有持仓 {local_pos['symbol']} 但交易所返回空仓 (可能是延迟)，暂停开仓")
+                # 强制跳过开仓逻辑
+                time.sleep(5)
+                continue
+                
             if len(real_positions) > 0:
                 print(f">>> 当前持有 {len(real_positions)} 个仓位:")
                 for p in real_positions:
-                    symbol = p['symbol']
-                    print(f"   {symbol} ({p['side']}): 数量 {p['amount']}, 浮盈亏 {p['unrealized_pnl']} U")
+                    symbol = str(p['symbol'])
+                    side_text = "多"
+                    if p['side'] == 'SELL':
+                        side_text = "空"
+                    print(f"   {symbol} ({side_text}): 数量 {p['amount']}, 浮盈亏 {p['unrealized_pnl']} 美元")
                     
-                    # 持仓巡检：AI 评估 + 移动止损
-                    # 获取 K 线
-                    df = client.get_klines(symbol, '1h', limit=100)
+                    # 持仓巡检：智能评估 + 移动止损
+                    # 获取K线
+                    df = client.get_klines(symbol, '1m', limit=220)
+                    df_large = client.get_klines(symbol, '15m', limit=220)
+                    # df_small 已移除，直接复用 df (1m)
+                    
                     if df is not None:
                         df_analyzed = analyzer.calculate_indicators(df)
+                        df_large_analyzed = analyzer.calculate_indicators(df_large) if df_large is not None else None
+
                         
                         # [新增] 移动止损检查
                         current_atr = df_analyzed.iloc[-1].get('ATR', 0)
                         current_price = df_analyzed.iloc[-1]['收盘价']
                         
-                        # 计算浮盈 ATR 倍数
+                        # 计算浮盈的波动率倍数
                         entry_price = float(p['entry_price'])
                         amount = abs(float(p['amount']))
                         side = p['side']
@@ -118,28 +124,42 @@ def run_bot():
                             profit_per_share = entry_price - current_price
                         
                         atr_multiple = profit_per_share / current_atr if current_atr > 0 else 0
+
+                        trend_1m = analyzer.get_trend_bias(df_analyzed) if df_analyzed is not None else None
+                        trend_15m = analyzer.get_trend_bias(df_large_analyzed) if df_large_analyzed is not None else None
                         
-                        # AI 评估 (获取信心分数用于加减仓判断)
+                        is_long = side == 'BUY'
+                        align_15m = trend_15m == ('BUY_ONLY' if is_long else 'SELL_ONLY')
+                        align_1m = trend_1m == ('BUY_ONLY' if is_long else 'SELL_ONLY')
+                        
+                        opp_15m = trend_15m == ('SELL_ONLY' if is_long else 'BUY_ONLY')
+                        opp_1m = trend_1m == ('SELL_ONLY' if is_long else 'BUY_ONLY')
+                        
+                        alignment_score = int(align_15m) + int(align_1m)
+                        opposite_score = int(opp_15m) + int(opp_1m)
+                        has_alignment_data = trend_1m is not None or trend_15m is not None
+                        
+                        # 智能评估（获取信心分数用于加减仓判断）
                         ai_action, ai_info = ai_strategy.audit_position(p, df_analyzed)
                         ai_reason = ai_info.get('reason', '')
                         ai_confidence = ai_info.get('confidence', 0)
                         
-                        # --- 浮动加减仓逻辑 ---
+                        # 浮动加减仓逻辑
                         is_scaling_op = False
                         
-                        # 1. 加仓逻辑 (Pyramiding): 浮盈 > 2.5 ATR
-                        if atr_multiple > 2.5:
-                            # [AI 过滤] 如果 AI 建议 CLOSE 且信心尚可，则不加仓
+                        # 加仓逻辑：浮盈 > 2.5 倍波动率
+                        if atr_multiple > 2.5 and alignment_score >= 2:
+                            # 智能过滤：如果建议平仓且信心尚可，则不加仓
                             if ai_action == 'CLOSE' and ai_confidence > 50:
-                                print(f"   [策略] 规则触发加仓，但 AI 建议平仓 (信心 {ai_confidence}) -> 取消加仓")
+                                print(f"   【策略】规则触发加仓，但智能评估建议平仓（信心 {ai_confidence}）-> 取消加仓")
                             else:
-                                # 检查是否已达到最大仓位 (例如总权益的 10%)
+                                # 检查是否已达到最大仓位（例如总权益的 10%）
                                 balance_info = client.get_balance()
                                 total_equity = balance_info.get('总权益', 0) if balance_info else 0
                                 current_position_value = amount * current_price
                                 
                                 if total_equity > 0 and current_position_value < (total_equity * 0.10):
-                                    # 加仓 0.5 倍初始仓位 (假设初始仓位约为 2% 风险对应的量，这里简单按当前价值的 30% 加)
+                                    # 加仓：按当前仓位价值的 30% 加
                                     add_amount = current_position_value * 0.3 
                                     # 最小加仓限制
                                     if add_amount > 10:
@@ -147,11 +167,11 @@ def run_bot():
                                         if success:
                                             is_scaling_op = True
                         
-                        # 2. 减仓逻辑 (Scale Out): 浮盈 > 4 ATR
-                        elif atr_multiple > 4.0:
-                            # [AI 过滤] 如果 AI 强烈建议 HOLD，则推迟减仓
-                            if ai_action == 'HOLD' and ai_confidence >= 80:
-                                print(f"   [策略] 规则触发减仓，但 AI 强烈建议持有 (信心 {ai_confidence}) -> 暂不减仓，让利润奔跑")
+                        # 减仓逻辑：浮盈 > 4 倍波动率
+                        elif atr_multiple > 4.0 or (has_alignment_data and alignment_score <= 1 and atr_multiple > 1.8):
+                            # 智能过滤：如果强烈建议持有，则推迟减仓
+                            if ai_action == 'HOLD' and ai_confidence >= 80 and opposite_score < 2:
+                                print(f"   【策略】规则触发减仓，但智能评估强烈建议持有（信心 {ai_confidence}）-> 暂不减仓")
                             else:
                                 # 减仓 30%
                                 pnl = trader.reduce_position(p, 0.3, current_price)
@@ -159,13 +179,13 @@ def run_bot():
                                     is_scaling_op = True
                                     # 更新已实现盈亏
                                     state_manager.update_pnl(pnl)
-                                    print(f"   [状态] 减仓已实现盈亏: {pnl:.2f} U")
+                                    print(f"   【状态】减仓已实现盈亏: {pnl:.2f} 美元")
                                 
                         # 如果没有执行加减仓
                         if not is_scaling_op:
                             # 检查是否需要全平
-                            if ai_action == 'CLOSE':
-                                print(f">>> [AI 建议] 对 {symbol} 执行平仓操作，理由: {ai_reason}")
+                            if ai_action == 'CLOSE' and (ai_confidence >= 65 or opposite_score >= 2):
+                                print(f">>>【智能建议】对 {symbol} 执行平仓操作，理由: {ai_reason}")
                                 success = trader.close_position(symbol)
                                 if success:
                                     state_manager.clear_position(symbol=symbol, pnl=p['unrealized_pnl'])
@@ -181,49 +201,93 @@ def run_bot():
             # 1. 大盘熔断检测
             is_safe, reason = sentiment.check_market_sentiment()
             if not is_safe:
-                print(f"[熔断] {reason} -> 暂停交易")
+                print(f"【熔断】{reason} -> 暂停交易")
                 time.sleep(300) # 暴跌时多睡会儿 (5分钟)
                 continue
 
-            # 2. 选币
-            # [优化] 针对小币种调整参数: 
-            # 最小成交额降低到 50万 USDT (原 1000万)
-            # 允许更大价差 1% (原 0.5%)
-            # 扩大候选列表 top_n=15
-            top_coins = scanner.scan_market(min_volume=500000, max_spread=0.01, top_n=15)
+
+            # 2. 扫描筛选
             target_symbol = None
+            target_trend_bias = None
             
-            if top_coins is not None and not top_coins.empty:
-                for _, row in top_coins.iterrows():
-                    sym = row['symbol']
-                    # [优化] 冷却时间恢复为 10分钟 (600秒)
-                    if not state_manager.is_in_cooldown(sym, cooldown_seconds=600):
-                        target_symbol = sym
-                        break
-                    else:
-                        print(f"   [冷却] {sym} 刚交易过，跳过")
+            # [指定模式] 只交易 ACUUSDT
+            tickers = ['ACUUSDT']
+            print(f"   【指定模式】当前只关注 {tickers[0]}，正在分析趋势与资金流...")
+ 
+            for sym in tickers:
+                # 冷却检查
+                if state_manager.is_in_cooldown(sym):
+                    continue
+                    
+                # 获取 1m K线确认趋势
+                df_1m = client.get_klines(sym, '1m', limit=100)
+                if df_1m is None:
+                    continue
+                
+                df_1m_analyzed = analyzer.calculate_indicators(df_1m)
+                if df_1m_analyzed is None:
+                    continue
+
+                # 资金流向初步过滤 (基于K线计算的 CMF/NetFlow)
+                cmf = df_1m_analyzed.iloc[-1].get('CMF', 0)
+                net_flow_ma = df_1m_analyzed.iloc[-1].get('Net_Flow_MA5', 0)
+                
+                # 如果资金流极差，直接跳过 (不浪费后续计算资源)
+                # 例如 CMF < -0.15 且 NetFlow < 0 (严重流出)
+                if cmf < -0.15 and net_flow_ma < 0:
+                    # print(f"   [过滤] {sym} 资金严重流出 (CMF: {cmf:.2f})")
+                    continue
+
+                trend_bias = analyzer.get_trend_bias(df_1m_analyzed)
+                if trend_bias:
+                    # 再次确认：如果是做多趋势，但 CMF 为负，则需要谨慎
+                    if trend_bias == 'BUY_ONLY' and cmf < -0.05:
+                         continue
+                    # 如果是做空趋势，但 CMF 为正，也跳过
+                    if trend_bias == 'SELL_ONLY' and cmf > 0.05:
+                         continue
+                         
+                    target_symbol = sym
+                    target_trend_bias = trend_bias
+                    print(f"   => 锁定目标: {target_symbol} ({target_trend_bias}, CMF:{cmf:.2f})")
+                    break
+                else:
+                    # 调试日志：为什么没选中
+                    print(f"   [跳过] {sym} 趋势不明确 (MA未排列)")
             
             if not target_symbol:
-                print("未找到合适目标 (或都在冷却中)，休息 60秒...")
-                time.sleep(60)
+                print("   没有发现合适的趋势币种，休息 30秒...")
+                time.sleep(30)
                 continue
                 
-            print(f">> 锁定目标: {target_symbol}")
+            print(f"   正在深入分析 {target_symbol} ...")
+            
+            # 3. 详细数据获取 (1m + 5m)
+            df_1m = client.get_klines(target_symbol, '1m', limit=220)
+            df_5m = client.get_klines(target_symbol, '5m', limit=200)
+            if df_1m is None or df_5m is None:
+                # time.sleep(10)
+                continue
+                
+            df_1m_analyzed = analyzer.calculate_indicators(df_1m)
+            df_5m_analyzed = analyzer.calculate_indicators(df_5m)
+            if df_1m_analyzed is None or df_5m_analyzed is None:
+                # time.sleep(10)
+                continue
 
-            # 3. 分析
-            df = client.get_klines(target_symbol, '1h', limit=100)
-            if df is None:
-                time.sleep(10)
+            trend_bias = target_trend_bias or analyzer.get_trend_bias(df_1m_analyzed)
+            if not trend_bias:
+                print(f"   【策略】趋势不明确，跳过 {target_symbol}")
+                state_manager.set_cooldown(target_symbol)
+                # time.sleep(60)
                 continue
-                
-            df_analyzed = analyzer.calculate_indicators(df)
             
             # 4. 策略 (AI 决策)
-            # signal, info = analyzer.check_breakout_strategy(df_analyzed)
-            signal, info = ai_strategy.analyze(df_analyzed, target_symbol)
+            signal, info = analyzer.check_trend_following(df_1m_analyzed, trend_bias=trend_bias)
             
             if signal:
-                print(f"!!! 信号触发: {signal} !!!")
+                signal_text = "做多" if signal == 'BUY' else "做空"
+                print(f"!!! 趋势信号触发: {signal_text} !!!")
                 
                 # 5. 交易
                 # 动态仓位计算
@@ -231,28 +295,28 @@ def run_bot():
                 total_equity = balance_info.get('总权益', 0) if balance_info else 0
                 
                 trade_amount = 20 # 默认最小额
-                leverage = 5      # 默认 5倍杠杆
+                leverage = 3      # 默认 3倍杠杆
                 
                 stop_loss = info.get('stop_loss')
                 current_price = info.get('current_price')
                 
                 if total_equity > 0 and stop_loss and current_price:
-                    # 风险模型: 单笔亏损不超过总权益的 2%
-                    risk_per_trade = total_equity * 0.02 
+                    # 风险模型: 单笔亏损不超过总权益的 1%
+                    risk_per_trade = total_equity * 0.01 
                     
                     price_diff = abs(current_price - stop_loss)
                     if price_diff > 0:
                         # 仓位价值 = (风险金额 / 止损价差) * 当前价格
                         position_value = (risk_per_trade / price_diff) * current_price
                         
-                        # 限制最大仓位为总权益的 50% (防止过度杠杆)
-                        max_position_value = total_equity * 0.5 * leverage 
+                        # 限制最大仓位为总权益的 30% (防止过度杠杆)
+                        max_position_value = total_equity * 0.3 * leverage 
                         trade_amount = min(position_value, max_position_value)
                         
                         # 再次检查最小交易额 (比如 10U)
                         trade_amount = max(trade_amount, 10.0)
                         
-                        print(f"   [风控计算] 风险额: {risk_per_trade:.2f}, 止损幅: {price_diff/current_price*100:.2f}%, 建议仓位: {trade_amount:.2f}")
+                        print(f"   【风控计算】风险额: {risk_per_trade:.2f}, 止损幅: {price_diff/current_price*100:.2f}%, 建议仓位: {trade_amount:.2f}")
                 
                 # 获取策略建议的止盈止损
                 take_profit = info.get('take_profit')
@@ -276,9 +340,10 @@ def run_bot():
                         entry_price=info['current_price'],
                         quantity=order.get('origQty', 0) # 假设
                     )
-                    print(">>> 开仓成功，状态已保存")
+                    print(">>> 开仓成功，状态已保存。等待 15秒 让交易所同步状态...")
+                    time.sleep(15) # [修复] 必须等待，防止 API 延迟导致重复下单
             else:
-                print(f"   [策略] AI 暂不推荐交易 {target_symbol}，进入冷却 (10分钟)")
+                print(f"   【策略】趋势策略暂不推荐交易 {target_symbol}，进入冷却（10分钟）")
                 state_manager.set_cooldown(target_symbol)
                 print("无信号，继续观察...")
 
@@ -286,13 +351,13 @@ def run_bot():
             print("\n>>> 用户手动停止")
             sys.exit(0)
         except Exception as e:
-            print(f"\n[Error] 发生异常: {str(e)}")
+            print(f"\n【异常】发生错误: {str(e)}")
             traceback.print_exc()
             print(">>> 系统将自动重试...")
         
         # 每轮间隔
-        print(">>> 本轮结束，休眠 60秒...")
-        time.sleep(60)
+        print(">>> 本轮结束，立即开始下一轮...")
+        time.sleep(5) # [修复] 增加最小轮询间隔，防止死循环刷单
 
 if __name__ == "__main__":
     run_bot()

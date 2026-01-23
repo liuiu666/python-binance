@@ -1,7 +1,12 @@
 import requests
 from binance.client import Client
 from binance.enums import *
+from binance.exceptions import BinanceAPIException
 import os
+import time
+import hashlib
+import hmac
+from urllib.parse import urlencode
 from dotenv import load_dotenv
 
 # 加载环境变量
@@ -14,6 +19,7 @@ class BinanceClient:
         self.api_secret = os.getenv('BINANCE_API_SECRET')
         self.http_proxy = os.getenv('HTTP_PROXY')
         self.https_proxy = os.getenv('HTTPS_PROXY')
+        self.debug = os.getenv('DEBUG') == '1'
 
         # 配置代理
         requests_params = {'timeout': 30}
@@ -35,10 +41,25 @@ class BinanceClient:
             )
             # 禁用默认的 ping，因为这在初始化时可能因为网络抖动导致失败
             self.client.ping = lambda: {}
+
+            self._algo_disabled_until_ts = 0.0
+            self._last_algo_warning_ts = 0.0
         except Exception as e:
             print(f">>> [System] 致命错误: 无法连接币安 API (Timeout/Proxy Error)")
             print(f"    详情: {e}")
             raise e
+
+    def is_algo_available(self):
+        return time.time() >= self._algo_disabled_until_ts
+
+    def _disable_algo_temporarily(self, seconds=300):
+        self._algo_disabled_until_ts = max(self._algo_disabled_until_ts, time.time() + seconds)
+
+    def _warn_once(self, msg, min_interval_seconds=60):
+        now = time.time()
+        if now - self._last_algo_warning_ts >= min_interval_seconds:
+            print(msg)
+            self._last_algo_warning_ts = now
 
     def get_account_info(self):
         """
@@ -216,6 +237,13 @@ class BinanceClient:
             print(f"获取交易对失败: {str(e)}")
             return []
 
+    def get_exchange_info(self):
+        try:
+            return self.client.futures_exchange_info()
+        except Exception as e:
+            print(f"获取交易所信息失败: {str(e)}")
+            return None
+
     def get_funding_rate(self, symbol):
         """
         获取当前资金费率
@@ -279,12 +307,9 @@ class BinanceClient:
 
     def place_order(self, symbol, side, quantity=None, order_type='MARKET', price=None, stop_price=None, reduce_only=False, close_position=False):
         """
-        下单 (兼容 2025 Algo Order API)
+        下单
         """
         try:
-            # 1. 如果是条件单 (STOP_MARKET 等)，必须使用 Algo API
-            is_algo_order = order_type in ['STOP_MARKET', 'TAKE_PROFIT_MARKET', 'STOP', 'TAKE_PROFIT', 'TRAILING_STOP_MARKET']
-            
             params = {
                 'symbol': symbol,
                 'side': side,
@@ -294,64 +319,39 @@ class BinanceClient:
             # [Fix -1021]
             params['recvWindow'] = 10000 
 
-            # --- 参数处理 ---
-            if is_algo_order:
-                # Algo Order 参数构造
-                # 根据最新文档：
-                # POST /fapi/v1/algo/futures/newOrder
-                
-                if stop_price is None:
-                    print(f"{order_type} 必须指定触发价格")
-                    return None
-                
+            if stop_price is not None:
                 params['stopPrice'] = str(stop_price)
                 params['workingType'] = 'MARK_PRICE'
-                
-                if close_position:
-                    params['closePosition'] = 'true' # 必须是字符串 'true'
-                    # closePosition=true 时不需要 quantity
-                    if 'quantity' in params:
-                        del params['quantity']
-                elif quantity is not None:
-                    params['quantity'] = quantity
-                else:
-                     print(f"Algo Order 必须指定 quantity 或 closePosition=True")
-                     return None
-                     
-                if reduce_only and not close_position:
-                    params['reduceOnly'] = 'true' # 必须是字符串 'true'
-                
-                print(f">>> [DEBUG] Algo 下单参数: {params}")
-                
-                # 调用 Algo API
-                # path: algo/futures/newOrder (python-binance 会自动拼接 /fapi/v1/)
-                return self.client._request_futures_api('post', 'algo/futures/newOrder', True, data=params)
 
+            if close_position:
+                params['closePosition'] = 'true'
             else:
-                # 标准订单 (LIMIT, MARKET)
-                if not close_position:
-                    if quantity is None:
-                         print(f"错误: 非全平模式下必须指定数量")
-                         return None
-                    params['quantity'] = quantity
-                
-                if order_type == 'LIMIT':
-                    if price is None:
-                        print("限价单必须指定价格")
-                        return None
-                    params['timeInForce'] = 'GTC'
-                    params['price'] = str(price)
-                    if reduce_only:
-                        params['reduceOnly'] = 'true'
-                elif reduce_only:
-                    params['reduceOnly'] = 'true'
+                if quantity is None:
+                    print(f"错误: 非全平模式下必须指定数量")
+                    return None
+                params['quantity'] = quantity
 
-                    
+            if order_type == 'LIMIT':
+                if price is None:
+                    print("限价单必须指定价格")
+                    return None
+                params['timeInForce'] = 'GTC'
+                params['price'] = str(price)
+
+            if reduce_only and not close_position:
+                params['reduceOnly'] = 'true'
+
+            if self.debug:
                 print(f">>> [DEBUG] 标准下单参数: {params}")
-                return self.client.futures_create_order(**params)
+            return self.client.futures_create_order(**params)
                 
         except Exception as e:
-            print(f"下单失败: {symbol} - {str(e)}")
+            # 忽略 -4120 (Order type not supported) 错误，通常因为账户配置不支持某些条件单，trader 会自动降级处理
+            if hasattr(e, 'code') and int(e.code) == -4120:
+                print(f"下单失败: {symbol} - 交易所不支持此类条件单 (Error -4120)，将尝试本地止损")
+            else:
+                print(f"下单失败: {symbol} - {str(e)}")
+            
             if hasattr(e, 'message'):
                 print(f"   Error Message: {e.message}")
             if hasattr(e, 'code'):

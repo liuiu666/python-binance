@@ -7,6 +7,12 @@ class StateManager:
     def __init__(self, filename='position.json'):
         self.filename = filename
         self.state = self._load_state()
+        if 'positions' not in self.state:
+            self.state['positions'] = {}
+        if 'cooldowns' not in self.state:
+            self.state['cooldowns'] = {}
+        if 'current_position' not in self.state:
+            self.state['current_position'] = None
         self._init_daily_stats()
 
     def _load_state(self):
@@ -37,13 +43,33 @@ class StateManager:
             json.dump(self.state, f, indent=4)
 
     def set_position(self, symbol, side, entry_price, quantity):
-        self.state['current_position'] = {
+        now_ts = time.time()
+        pos = {
             'symbol': symbol,
             'side': side,
             'entry_price': entry_price,
-            'quantity': quantity
+            'quantity': quantity,
+            'open_ts': now_ts,
+            'update_ts': now_ts
         }
+        self.state['current_position'] = pos
+        self.state['positions'][symbol] = pos
         self.save_state()
+
+    def set_position_meta(self, symbol, **kwargs):
+        if 'positions' not in self.state:
+            self.state['positions'] = {}
+        pos = self.state['positions'].get(symbol) or {}
+        pos.update(kwargs)
+        pos['symbol'] = symbol
+        pos['update_ts'] = time.time()
+        self.state['positions'][symbol] = pos
+        if self.state.get('current_position') and self.state['current_position'].get('symbol') == symbol:
+            self.state['current_position'].update(pos)
+        self.save_state()
+
+    def get_position_meta(self, symbol):
+        return (self.state.get('positions') or {}).get(symbol)
 
     def set_cooldown(self, symbol):
         """手动设置冷却时间 (例如 AI 拒绝交易后)"""
@@ -65,6 +91,12 @@ class StateManager:
         :param pnl: 本次交易盈亏 (用于统计)
         """
         self.state['current_position'] = None
+        if symbol and 'positions' in self.state and symbol in self.state['positions']:
+            self.state['positions'][symbol]['closed_ts'] = time.time()
+            if 'local_stop' in self.state['positions'][symbol]:
+                self.state['positions'][symbol]['local_stop'] = None
+            if 'local_stop_side' in self.state['positions'][symbol]:
+                self.state['positions'][symbol]['local_stop_side'] = None
         
         # 更新冷却时间
         if symbol:

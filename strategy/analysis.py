@@ -13,6 +13,11 @@ class MarketAnalyzer:
         """
         if df is None or df.empty:
             return None
+            
+        # 数据长度检查：如果数据量太少，无法计算指标，直接返回 None
+        # ATR 需要 14，MA200 需要 200 (虽然 MA 可以是 NaN，但太少的数据计算无意义且可能导致库报错)
+        if len(df) < 50:
+            return None
         
         # 复制一份以免修改原始数据
         data = df.copy()
@@ -20,6 +25,8 @@ class MarketAnalyzer:
         # 计算移动平均线 (MA)
         data['MA5'] = ta.trend.sma_indicator(data['收盘价'], window=5)
         data['MA20'] = ta.trend.sma_indicator(data['收盘价'], window=20)
+        data['MA50'] = ta.trend.sma_indicator(data['收盘价'], window=50)
+        data['MA200'] = ta.trend.sma_indicator(data['收盘价'], window=200)
         
         # 计算 RSI
         data['RSI'] = ta.momentum.rsi(data['收盘价'], window=14)
@@ -63,6 +70,129 @@ class MarketAnalyzer:
         data['CMF'] = cmf.chaikin_money_flow()
 
         return data
+
+    def get_trend_bias(self, df):
+        if df is None or len(df) < 50:
+            return None
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
+        ma20 = float(last.get('MA20', 0) or 0)
+        ma50 = float(last.get('MA50', 0) or 0)
+        ma200 = float(last.get('MA200', 0) or 0)
+        ma20_prev = float(prev.get('MA20', 0) or 0)
+        price = float(last.get('收盘价', 0) or 0)
+        if price <= 0:
+            return None
+            
+        # [优化] 放宽趋势判断：不再死板要求 MA50 > MA200
+        # 只要 MA20 > MA50 (短期金叉) 或者 价格强势站上 MA50，就允许做多
+        # 这样对于刚启动的行情也能捕捉到
+        if (ma20 > ma50 and ma50 > 0) or (price > ma50 and ma50 > 0):
+            return 'BUY_ONLY'
+        if (ma20 < ma50 and ma50 > 0) or (price < ma50 and ma50 > 0):
+            return 'SELL_ONLY'
+            
+        # 极简模式：如果均线粘合，直接看价格和 MA20 关系
+        if price > ma20:
+            return 'BUY_ONLY'
+        if price < ma20:
+            return 'SELL_ONLY'
+            
+        return None
+
+    def check_trend_following(self, df, trend_bias=None, volume_ratio=0.8, check_money_flow=True):
+        if df is None or len(df) < 50:
+            return None, {}
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
+        ma20 = float(last.get('MA20', 0) or 0)
+        ma50 = float(last.get('MA50', 0) or 0)
+        price = float(last.get('收盘价', 0) or 0)
+        atr = float(last.get('ATR', 0) or 0)
+        vol = float(last.get('成交量', 0) or 0)
+        vol_ma20 = float(last.get('VOL_MA20', 0) or 0)
+        
+        # 资金流向数据
+        net_flow = float(last.get('Net_Flow_MA5', 0) or 0)
+        cmf = float(last.get('CMF', 0) or 0)
+        mfi = float(last.get('MFI', 50) or 50)
+        
+        if price <= 0:
+            return None, {}
+            
+        # [放宽] 不再强制要求放量，只要不极度缩量即可
+        # if vol_ma20 > 0 and vol < vol_ma20 * volume_ratio:
+        #    return None, {}
+
+        # [优化] 趋势判定放宽
+        # 不再要求 ma50 > ma200，只要短期 ma20 > ma50 或价格强势
+        buy_trend = ma20 > ma50 or (price > ma20 and price > ma50)
+        sell_trend = ma20 < ma50 or (price < ma20 and price < ma50)
+        
+        signal = None
+        reason = ""
+        
+        if trend_bias == 'BUY_ONLY' or trend_bias is None:
+            # 只要价格站稳 MA20 即可尝试做多
+            if buy_trend and price > ma20:
+                signal = 'BUY'
+                reason = "价格站上 MA20，短期趋势看多"
+                
+        if signal is None and (trend_bias == 'SELL_ONLY' or trend_bias is None):
+            if sell_trend and price < ma20:
+                signal = 'SELL'
+                reason = "价格跌破 MA20，短期趋势看空"
+        
+        # [资金综合分析]
+        if signal and check_money_flow:
+            if signal == 'BUY':
+                # 稍微放宽资金流要求：只要不是严重流出 (CMF < -0.1) 即可
+                if cmf < -0.1:
+                    signal = None
+                    reason = f"趋势虽好但资金严重流出 (CMF: {cmf:.2f})"
+                else:
+                    reason += f" (资金面 CMF: {cmf:.2f})"
+                    
+            elif signal == 'SELL':
+                if cmf > 0.1:
+                    signal = None
+                    reason = f"趋势虽差但资金严重流入 (CMF: {cmf:.2f})"
+                else:
+                    reason += f" (资金面 CMF: {cmf:.2f})"
+
+        if not signal:
+            return None, {}
+        
+        stop_loss = 0
+        take_profit = 0
+        
+        # [优化] 动态调整止损价格，放宽止损以适应高波动
+        if atr > 0:
+            atr_multiplier_sl = 3.0 # 从 2.2 放宽到 3.0
+            atr_multiplier_tp = 5.0 # 保持盈亏比
+            
+            if signal == 'BUY':
+                stop_loss = price - (atr_multiplier_sl * atr)
+                take_profit = price + (atr_multiplier_tp * atr)
+            else:
+                stop_loss = price + (atr_multiplier_sl * atr)
+                take_profit = price - (atr_multiplier_tp * atr)
+        else:
+            # 兜底百分比也放宽
+            if signal == 'BUY':
+                stop_loss = price * 0.96 # 放宽到 4%
+                take_profit = price * 1.08
+            else:
+                stop_loss = price * 1.04
+                take_profit = price * 0.92
+                
+        return signal, {
+            'reason': reason,
+            'stop_loss': stop_loss,
+            'take_profit': take_profit,
+            'current_price': price,
+            'atr': atr
+        }
 
     def check_breakout_strategy(self, df, lookback=20, vol_multiplier=1.5):
         """
@@ -220,5 +350,3 @@ class MarketAnalyzer:
         result.columns = ['交易对', '当前价', '24h涨跌幅%', '24h振幅%', '24h成交额']
         
         return result
-
-

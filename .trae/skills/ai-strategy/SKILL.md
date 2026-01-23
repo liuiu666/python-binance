@@ -1,49 +1,44 @@
 ---
 name: "ai-strategy"
-description: "使用大语言模型(LLM)分析市场数据，生成交易决策。当需要更高维度的智能判断时调用，替代传统的规则策略。"
+description: "用大模型结合趋势与资金面给出交易决策与调仓建议。当需要智能决策替代规则时调用。"
 ---
 
-# AI Strategy Skill
+# 智能策略技能
 
-此技能引入 LLM 作为核心决策大脑。它不再依赖死板的代码规则（如 RSI>70 就卖），而是将所有数据喂给大模型，让模型根据其内在的金融知识库进行综合判断。
+此技能使用大模型综合趋势、资金与量价信息，输出清晰的交易决策与持仓规则。
 
-## 功能特性
-1. **全数据融合**：同时考虑 K 线形态、技术指标、资金流向等多个维度。
-2. **自然语言解释**：不仅输出 BUY/SELL 信号，还会告诉你理由（例如："虽然 RSI 超买，但资金持续流入，建议继续持有"）。
-3. **模型无关性**：支持 GPT-4, Claude 3.5, DeepSeek 等任何兼容 OpenAI 接口的模型。
+## 决策重点
+1. 趋势一致性高于震荡指标
+2. 资金流向与持仓量必须支持趋势
+3. 资金费率过高视为风险
+4. 只给出可执行的止盈止损与调仓规则
 
-## 配置方法
-在使用前，请确保 `config.json` 或环境变量中配置了正确的 API Key。
+## 需要的数据
+- 5m、1h 与 4h 的 MA20/50/200、ATR、成交量与均量
+- 资金流向、资金费率、持仓量变化
+- 盘口价差与流动性
+- 当前价格与关键支撑压力位
 
-```json
+## 输出结构
+必须输出 JSON，字段如下：
+- signal: BUY 或 SELL 或 HOLD
+- confidence: 0-100
+- stop_loss: 数值
+- take_profit: 数值
+- add_rule: 加仓条件
+- reduce_rule: 减仓条件
+- hold_rule: 持仓与离场规则
+- reason: 一句话理由
+
+## 提示词模板
+请以专业币圈交易员身份输出，严格 JSON：
 {
-    "llm": {
-        "api_key": "sk-xxxx",
-        "base_url": "https://api.openai.com/v1",
-        "model": "gpt-4o"
-    }
+  "signal": "BUY/SELL/HOLD",
+  "confidence": 0-100,
+  "stop_loss": "数值",
+  "take_profit": "数值",
+  "add_rule": "浮盈达到 2.5ATR 且趋势未破位时加仓 30%",
+  "reduce_rule": "浮盈达到 4ATR 或资金流向反转时减仓 30%",
+  "hold_rule": "价格跌破 MA20 且 MA20 下拐或 MA50/MA200 趋势反转则离场",
+  "reason": "一句话理由"
 }
-```
-
-## 使用方法
-
-```python
-from handlers.llm_client import LLMClient
-
-llm = LLMClient()
-
-# 准备数据
-market_data = {
-    "symbol": "BTCUSDT",
-    "current_price": 65000,
-    "rsi": 75,
-    "net_inflow": 5000000
-    # ... 其他指标
-}
-
-# 获取建议
-signal, reason = llm.get_trading_advice(market_data)
-
-if signal == 'BUY':
-    print(f"AI 建议买入: {reason}")
-```

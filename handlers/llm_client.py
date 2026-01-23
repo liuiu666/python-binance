@@ -73,6 +73,12 @@ class LLMClient:
         """
         if not self.client:
             return None, "LLM Client 未初始化"
+        
+        # 格式化资金流向
+        flow_text = "暂无数据"
+        if market_data.get('money_flow'):
+            mf = market_data['money_flow']
+            flow_text = f"周期: {mf.get('周期')}, 主动买入: {mf.get('主动买入量'):.2f}, 主动卖出: {mf.get('主动卖出量'):.2f}, 净流入: {mf.get('净流入量'):.2f}, 买卖比: {mf.get('买卖比'):.4f}"
             
         prompt = f"""
         请评估当前持仓是否应该继续持有 ({position_data.get('symbol')}):
@@ -84,15 +90,25 @@ class LLMClient:
         - 未实现盈亏: {position_data.get('unrealized_pnl')} USDT
         - 杠杆: {position_data.get('leverage')}x
         
-        [市场数据]
+        [关键资金数据 (核心依据)]
+        - 资金流向 (5m): {flow_text}
+        - CMF指标: {market_data.get('cmf', 0):.4f} (Chaikin Money Flow)
+        - 净流入MA5: {market_data.get('net_flow_ma', 0):.2f}
+        
+        [市场技术面]
         - 当前价: {market_data.get('current_price')}
         - RSI (14): {market_data.get('rsi')}
-        - MA5/MA20: {market_data.get('ma_status')}
+        - MA趋势: {market_data.get('ma_status')}
         - ATR: {market_data.get('atr')}
         
-        基于当前市场走势和持仓盈亏情况，建议怎么操作？
+        [决策规则]
+        1. **严禁单纯依赖 RSI 超买超卖平仓**。在强趋势中，RSI > 70 或 < 30 是常态，除非伴随资金大幅撤退，否则不要平仓。
+        2. **核心看资金**：
+           - 做多时：只有当资金明显流出 (净流出且 CMF < 0) 或 价格有效跌破 MA20 时，才建议 CLOSE。
+           - 做空时：只有当资金明显流入 (净流入且 CMF > 0) 或 价格有效站上 MA20 时，才建议 CLOSE。
+        3. 如果资金流向与持仓方向一致（例如做多且资金净流入），请坚定 HOLD，哪怕有浮亏。
+        
         请输出 JSON: action (HOLD/CLOSE), reason (简短理由), confidence (0-100).
-        注意：如果趋势反转或风险过大，请果断建议 CLOSE。如果仍有盈利空间，建议 HOLD。
         """
         
         try:

@@ -98,11 +98,11 @@ def test_llm_analysis():
     
     try:
         print(">>> 发送模拟数据请求 LLM 分析...")
-        signal, reason = llm.get_trading_advice(mock_data)
-        if signal in ['BUY', 'SELL', 'HOLD'] and reason:
-            print_result(True, f"LLM 响应正常. 信号: {signal}, 理由: {reason}")
+        result, error = llm.get_trading_advice(mock_data)
+        if isinstance(result, dict) and result.get('signal') in ['BUY', 'SELL', 'HOLD'] and result.get('reason'):
+            print_result(True, f"LLM 响应正常. 信号: {result.get('signal')}, 理由: {result.get('reason')}")
         else:
-            print_result(False, f"LLM 响应格式不符. 信号: {signal}, 理由: {reason}")
+            print_result(False, f"LLM 响应格式不符. 结果: {result}, 错误: {error}")
     except Exception as e:
         print_result(False, f"LLM 调用异常: {e}")
 

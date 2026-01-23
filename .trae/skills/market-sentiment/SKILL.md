@@ -1,35 +1,32 @@
 ---
 name: "market-sentiment"
-description: "监控大盘(如BTC)走势，判断市场整体风险。当需要进行多头交易前调用，若大盘暴跌则发出熔断信号。"
+description: "监控大盘趋势与风险状态，给出是否允许开仓的结论。当准备交易前调用。"
 ---
 
-# Market Sentiment Skill
+# 大盘情绪技能
 
-此技能用于"看天吃饭"。在对小币种进行操作前，先检查大盘 (BTC/ETH) 的脸色。如果大盘正在跳水，任何小币种的做多信号都应被忽略。
+此技能用于判断大盘是否处于可交易环境，避免在系统性风险中开仓。
 
-## 功能特性
-1. **暴跌熔断**：检测 BTC 1小时内的实时跌幅。如果跌幅超过阈值 (如 -1%)，则判定为"危险"。
-2. **趋势确认**：(可选) 结合 4h 趋势判断大环境。
+## 风险判断
+1. 1h 大幅下跌直接熔断
+2. 4h 趋势与 1h 背离时降低风险偏好
+3. 资金费率与持仓量异常时降低交易频率
 
-## 使用方法
+## 需要的数据
+- BTC 与 ETH 的 1h 与 4h K 线
+- 资金费率与持仓量变化
+- 24h 波动与价差
 
-### 代码调用
+## 输出结构
+必须输出 JSON，字段如下：
+- is_safe: YES 或 NO
+- risk_level: 低 中 高
+- reason: 一句话理由
 
-```python
-from strategy.sentiment import SentimentAnalyzer
-
-sentiment = SentimentAnalyzer()
-
-# crash_threshold: 暴跌阈值 (默认 -0.01 即 -1%)
-is_safe, reason = sentiment.check_market_sentiment(symbol='BTCUSDT', crash_threshold=-0.01)
-
-if not is_safe:
-    print(f"熔断触发: {reason}")
-    # 停止开仓，甚至清仓
-else:
-    print("大盘环境安全，允许交易")
-```
-
-## 参数建议
-- **保守型**: 阈值设为 -0.005 (-0.5%)，稍微有点风吹草动就停止。
-- **激进型**: 阈值设为 -0.02 (-2%)，除非崩盘否则继续干。
+## 提示词模板
+请以专业币圈交易员身份给出大盘风险判断，只输出 JSON：
+{
+  "is_safe": "YES/NO",
+  "risk_level": "低/中/高",
+  "reason": "一句话理由"
+}

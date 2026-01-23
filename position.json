@@ -3,14 +3,43 @@
     "daily_stats": {
         "date": "2026-01-23",
         "initial_balance": 43.35376139,
-        "realized_pnl": -1.01674627,
-        "trade_count": 13
+        "realized_pnl": 0.72970795,
+        "trade_count": 16
     },
     "cooldowns": {
         "RIVERUSDT": 1769176596.9979541,
-        "ACUUSDT": 1769176502.891261,
-        "INUSDT": 1769172482.7378173,
-        "SKRUSDT": 1769172577.9896307,
-        "SENTUSDT": 1769173748.3715055
+        "ACUUSDT": 1769187623.3850133,
+        "INUSDT": 1769176694.6729968,
+        "SKRUSDT": 1769176790.2384114,
+        "SENTUSDT": 1769176906.8469498,
+        "ZAMAUSDT": 1769186229.4786022,
+        "XAGUSDT": 1769186307.3052225,
+        "MEMEUSDT": 1769186333.607059,
+        "SLPUSDT": 1769186399.3691733,
+        "FUNUSDT": 1769186707.5525725,
+        "COLLECTUSDT": 1769186762.6258771,
+        "NEIROUSDT": 1769186163.155637,
+        "NOTUSDT": 1769186178.6699128,
+        "FOGOUSDT": 1769186211.0759223,
+        "MAGMAUSDT": 1769186217.6017559,
+        "BREVUSDT": 1769186223.6690068,
+        "FRAXUSDT": 1769186237.9344604,
+        "BOMEUSDT": 1769186252.8528566,
+        "TURBOUSDT": 1769186262.658244,
+        "JCTUSDT": 1769186271.524361,
+        "PTBUSDT": 1769186280.988023
+    },
+    "positions": {
+        "ACUUSDT": {
+            "symbol": "ACUUSDT",
+            "side": "BUY",
+            "entry_price": 0.25817,
+            "quantity": "38",
+            "open_ts": 1769187543.9305973,
+            "update_ts": 1769187623.383922,
+            "local_stop": null,
+            "local_stop_side": null,
+            "closed_ts": 1769187623.3850107
+        }
     }
 }

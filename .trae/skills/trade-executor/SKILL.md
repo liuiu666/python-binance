@@ -1,43 +1,42 @@
 ---
 name: "trade-executor"
-description: "执行实际的加密货币交易指令，使用限价单(Limit Order)以保护滑点。当确定要开仓、平仓或调整仓位时调用。"
+description: "执行交易并挂止盈止损与调仓订单。当确定开仓、平仓或加减仓时调用。"
 ---
 
-# Trade Executor Skill
+# 交易执行技能
 
-此技能负责将交易策略生成的信号转换为实际的交易所订单。为了应对小币种的高波动和低流动性，本技能强制使用限价单机制。
+此技能负责把交易信号落地为订单，并确保滑点、风控与仓位调整可控。
 
-## 功能特性
-1. **滑点保护**：自动根据盘口价格计算限价单价格 (买单=Ask+0.2%, 卖单=Bid-0.2%)，拒绝市价单。
-2. **数量计算**：根据 USDT 金额自动换算币种数量。
-3. **安全检查**：下单前检查盘口数据是否正常。
+## 执行规则
+1. 限价优先，避免不必要滑点
+2. 下单前检查最小成交额与步进规则
+3. 开仓必须同时挂止损与分批止盈
+4. 加减仓只在趋势方向未破坏时触发
 
-## 使用方法
+## 需要的数据
+- 盘口价格与价差
+- 交易规则：最小数量、步进、最小成交额
+- 账户可用余额与仓位信息
+- 止盈止损与调仓规则
 
-### 代码调用
+## 输出结构
+必须输出 JSON，字段如下：
+- action: OPEN 或 CLOSE 或 INCREASE 或 REDUCE
+- order_type: LIMIT 或 MARKET
+- quantity: 数值
+- price: 数值
+- stop_loss: 数值
+- take_profit: 数值
+- notes: 风控说明
 
-```python
-from handlers.trader import TradeExecutor
-
-executor = TradeExecutor()
-
-# symbol: 交易对 (如 'ALPACAUSDT')
-# side: 方向 ('BUY' 或 'SELL')
-# amount_usdt: 交易金额 (如 100 USDT)
-# slippage: 允许滑点 (默认 0.002 即 0.2%)
-
-order = executor.execute_trade(
-    symbol='ALPACAUSDT', 
-    side='BUY', 
-    amount_usdt=100,
-    slippage=0.002
-)
-
-if order:
-    print(f"下单成功: {order}")
-```
-
-## 注意事项
-- 调用此技能即代表**真实资金操作**（如果配置的是实盘 Key）。
-- 确保账户有足够的 USDT 余额。
-- 默认滑点设置为 0.2%，对于极端波动币种可能无法成交，此时订单会挂在盘口等待成交 (GTC)。
+## 提示词模板
+请以专业币圈交易员身份给出执行指令，只输出 JSON：
+{
+  "action": "OPEN/CLOSE/INCREASE/REDUCE",
+  "order_type": "LIMIT/MARKET",
+  "quantity": "数值",
+  "price": "数值",
+  "stop_loss": "数值",
+  "take_profit": "数值",
+  "notes": "风控说明"
+}
