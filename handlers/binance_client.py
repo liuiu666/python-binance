@@ -293,6 +293,8 @@ class BinanceClient:
                     return None
                 params['timeInForce'] = 'GTC'
                 params['price'] = price
+                if reduce_only:
+                    params['reduceOnly'] = True
                 
             elif order_type in ['STOP_MARKET', 'TAKE_PROFIT_MARKET']:
                 if stop_price is None:

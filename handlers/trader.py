@@ -171,15 +171,16 @@ class TradeExecutor:
                     else:
                         tp_price = round(tp_price, filters['price_precision'])
                         
+                    # 改用 LIMIT 单作为止盈 (规避 API -4120 错误，且 LIMIT 单手续费更低)
                     self.client.place_order(
                         symbol=symbol,
                         side=close_side,
                         quantity=quantity, # 使用开仓数量 + reduce_only
-                        order_type='TAKE_PROFIT_MARKET',
-                        stop_price=str(tp_price),
+                        order_type='LIMIT',
+                        price=str(tp_price),
                         reduce_only=True
                     )
-                    print(f"   已挂止盈单: {tp_price}")
+                    print(f"   已挂止盈单(限价): {tp_price}")
 
         else:
             print(">>> [Trader] 交易失败")
