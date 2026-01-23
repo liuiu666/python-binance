@@ -262,7 +262,7 @@ class BinanceClient:
             return df
         except Exception as e:
             # 避免打印英文错误信息，使用通用中文提示
-            print(f"获取 K 线失败: {symbol}")
+            print(f"获取 K 线失败: {symbol} - {str(e)}")
             return None
 
     def place_order(self, symbol, side, quantity, order_type='MARKET', price=None, stop_price=None, reduce_only=False, close_position=False):

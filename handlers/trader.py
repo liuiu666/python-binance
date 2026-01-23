@@ -465,7 +465,7 @@ class TradeExecutor:
         
         filters = self.client.get_symbol_filters(symbol)
         if not filters:
-            return False
+            return None
             
         # 精度调整
         step_size = filters['step_size']
@@ -477,7 +477,7 @@ class TradeExecutor:
             
         if reduce_qty < filters['min_qty']:
             print(f"   减仓数量 {reduce_qty} 太小，忽略")
-            return False
+            return None
             
         try:
             # 1. 执行减仓
