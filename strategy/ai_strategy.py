@@ -164,11 +164,15 @@ class AIStrategy:
 
         current = df.iloc[-1]
         
+        # [新增] 获取资金流向用于验证
+        money_flow = self.client.get_money_flow(position['symbol'], period='15m')
+
         market_data = {
             "current_price": current['收盘价'],
             "atr": current.get('ATR', 0),
             "rsi": current.get('RSI', 50),
             "ma_status": "Bullish" if current.get('MA5', 0) > current.get('MA20', 0) else "Bearish",
+            "money_flow": money_flow # 将资金流向传给 AI (虽然 AI 可能已处理，但在外部逻辑中也需要)
         }
         
         print(f">>> [AI Strategy] 正在评估持仓 {position['symbol']} ...")
@@ -184,12 +188,48 @@ class AIStrategy:
             confidence = llm_result.get('confidence', 0)
             
             if action_raw in ['HOLD', 'CLOSE']:
-                # [新增] 平仓也需要一定信心，否则保持持有 (让利润奔跑)
-                if action_raw == 'CLOSE' and confidence < 60:
-                     action = 'HOLD'
-                     reason = f"AI 建议平仓但信心不足 ({confidence} < 60) -> 保持持有"
+                # [核心修改] 强化平仓逻辑：资金流向保护
+                # 用户反馈：平仓太随意。优化：引入主力资金流向验证，防止被震荡洗下车。
+                if action_raw == 'CLOSE':
+                    # 默认不平仓，除非满足以下条件
+                    can_close = False
+                    
+                    # 1. 信心非常高，直接平仓
+                    if confidence >= 85:
+                        can_close = True
+                        reason = f"{llm_result.get('reason')} (AI 极度确信)"
+                    
+                    # 2. 信心一般，但资金流向也在撤退
+                    elif money_flow:
+                        net_inflow = money_flow.get('净流入量', 0)
+                        side = position['side']
+                        
+                        # 如果做多，且资金大幅流出 (净流出 < 0)
+                        if side == 'BUY' and net_inflow < 0:
+                            can_close = True
+                            reason = f"{llm_result.get('reason')} (且主力资金流出验证)"
+                        # 如果做空，且资金大幅流入
+                        elif side == 'SELL' and net_inflow > 0:
+                            can_close = True
+                            reason = f"{llm_result.get('reason')} (且主力资金流入验证)"
+                        else:
+                            # 资金流向不支持平仓（例如做多时资金还在流入）
+                            action = 'HOLD'
+                            reason = f"AI 建议平仓 (信心 {confidence})，但主力资金仍在流入 -> 驳回平仓，继续持有"
+                    
+                    else:
+                        # 没有资金流向数据，回退到原来的信心阈值
+                        if confidence >= 75: # 提高阈值从 70 到 75
+                             can_close = True
+                        else:
+                             action = 'HOLD'
+                             reason = f"AI 建议平仓但信心不足 ({confidence} < 75) -> 保持持有"
+                    
+                    if can_close:
+                        action = 'CLOSE'
+                        # reason 已在上方设置
                 else:
-                    action = action_raw
+                    action = 'HOLD'
                     reason = llm_result.get('reason', '无理由')
             else:
                 reason = llm_result.get('reason', '无理由')

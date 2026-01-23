@@ -279,76 +279,79 @@ class BinanceClient:
 
     def place_order(self, symbol, side, quantity=None, order_type='MARKET', price=None, stop_price=None, reduce_only=False, close_position=False):
         """
-        下单
-        :param symbol: 交易对
-        :param side: 方向 ('BUY' 或 'SELL')
-        :param quantity: 数量 (可选，如果 close_position=True 则忽略，否则必填)
-        :param order_type: 订单类型
-        :param price: 价格
-        :param stop_price: 触发价格
-        :param reduce_only: 是否只减仓
-        :param close_position: 是否全平 (仅用于 STOP_MARKET/TAKE_PROFIT_MARKET)
+        下单 (兼容 2025 Algo Order API)
         """
         try:
+            # 1. 如果是条件单 (STOP_MARKET 等)，必须使用 Algo API
+            is_algo_order = order_type in ['STOP_MARKET', 'TAKE_PROFIT_MARKET', 'STOP', 'TAKE_PROFIT', 'TRAILING_STOP_MARKET']
+            
             params = {
                 'symbol': symbol,
                 'side': side,
                 'type': order_type,
             }
             
-            if not close_position:
-                if quantity is None:
-                    print(f"错误: 非全平模式下必须指定数量 (quantity)")
-                    return None
-                params['quantity'] = quantity
-            
-            if order_type == 'LIMIT':
-                if price is None:
-                    print("限价单必须指定价格")
-                    return None
-                params['timeInForce'] = 'GTC'
-                params['price'] = price
-                if reduce_only:
-                    params['reduceOnly'] = True
-                
-            elif order_type in ['STOP', 'TAKE_PROFIT']:
-                if stop_price is None or price is None:
-                    print(f"{order_type} 必须指定触发价格(stop_price)和执行价格(price)")
-                    return None
-                params['stopPrice'] = stop_price
-                params['price'] = price
-                params['workingType'] = 'MARK_PRICE'
-                if reduce_only:
-                    params['reduceOnly'] = True
+            # [Fix -1021]
+            params['recvWindow'] = 10000 
 
-            elif order_type in ['STOP_MARKET', 'TAKE_PROFIT_MARKET']:
+            # --- 参数处理 ---
+            if is_algo_order:
+                # Algo Order 参数构造
+                # 根据最新文档：
+                # POST /fapi/v1/algo/futures/newOrder
+                
                 if stop_price is None:
                     print(f"{order_type} 必须指定触发价格")
                     return None
-                params['stopPrice'] = stop_price
-                params['workingType'] = 'MARK_PRICE' # 显式指定触发类型
+                
+                params['stopPrice'] = str(stop_price)
+                params['workingType'] = 'MARK_PRICE'
                 
                 if close_position:
-                    params['closePosition'] = True
-                    # closePosition=True 时不能传 quantity，也不能传 reduceOnly (隐含为 True)
+                    params['closePosition'] = 'true' # 必须是字符串 'true'
+                    # closePosition=true 时不需要 quantity
                     if 'quantity' in params:
                         del params['quantity']
-                elif reduce_only:
-                     params['reduceOnly'] = True
-            
-            elif reduce_only:
-                # MARKET 或 LIMIT 单的 reduceOnly
-                params['reduceOnly'] = True
+                elif quantity is not None:
+                    params['quantity'] = quantity
+                else:
+                     print(f"Algo Order 必须指定 quantity 或 closePosition=True")
+                     return None
+                     
+                if reduce_only and not close_position:
+                    params['reduceOnly'] = 'true' # 必须是字符串 'true'
                 
-            print(f">>> [DEBUG] 下单参数: {params}")
-            # 增加 recvWindow 以解决时间同步问题 (APIError -1021)
-            params['recvWindow'] = 10000 
-            order = self.client.futures_create_order(**params)
-            print(f"下单成功: {side} {symbol} {quantity if not close_position else 'ALL'} Type={order_type}")
-            return order
+                print(f">>> [DEBUG] Algo 下单参数: {params}")
+                
+                # 调用 Algo API
+                # path: algo/futures/newOrder (python-binance 会自动拼接 /fapi/v1/)
+                return self.client._request_futures_api('post', 'algo/futures/newOrder', True, data=params)
+
+            else:
+                # 标准订单 (LIMIT, MARKET)
+                if not close_position:
+                    if quantity is None:
+                         print(f"错误: 非全平模式下必须指定数量")
+                         return None
+                    params['quantity'] = quantity
+                
+                if order_type == 'LIMIT':
+                    if price is None:
+                        print("限价单必须指定价格")
+                        return None
+                    params['timeInForce'] = 'GTC'
+                    params['price'] = str(price)
+                    if reduce_only:
+                        params['reduceOnly'] = 'true'
+                elif reduce_only:
+                    params['reduceOnly'] = 'true'
+
+                    
+                print(f">>> [DEBUG] 标准下单参数: {params}")
+                return self.client.futures_create_order(**params)
+                
         except Exception as e:
             print(f"下单失败: {symbol} - {str(e)}")
-            # 尝试打印更详细的错误信息
             if hasattr(e, 'message'):
                 print(f"   Error Message: {e.message}")
             if hasattr(e, 'code'):
