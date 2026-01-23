@@ -39,7 +39,7 @@ class LLMClient:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "你是一个专业的加密货币日内交易员。根据用户提供的技术指标和市场数据，判断未来的短期走势。请只输出 JSON 格式，包含字段: signal (BUY/SELL/HOLD), reason (简短理由), confidence (0-100), stop_loss (建议止损价), take_profit (建议止盈价)."},
+                    {"role": "system", "content": "你是一个激进的加密货币交易专家，专注于捕捉高波动和资金流向异常带来的暴利机会。你的目标是帮助用户快速翻倍，因此请淡化滞后的技术指标（如 RSI, MACD），重点关注资金流向、成交量突增和合约持仓变化。请只输出 JSON 格式，包含字段: signal (BUY/SELL/HOLD), reason (简短理由), confidence (0-100), stop_loss, take_profit。"},
                     {"role": "user", "content": prompt}
                 ],
                 response_format={"type": "json_object"}
@@ -125,9 +125,20 @@ class LLMClient:
         if 'recent_klines' in data and data['recent_klines']:
             kline_text = "\n".join(data['recent_klines'])
         
+        # 格式化资金流向
+        flow_text = "暂无数据"
+        if data.get('money_flow'):
+            mf = data['money_flow']
+            flow_text = f"周期: {mf.get('周期')}, 主动买入: {mf.get('主动买入量'):.2f}, 主动卖出: {mf.get('主动卖出量'):.2f}, 净流入: {mf.get('净流入量'):.2f}, 买卖比: {mf.get('买卖比'):.4f}"
+
         return f"""
         请分析以下加密货币数据 ({data.get('symbol')}):
         
+        [关键资金流向 (核心驱动力)]
+        **这是最重要的判断依据，请优先参考**
+        {flow_text}
+        (如果净流入为正且买卖比 > 1.1，说明资金在抢筹; 反之说明资金出逃)
+
         [关键合约数据]
         1. 资金费率: {data.get('funding_rate', 0):.6f} 
            (注意: 正值代表多头付钱给空头; 若 > 0.05% 则持仓成本极高; 若 < -0.05% 可能是空头拥挤)
@@ -136,7 +147,7 @@ class LLMClient:
         [最近 12 小时价格走势 (从旧到新)]
         {kline_text}
         
-        [当前技术指标]
+        [当前技术指标 (辅助参考)]
         1. 趋势指标:
            - MA5: {data.get('ma5')}
            - MA20: {data.get('ma20')} ({data.get('ma_status')})
@@ -152,7 +163,11 @@ class LLMClient:
            - 24h 涨跌: {data.get('change_pct')}%
            
         [分析任务]
-        请结合 **合约数据** 和 **K线形态** 判断走势。
+        用户目标是**快速翻倍**，偏好**高波动、高增长**的机会。
+        请**重资金流向和成交量，轻滞后指标**。
+        1. 如果资金大幅净流入且价格未暴涨，这是最佳买入点，请给高信心 (Confidence > 80)。
+        2. 如果资金流出但指标显示超卖，不要轻易抄底（可能是阴跌）。
+        3. 只要资金和量能支持，不要在意 RSI 超买（可能是主升浪）。
         
         [硬性风控规则]
         1. 手续费成本约为 0.1% (双边)。如果预期利润 < 0.2%，请直接观望 (HOLD)。
@@ -165,10 +180,10 @@ class LLMClient:
         - confidence (0-100)
         - stop_loss (建议止损价格，数值类型)
         - take_profit (建议止盈价格，数值类型)
-        - reason (简短理由，必须包含对费率或持仓量的分析)
+        - reason (简短理由，必须包含对资金流向或成交量的分析)
         
         [止盈止损建议]
         - 请根据 ATR 或 支撑压力位 给出具体的止盈止损价格。
         - 针对小市值/高波动币种，建议设置较宽的止损 (如 3倍 ATR) 以防被震仓。
-        - 止盈应至少是止损距离的 1.5 倍 (盈亏比 > 1.5)。
+        - 止盈应至少是止损距离的 2.0 倍 (追求高盈亏比)。
         """

@@ -32,15 +32,17 @@ class AIStrategy:
             k_str = f"Time: {row.name}, O: {row['开盘价']}, H: {row['最高价']}, L: {row['最低价']}, C: {row['收盘价']}, V: {row['成交量']}"
             recent_klines.append(k_str)
 
-        # 2.6 获取合约数据 (资金费率 & 持仓量)
+        # 2.6 获取合约数据 (资金费率 & 持仓量 & 资金流向)
         funding_rate = self.client.get_funding_rate(symbol)
         open_interest = self.client.get_open_interest(symbol)
+        money_flow = self.client.get_money_flow(symbol, period='15m') # 获取15分钟级别的资金流向
 
         # 3. 构建数据包
         market_data = {
             "symbol": symbol,
-            "funding_rate": funding_rate, # 新增
-            "open_interest": open_interest, # 新增
+            "funding_rate": funding_rate,
+            "open_interest": open_interest,
+            "money_flow": money_flow, # 新增
             "current_price": current['收盘价'],
             "change_pct": (current['收盘价'] - current['开盘价']) / current['开盘价'] * 100,
             "atr": current.get('ATR', 0),

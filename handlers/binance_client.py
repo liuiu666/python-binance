@@ -33,6 +33,8 @@ class BinanceClient:
                 self.api_secret, 
                 requests_params=requests_params
             )
+            # 禁用默认的 ping，因为这在初始化时可能因为网络抖动导致失败
+            self.client.ping = lambda: {}
         except Exception as e:
             print(f">>> [System] 致命错误: 无法连接币安 API (Timeout/Proxy Error)")
             print(f"    详情: {e}")
@@ -275,12 +277,12 @@ class BinanceClient:
             print(f"获取 K 线失败: {symbol} - {str(e)}")
             return None
 
-    def place_order(self, symbol, side, quantity, order_type='MARKET', price=None, stop_price=None, reduce_only=False, close_position=False):
+    def place_order(self, symbol, side, quantity=None, order_type='MARKET', price=None, stop_price=None, reduce_only=False, close_position=False):
         """
         下单
         :param symbol: 交易对
         :param side: 方向 ('BUY' 或 'SELL')
-        :param quantity: 数量 (如果 close_position=True 则忽略)
+        :param quantity: 数量 (可选，如果 close_position=True 则忽略，否则必填)
         :param order_type: 订单类型
         :param price: 价格
         :param stop_price: 触发价格
@@ -295,6 +297,9 @@ class BinanceClient:
             }
             
             if not close_position:
+                if quantity is None:
+                    print(f"错误: 非全平模式下必须指定数量 (quantity)")
+                    return None
                 params['quantity'] = quantity
             
             if order_type == 'LIMIT':
@@ -336,6 +341,8 @@ class BinanceClient:
                 params['reduceOnly'] = True
                 
             print(f">>> [DEBUG] 下单参数: {params}")
+            # 增加 recvWindow 以解决时间同步问题 (APIError -1021)
+            params['recvWindow'] = 10000 
             order = self.client.futures_create_order(**params)
             print(f"下单成功: {side} {symbol} {quantity if not close_position else 'ALL'} Type={order_type}")
             return order
@@ -438,3 +445,13 @@ class BinanceClient:
         except Exception as e:
             print(f"获取 {symbol} 资金流向失败: {str(e)}")
             return None
+
+    def get_all_open_orders(self):
+        """
+        获取当前账户所有挂单 (不指定 symbol)
+        """
+        try:
+            return self.client.futures_get_open_orders()
+        except Exception as e:
+            print(f"获取所有挂单失败: {str(e)}")
+            return []

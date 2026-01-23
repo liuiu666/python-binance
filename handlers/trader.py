@@ -168,13 +168,11 @@ class TradeExecutor:
                     self.client.place_order(
                         symbol=symbol,
                         side=close_side,
-                        quantity=quantity, # 使用开仓数量 + reduce_only
-                        order_type='STOP',
+                        order_type='STOP_MARKET',
                         stop_price=str(sl_price),
-                        price=str(limit_price),
-                        reduce_only=True
+                        close_position=True
                     )
-                    print(f"   已挂止损单(STOP): 触发 {sl_price}, 限价 {limit_price}")
+                    print(f"   已挂止损单(STOP_MARKET): 触发 {sl_price}")
 
                 # 止盈单
                 if take_profit:
@@ -209,7 +207,7 @@ class TradeExecutor:
         
         # 1. 撤销所有挂单 (止盈止损单)
         try:
-            self.client.client.futures_cancel_all_open_orders(symbol=symbol)
+            self.client.client.futures_cancel_all_open_orders(symbol=symbol, recvWindow=10000)
             print(f"   已撤销 {symbol} 所有挂单")
         except Exception as e:
             print(f"   撤单失败: {e}")
@@ -269,11 +267,46 @@ class TradeExecutor:
         try:
             orders = self.client.client.futures_get_open_orders(symbol=symbol)
             stop_order = None
-            for o in orders:
-                if o['type'] == 'STOP_MARKET':
-                    stop_order = o
-                    break
             
+            # [新增] 检查并清理错误的挂单 (例如 STOP 限价单)，并确保止损单唯一
+            stop_orders = []
+            for o in orders:
+                if o['type'] == 'STOP':
+                    print(f">>> [System] 发现不支持的 STOP 限价止损单 (ID: {o['orderId']})，正在撤销...")
+                    try:
+                        self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'], recvWindow=10000)
+                    except Exception as e:
+                        print(f"   撤销失败: {e}")
+                elif o['type'] == 'STOP_MARKET':
+                    stop_orders.append(o)
+            
+            # 确保只有一个 STOP_MARKET 单
+            if len(stop_orders) > 1:
+                print(f">>> [System] 发现 {len(stop_orders)} 个 STOP_MARKET 止损单，正在清理多余委托...")
+                # 策略：保留触发价格最有利的那个 (对于BUY持仓，保留最高的止损价；对于SELL持仓，保留最低的止损价)
+                # 这样可以最大程度保护利润
+                if side == 'BUY':
+                    # 降序排列，取最大的 stopPrice
+                    stop_orders.sort(key=lambda x: float(x['stopPrice']), reverse=True)
+                else:
+                    # 升序排列，取最小的 stopPrice
+                    stop_orders.sort(key=lambda x: float(x['stopPrice']), reverse=False)
+                
+                # 保留第一个，撤销其余的
+                keep_order = stop_orders[0]
+                for o in stop_orders[1:]:
+                    try:
+                        print(f"   撤销冗余止损单 (Price: {o['stopPrice']})")
+                        self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'], recvWindow=10000)
+                    except Exception as e:
+                        print(f"   撤销失败: {e}")
+                
+                stop_order = keep_order
+            elif len(stop_orders) == 1:
+                stop_order = stop_orders[0]
+            else:
+                stop_order = None
+
             if not stop_order:
                 # [新增] 如果没有止损单，尝试补挂
                 print(f">>> [Trailing Stop] ⚠️ {symbol} 未检测到止损单，正在计算补单...")
@@ -338,7 +371,7 @@ class TradeExecutor:
                 # 1. 撤销旧单 (如果有)
                 if stop_order.get('orderId'):
                     try:
-                        self.client.client.futures_cancel_order(symbol=symbol, orderId=stop_order['orderId'])
+                        self.client.client.futures_cancel_order(symbol=symbol, orderId=stop_order['orderId'], recvWindow=10000)
                     except Exception as e:
                         print(f"   撤销旧止损单失败: {e}")
                 else:
@@ -383,11 +416,9 @@ class TradeExecutor:
                 self.client.place_order(
                     symbol=symbol,
                     side=close_side,
-                    quantity=quantity,
-                    order_type='STOP',
+                    order_type='STOP_MARKET',
                     stop_price=str(new_sl),
-                    price=str(limit_price),
-                    reduce_only=True
+                    close_position=True
                 )
                 
         except Exception as e:
@@ -441,7 +472,7 @@ class TradeExecutor:
             
             # 2. 撤销旧止损单
             try:
-                self.client.client.futures_cancel_all_open_orders(symbol=symbol)
+                self.client.client.futures_cancel_all_open_orders(symbol=symbol, recvWindow=10000)
             except:
                 pass
                 
@@ -479,11 +510,9 @@ class TradeExecutor:
             self.client.place_order(
                 symbol=symbol,
                 side=close_side,
-                quantity=total_quantity,
-                order_type='STOP',
+                order_type='STOP_MARKET',
                 stop_price=str(new_sl),
-                price=str(limit_price),
-                reduce_only=True
+                close_position=True
             )
             print(f"   已更新止损 (总仓位 {total_quantity}): {new_sl}")
             return True
@@ -550,7 +579,7 @@ class TradeExecutor:
             # 2. 调整剩余仓位的止损单
             # 撤销旧单
             try:
-                self.client.client.futures_cancel_all_open_orders(symbol=symbol)
+                self.client.client.futures_cancel_all_open_orders(symbol=symbol, recvWindow=10000)
             except:
                 pass
                 
@@ -584,10 +613,9 @@ class TradeExecutor:
             self.client.place_order(
                 symbol=symbol,
                 side=close_side,
-                quantity=remain_qty,
                 order_type='STOP_MARKET',
                 stop_price=str(new_sl),
-                reduce_only=True
+                close_position=True
             )
             print(f"   剩余仓位 {remain_qty} 已重置止损: {new_sl}")
             return pnl

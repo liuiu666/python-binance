@@ -63,6 +63,33 @@ def run_bot():
             #          if len(real_positions) == 0:
             #              time.sleep(3600) # 休息1小时
             #              continue
+            
+            # [新增] 清理“无关委托” (无持仓的挂单)
+            try:
+                open_orders = client.get_all_open_orders()
+                if open_orders:
+                    # 获取当前持仓的 symbol 列表
+                    holding_symbols = [p['symbol'] for p in real_positions]
+                    
+                    # 按 symbol 分组挂单
+                    orders_by_symbol = {}
+                    for o in open_orders:
+                        s = o['symbol']
+                        if s not in orders_by_symbol:
+                            orders_by_symbol[s] = []
+                        orders_by_symbol[s].append(o)
+                    
+                    # 检查是否有无持仓的挂单
+                    for s, orders in orders_by_symbol.items():
+                        if s not in holding_symbols:
+                            print(f">>> [System] 发现 {s} 无持仓但有 {len(orders)} 个挂单，正在清理无关委托...")
+                            try:
+                                client.client.futures_cancel_all_open_orders(symbol=s, recvWindow=10000)
+                                print(f"   已撤销 {s} 所有挂单")
+                            except Exception as e:
+                                print(f"   清理失败: {e}")
+            except Exception as e:
+                print(f"[System] 挂单清理检查出错: {e}")
 
             # 再次检查是否有真实持仓 (强制单向持仓限制)
             if len(real_positions) > 0:
