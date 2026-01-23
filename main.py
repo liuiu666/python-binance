@@ -47,15 +47,15 @@ def run_bot():
                     state_manager.clear_position()
                     local_pos = None
             
-            # 0.5 每日风控检查
-            balance_info = client.get_balance()
-            if balance_info:
-                is_safe_daily, reason_daily = state_manager.check_daily_risk(balance_info['总权益'])
-                if not is_safe_daily:
-                     print(f"[每日风控] {reason_daily} -> 今日停止开新仓")
-                     if len(real_positions) == 0:
-                         time.sleep(3600) # 休息1小时
-                         continue
+            # 0.5 每日风控检查 (用户要求取消)
+            # balance_info = client.get_balance()
+            # if balance_info:
+            #     is_safe_daily, reason_daily = state_manager.check_daily_risk(balance_info['总权益'])
+            #     if not is_safe_daily:
+            #          print(f"[每日风控] {reason_daily} -> 今日停止开新仓")
+            #          if len(real_positions) == 0:
+            #              time.sleep(3600) # 休息1小时
+            #              continue
 
             # 再次检查是否有真实持仓 (强制单向持仓限制)
             if len(real_positions) > 0:
