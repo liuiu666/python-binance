@@ -42,6 +42,26 @@ class MarketAnalyzer:
         data['BOLL_LOWER'] = boll.bollinger_lband()
         data['BOLL_MID'] = boll.bollinger_mavg()
         
+        # --- 资金流向分析 (新增) ---
+        if '主动买入成交量' in data.columns:
+            # 1. 资金净流入 (Taker Buy - Taker Sell)
+            # 总成交量 = 主动买入 + 主动卖出
+            # 主动卖出 = 总成交量 - 主动买入
+            # 净买入 = 主动买入 - 主动卖出 = 2 * 主动买入 - 总成交量
+            data['Net_Volume'] = 2 * data['主动买入成交量'] - data['成交量']
+            data['Net_Flow_MA5'] = ta.trend.sma_indicator(data['Net_Volume'], window=5)
+            
+            # 2. 资金流入比例 (主动买入 / 总成交量)
+            data['Buy_Ratio'] = data['主动买入成交量'] / data['成交量']
+        
+        # 3. MFI (资金流量指标)
+        mfi = ta.volume.MFIIndicator(high=data['最高价'], low=data['最低价'], close=data['收盘价'], volume=data['成交量'], window=14)
+        data['MFI'] = mfi.money_flow_index()
+        
+        # 4. CMF (蔡金资金流向)
+        cmf = ta.volume.ChaikinMoneyFlowIndicator(high=data['最高价'], low=data['最低价'], close=data['收盘价'], volume=data['成交量'], window=20)
+        data['CMF'] = cmf.chaikin_money_flow()
+
         return data
 
     def check_breakout_strategy(self, df, lookback=20, vol_multiplier=1.5):

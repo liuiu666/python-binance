@@ -210,6 +210,29 @@ class BinanceClient:
             print(f"获取交易对失败: {str(e)}")
             return []
 
+    def get_funding_rate(self, symbol):
+        """
+        获取当前资金费率
+        """
+        try:
+            funding = self.client.futures_mark_price(symbol=symbol)
+            # lastFundingRate 是最近一期的费率
+            return float(funding['lastFundingRate'])
+        except Exception as e:
+            print(f"获取费率失败 {symbol}: {e}")
+            return 0.0
+
+    def get_open_interest(self, symbol):
+        """
+        获取未平仓合约量 (Open Interest)
+        """
+        try:
+            oi = self.client.futures_open_interest(symbol=symbol)
+            return float(oi['openInterest'])
+        except Exception as e:
+            print(f"获取持仓量失败 {symbol}: {e}")
+            return 0.0
+
     def get_klines(self, symbol, interval, limit=100):
         """
         获取 K 线数据并转换为 DataFrame
@@ -232,7 +255,7 @@ class BinanceClient:
             df['开盘时间'] = pd.to_datetime(df['开盘时间'], unit='ms')
             df['收盘时间'] = pd.to_datetime(df['收盘时间'], unit='ms')
             
-            numeric_cols = ['开盘价', '最高价', '最低价', '收盘价', '成交量']
+            numeric_cols = ['开盘价', '最高价', '最低价', '收盘价', '成交量', '成交额', '成交笔数', '主动买入成交量', '主动买入成交额']
             # 使用 apply 默认 axis=0 进行列批量转换，比 axis=1 更安全且快
             df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric)
             

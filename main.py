@@ -120,9 +120,12 @@ def run_bot():
                                 print(f"   [策略] 规则触发减仓，但 AI 强烈建议持有 (信心 {ai_confidence}) -> 暂不减仓，让利润奔跑")
                             else:
                                 # 减仓 30%
-                                success = trader.reduce_position(p, 0.3, current_price)
-                                if success:
+                                pnl = trader.reduce_position(p, 0.3, current_price)
+                                if pnl is not None:
                                     is_scaling_op = True
+                                    # 更新已实现盈亏
+                                    state_manager.update_pnl(pnl)
+                                    print(f"   [状态] 减仓已实现盈亏: {pnl:.2f} U")
                                 
                         # 如果没有执行加减仓
                         if not is_scaling_op:

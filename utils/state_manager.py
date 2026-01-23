@@ -45,6 +45,12 @@ class StateManager:
         }
         self.save_state()
 
+    def update_pnl(self, pnl):
+        """更新已实现盈亏 (用于分批止盈/减仓)"""
+        self._init_daily_stats()
+        self.state['daily_stats']['realized_pnl'] += pnl
+        self.save_state()
+
     def clear_position(self, symbol=None, pnl=0.0):
         """
         平仓时调用

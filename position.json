@@ -1,15 +1,12 @@
 {
-    "current_position": {
-        "symbol": "RIVERUSDT",
-        "side": "SELL",
-        "entry_price": 39.61,
-        "quantity": "0.2"
-    },
+    "current_position": null,
     "daily_stats": {
         "date": "2026-01-23",
         "initial_balance": 43.35376139,
-        "realized_pnl": 0.0,
-        "trade_count": 0
+        "realized_pnl": -0.4258,
+        "trade_count": 1
     },
-    "cooldowns": {}
+    "cooldowns": {
+        "RIVERUSDT": 1769165194.592743
+    }
 }

@@ -260,14 +260,38 @@ class TradeExecutor:
                     break
             
             if not stop_order:
-                return # 没有止损单，不做操作
+                # [新增] 如果没有止损单，尝试补挂
+                print(f">>> [Trailing Stop] ⚠️ {symbol} 未检测到止损单，正在计算补单...")
                 
-            current_sl = float(stop_order['stopPrice'])
-            new_sl = None
+                # 1. 计算初始止损位 (Entry +/- 2 ATR)
+                if atr <= 0: atr = current_price * 0.02
+                
+                if side == 'BUY':
+                    base_sl = entry_price - (2 * atr)
+                    # 如果当前价格已经跌破初始止损，则以当前价格为基准重设 (防止立即触发/报错)
+                    if base_sl >= current_price:
+                        base_sl = current_price - (2 * atr)
+                        print(f"   [风险] 已跌破原始止损，重设为现价 - 2ATR: {base_sl:.4f}")
+                else:
+                    base_sl = entry_price + (2 * atr)
+                    if base_sl <= current_price:
+                        base_sl = current_price + (2 * atr)
+                        print(f"   [风险] 已涨破原始止损，重设为现价 + 2ATR: {base_sl:.4f}")
+
+                current_sl = base_sl #以此作为当前止损基准
+                new_sl = base_sl     # 默认新止损就是基准
+                
+                # 标记需要挂新单
+                stop_order = {'orderId': None} # 伪造一个对象以便进入后续逻辑 (orderId None 表示不需要撤单)
+            else:
+                current_sl = float(stop_order['stopPrice'])
+                new_sl = None
+            
             action_desc = ""
             
-            # 移动止损逻辑
+            # 移动止损逻辑 (计算是否有更好的止损位)
             if side == 'BUY':
+                # ... 保持原有逻辑 ...
                 # 1. 保本检查: 盈利 > 1.5 ATR 且 当前止损 < 开仓价
                 if profit > 1.5 * atr and current_sl < entry_price:
                     new_sl = entry_price * 1.001 # 略微高于开仓价 (抵消手续费)
@@ -296,8 +320,14 @@ class TradeExecutor:
                 print(f">>> [Trailing Stop] {symbol} {action_desc}")
                 print(f"   原止损: {current_sl} -> 新止损: {new_sl:.4f}")
                 
-                # 1. 撤销旧单
-                self.client.client.futures_cancel_order(symbol=symbol, orderId=stop_order['orderId'])
+                # 1. 撤销旧单 (如果有)
+                if stop_order.get('orderId'):
+                    try:
+                        self.client.client.futures_cancel_order(symbol=symbol, orderId=stop_order['orderId'])
+                    except Exception as e:
+                        print(f"   撤销旧止损单失败: {e}")
+                else:
+                    print(f"   [补单] 正在挂初始/补救止损单")
                 
                 # 2. 挂新单
                 close_side = 'SELL' if side == 'BUY' else 'BUY'
@@ -311,8 +341,16 @@ class TradeExecutor:
                     else:
                         new_sl = round(new_sl, filters['price_precision'])
                 
-                # 获取当前持仓数量
+                # 获取当前持仓数量并处理精度
                 quantity = abs(float(position['amount']))
+                
+                if filters:
+                    step_size = filters.get('step_size', 0)
+                    if step_size > 0:
+                        qty_precision = int(round(-math.log(step_size, 10), 0))
+                        quantity = round(quantity, qty_precision)
+                    else:
+                        quantity = round(quantity, filters['quantity_precision'])
                 
                 self.client.place_order(
                     symbol=symbol,
@@ -444,7 +482,7 @@ class TradeExecutor:
         try:
             # 1. 执行减仓
             close_side = 'SELL' if side == 'BUY' else 'BUY'
-            self.client.place_order(
+            order = self.client.place_order(
                 symbol=symbol,
                 side=close_side,
                 quantity=reduce_qty,
@@ -452,6 +490,20 @@ class TradeExecutor:
                 reduce_only=True
             )
             print(f"   减仓成功")
+            
+            # [新增] 计算已实现盈亏并更新状态
+            # 注意：市价单成交价格可能略有偏差，这里简单估算，或者从 order 获取成交均价 (如果 order 返回了)
+            # 为了简单，暂按 current_price 估算
+            if side == 'BUY':
+                pnl = (current_price - float(position['entry_price'])) * reduce_qty
+            else:
+                pnl = (float(position['entry_price']) - current_price) * reduce_qty
+            
+            # 这里需要一种方式访问 state_manager。
+            # 由于 TradeExecutor 没有持有 state_manager 引用，我们暂且打印，或者后续重构让 main 传入
+            # 简单起见，我们假设外部循环会通过 balance check 间接更新 daily stats 的 risk check
+            # 但 daily_stats['realized_pnl'] 需要手动更新
+            # 方案：TradeExecutor 返回 pnl，由 main 更新
             
             # 2. 调整剩余仓位的止损单
             # 撤销旧单
@@ -466,7 +518,7 @@ class TradeExecutor:
             
             if remain_qty < filters['min_qty']:
                 print("   剩余仓位过小，不再挂止损")
-                return True
+                return pnl
                 
             # 保持原有的止损价逻辑较复杂，这里简单策略：
             # 减仓通常意味着锁定利润，剩余仓位应该将止损移至保本或更激进
@@ -496,8 +548,8 @@ class TradeExecutor:
                 reduce_only=True
             )
             print(f"   剩余仓位 {remain_qty} 已重置止损: {new_sl}")
-            return True
+            return pnl
             
         except Exception as e:
             print(f"   减仓失败: {e}")
-            return False
+            return None
