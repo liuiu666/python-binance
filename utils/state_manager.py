@@ -45,6 +45,13 @@ class StateManager:
         }
         self.save_state()
 
+    def set_cooldown(self, symbol):
+        """手动设置冷却时间 (例如 AI 拒绝交易后)"""
+        if 'cooldowns' not in self.state:
+            self.state['cooldowns'] = {}
+        self.state['cooldowns'][symbol] = time.time()
+        self.save_state()
+
     def update_pnl(self, pnl):
         """更新已实现盈亏 (用于分批止盈/减仓)"""
         self._init_daily_stats()

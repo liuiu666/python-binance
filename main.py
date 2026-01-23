@@ -251,6 +251,8 @@ def run_bot():
                     )
                     print(">>> 开仓成功，状态已保存")
             else:
+                print(f"   [策略] AI 暂不推荐交易 {target_symbol}，进入冷却 (10分钟)")
+                state_manager.set_cooldown(target_symbol)
                 print("无信号，继续观察...")
 
         except KeyboardInterrupt:
