@@ -155,10 +155,10 @@ class TradeExecutor:
                     self.client.place_order(
                         symbol=symbol,
                         side=close_side,
-                        quantity=None, # close_position=True 不需要数量
+                        quantity=quantity, # 使用开仓数量 + reduce_only
                         order_type='STOP_MARKET',
                         stop_price=str(sl_price),
-                        close_position=True
+                        reduce_only=True
                     )
                     print(f"   已挂止损单: {sl_price}")
 
@@ -174,10 +174,10 @@ class TradeExecutor:
                     self.client.place_order(
                         symbol=symbol,
                         side=close_side,
-                        quantity=None, # close_position=True 不需要数量
+                        quantity=quantity, # 使用开仓数量 + reduce_only
                         order_type='TAKE_PROFIT_MARKET',
                         stop_price=str(tp_price),
-                        close_position=True
+                        reduce_only=True
                     )
                     print(f"   已挂止盈单: {tp_price}")
 
@@ -311,14 +311,193 @@ class TradeExecutor:
                     else:
                         new_sl = round(new_sl, filters['price_precision'])
                 
+                # 获取当前持仓数量
+                quantity = abs(float(position['amount']))
+                
                 self.client.place_order(
                     symbol=symbol,
                     side=close_side,
-                    quantity=None,
+                    quantity=quantity,
                     order_type='STOP_MARKET',
                     stop_price=str(new_sl),
-                    close_position=True
+                    reduce_only=True
                 )
                 
         except Exception as e:
             print(f"移动止损检查失败: {e}")
+
+    def increase_position(self, position, amount_usdt, current_price, atr):
+        """
+        浮盈加仓 (Pyramiding)
+        规则:
+        1. 加仓后重新计算平均开仓价
+        2. 止损上移到新平均价的下方 (保证整体风险可控)
+        """
+        symbol = position['symbol']
+        side = position['side']
+        old_quantity = float(position['amount'])
+        
+        print(f">>> [Trader] 正在对 {symbol} 执行加仓，金额: {amount_usdt} USDT...")
+        
+        # 1. 执行加仓交易
+        # 注意：这里调用 execute_trade 会自动挂新的止损单吗？execute_trade 内部有挂单逻辑
+        # 但我们需要特殊的止损逻辑，所以这里手动下单比较好，或者复用 execute_trade 但不传 sl/tp，后续手动调整
+        
+        # 计算加仓数量
+        filters = self.client.get_symbol_filters(symbol)
+        if not filters:
+            return False
+            
+        quantity = amount_usdt / current_price
+        
+        # 精度调整
+        step_size = filters['step_size']
+        if step_size > 0:
+            inv_step = 1.0 / step_size
+            quantity = math.floor(quantity * inv_step) / inv_step
+            qty_precision = int(round(-math.log(step_size, 10), 0))
+            quantity = round(quantity, qty_precision)
+        
+        if quantity < filters['min_qty']:
+            print(f"   加仓数量 {quantity} 太小，忽略")
+            return False
+            
+        try:
+            # 加仓下单
+            self.client.place_order(
+                symbol=symbol,
+                side=side,
+                quantity=quantity,
+                order_type='MARKET' # 加仓通常用市价，或者当前价限价
+            )
+            print(f"   加仓成功: {quantity}")
+            
+            # 2. 撤销旧止损单
+            try:
+                self.client.client.futures_cancel_all_open_orders(symbol=symbol)
+            except:
+                pass
+                
+            # 3. 计算新止损
+            # 新的总数量
+            total_quantity = old_quantity + quantity
+            # 简单估算新止损：移动到 (当前价 - 1.5 * ATR)
+            # 这样既保护了部分利润，又给新仓位留了空间
+            if side == 'BUY':
+                new_sl = current_price - (1.5 * atr)
+            else:
+                new_sl = current_price + (1.5 * atr)
+                
+            # 精度处理
+            if filters['tick_size'] > 0:
+                precision = int(round(-math.log(filters['tick_size'], 10), 0))
+                new_sl = round(new_sl, precision)
+            else:
+                new_sl = round(new_sl, filters['price_precision'])
+                
+            # 4. 挂新止损单 (针对总仓位)
+            close_side = 'SELL' if side == 'BUY' else 'BUY'
+            self.client.place_order(
+                symbol=symbol,
+                side=close_side,
+                quantity=total_quantity,
+                order_type='STOP_MARKET',
+                stop_price=str(new_sl),
+                reduce_only=True
+            )
+            print(f"   已更新止损 (总仓位 {total_quantity}): {new_sl}")
+            return True
+            
+        except Exception as e:
+            print(f"   加仓失败: {e}")
+            return False
+
+    def reduce_position(self, position, reduce_pct, current_price):
+        """
+        分批减仓 (Scale Out)
+        :param reduce_pct: 减仓比例 (0.0 - 1.0), 例如 0.5 表示减仓一半
+        """
+        symbol = position['symbol']
+        side = position['side']
+        total_quantity = abs(float(position['amount']))
+        
+        reduce_qty = total_quantity * reduce_pct
+        
+        print(f">>> [Trader] 正在对 {symbol} 执行减仓 ({reduce_pct*100}%), 数量: {reduce_qty}...")
+        
+        filters = self.client.get_symbol_filters(symbol)
+        if not filters:
+            return False
+            
+        # 精度调整
+        step_size = filters['step_size']
+        if step_size > 0:
+            inv_step = 1.0 / step_size
+            reduce_qty = math.floor(reduce_qty * inv_step) / inv_step
+            qty_precision = int(round(-math.log(step_size, 10), 0))
+            reduce_qty = round(reduce_qty, qty_precision)
+            
+        if reduce_qty < filters['min_qty']:
+            print(f"   减仓数量 {reduce_qty} 太小，忽略")
+            return False
+            
+        try:
+            # 1. 执行减仓
+            close_side = 'SELL' if side == 'BUY' else 'BUY'
+            self.client.place_order(
+                symbol=symbol,
+                side=close_side,
+                quantity=reduce_qty,
+                order_type='MARKET',
+                reduce_only=True
+            )
+            print(f"   减仓成功")
+            
+            # 2. 调整剩余仓位的止损单
+            # 撤销旧单
+            try:
+                self.client.client.futures_cancel_all_open_orders(symbol=symbol)
+            except:
+                pass
+                
+            # 剩余数量
+            remain_qty = total_quantity - reduce_qty
+            remain_qty = round(remain_qty, qty_precision if step_size > 0 else filters['quantity_precision'])
+            
+            if remain_qty < filters['min_qty']:
+                print("   剩余仓位过小，不再挂止损")
+                return True
+                
+            # 保持原有的止损价逻辑较复杂，这里简单策略：
+            # 减仓通常意味着锁定利润，剩余仓位应该将止损移至保本或更激进
+            # 这里我们尝试读取之前的止损价比较困难，简单起见，重设为保本 (开仓价)
+            # 或者更智能点：如果有盈利，设为 (当前价 - 2ATR)
+            # 为简化，暂时设为 开仓价 (Entry Price) 
+            entry_price = float(position['entry_price'])
+            
+            if side == 'BUY':
+                new_sl = max(entry_price, current_price * 0.98) # 至少保本或现价下方2%
+            else:
+                new_sl = min(entry_price, current_price * 1.02)
+                
+             # 精度处理
+            if filters['tick_size'] > 0:
+                precision = int(round(-math.log(filters['tick_size'], 10), 0))
+                new_sl = round(new_sl, precision)
+            else:
+                new_sl = round(new_sl, filters['price_precision'])
+
+            self.client.place_order(
+                symbol=symbol,
+                side=close_side,
+                quantity=remain_qty,
+                order_type='STOP_MARKET',
+                stop_price=str(new_sl),
+                reduce_only=True
+            )
+            print(f"   剩余仓位 {remain_qty} 已重置止损: {new_sl}")
+            return True
+            
+        except Exception as e:
+            print(f"   减仓失败: {e}")
+            return False

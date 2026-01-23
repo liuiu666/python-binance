@@ -164,4 +164,10 @@ class AIStrategy:
         print(f"   评估理由: {reason}")
         print("-" * 50)
         
-        return action, reason
+        # 将 confidence 放入 info 字典返回
+        info = {
+            "reason": reason,
+            "confidence": confidence
+        }
+        
+        return action, info

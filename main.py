@@ -73,17 +73,69 @@ def run_bot():
                         # [新增] 移动止损检查
                         current_atr = df_analyzed.iloc[-1].get('ATR', 0)
                         current_price = df_analyzed.iloc[-1]['收盘价']
-                        trader.check_trailing_stop(p, current_price, atr=current_atr)
                         
-                        # AI 评估
-                        action, reason = ai_strategy.audit_position(p, df_analyzed)
+                        # 计算浮盈 ATR 倍数
+                        entry_price = float(p['entry_price'])
+                        amount = abs(float(p['amount']))
+                        side = p['side']
+                        if side == 'BUY':
+                            profit_per_share = current_price - entry_price
+                        else:
+                            profit_per_share = entry_price - current_price
                         
-                        if action == 'CLOSE':
-                            print(f">>> [AI 建议] 对 {symbol} 执行平仓操作，理由: {reason}")
-                            success = trader.close_position(symbol)
-                            if success:
-                                state_manager.clear_position(symbol=symbol, pnl=p['unrealized_pnl'])
-                                print(f"   {symbol} 已平仓")
+                        atr_multiple = profit_per_share / current_atr if current_atr > 0 else 0
+                        
+                        # AI 评估 (获取信心分数用于加减仓判断)
+                        ai_action, ai_info = ai_strategy.audit_position(p, df_analyzed)
+                        ai_reason = ai_info.get('reason', '')
+                        ai_confidence = ai_info.get('confidence', 0)
+                        
+                        # --- 浮动加减仓逻辑 ---
+                        is_scaling_op = False
+                        
+                        # 1. 加仓逻辑 (Pyramiding): 浮盈 > 2.5 ATR
+                        if atr_multiple > 2.5:
+                            # [AI 过滤] 如果 AI 建议 CLOSE 且信心尚可，则不加仓
+                            if ai_action == 'CLOSE' and ai_confidence > 50:
+                                print(f"   [策略] 规则触发加仓，但 AI 建议平仓 (信心 {ai_confidence}) -> 取消加仓")
+                            else:
+                                # 检查是否已达到最大仓位 (例如总权益的 10%)
+                                balance_info = client.get_balance()
+                                total_equity = balance_info.get('总权益', 0) if balance_info else 0
+                                current_position_value = amount * current_price
+                                
+                                if total_equity > 0 and current_position_value < (total_equity * 0.10):
+                                    # 加仓 0.5 倍初始仓位 (假设初始仓位约为 2% 风险对应的量，这里简单按当前价值的 30% 加)
+                                    add_amount = current_position_value * 0.3 
+                                    # 最小加仓限制
+                                    if add_amount > 10:
+                                        success = trader.increase_position(p, add_amount, current_price, current_atr)
+                                        if success:
+                                            is_scaling_op = True
+                        
+                        # 2. 减仓逻辑 (Scale Out): 浮盈 > 4 ATR
+                        elif atr_multiple > 4.0:
+                            # [AI 过滤] 如果 AI 强烈建议 HOLD，则推迟减仓
+                            if ai_action == 'HOLD' and ai_confidence >= 80:
+                                print(f"   [策略] 规则触发减仓，但 AI 强烈建议持有 (信心 {ai_confidence}) -> 暂不减仓，让利润奔跑")
+                            else:
+                                # 减仓 30%
+                                success = trader.reduce_position(p, 0.3, current_price)
+                                if success:
+                                    is_scaling_op = True
+                                
+                        # 如果没有执行加减仓
+                        if not is_scaling_op:
+                            # 检查是否需要全平
+                            if ai_action == 'CLOSE':
+                                print(f">>> [AI 建议] 对 {symbol} 执行平仓操作，理由: {ai_reason}")
+                                success = trader.close_position(symbol)
+                                if success:
+                                    state_manager.clear_position(symbol=symbol, pnl=p['unrealized_pnl'])
+                                    print(f"   {symbol} 已平仓")
+                            else:
+                                # 移动止损 (仅在未做其他操作时执行)
+                                trader.check_trailing_stop(p, current_price, atr=current_atr)
                 
                 print(">>> [策略限制] 持仓中，暂停开新仓")
                 time.sleep(60)
