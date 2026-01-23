@@ -1,4 +1,2 @@
 python-binance
-pandas
 python-dotenv
-loguru
