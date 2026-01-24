@@ -44,14 +44,17 @@ class StateManager:
 
     def set_position(self, symbol, side, entry_price, quantity):
         now_ts = time.time()
-        pos = {
+        existing = (self.state.get('positions') or {}).get(symbol) or {}
+        pos = existing.copy()
+        if 'open_ts' not in pos:
+            pos['open_ts'] = now_ts
+        pos.update({
             'symbol': symbol,
             'side': side,
             'entry_price': entry_price,
             'quantity': quantity,
-            'open_ts': now_ts,
             'update_ts': now_ts
-        }
+        })
         self.state['current_position'] = pos
         self.state['positions'][symbol] = pos
         self.save_state()

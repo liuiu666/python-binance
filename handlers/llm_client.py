@@ -39,7 +39,7 @@ class LLMClient:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "你是一个激进的加密货币交易专家，专注于捕捉高波动和资金流向异常带来的暴利机会。你的目标是帮助用户快速翻倍，因此请淡化滞后的技术指标（如 RSI, MACD），重点关注资金流向、成交量突增和合约持仓变化。请只输出 JSON 格式，包含字段: signal (BUY/SELL/HOLD), reason (简短理由), confidence (0-100), stop_loss, take_profit。"},
+                    {"role": "system", "content": "你是一个专业的加密货币趋势与资金面分析师，目标是显著提升胜率并降低无效交易。决策时必须综合资金流向、10分钟成交量变化、合约持仓(OI)、资金费率与大周期趋势；若关键维度缺失或相互矛盾，直接给出 HOLD 并降低信心。请只输出 JSON 格式，包含字段: signal (BUY/SELL/HOLD), reason (简短理由), confidence (0-100), stop_loss, take_profit。reason 必须同时提及资金流向与10分钟成交量的变化结论。"},
                     {"role": "user", "content": prompt}
                 ],
                 response_format={"type": "json_object"}
@@ -124,6 +124,7 @@ class LLMClient:
            - 如果建议 HOLD 且趋势强劲，检查是否需要取消止盈 (CANCEL_TP) 或 上移止盈 (MOVE_TP)。
            - 如果建议 HOLD 但风险增加，检查是否需要上移/下移止损 (MOVE_SL)。
            - 如果当前没有止盈且趋势变弱，建议设置止盈 (SET_TP)。
+           - **盈利时止损必须上移到盈利区间**：做多止损不得低于开仓价，做空止损不得高于开仓价；若给出 MOVE_SL/SET_SL，必须满足该条件。
         
         请输出 JSON: 
         - action (HOLD/CLOSE)
@@ -183,6 +184,13 @@ class LLMClient:
         1. 资金费率: {data.get('funding_rate', '未知')} 
            (注意: 正值代表多头付钱给空头; 若 > 0.05% 则持仓成本极高; 若 < -0.05% 可能是空头拥挤)
         2. 持仓量 (OI): {data.get('open_interest', 0)}
+
+        [10分钟成交量与价格动量]
+        - 近10m成交量: {data.get('volume_10m', 0)}
+        - 前10m成交量: {data.get('volume_10m_prev', 0)}
+        - 近30m均值(折算10m): {data.get('volume_10m_avg', 0)}
+        - 10m量能变化: {data.get('volume_10m_change_pct', 0):.2f}% (倍数: {data.get('volume_10m_ratio', 0):.2f})
+        - 10m价格变动: {data.get('price_10m_change_pct', 0):.2f}%
         
         [最近 12 小时价格走势 (从旧到新)]
         {kline_text}
@@ -201,11 +209,22 @@ class LLMClient:
         3. 市场概况:
            - 当前价: {data.get('current_price')}
            - 24h 涨跌: {data.get('change_pct')}%
+
+        [大周期趋势参考]
+        - MA5: {data.get('larger_timeframe_trend', {}).get('ma5')}
+        - MA20: {data.get('larger_timeframe_trend', {}).get('ma20')}
+        - RSI: {data.get('larger_timeframe_trend', {}).get('rsi')}
+        - 趋势: {data.get('larger_timeframe_trend', {}).get('trend')}
            
         [分析任务]
         用户目标是**快速翻倍**，偏好**高波动、高增长**的机会。
-        请**重资金流向和成交量，轻滞后指标**。
-        1. 如果资金大幅净流入且价格未暴涨，这是最佳买入点，请给高信心 (Confidence > 80)。
+        请**重资金流向和成交量，轻滞后指标**，并遵循多因子一致性。
+        1. 只有当以下条件中至少满足 3 条才给出 BUY/SELL，否则输出 HOLD：
+           - 资金流向与方向一致且强度明确（净流入/净流出明显，买卖比偏离 1）
+           - 10m 成交量明显放大或高于近30m均值
+           - OI 与价格同向增量（上涨+OI上升 或 下跌+OI上升）
+           - 大周期趋势与信号方向一致
+           - 10m 价格动量与资金方向一致
         2. 如果资金流出但指标显示超卖，不要轻易抄底（可能是阴跌）。
         3. 只要资金和量能支持，不要在意 RSI 超买（可能是主升浪）。
         
@@ -213,6 +232,7 @@ class LLMClient:
         1. 手续费成本约为 0.1% (双边)。如果预期利润 < 0.2%，请直接观望 (HOLD)。
         2. 如果价格上涨但 OI (持仓量) 下跌，视为“空头平仓导致的诱多”，请谨慎。
         3. 如果资金费率极高 (>0.05%) 且趋势不明确，请避免做多。
+        4. 如果 10m 成交量没有放大且价格动量不足，避免给出高信心信号。
         
         [输出要求]
         请只输出 JSON 格式，包含字段: 
@@ -220,7 +240,7 @@ class LLMClient:
         - confidence (0-100)
         - stop_loss (建议止损价格，数值类型)
         - take_profit (建议止盈价格，数值类型)
-        - reason (简短理由，必须包含对资金流向或成交量的分析)
+        - reason (简短理由，必须同时包含资金流向与10分钟成交量变化结论)
         
         [止盈止损建议]
         - 请根据 ATR 或 支撑压力位 给出具体的止盈止损价格。

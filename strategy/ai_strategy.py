@@ -68,6 +68,20 @@ class AIStrategy:
             k_str = f"时间: {row.name}, 开: {row['开盘价']}, 高: {row['最高价']}, 低: {row['最低价']}, 收: {row['收盘价']}, 量: {row['成交量']}"
             recent_klines.append(k_str)
 
+        vol_10m = 0
+        vol_prev_10m = 0
+        vol_10m_avg = 0
+        price_10m_change_pct = 0
+        if len(df) >= 10:
+            vol_10m = float(df.tail(10)['成交量'].sum())
+            base_price_10m = float(df.iloc[-10]['收盘价'] or 0)
+            if base_price_10m > 0:
+                price_10m_change_pct = (price - base_price_10m) / base_price_10m * 100
+        if len(df) >= 20:
+            vol_prev_10m = float(df.iloc[-20:-10]['成交量'].sum())
+        if len(df) >= 30:
+            vol_10m_avg = float(df.tail(30)['成交量'].sum() / 3.0)
+
         # 2.6 获取合约数据（资金费率、持仓量、资金流向）
         funding_rate = self.client.get_funding_rate(symbol)
         open_interest = self.client.get_open_interest(symbol)
@@ -115,11 +129,24 @@ class AIStrategy:
         net_flow_ma = float(current.get('Net_Flow_MA5', 0) or 0)
 
         # 3. 构建数据包
+        vol_ratio = 0
+        if vol_prev_10m > 0:
+            vol_ratio = vol_10m / vol_prev_10m
+        vol_change_pct = 0
+        if vol_prev_10m > 0:
+            vol_change_pct = (vol_10m - vol_prev_10m) / vol_prev_10m * 100
+
         market_data = {
             "symbol": symbol,
             "funding_rate": f"{fr_val:.6f} ({fr_desc})",
             "open_interest": open_interest,
             "money_flow": money_flow,
+            "volume_10m": vol_10m,
+            "volume_10m_prev": vol_prev_10m,
+            "volume_10m_avg": vol_10m_avg,
+            "volume_10m_ratio": vol_ratio,
+            "volume_10m_change_pct": vol_change_pct,
+            "price_10m_change_pct": price_10m_change_pct,
             "cmf": cmf,
             "net_flow_ma": net_flow_ma,
             "current_price": price,
@@ -137,6 +164,55 @@ class AIStrategy:
             "larger_timeframe_trend": larger_info,
             "recent_klines": recent_klines
         }
+
+        def _dynamic_levels(sig, p, a):
+            if p <= 0:
+                return None, None
+            if a and a > 0:
+                atr_pct = a / p
+                if atr_pct < 0.004:
+                    sl_mult = 2.0
+                elif atr_pct < 0.012:
+                    sl_mult = 2.6
+                elif atr_pct < 0.025:
+                    sl_mult = 3.2
+                else:
+                    sl_mult = 3.8
+                tp_mult = max(sl_mult * 1.8, 4.0)
+                if sig == 'BUY':
+                    return p - (sl_mult * a), p + (tp_mult * a)
+                return p + (sl_mult * a), p - (tp_mult * a)
+            sl_pct = 0.02
+            tp_pct = 0.035
+            if sig == 'BUY':
+                return p * (1 - sl_pct), p * (1 + tp_pct)
+            return p * (1 + sl_pct), p * (1 - tp_pct)
+
+        def _sanitize_levels(sig, p, a, sl, tp):
+            if not sl or not tp or p <= 0:
+                return None, None
+            try:
+                sl = float(sl)
+                tp = float(tp)
+            except Exception:
+                return None, None
+            if sig == 'BUY' and not (sl < p < tp):
+                return None, None
+            if sig == 'SELL' and not (tp < p < sl):
+                return None, None
+            sl_dist = abs(p - sl)
+            tp_dist = abs(tp - p)
+            if a and a > 0:
+                min_sl = max(1.6 * a, p * 0.004)
+                max_sl = max(5.5 * a, p * 0.06)
+            else:
+                min_sl = p * 0.005
+                max_sl = p * 0.08
+            if sl_dist < min_sl or sl_dist > max_sl:
+                return None, None
+            if tp_dist < sl_dist * 1.3:
+                return None, None
+            return sl, tp
 
         print(f">>>【智能策略】正在请求分析 {symbol} ...")
         
@@ -189,29 +265,19 @@ class AIStrategy:
             price = current['收盘价']
             
             # 优先使用建议的止盈止损
-            llm_sl = llm_result.get('stop_loss')
-            llm_tp = llm_result.get('take_profit')
-            
-            if llm_sl and llm_tp:
-                info['stop_loss'] = float(llm_sl)
-                info['take_profit'] = float(llm_tp)
-                print(f"   【建议】使用模型提供的风控点位: 止损 {llm_sl}, 止盈 {llm_tp}")
-            elif atr > 0:
-                if signal == 'BUY':
-                    info['stop_loss'] = price - (3.0 * atr)
-                    info['take_profit'] = price + (5.0 * atr)
-                elif signal == 'SELL':
-                    info['stop_loss'] = price + (3.0 * atr)
-                    info['take_profit'] = price - (5.0 * atr)
-                print(f"   【建议】使用波动率兜底策略: 止损 {info['stop_loss']:.4f}, 止盈 {info['take_profit']:.4f}")
+            llm_sl = llm_result.get('stop_loss') if llm_result else None
+            llm_tp = llm_result.get('take_profit') if llm_result else None
+            sl, tp = _sanitize_levels(signal, price, atr, llm_sl, llm_tp)
+            if sl and tp:
+                info['stop_loss'] = float(sl)
+                info['take_profit'] = float(tp)
+                print(f"   【建议】使用模型提供的风控点位: 止损 {sl}, 止盈 {tp}")
             else:
-                if signal == 'BUY':
-                    info['stop_loss'] = price * 0.97
-                    info['take_profit'] = price * 1.06
-                elif signal == 'SELL':
-                    info['stop_loss'] = price * 1.03
-                    info['take_profit'] = price * 0.94
-                print(f"   【建议】使用固定百分比兜底: 止损 {info['stop_loss']:.4f}, 止盈 {info['take_profit']:.4f}")
+                sl, tp = _dynamic_levels(signal, price, atr)
+                if sl and tp:
+                    info['stop_loss'] = float(sl)
+                    info['take_profit'] = float(tp)
+                    print(f"   【建议】使用动态风控点位: 止损 {sl:.4f}, 止盈 {tp:.4f}")
         
         print("-" * 50)
         print(f"   【分析结果】{symbol}")

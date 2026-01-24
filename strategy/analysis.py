@@ -219,25 +219,30 @@ class MarketAnalyzer:
         stop_loss = 0
         take_profit = 0
         
-        # [优化] 动态调整止损价格，放宽止损以适应高波动
-        if atr > 0:
-            atr_multiplier_sl = 3.0 # 从 2.2 放宽到 3.0
-            atr_multiplier_tp = 5.0 # 保持盈亏比
-            
-            if signal == 'BUY':
-                stop_loss = price - (atr_multiplier_sl * atr)
-                take_profit = price + (atr_multiplier_tp * atr)
+        if atr > 0 and price > 0:
+            atr_pct = atr / price
+            if atr_pct < 0.004:
+                sl_mult = 2.0
+            elif atr_pct < 0.012:
+                sl_mult = 2.6
+            elif atr_pct < 0.025:
+                sl_mult = 3.2
             else:
-                stop_loss = price + (atr_multiplier_sl * atr)
-                take_profit = price - (atr_multiplier_tp * atr)
+                sl_mult = 3.8
+            tp_mult = max(sl_mult * 1.8, 4.0)
+            if signal == 'BUY':
+                stop_loss = price - (sl_mult * atr)
+                take_profit = price + (tp_mult * atr)
+            else:
+                stop_loss = price + (sl_mult * atr)
+                take_profit = price - (tp_mult * atr)
         else:
-            # 兜底百分比也放宽
             if signal == 'BUY':
-                stop_loss = price * 0.96 # 放宽到 4%
-                take_profit = price * 1.08
+                stop_loss = price * 0.98
+                take_profit = price * 1.035
             else:
-                stop_loss = price * 1.04
-                take_profit = price * 0.92
+                stop_loss = price * 1.02
+                take_profit = price * 0.965
                 
         return signal, {
             'reason': reason,
@@ -294,12 +299,31 @@ class MarketAnalyzer:
         stop_loss = 0
         take_profit = 0
         
-        if signal == 'BUY':
-            stop_loss = curr['收盘价'] - (2 * atr) # 2倍 ATR 止损
-            take_profit = curr['收盘价'] + (3 * atr) # 3倍 ATR 止盈 (盈亏比 1.5)
-        elif signal == 'SELL':
-            stop_loss = curr['收盘价'] + (2 * atr)
-            take_profit = curr['收盘价'] - (3 * atr)
+        price = curr['收盘价']
+        if atr > 0 and price > 0:
+            atr_pct = atr / price
+            if atr_pct < 0.004:
+                sl_mult = 1.8
+            elif atr_pct < 0.012:
+                sl_mult = 2.3
+            elif atr_pct < 0.025:
+                sl_mult = 2.8
+            else:
+                sl_mult = 3.4
+            tp_mult = max(sl_mult * 1.7, 3.6)
+            if signal == 'BUY':
+                stop_loss = price - (sl_mult * atr)
+                take_profit = price + (tp_mult * atr)
+            elif signal == 'SELL':
+                stop_loss = price + (sl_mult * atr)
+                take_profit = price - (tp_mult * atr)
+        else:
+            if signal == 'BUY':
+                stop_loss = price * 0.985
+                take_profit = price * 1.03
+            elif signal == 'SELL':
+                stop_loss = price * 1.015
+                take_profit = price * 0.97
             
         return signal, {
             'reason': reason,

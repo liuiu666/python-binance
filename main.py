@@ -169,7 +169,18 @@ def run_bot():
                             elif adj_type in ['MOVE_SL', 'SET_SL'] and adj_val:
                                 try:
                                     new_sl = float(adj_val)
-                                    trader.update_stop_loss(symbol, p['side'], new_sl)
+                                    if side == 'BUY' and current_price > entry_price and new_sl < entry_price:
+                                        print(f"       止损低于开仓价，已修正为保本价: {entry_price}")
+                                        new_sl = entry_price
+                                    if side == 'SELL' and current_price < entry_price and new_sl > entry_price:
+                                        print(f"       止损高于开仓价，已修正为保本价: {entry_price}")
+                                        new_sl = entry_price
+                                    if side == 'BUY' and new_sl >= current_price:
+                                        print(f"       止损触发价不合理，已忽略: {new_sl}")
+                                    elif side == 'SELL' and new_sl <= current_price:
+                                        print(f"       止损触发价不合理，已忽略: {new_sl}")
+                                    else:
+                                        trader.update_stop_loss(symbol, p['side'], new_sl)
                                 except ValueError:
                                     print(f"       无效的止损数值: {adj_val}")
                                     
