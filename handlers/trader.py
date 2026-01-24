@@ -942,12 +942,6 @@ class TradeExecutor:
             # 方案：TradeExecutor 返回 pnl，由 main 更新
             
             # 2. 调整剩余仓位的止损单
-            # 撤销旧单
-            try:
-                self.client.client.futures_cancel_all_open_orders(symbol=symbol, recvWindow=10000)
-            except:
-                pass
-                
             # 剩余数量
             remain_qty = total_quantity - reduce_qty
             remain_qty = round(remain_qty, qty_precision if step_size > 0 else filters['quantity_precision'])
@@ -975,15 +969,9 @@ class TradeExecutor:
             else:
                 new_sl = round(new_sl, filters['price_precision'])
 
-            self.client.place_order(
-                symbol=symbol,
-                side=close_side,
-                quantity=remain_qty,
-                order_type='STOP_MARKET',
-                stop_price=str(new_sl),
-                reduce_only=True
-            )
-            print(f"   剩余仓位 {remain_qty} 已重置止损: {new_sl}")
+            ok = self.update_stop_loss(symbol, side, new_sl)
+            if ok:
+                print(f"   剩余仓位 {remain_qty} 已重置止损: {new_sl}")
             return pnl
             
         except Exception as e:

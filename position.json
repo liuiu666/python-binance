@@ -1,28 +1,19 @@
 {
-    "current_position": {
-        "symbol": "SPACEUSDT",
-        "side": "BUY",
-        "entry_price": 0.017383,
-        "quantity": 2097.0,
-        "open_ts": 1769258393.7451544,
-        "update_ts": 1769260264.7624862,
-        "local_stop": 0.017084,
-        "local_stop_side": "BUY"
-    },
+    "current_position": null,
     "daily_stats": {
         "date": "2026-01-24",
         "initial_balance": 0.0,
-        "realized_pnl": -1.1180864799999992,
-        "trade_count": 50
+        "realized_pnl": -0.5104996902113992,
+        "trade_count": 52
     },
     "cooldowns": {
-        "ACUUSDT": 1769259689.1287503,
-        "ENSOUSDT": 1769259703.3570523,
+        "ACUUSDT": 1769262900.1525552,
+        "ENSOUSDT": 1769260999.853484,
         "RIVERUSDT": 1769251816.397818,
-        "SPACEUSDT": 1769258773.321489,
+        "SPACEUSDT": 1769261436.2455273,
         "INUSDT": 1769227095.6571825,
-        "KAIAUSDT": 1769258899.1514015,
-        "SOMIUSDT": 1769259713.1396053
+        "KAIAUSDT": 1769261452.2910035,
+        "SOMIUSDT": 1769261287.923425
     },
     "positions": {
         "ACUUSDT": {
@@ -63,8 +54,8 @@
             "entry_price": 0.017383,
             "quantity": 2097.0,
             "open_ts": 1769258393.7451544,
-            "update_ts": 1769260264.7624862,
-            "local_stop": 0.017084,
+            "update_ts": 1769262913.9381154,
+            "local_stop": 0.017292,
             "local_stop_side": "BUY"
         },
         "RIVERUSDT": {
@@ -86,6 +77,16 @@
             "update_ts": 1769258820.7352715,
             "local_stop": null,
             "local_stop_side": null
+        },
+        "SOMIUSDT": {
+            "local_stop": null,
+            "local_stop_side": null,
+            "symbol": "SOMIUSDT",
+            "update_ts": 1769261210.659078,
+            "open_ts": 1769261028.2480159,
+            "side": "BUY",
+            "entry_price": 0.3046,
+            "quantity": 202.0
         }
     }
 }
