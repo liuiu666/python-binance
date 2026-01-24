@@ -7,20 +7,31 @@ class AIStrategy:
         self.llm = LLMClient()
         self.client = client or BinanceClient()
 
-    def analyze(self, df, symbol, trend_bias=None):
+    def analyze(self, df, symbol, trend_bias=None, df_larger=None):
         """
         使用大模型分析市场数据并生成信号
-        :param df: 包含技术指标的 DataFrame
+        :param df: 包含技术指标的 DataFrame (1m)
         :param symbol: 交易对名称
+        :param trend_bias: 趋势偏向
+        :param df_larger: 更大周期的 DataFrame (如 5m 或 15m)
         :return: (signal, info)
-                 signal: 'BUY', 'SELL', or None
-                 info: dict 包含 'reason', 'current_price' 等
         """
         if df is None or len(df) < 20:
             return None, {}
 
-        # 1. 获取最新数据
+        # 1. 获取最新数据 (1m)
         current = df.iloc[-1]
+        
+        # 获取大周期数据 (5m/15m) 作为参考
+        larger_info = {}
+        if df_larger is not None and not df_larger.empty:
+            curr_large = df_larger.iloc[-1]
+            larger_info = {
+                "ma5": float(curr_large.get('MA5', 0) or 0),
+                "ma20": float(curr_large.get('MA20', 0) or 0),
+                "rsi": float(curr_large.get('RSI', 50) or 50),
+                "trend": "看多" if float(curr_large.get('MA5', 0) or 0) > float(curr_large.get('MA20', 0) or 0) else "看空"
+            }
 
         price = float(current['收盘价'])
         atr = float(current.get('ATR', 0) or 0)
@@ -52,7 +63,7 @@ class AIStrategy:
         
         # 2.5 提取最近 K 线序列（用于形态识别）
         recent_klines = []
-        subset = df.tail(12)
+        subset = df.tail(30)
         for idx, row in subset.iterrows():
             k_str = f"时间: {row.name}, 开: {row['开盘价']}, 高: {row['最高价']}, 低: {row['最低价']}, 收: {row['收盘价']}, 量: {row['成交量']}"
             recent_klines.append(k_str)
@@ -81,8 +92,12 @@ class AIStrategy:
             pass
 
         try:
-            fr = float(funding_rate or 0)
-            if abs(fr) > 0.001 and ma5 > 0 and ma20 > 0:
+            fr_val = float(funding_rate or 0)
+            fr_desc = "正常"
+            if fr_val > 0.001: fr_desc = "费率偏高(多头拥挤)"
+            if fr_val < -0.001: fr_desc = "费率偏低(空头拥挤)"
+
+            if abs(fr_val) > 0.001 and ma5 > 0 and ma20 > 0:
                 ma_gap = abs(ma5 - ma20) / price
                 if ma_gap < 0.001:
                     return None, {
@@ -92,7 +107,8 @@ class AIStrategy:
                         "atr": atr
                     }
         except Exception:
-            pass
+            fr_val = 0
+            fr_desc = "未知"
             
         # 提取资金流指标
         cmf = float(current.get('CMF', 0) or 0)
@@ -101,7 +117,7 @@ class AIStrategy:
         # 3. 构建数据包
         market_data = {
             "symbol": symbol,
-            "funding_rate": funding_rate,
+            "funding_rate": f"{fr_val:.6f} ({fr_desc})",
             "open_interest": open_interest,
             "money_flow": money_flow,
             "cmf": cmf,
@@ -118,6 +134,7 @@ class AIStrategy:
             "boll_mid": current.get('BOLL_MID', 0),
             "boll_lower": current.get('BOLL_LOWER', 0),
             "ma_status": "看多" if current.get('MA5', 0) > current.get('MA20', 0) else "看空",
+            "larger_timeframe_trend": larger_info,
             "recent_klines": recent_klines
         }
 
@@ -213,11 +230,12 @@ class AIStrategy:
 
         return signal, info
 
-    def audit_position(self, position, df):
+    def audit_position(self, position, df, open_orders=None):
         """
         评估当前持仓
         :param position: 持仓字典
         :param df: K线数据
+        :param open_orders: 当前挂单列表
         :return: (action, info) action: 'HOLD' 或 'CLOSE'
         """
         if df is None or len(df) < 5:
@@ -246,10 +264,14 @@ class AIStrategy:
             "cmf": cmf,
             "net_flow_ma": net_flow_ma,
             "ma_status": "看多" if current.get('MA5', 0) > current.get('MA20', 0) else "看空",
-            "money_flow": money_flow
+            "money_flow": money_flow,
+            "open_orders": open_orders  # [新增] 传入挂单信息
         }
         
         print(f">>>【智能策略】正在评估持仓 {position['symbol']} ...")
+        
+        if open_orders:
+            print(f"   [挂单信息] 正在结合当前 {len(open_orders)} 个挂单进行分析...")
         
         llm_result, error = self.llm.get_position_audit(position, market_data)
         

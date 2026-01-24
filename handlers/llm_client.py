@@ -79,6 +79,17 @@ class LLMClient:
         if market_data.get('money_flow'):
             mf = market_data['money_flow']
             flow_text = f"周期: {mf.get('周期')}, 主动买入: {mf.get('主动买入量'):.2f}, 主动卖出: {mf.get('主动卖出量'):.2f}, 净流入: {mf.get('净流入量'):.2f}, 买卖比: {mf.get('买卖比'):.4f}"
+
+        open_orders = market_data.get('open_orders', [])
+        open_orders_desc = "无挂单"
+        if open_orders:
+            descs = []
+            for o in open_orders:
+                otype = o.get('type')
+                oprice = o.get('stopPrice') or o.get('price')
+                oside = o.get('side')
+                descs.append(f"{otype} ({oside}) @ {oprice}")
+            open_orders_desc = ", ".join(descs)
             
         prompt = f"""
         请评估当前持仓是否应该继续持有 ({position_data.get('symbol')}):
@@ -89,6 +100,7 @@ class LLMClient:
         - 开仓均价: {position_data.get('entry_price')}
         - 未实现盈亏: {position_data.get('unrealized_pnl')} USDT
         - 杠杆: {position_data.get('leverage')}x
+        - 当前挂单: {open_orders_desc}
         
         [关键资金数据 (核心依据)]
         - 资金流向 (5m): {flow_text}
@@ -107,8 +119,15 @@ class LLMClient:
            - 做多时：只有当资金明显流出 (净流出且 CMF < 0) 或 价格有效跌破 MA20 时，才建议 CLOSE。
            - 做空时：只有当资金明显流入 (净流入且 CMF > 0) 或 价格有效站上 MA20 时，才建议 CLOSE。
         3. 如果资金流向与持仓方向一致（例如做多且资金净流入），请坚定 HOLD，哪怕有浮亏。
+        4. **检查挂单合理性**：
+           - 如果建议 HOLD 且趋势强劲，请检查是否有过早的止盈单。如果有，建议指出。
+           - 如果建议 HOLD 但风险增加，请检查止损是否过远。
         
-        请输出 JSON: action (HOLD/CLOSE), reason (简短理由), confidence (0-100).
+        请输出 JSON: 
+        - action (HOLD/CLOSE)
+        - reason (简短理由)
+        - confidence (0-100)
+        - adjust_suggestion (可选，针对挂单的调整建议，例如 "建议取消止盈" 或 "建议上移止损到 xxx")
         """
         
         try:
@@ -156,7 +175,7 @@ class LLMClient:
         (如果净流入为正且买卖比 > 1.1，说明资金在抢筹; 反之说明资金出逃)
 
         [关键合约数据]
-        1. 资金费率: {data.get('funding_rate', 0):.6f} 
+        1. 资金费率: {data.get('funding_rate', '未知')} 
            (注意: 正值代表多头付钱给空头; 若 > 0.05% 则持仓成本极高; 若 < -0.05% 可能是空头拥挤)
         2. 持仓量 (OI): {data.get('open_interest', 0)}
         

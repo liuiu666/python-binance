@@ -46,81 +46,62 @@ class TradeExecutor:
             del self._local_trailing_stops[symbol]
 
     def _place_stop_protection(self, symbol, side, stop_price):
-        if not self.client.is_algo_available():
-            self._set_local_stop(symbol, side, stop_price)
-            print(f"   [本地止损] 条件单不可用，本地止损价: {self._get_local_stop(symbol):.4f}")
-            return False
-
+        """
+        设置止损保护
+        策略：优先尝试交易所 STOP_MARKET 单（APP可见），如果不支持或失败，则自动降级为本地止损
+        """
+        # 1. 总是先设置本地止损作为兜底（双重保险）
+        self._set_local_stop(symbol, side, stop_price)
+        local_val = self._get_local_stop(symbol)
+        
+        # 2. 准备参数
         close_side = 'SELL' if side == 'BUY' else 'BUY'
         
-        # 标准且稳定的 API 调用流程：
-        # 1. 获取当前持仓数量
-        # 2. 使用 STOP_MARKET + reduceOnly=True + 明确数量
-        
-        # 步骤 1: 获取持仓数量
-        positions = self.client.get_current_positions()
-        target_pos = next((p for p in positions if p['symbol'] == symbol), None)
-        
-        if not target_pos:
-            print(f"   [失败] 无法获取持仓信息，转为本地止损")
-            self._set_local_stop(symbol, side, stop_price)
-            return False
-
-        quantity = abs(float(target_pos['amount']))
+        # 精度处理
         filters = self.client.get_symbol_filters(symbol)
         if filters:
-            quantity = self._quantize_quantity(quantity, filters)
-        
-        # 步骤 2: 下单 (优先尝试最标准的 STOP_MARKET)
-        print(f"   [止损] 正在设置 STOP_MARKET 止损单 (触发价: {stop_price}, 数量: {quantity})...")
-        order = self.client.place_order(
-            symbol=symbol,
-            side=close_side,
-            quantity=quantity,
-            order_type='STOP_MARKET',
-            stop_price=str(stop_price),
-            reduce_only=True
-        )
-        
-        if order:
-            print(f"   [成功] 止损单设置成功")
-            return True
+            stop_price = self._quantize_price(stop_price, filters)
+            
+        # 3. 尝试发送交易所订单 (恢复用户习惯的 APP 可见止损)
+        try:
+            # [重要] 先撤销该交易对已有的所有 STOP 订单，防止重复挂单
+            # 注意：不撤销 LIMIT 止盈单
+            try:
+                open_orders = self.client.get_all_open_orders(symbol=symbol)
+                if open_orders:
+                    for o in open_orders:
+                        if o.get('type') in ['STOP', 'STOP_MARKET', 'TAKE_PROFIT', 'TAKE_PROFIT_MARKET']:
+                            # 仅撤销止损类订单，保留限价止盈(LIMIT)
+                            # 如果之前有止盈也是 STOP 类型，也会被撤销并重置，这是合理的
+                            if o.get('reduceOnly') or o.get('closePosition'):
+                                self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'])
+            except Exception as e:
+                print(f"   [提示] 撤销旧止损单失败: {e}")
 
-        # 如果标准市价止损失败，尝试限价止损 (STOP) 作为兜底
-        # 某些极端情况下，交易所可能暂时不支持市价止损
-        print(f"   [警告] 市价止损下单失败，尝试使用限价止损 (STOP)...")
+            # 方案 A: STOP_MARKET (市价止损) + closePosition=True
+            # 这是最标准的止损方式，不需要指定数量，直接平仓
+            
+            order = self.client.place_order(
+                symbol=symbol,
+                side=close_side,
+                order_type='STOP_MARKET',
+                stop_price=stop_price,
+                close_position=True, # 关键：全平模式
+                quantity=None # closePosition 不需要数量
+            )
+            
+            if order:
+                print(f"   [成功] 交易所止损单已设置 (触发价: {stop_price})")
+                return True
+            else:
+                # place_order 返回 None (内部捕获了错误，如不支持等)
+                print(f"   [提示] 交易所未接受止损单(可能不支持)，已确保本地止损生效 (触发价: {local_val})")
+                
+        except Exception as e:
+            # 只有在调试模式下才打印详细堆栈，平时只提示
+            print(f"   [提示] 交易所止损设置异常({e})，已启用本地止损监控 (触发价: {local_val})")
         
-        # 计算激进的限价以确保成交 (模拟市价)
-        # 做多止损(卖出): 限价 = 止损价 * 0.95
-        # 做空止损(买入): 限价 = 止损价 * 1.05
-        limit_price = 0
-        stop_price_float = float(stop_price)
-        if close_side == 'SELL':
-            limit_price = stop_price_float * 0.95
-        else:
-            limit_price = stop_price_float * 1.05
-        
-        # 价格精度调整
-        if filters:
-            limit_price = self._quantize_price(limit_price, filters)
-
-        print(f"   [重试] 尝试使用 STOP 限价止损 (Stop: {stop_price}, Limit: {limit_price})...")
-        order = self.client.place_order(
-            symbol=symbol,
-            side=close_side,
-            quantity=quantity,
-            order_type='STOP',
-            stop_price=str(stop_price),
-            price=str(limit_price),
-            reduce_only=True
-        )
-        if order:
-            print(f"   [成功] STOP 限价止损单下单成功")
-            return True
-
-        self._set_local_stop(symbol, side, stop_price)
-        print(f"   [本地止损] 所有条件单下单失败，启用本地止损，止损价: {self._get_local_stop(symbol):.4f}")
-        return False
+        return True # 只要本地止损设置成功，就返回 True
 
     def _quantize_price(self, price, filters):
         tick_size = float(filters.get('tick_size', 0) or 0)
@@ -243,8 +224,9 @@ class TradeExecutor:
             return None
             
         avail_balance = account['balance']['available_balance']
-        if avail_balance < amount_usdt:
-            print(f">>>【交易执行】余额不足! 可用: {avail_balance:.2f}, 需要: {amount_usdt}")
+        required_margin = amount_usdt / leverage
+        if avail_balance < required_margin:
+            print(f">>>【交易执行】余额不足! 可用: {avail_balance:.2f}, 需要保证金: {required_margin:.2f} (名义价值: {amount_usdt})")
             return None
 
         # 1. 调整杠杆
@@ -465,69 +447,25 @@ class TradeExecutor:
         else:
             profit = entry_price - current_price
             
-        # 获取当前挂单 (找到止损单)
+        # [MODIFIED] 强制使用本地止损逻辑，不再获取交易所挂单
         try:
-            orders = self.client.client.futures_get_open_orders(symbol=symbol)
-            stop_order = None
+            current_sl = self._get_local_stop(symbol)
+            new_sl = None
             
-            # 检查并清理错误的挂单，并确保止损单唯一
-            stop_orders = []
-            for o in orders:
-                if o['type'] == 'STOP':
-                    print(f">>>【系统】发现不支持的止损挂单（订单号: {o['orderId']}），正在撤销...")
-                    try:
-                        self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'], recvWindow=10000)
-                    except Exception as e:
-                        print(f"   撤销失败: {e}")
-                elif o['type'] == 'STOP_MARKET':
-                    stop_orders.append(o)
-            
-            # 确保只有一个止损单
-            if len(stop_orders) > 1:
-                print(f">>>【系统】发现 {len(stop_orders)} 个止损单，正在清理多余委托...")
+            # 如果当前没有本地止损，计算初始止损
+            if current_sl is None:
+                print(f">>>【移动止损】{symbol} 未检测到本地止损，正在计算初始值...")
                 if side == 'BUY':
-                    stop_orders.sort(key=lambda x: float(x['stopPrice']), reverse=True)
+                    current_sl = entry_price - (2 * atr)
+                    if current_sl >= current_price: current_sl = current_price - (2 * atr)
                 else:
-                    stop_orders.sort(key=lambda x: float(x['stopPrice']), reverse=False)
+                    current_sl = entry_price + (2 * atr)
+                    if current_sl <= current_price: current_sl = current_price + (2 * atr)
                 
-                keep_order = stop_orders[0]
-                for o in stop_orders[1:]:
-                    try:
-                        print(f"   撤销冗余止损单（触发价: {o['stopPrice']}）")
-                        self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'], recvWindow=10000)
-                    except Exception as e:
-                        print(f"   撤销失败: {e}")
-                
-                stop_order = keep_order
-            elif len(stop_orders) == 1:
-                stop_order = stop_orders[0]
-            else:
-                stop_order = None
+                # 立即设置初始止损
+                self._place_stop_protection(symbol, side, current_sl)
+                return
 
-            if not stop_order:
-                print(f">>>【移动止损】{symbol} 未检测到止损单，正在计算补单...")
-                
-                if atr <= 0: atr = current_price * 0.02
-                
-                if side == 'BUY':
-                    base_sl = entry_price - (2 * atr)
-                    if base_sl >= current_price:
-                        base_sl = current_price - (2 * atr)
-                        print(f"   【风险】已跌破原始止损，重设为更低止损: {base_sl:.4f}")
-                else:
-                    base_sl = entry_price + (2 * atr)
-                    if base_sl <= current_price:
-                        base_sl = current_price + (2 * atr)
-                        print(f"   【风险】已涨破原始止损，重设为更高止损: {base_sl:.4f}")
-
-                current_sl = base_sl
-                new_sl = base_sl
-                
-                stop_order = {'orderId': None}
-            else:
-                current_sl = float(stop_order['stopPrice'])
-                new_sl = None
-            
             action_desc = ""
             
             # 混合移动止损逻辑：波动率跟踪 + 收益率锁定
@@ -592,53 +530,23 @@ class TradeExecutor:
                 print(f">>>【移动止损】{symbol} {action_desc}")
                 print(f"   原止损: {current_sl} -> 新止损: {new_sl:.4f}")
                 
-                # 1. 撤销旧单 (如果有)
-                if stop_order.get('orderId'):
+                # 更新止损 (这会自动更新本地止损 + 尝试更新交易所订单)
+                self._place_stop_protection(symbol, side, new_sl)
+                
+                # [新增] 动态止盈优化：如果趋势强劲 (触发了移动止损)，尝试取消固定止盈，让利润奔跑
+                # 只在第一次大幅移动止损时执行，避免频繁操作
+                if roi_pct > 0.05:
                     try:
-                        self.client.client.futures_cancel_order(symbol=symbol, orderId=stop_order['orderId'], recvWindow=10000)
+                        open_orders = self.client.get_all_open_orders(symbol=symbol)
+                        tp_orders = [o for o in open_orders if o.get('type') in ['TAKE_PROFIT', 'TAKE_PROFIT_MARKET', 'LIMIT'] and (o.get('reduceOnly') or o.get('closePosition'))]
+                        
+                        # 如果还有止盈单，且利润已经很不错了，撤销止盈单，完全依赖移动止损
+                        if tp_orders:
+                            print(f"   [动态策略] 趋势强劲 (收益率 {roi_pct*100:.1f}%)，撤销固定止盈，让利润奔跑！")
+                            for o in tp_orders:
+                                self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'])
                     except Exception as e:
-                        print(f"   撤销旧止损单失败: {e}")
-                else:
-                    print("   正在挂初始止损单")
-                
-                # 2. 挂新单
-                close_side = 'SELL' if side == 'BUY' else 'BUY'
-                
-                # 获取精度规则
-                filters = self.client.get_symbol_filters(symbol)
-                if filters:
-                    if filters['tick_size'] > 0:
-                        precision = int(round(-math.log(filters['tick_size'], 10), 0))
-                        new_sl = round(new_sl, precision)
-                    else:
-                        new_sl = round(new_sl, filters['price_precision'])
-                
-                # 获取当前持仓数量并处理精度
-                quantity = abs(float(position['amount']))
-                
-                if filters:
-                    step_size = filters.get('step_size', 0)
-                    if step_size > 0:
-                        qty_precision = int(round(-math.log(step_size, 10), 0))
-                        quantity = round(quantity, qty_precision)
-                    else:
-                        quantity = round(quantity, filters['quantity_precision'])
-                
-                limit_price = new_sl
-                if close_side == 'SELL':
-                     limit_price = new_sl * 0.95
-                else:
-                     limit_price = new_sl * 1.05
-                     
-                if filters:
-                    if filters['tick_size'] > 0:
-                        limit_price = round(limit_price, precision)
-                    else:
-                        limit_price = round(limit_price, filters['price_precision'])
-
-                ok = self._place_stop_protection(symbol, side, new_sl)
-                if not ok:
-                    return
+                        pass
                 
         except Exception as e:
             print(f"移动止损检查失败: {e}")

@@ -97,7 +97,14 @@ def run_bot():
                     side_text = "多"
                     if p['side'] == 'SELL':
                         side_text = "空"
-                    print(f"   {symbol} ({side_text}): 数量 {p['amount']}, 浮盈亏 {p['unrealized_pnl']} 美元")
+                    
+                    # 获取本地止损信息用于显示
+                    meta = state_manager.get_position_meta(symbol)
+                    local_sl_info = "未设置"
+                    if meta and meta.get('local_stop'):
+                        local_sl_info = f"{meta['local_stop']}"
+                        
+                    print(f"   {symbol} ({side_text}): 数量 {p['amount']}, 浮盈亏 {p['unrealized_pnl']} 美元, 本地止损: {local_sl_info}")
                     
                     # 持仓巡检：智能评估 + 移动止损
                     # 获取K线
@@ -140,10 +147,28 @@ def run_bot():
                         has_alignment_data = trend_1m is not None or trend_15m is not None
                         
                         # 智能评估（获取信心分数用于加减仓判断）
-                        ai_action, ai_info = ai_strategy.audit_position(p, df_analyzed)
+                        # [新增] 获取当前挂单，辅助 AI 决策
+                        open_orders = client.get_open_orders(symbol)
+                        
+                        ai_action, ai_info = ai_strategy.audit_position(p, df_analyzed, open_orders=open_orders)
                         ai_reason = ai_info.get('reason', '')
                         ai_confidence = ai_info.get('confidence', 0)
                         
+                        # [新增] 处理 AI 的挂单调整建议
+                        adjust_suggestion = ai_info.get('adjust_suggestion')
+                        if adjust_suggestion:
+                            print(f"   >>> [AI 建议调整挂单] {adjust_suggestion}")
+                            # 简单的关键词触发逻辑，后续可增强
+                            if "取消止盈" in adjust_suggestion:
+                                try:
+                                    tp_orders = [o for o in open_orders if o.get('type') in ['TAKE_PROFIT', 'TAKE_PROFIT_MARKET', 'LIMIT'] and (o.get('reduceOnly') or o.get('closePosition'))]
+                                    if tp_orders:
+                                        print(f"       执行: 正在撤销 {len(tp_orders)} 个止盈单...")
+                                        for o in tp_orders:
+                                            client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'])
+                                except Exception as e:
+                                    print(f"       撤单失败: {e}")
+
                         # 浮动加减仓逻辑
                         is_scaling_op = False
                         
@@ -158,9 +183,9 @@ def run_bot():
                                 total_equity = balance_info.get('总权益', 0) if balance_info else 0
                                 current_position_value = amount * current_price
                                 
-                                if total_equity > 0 and current_position_value < (total_equity * 0.10):
-                                    # 加仓：按当前仓位价值的 30% 加
-                                    add_amount = current_position_value * 0.3 
+                                if total_equity > 0 and current_position_value < (total_equity * 0.40):
+                                    # 加仓：按当前仓位价值的 50% 加
+                                    add_amount = current_position_value * 0.5 
                                     # 最小加仓限制
                                     if add_amount > 10:
                                         success = trader.increase_position(p, add_amount, current_price, current_atr)
@@ -300,7 +325,12 @@ def run_bot():
                 continue
             
             # 4. 策略 (AI 决策)
-            signal, info = analyzer.check_trend_following(df_1m_analyzed, trend_bias=trend_bias)
+            # 传入 df_5m_analyzed 作为大周期参考
+            signal, info = ai_strategy.analyze(df_1m_analyzed, symbol=target_symbol, trend_bias=trend_bias, df_larger=df_5m_analyzed)
+            
+            # 只有当 AI 明确给出信号时才使用，否则回退到规则策略
+            if not signal:
+                 signal, info = analyzer.check_trend_following(df_1m_analyzed, trend_bias=trend_bias)
             
             if signal:
                 signal_text = "做多" if signal == 'BUY' else "做空"
@@ -321,16 +351,16 @@ def run_bot():
                 current_price = info.get('current_price')
                 
                 if total_equity > 0 and stop_loss and current_price:
-                    # 风险模型: 单笔亏损不超过总权益的 1%
-                    risk_per_trade = total_equity * 0.01 
+                    # 风险模型: 单笔亏损不超过总权益的 6% (极度激进模式)
+                    risk_per_trade = total_equity * 0.06 
                     
                     price_diff = abs(current_price - stop_loss)
                     if price_diff > 0:
                         # 仓位价值 = (风险金额 / 止损价差) * 当前价格
                         position_value = (risk_per_trade / price_diff) * current_price
                         
-                        # 限制最大仓位为总权益的 30% (防止过度杠杆)
-                        max_position_value = total_equity * 0.3 * leverage 
+                        # 限制最大仓位为总权益的 95% * 杠杆 (几乎满仓)
+                        max_position_value = total_equity * 0.95 * leverage 
                         trade_amount = min(position_value, max_position_value)
                         
                         # 再次检查最小交易额 (比如 10U)
@@ -340,8 +370,20 @@ def run_bot():
                 
                 # 获取策略建议的止盈止损
                 take_profit = info.get('take_profit')
-                take_profit = info.get('take_profit')
                 
+                # [Fix] 如果没有止损价（比如 AI 未返回且规则策略也未覆盖），必须兜底
+                if not stop_loss and info.get('current_price'):
+                    fallback_price = info['current_price']
+                    fallback_atr = info.get('atr', 0)
+                    if fallback_atr <= 0:
+                        fallback_atr = fallback_price * 0.01 # 默认 1% 波动
+                    
+                    if signal == 'BUY':
+                        stop_loss = fallback_price - (3.0 * fallback_atr)
+                    else:
+                        stop_loss = fallback_price + (3.0 * fallback_atr)
+                    print(f"   【风控修正】缺失止损价，已自动生成兜底止损: {stop_loss:.4f}")
+
                 order = trader.execute_trade(
                     symbol=target_symbol, 
                     side=signal, 
@@ -354,11 +396,13 @@ def run_bot():
                 if order:
                     # 记录持仓状态
                     # 注意：这里需要获取真实的成交均价和数量，这里简化处理
+                    orig_qty = float(order.get('origQty', 0) or 0)
+                    
                     state_manager.set_position(
                         symbol=target_symbol, 
                         side=signal, 
                         entry_price=info['current_price'],
-                        quantity=order.get('origQty', 0) # 假设
+                        quantity=orig_qty
                     )
                     print(">>> 开仓成功，状态已保存。等待 15秒 让交易所同步状态...")
                     time.sleep(15) # [修复] 必须等待，防止 API 延迟导致重复下单

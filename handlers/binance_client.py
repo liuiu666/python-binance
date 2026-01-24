@@ -20,12 +20,16 @@ class BinanceClient:
         self.http_proxy = os.getenv('HTTP_PROXY')
         self.https_proxy = os.getenv('HTTPS_PROXY')
         self.debug = os.getenv('DEBUG') == '1'
+        
+        # 缓存交易所信息
+        self.exchange_info_cache = None
+        self.exchange_info_last_update = 0
 
         # 配置代理
-        requests_params = {'timeout': 30}
+        self.requests_params = {'timeout': 30}
         if self.http_proxy:
             print(f">>> [System] 检测到代理配置: {self.http_proxy}")
-            requests_params['proxies'] = {
+            self.requests_params['proxies'] = {
                 'http': self.http_proxy,
                 'https': self.https_proxy or self.http_proxy
             }
@@ -34,20 +38,50 @@ class BinanceClient:
 
         # 初始化币安客户端
         try:
-            self.client = Client(
-                self.api_key, 
-                self.api_secret, 
-                requests_params=requests_params
-            )
-            # 禁用默认的 ping，因为这在初始化时可能因为网络抖动导致失败
-            self.client.ping = lambda: {}
-
+            self._init_client()
             self._algo_disabled_until_ts = 0.0
             self._last_algo_warning_ts = 0.0
         except Exception as e:
             print(f">>> [System] 致命错误: 无法连接币安 API (Timeout/Proxy Error)")
             print(f"    详情: {e}")
             raise e
+
+    def _init_client(self):
+        """初始化或重置 API 客户端连接"""
+        self.client = Client(
+            self.api_key, 
+            self.api_secret, 
+            requests_params=self.requests_params
+        )
+        # 禁用默认的 ping
+        self.client.ping = lambda: {}
+
+    def _execute_with_retry(self, func, *args, **kwargs):
+        """通用重试包装器，处理 SSL/连接错误"""
+        max_retries = 3
+        last_exception = None
+        
+        for i in range(max_retries):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                last_exception = e
+                # 检查是否为网络连接类错误
+                err_str = str(e)
+                is_conn_err = 'SSLError' in err_str or 'Connection' in err_str or 'EOF' in err_str or 'Reset' in err_str
+                
+                if is_conn_err and i < max_retries - 1:
+                    print(f">>> [System] 网络抖动 (尝试 {i+1}/{max_retries})，正在重连...")
+                    try:
+                        self._init_client()
+                        time.sleep(1) 
+                    except:
+                        pass
+                    continue
+                # 如果不是连接错误，或者是最后一次重试，则抛出
+                raise e
+
+
 
     def is_algo_available(self):
         return time.time() >= self._algo_disabled_until_ts
@@ -67,7 +101,7 @@ class BinanceClient:
         """
         try:
             # 获取账户信息
-            info = self.client.futures_account()
+            info = self._execute_with_retry(self.client.futures_account)
             
             # 整理余额
             usdt_balance = next((item for item in info['assets'] if item['asset'] == 'USDT'), None)
@@ -114,12 +148,32 @@ class BinanceClient:
             print(f"调整杠杆失败: {symbol} -> {leverage}x, 错误: {str(e)}")
             return False
 
+    def _get_cached_exchange_info(self):
+        """获取缓存的交易所信息 (缓存1小时)"""
+        now = time.time()
+        if self.exchange_info_cache and (now - self.exchange_info_last_update < 3600):
+            return self.exchange_info_cache
+        
+        try:
+            # 更新缓存
+            info = self.client.futures_exchange_info()
+            self.exchange_info_cache = info
+            self.exchange_info_last_update = now
+            return info
+        except Exception as e:
+            print(f"更新交易所信息缓存失败: {e}")
+            return self.exchange_info_cache # 如果更新失败，返回旧缓存
+
     def get_symbol_filters(self, symbol):
         """
         获取交易对的精度过滤器信息 (Price & Quantity Precision)
         """
         try:
-            info = self.client.futures_exchange_info()
+            info = self._get_cached_exchange_info()
+            if not info:
+                # 缓存为空且更新失败，尝试直接调用一次
+                info = self.client.futures_exchange_info()
+            
             target = next((s for s in info['symbols'] if s['symbol'] == symbol), None)
             
             if not target:
@@ -132,7 +186,8 @@ class BinanceClient:
                 'max_qty': 0.0,
                 'step_size': 0.0,
                 'tick_size': 0.0,
-                'min_notional': 5.0 # 默认值
+                'min_notional': 5.0, # 默认值
+                'order_types': target.get('orderTypes', []) # [Add] 获取支持的订单类型
             }
             
             for f in target['filters']:
@@ -224,7 +279,7 @@ class BinanceClient:
         """
         try:
             # 获取交易所信息
-            exchange_info = self.client.futures_exchange_info()
+            exchange_info = self._execute_with_retry(self.client.futures_exchange_info)
             
             trading_symbols = []
             for symbol_info in exchange_info['symbols']:
@@ -239,10 +294,20 @@ class BinanceClient:
 
     def get_exchange_info(self):
         try:
-            return self.client.futures_exchange_info()
+            return self._execute_with_retry(self.client.futures_exchange_info)
         except Exception as e:
             print(f"获取交易所信息失败: {str(e)}")
             return None
+
+    def get_open_orders(self, symbol=None):
+        """
+        获取当前挂单
+        """
+        try:
+            return self._execute_with_retry(self.client.futures_get_open_orders, symbol=symbol)
+        except Exception as e:
+            print(f"获取挂单失败: {str(e)}")
+            return []
 
     def get_funding_rate(self, symbol):
         """
@@ -273,6 +338,37 @@ class BinanceClient:
             print(f"获取持仓量失败 {symbol}: {e}")
             return 0.0
 
+    def get_money_flow(self, symbol, period='1h', limit=5):
+        """
+        获取资金流向数据 (基于 K 线主动买入量估算)
+        """
+        try:
+            # 复用 get_klines 获取数据
+            df = self.get_klines(symbol, period, limit=limit)
+            if df is None or df.empty:
+                return None
+            
+            # 计算净主动买入量
+            # 主动买入成交量 (Taker Buy Volume) 是买方主动吃单的量
+            # 主动卖出成交量 = 总成交量 - 主动买入成交量
+            # 净流入 = 主动买入 - 主动卖出 = 2 * 主动买入 - 总成交量
+            
+            total_vol = df['成交量'].sum()
+            buy_vol = df['主动买入成交量'].sum()
+            sell_vol = total_vol - buy_vol
+            net_inflow = 2 * buy_vol - total_vol
+            
+            return {
+                '净流入量': float(net_inflow),
+                '主动买入量': float(buy_vol),
+                '主动卖出量': float(sell_vol),
+                '买卖比': float(buy_vol / sell_vol) if sell_vol > 0 else 10.0,
+                '主动买入占比': float(buy_vol / total_vol) if total_vol > 0 else 0.5
+            }
+        except Exception as e:
+            print(f"计算资金流失败 {symbol}: {e}")
+            return None
+
     def get_klines(self, symbol, interval, limit=100):
         """
         获取 K 线数据并转换为 DataFrame
@@ -283,7 +379,7 @@ class BinanceClient:
         try:
             import pandas as pd
             # 获取 K 线数据
-            klines = self.client.futures_klines(symbol=symbol, interval=interval, limit=limit)
+            klines = self._execute_with_retry(self.client.futures_klines, symbol=symbol, interval=interval, limit=limit)
             
             # 转换为 DataFrame
             df = pd.DataFrame(klines, columns=[
@@ -305,7 +401,7 @@ class BinanceClient:
             print(f"获取 K 线失败: {symbol} - {str(e)}")
             return None
 
-    def place_order(self, symbol, side, quantity=None, order_type='MARKET', price=None, stop_price=None, reduce_only=False, close_position=False, working_type='MARK_PRICE', price_protect=False):
+    def place_order(self, symbol, side, quantity=None, order_type='MARKET', price=None, stop_price=None, reduce_only=False, close_position=False, working_type='MARK_PRICE', price_protect=False, **kwargs):
         """
         下单
         """
@@ -315,6 +411,16 @@ class BinanceClient:
                 'side': side,
                 'type': order_type,
             }
+            
+            # 支持额外参数 (如 timeInForce)
+            if kwargs:
+                # 转换参数名为驼峰式 (例如 time_in_force -> timeInForce)
+                for k, v in kwargs.items():
+                    # 简单处理：如果是 time_in_force，转为 timeInForce
+                    if k == 'time_in_force':
+                        params['timeInForce'] = v
+                    else:
+                        params[k] = v
             
             # [Fix -1021]
             params['recvWindow'] = 10000 
@@ -349,11 +455,18 @@ class BinanceClient:
             return self.client.futures_create_order(**params)
                 
         except Exception as e:
-            # 忽略 -4120 (Order type not supported) 错误，通常因为账户配置不支持某些条件单，trader 会自动降级处理
-            if hasattr(e, 'code') and int(e.code) == -4120:
-                print(f"下单失败: {symbol} - 交易所不支持此类条件单 (Error -4120)")
-            else:
-                print(f"下单失败: {symbol} - {str(e)}")
+            # 忽略 -4120 (Order type not supported) 和 -4136 (Target strategy invalid) 错误
+            # 这些错误通常表示交易所不支持此类止损单 (不管是 STOP_MARKET 还是 STOP)
+            error_code = 0
+            if hasattr(e, 'code'):
+                error_code = int(e.code)
+            
+            if error_code in [-4120, -4136]:
+                # 仅在 debug 模式或第一次遇到时提示，避免刷屏
+                print(f"   [提示] 该币种不支持交易所止损单 (Error {error_code})，已自动切换为本地止损监控。")
+                return None
+
+            print(f"下单失败: {symbol} - {str(e)}")
             
             if hasattr(e, 'message'):
                 print(f"   Error Message: {e.message}")
@@ -362,24 +475,13 @@ class BinanceClient:
             return None
 
 
-    def get_trading_symbols(self):
-        """
-        获取所有状态为 TRADING 的交易对
-        """
-        try:
-            info = self.client.futures_exchange_info()
-            return {s['symbol'] for s in info['symbols'] if s['status'] == 'TRADING'}
-        except Exception as e:
-            print(f"获取交易规则失败: {str(e)}")
-            return set()
-
     def get_ticker_24hr(self):
         """
         获取所有交易对的 24小时 统计数据
         """
         try:
             # 获取所有 ticker 信息
-            tickers = self.client.futures_ticker()
+            tickers = self._execute_with_retry(self.client.futures_ticker)
             return tickers
         except Exception as e:
             print(f"获取 24h Ticker 失败: {str(e)}")
@@ -390,7 +492,7 @@ class BinanceClient:
         获取交易对的最新成交价 (替代盘口数据)
         """
         try:
-            return self.client.futures_symbol_ticker(symbol=symbol)
+            return self._execute_with_retry(self.client.futures_symbol_ticker, symbol=symbol)
         except Exception as e:
             print(f"获取 Ticker 失败: {str(e)}")
             return None
@@ -403,61 +505,17 @@ class BinanceClient:
         try:
             # futures_orderbook_ticker 不传 symbol 默认返回所有 (list)
             # 传 symbol 返回单个 (dict)
-            return self.client.futures_orderbook_ticker(symbol=symbol)
+            return self._execute_with_retry(self.client.futures_orderbook_ticker, symbol=symbol)
         except Exception as e:
             print(f"获取 Book Ticker 失败: {str(e)}")
             return None if symbol else []
-
-
-    def get_money_flow(self, symbol, period='1h', limit=1):
-        """
-        获取资金流向数据（基于合约主动买卖量）
-        period: 时间周期，如 '5m', '15m', '1h', '4h', '1d'
-        """
-        try:
-            # 使用 futures_taker_longshort_ratio 获取买卖量数据
-            # 虽然名字叫 Ratio，但返回数据包含 buyVol 和 sellVol
-            taker_stats = self.client.futures_taker_longshort_ratio(
-                symbol=symbol,
-                period=period,
-                limit=limit
-            )
-            
-            if not taker_stats:
-                return None
-                
-            # 取最近的一个周期数据
-            latest_stat = taker_stats[-1]
-            
-            # 注意：这里的 buyVol 和 sellVol 通常是数量（Cont），不是金额？
-            # 或者是基础货币数量？文档说是 "Volume"
-            # 如果是数量，需要乘以价格估算金额，或者直接展示数量
-            # 通常 takerlongshortRatio 返回的是 "buyVol": "xxxx", "sellVol": "xxxx"
-            
-            buy_vol = float(latest_stat['buyVol'])
-            sell_vol = float(latest_stat['sellVol'])
-            buy_sell_ratio = float(latest_stat['buySellRatio'])
-            
-            # 估算净流入（这里直接用 Volume 差值）
-            net_inflow = buy_vol - sell_vol
-            
-            return {
-                '周期': period,
-                '主动买入量': buy_vol,
-                '主动卖出量': sell_vol,
-                '净流入量': net_inflow,
-                '买卖比': buy_sell_ratio
-            }
-        except Exception as e:
-            print(f"获取 {symbol} 资金流向失败: {str(e)}")
-            return None
 
     def get_all_open_orders(self):
         """
         获取当前账户所有挂单 (不指定 symbol)
         """
         try:
-            return self.client.futures_get_open_orders()
+            return self._execute_with_retry(self.client.futures_get_open_orders)
         except Exception as e:
             print(f"获取所有挂单失败: {str(e)}")
             return []

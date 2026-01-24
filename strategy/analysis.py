@@ -113,32 +113,32 @@ class MarketAnalyzer:
         :return: 建议的杠杆倍数 (int)
         """
         if df is None or len(df) < 20:
-            return 3
-            
+            return 10
+        
         last = df.iloc[-1]
         price = float(last.get('收盘价', 0) or 0)
         atr = float(last.get('ATR', 0) or 0)
         
         if price <= 0:
-            return 3
-            
+            return 10
+        
         # 计算波动率百分比 (ATR / Price)
         atr_pct = (atr / price) * 100
         
-        # 动态杠杆逻辑
-        # 波动率极高 (>0.5%) -> 3x (防爆仓)
-        # 波动率高 (>0.3%)   -> 5x
-        # 波动率中等 (>0.1%) -> 10x
-        # 波动率低 (<=0.1%)  -> 20x
+        # 动态杠杆逻辑 (激进模式 - Plus)
+        # 波动率极高 (>0.5%) -> 10x
+        # 波动率高 (>0.3%)   -> 20x
+        # 波动率中等 (>0.1%) -> 35x
+        # 波动率低 (<=0.1%)  -> 50x
         
         if atr_pct > 0.5:
-            return 3
-        elif atr_pct > 0.3:
-            return 5
-        elif atr_pct > 0.1:
             return 10
-        else:
+        elif atr_pct > 0.3:
             return 20
+        elif atr_pct > 0.1:
+            return 35
+        else:
+            return 50
 
     def check_trend_following(self, df, trend_bias=None, volume_ratio=0.8, check_money_flow=True):
         if df is None or len(df) < 50:
