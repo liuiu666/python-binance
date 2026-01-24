@@ -52,6 +52,8 @@ class TradeExecutor:
             return False
 
         close_side = 'SELL' if side == 'BUY' else 'BUY'
+        
+        # 尝试1: 使用 closePosition=True
         order = self.client.place_order(
             symbol=symbol,
             side=close_side,
@@ -59,11 +61,37 @@ class TradeExecutor:
             stop_price=str(stop_price),
             close_position=True
         )
-        if not order:
-            self._set_local_stop(symbol, side, stop_price)
-            print(f"   [本地止损] 条件单下单失败，本地止损价: {self._get_local_stop(symbol):.4f}")
-            return False
-        return True
+        
+        if order:
+            return True
+            
+        # 尝试2: 失败后尝试使用 reduceOnly=True (针对 Error -4120)
+        # 获取持仓数量
+        positions = self.client.get_current_positions()
+        target_pos = next((p for p in positions if p['symbol'] == symbol), None)
+        
+        if target_pos:
+            quantity = abs(float(target_pos['amount']))
+            filters = self.client.get_symbol_filters(symbol)
+            if filters:
+                quantity = self._quantize_quantity(quantity, filters)
+                
+            print(f"   [重试] 尝试使用 ReduceOnly 模式挂止损 (数量: {quantity})...")
+            order = self.client.place_order(
+                symbol=symbol,
+                side=close_side,
+                quantity=quantity,
+                order_type='STOP_MARKET',
+                stop_price=str(stop_price),
+                reduce_only=True
+            )
+            if order:
+                print(f"   [成功] ReduceOnly 止损单下单成功")
+                return True
+
+        self._set_local_stop(symbol, side, stop_price)
+        print(f"   [本地止损] 条件单下单失败，本地止损价: {self._get_local_stop(symbol):.4f}")
+        return False
 
     def _quantize_price(self, price, filters):
         tick_size = float(filters.get('tick_size', 0) or 0)
@@ -668,13 +696,17 @@ class TradeExecutor:
                 limit_price = round(limit_price, precision)
             else:
                 limit_price = round(limit_price, filters['price_precision'])
+            
+            # 确保 total_quantity 精度正确
+            total_quantity = self._quantize_quantity(total_quantity, filters)
 
             self.client.place_order(
                 symbol=symbol,
                 side=close_side,
+                quantity=total_quantity,
                 order_type='STOP_MARKET',
                 stop_price=str(new_sl),
-                close_position=True
+                reduce_only=True
             )
             print(f"   已更新止损 (总仓位 {total_quantity}): {new_sl}")
             return True
@@ -775,9 +807,10 @@ class TradeExecutor:
             self.client.place_order(
                 symbol=symbol,
                 side=close_side,
+                quantity=remain_qty,
                 order_type='STOP_MARKET',
                 stop_price=str(new_sl),
-                close_position=True
+                reduce_only=True
             )
             print(f"   剩余仓位 {remain_qty} 已重置止损: {new_sl}")
             return pnl

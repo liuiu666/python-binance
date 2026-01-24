@@ -210,9 +210,24 @@ def run_bot():
             target_symbol = None
             target_trend_bias = None
             
-            # [指定模式] 只交易 ACUUSDT
-            tickers = ['ACUUSDT']
-            print(f"   【指定模式】当前只关注 {tickers[0]}，正在分析趋势与资金流...")
+            # [自动选币模式] 扫描市场筛选优质币种 (Top 5)
+            # 增加一些币种进入候选池
+            try:
+                scanned_list = scanner.scan_market(top_n=5, min_volume=50000000) # 5000万成交额门槛
+            except Exception as e:
+                print(f"   [扫描] 扫描失败: {e}")
+                scanned_list = []
+
+            tickers = []
+            if scanned_list is not None and not scanned_list.empty:
+                tickers = scanned_list['symbol'].tolist()
+            
+            # [保留偏好] 始终包含 ACUUSDT (如果它还在交易中)
+            if 'ACUUSDT' not in tickers:
+                tickers.insert(0, 'ACUUSDT') # 放在首位
+            
+            print(f"   【扫描结果】当前关注列表: {tickers}")
+            print(f"   正在分析趋势与资金流...")
  
             for sym in tickers:
                 # 冷却检查

@@ -1,45 +1,77 @@
 {
-    "current_position": null,
+    "current_position": {
+        "symbol": "RIVERUSDT",
+        "side": "BUY",
+        "entry_price": 44.505,
+        "quantity": "0.2",
+        "open_ts": 1769228995.9391835,
+        "update_ts": 1769228995.9391835
+    },
     "daily_stats": {
-        "date": "2026-01-23",
-        "initial_balance": 43.35376139,
-        "realized_pnl": 0.72970795,
+        "date": "2026-01-24",
+        "initial_balance": 0.0,
+        "realized_pnl": 0.4178681600000005,
         "trade_count": 16
     },
     "cooldowns": {
-        "RIVERUSDT": 1769176596.9979541,
-        "ACUUSDT": 1769187623.3850133,
-        "INUSDT": 1769176694.6729968,
-        "SKRUSDT": 1769176790.2384114,
-        "SENTUSDT": 1769176906.8469498,
-        "ZAMAUSDT": 1769186229.4786022,
-        "XAGUSDT": 1769186307.3052225,
-        "MEMEUSDT": 1769186333.607059,
-        "SLPUSDT": 1769186399.3691733,
-        "FUNUSDT": 1769186707.5525725,
-        "COLLECTUSDT": 1769186762.6258771,
-        "NEIROUSDT": 1769186163.155637,
-        "NOTUSDT": 1769186178.6699128,
-        "FOGOUSDT": 1769186211.0759223,
-        "MAGMAUSDT": 1769186217.6017559,
-        "BREVUSDT": 1769186223.6690068,
-        "FRAXUSDT": 1769186237.9344604,
-        "BOMEUSDT": 1769186252.8528566,
-        "TURBOUSDT": 1769186262.658244,
-        "JCTUSDT": 1769186271.524361,
-        "PTBUSDT": 1769186280.988023
+        "ACUUSDT": 1769228539.2224324,
+        "ENSOUSDT": 1769228699.250051,
+        "RIVERUSDT": 1769226525.3951564,
+        "SPACEUSDT": 1769228929.3430054,
+        "INUSDT": 1769227095.6571825
     },
     "positions": {
         "ACUUSDT": {
             "symbol": "ACUUSDT",
             "side": "BUY",
-            "entry_price": 0.25817,
-            "quantity": "38",
-            "open_ts": 1769187543.9305973,
-            "update_ts": 1769187623.383922,
+            "entry_price": 0.26798,
+            "quantity": "37",
+            "open_ts": 1769227854.3249302,
+            "update_ts": 1769228539.22085,
             "local_stop": null,
             "local_stop_side": null,
-            "closed_ts": 1769187623.3850107
+            "closed_ts": 1769228539.2224298
+        },
+        "ENSOUSDT": {
+            "symbol": "ENSOUSDT",
+            "side": "BUY",
+            "entry_price": 1.2208,
+            "quantity": "8.0",
+            "open_ts": 1769228607.9982703,
+            "update_ts": 1769228699.2484488,
+            "local_stop": null,
+            "local_stop_side": null,
+            "closed_ts": 1769228699.250049
+        },
+        "INUSDT": {
+            "symbol": "INUSDT",
+            "side": "BUY",
+            "entry_price": 0.0949,
+            "quantity": "104",
+            "open_ts": 1769226546.6958156,
+            "update_ts": 1769227095.6558785,
+            "local_stop": null,
+            "local_stop_side": null,
+            "closed_ts": 1769227095.657179
+        },
+        "SPACEUSDT": {
+            "symbol": "SPACEUSDT",
+            "side": "SELL",
+            "entry_price": 0.021281,
+            "quantity": "473",
+            "open_ts": 1769228771.1473174,
+            "update_ts": 1769228929.3414507,
+            "local_stop": null,
+            "local_stop_side": null,
+            "closed_ts": 1769228929.3430028
+        },
+        "RIVERUSDT": {
+            "symbol": "RIVERUSDT",
+            "side": "BUY",
+            "entry_price": 44.505,
+            "quantity": "0.2",
+            "open_ts": 1769228995.9391835,
+            "update_ts": 1769228995.9391835
         }
     }
 }

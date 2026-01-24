@@ -348,7 +348,7 @@ class BinanceClient:
         except Exception as e:
             # 忽略 -4120 (Order type not supported) 错误，通常因为账户配置不支持某些条件单，trader 会自动降级处理
             if hasattr(e, 'code') and int(e.code) == -4120:
-                print(f"下单失败: {symbol} - 交易所不支持此类条件单 (Error -4120)，将尝试本地止损")
+                print(f"下单失败: {symbol} - 交易所不支持此类条件单 (Error -4120)")
             else:
                 print(f"下单失败: {symbol} - {str(e)}")
             
