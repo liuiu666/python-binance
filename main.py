@@ -154,20 +154,38 @@ def run_bot():
                         ai_reason = ai_info.get('reason', '')
                         ai_confidence = ai_info.get('confidence', 0)
                         
-                        # [新增] 处理 AI 的挂单调整建议
-                        adjust_suggestion = ai_info.get('adjust_suggestion')
-                        if adjust_suggestion:
-                            print(f"   >>> [AI 建议调整挂单] {adjust_suggestion}")
-                            # 简单的关键词触发逻辑，后续可增强
-                            if "取消止盈" in adjust_suggestion:
+                        # [新增] 处理 AI 的挂单调整建议 (Dynamic Adjustment)
+                        adjustment = ai_info.get('adjustment')
+                        if adjustment:
+                            adj_type = adjustment.get('type')
+                            adj_val = adjustment.get('value')
+                            adj_reason = adjustment.get('reason', '')
+                            
+                            print(f"   >>> [AI 动态调整] {adj_type}: {adj_reason}")
+                            
+                            if adj_type == 'CANCEL_TP':
+                                trader.update_take_profit(symbol, p['side'], 0) # 0 means cancel all
+                                
+                            elif adj_type in ['MOVE_SL', 'SET_SL'] and adj_val:
                                 try:
-                                    tp_orders = [o for o in open_orders if o.get('type') in ['TAKE_PROFIT', 'TAKE_PROFIT_MARKET', 'LIMIT'] and (o.get('reduceOnly') or o.get('closePosition'))]
-                                    if tp_orders:
-                                        print(f"       执行: 正在撤销 {len(tp_orders)} 个止盈单...")
-                                        for o in tp_orders:
-                                            client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'])
-                                except Exception as e:
-                                    print(f"       撤单失败: {e}")
+                                    new_sl = float(adj_val)
+                                    trader.update_stop_loss(symbol, p['side'], new_sl)
+                                except ValueError:
+                                    print(f"       无效的止损数值: {adj_val}")
+                                    
+                            elif adj_type in ['MOVE_TP', 'SET_TP'] and adj_val:
+                                try:
+                                    new_tp = float(adj_val)
+                                    trader.update_take_profit(symbol, p['side'], new_tp)
+                                except ValueError:
+                                    print(f"       无效的止盈数值: {adj_val}")
+                                    
+                        # 兼容旧逻辑 (如果 LLM 还在输出 adjust_suggestion 字符串)
+                        adjust_suggestion = ai_info.get('adjust_suggestion')
+                        if adjust_suggestion and not adjustment:
+                             print(f"   >>> [AI 建议调整挂单] {adjust_suggestion}")
+                             if "取消止盈" in adjust_suggestion:
+                                 trader.update_take_profit(symbol, p['side'], 0)
 
                         # 浮动加减仓逻辑
                         is_scaling_op = False

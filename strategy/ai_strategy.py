@@ -340,7 +340,9 @@ class AIStrategy:
         # 将 confidence 放入 info 字典返回
         info = {
             "reason": reason,
-            "confidence": confidence
+            "confidence": confidence,
+            "adjust_suggestion": llm_result.get('adjust_suggestion'), # 保留旧字段兼容
+            "adjustment": llm_result.get('adjustment') # [新增] 结构化调整建议
         }
         
         return action, info

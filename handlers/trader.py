@@ -45,10 +45,10 @@ class TradeExecutor:
         if symbol in self._local_trailing_stops:
             del self._local_trailing_stops[symbol]
 
-    def _place_stop_protection(self, symbol, side, stop_price):
+    def _place_stop_protection(self, symbol, side, stop_price, quantity=None):
         """
         设置止损保护
-        策略：优先尝试交易所 STOP_MARKET 单（APP可见），如果不支持或失败，则自动降级为本地止损
+        策略：多级尝试，确保 API 止损成功 (STOP_MARKET -> STOP -> reduceOnly)
         """
         # 1. 总是先设置本地止损作为兜底（双重保险）
         self._set_local_stop(symbol, side, stop_price)
@@ -62,46 +62,122 @@ class TradeExecutor:
         if filters:
             stop_price = self._quantize_price(stop_price, filters)
             
-        # 3. 尝试发送交易所订单 (恢复用户习惯的 APP 可见止损)
+        # 3. 尝试发送交易所订单
         try:
-            # [重要] 先撤销该交易对已有的所有 STOP 订单，防止重复挂单
-            # 注意：不撤销 LIMIT 止盈单
+            # 撤销旧止损
             try:
-                open_orders = self.client.get_all_open_orders(symbol=symbol)
+                open_orders = self.client.get_open_orders(symbol=symbol)
                 if open_orders:
                     for o in open_orders:
-                        if o.get('type') in ['STOP', 'STOP_MARKET', 'TAKE_PROFIT', 'TAKE_PROFIT_MARKET']:
-                            # 仅撤销止损类订单，保留限价止盈(LIMIT)
-                            # 如果之前有止盈也是 STOP 类型，也会被撤销并重置，这是合理的
-                            if o.get('reduceOnly') or o.get('closePosition'):
-                                self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'])
+                        if o.get('type') in ['STOP', 'STOP_MARKET'] and (o.get('reduceOnly') or o.get('closePosition')):
+                            self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'])
             except Exception as e:
-                print(f"   [提示] 撤销旧止损单失败: {e}")
+                pass
 
-            # 方案 A: STOP_MARKET (市价止损) + closePosition=True
-            # 这是最标准的止损方式，不需要指定数量，直接平仓
+            # 方案 1: STOP_MARKET + closePosition (首选)
+            # 检查是否支持
+            supported_types = filters.get('order_types', [])
             
-            order = self.client.place_order(
-                symbol=symbol,
-                side=close_side,
-                order_type='STOP_MARKET',
-                stop_price=stop_price,
-                close_position=True, # 关键：全平模式
-                quantity=None # closePosition 不需要数量
-            )
-            
-            if order:
-                print(f"   [成功] 交易所止损单已设置 (触发价: {stop_price})")
-                return True
-            else:
-                # place_order 返回 None (内部捕获了错误，如不支持等)
-                print(f"   [提示] 交易所未接受止损单(可能不支持)，已确保本地止损生效 (触发价: {local_val})")
+            # 如果支持 STOP_MARKET，尝试方案 1
+            if not supported_types or 'STOP_MARKET' in supported_types:
+                try:
+                    order = self.client.place_order(
+                        symbol=symbol,
+                        side=close_side,
+                        order_type='STOP_MARKET',
+                        stop_price=stop_price,
+                        close_position=True,
+                        quantity=None
+                    )
+                    if order:
+                        print(f"   [成功] 交易所止损单已设置 (STOP_MARKET, 触发价: {stop_price})")
+                        return True
+                except Exception:
+                    pass # 继续尝试下一方案
+
+            # 方案 2: STOP (限价止损) + closePosition
+            # 即使没有明确说支持，也尝试一下
+            try:
+                # 构造一个肯定能成交的价格
+                # 卖出止损：价格 = 触发价 * 0.9
+                # 买入止损：价格 = 触发价 * 1.1
+                limit_price = stop_price * 0.9 if close_side == 'SELL' else stop_price * 1.1
+                limit_price = self._quantize_price(limit_price, filters)
+                
+                order = self.client.place_order(
+                    symbol=symbol,
+                    side=close_side,
+                    order_type='STOP',
+                    stop_price=stop_price,
+                    price=limit_price,
+                    close_position=True,
+                    quantity=None
+                )
+                if order:
+                    print(f"   [成功] 交易所止损单已设置 (STOP 限价, 触发价: {stop_price})")
+                    return True
+            except Exception:
+                pass
+
+            # 如果没有提供数量，尝试获取当前持仓
+            if quantity is None:
+                try:
+                    positions = self.client.get_current_positions()
+                    target = next((p for p in positions if p['symbol'] == symbol), None)
+                    if target:
+                        quantity = abs(float(target['amount']))
+                except:
+                    pass
+
+            if quantity and quantity > 0:
+                # [关键修正] 必须对数量进行精度量化，否则可能因小数位过多被拒
+                if filters:
+                    quantity = self._quantize_quantity(quantity, filters)
+
+                # 方案 3: STOP_MARKET + reduceOnly + quantity
+                if not supported_types or 'STOP_MARKET' in supported_types:
+                    try:
+                        order = self.client.place_order(
+                            symbol=symbol,
+                            side=close_side,
+                            order_type='STOP_MARKET',
+                            stop_price=stop_price,
+                            reduce_only=True,
+                            quantity=quantity
+                        )
+                        if order:
+                            print(f"   [成功] 交易所止损单已设置 (STOP_MARKET reduceOnly, 触发价: {stop_price})")
+                            return True
+                    except Exception:
+                        pass
+
+                # 方案 4: STOP + reduceOnly + quantity
+                try:
+                    limit_price = stop_price * 0.9 if close_side == 'SELL' else stop_price * 1.1
+                    limit_price = self._quantize_price(limit_price, filters)
+                    
+                    order = self.client.place_order(
+                        symbol=symbol,
+                        side=close_side,
+                        order_type='STOP',
+                        stop_price=stop_price,
+                        price=limit_price,
+                        reduce_only=True,
+                        quantity=quantity
+                    )
+                    if order:
+                        print(f"   [成功] 交易所止损单已设置 (STOP reduceOnly, 触发价: {stop_price})")
+                        return True
+                except Exception:
+                    pass
+
+            print(f"   [提示] 尝试了所有 API 止损方式均失败，请检查该币种是否特殊。已保留本地止损。")
                 
         except Exception as e:
             # 只有在调试模式下才打印详细堆栈，平时只提示
-            print(f"   [提示] 交易所止损设置异常({e})，已启用本地止损监控 (触发价: {local_val})")
+            pass
         
-        return True # 只要本地止损设置成功，就返回 True
+        return True
 
     def _quantize_price(self, price, filters):
         tick_size = float(filters.get('tick_size', 0) or 0)
@@ -129,6 +205,19 @@ class TradeExecutor:
 
         if total_quantity <= 0 or entry_price <= 0 or take_profit <= 0:
             return False
+
+        # [新增] 先撤销该交易对已有的所有止盈单，防止重复挂单
+        try:
+            open_orders = self.client.get_open_orders(symbol=symbol)
+            if open_orders:
+                for o in open_orders:
+                    # 撤销止盈单 (TAKE_PROFIT, TAKE_PROFIT_MARKET, LIMIT + reduceOnly)
+                    # 注意：STOP/STOP_MARKET 是止损，这里不撤
+                    if o.get('type') in ['TAKE_PROFIT', 'TAKE_PROFIT_MARKET'] or \
+                       (o.get('type') == 'LIMIT' and (o.get('reduceOnly') or o.get('closePosition'))):
+                        self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'])
+        except Exception as e:
+            print(f"   [提示] 撤销旧止盈单失败: {e}")
 
         is_long = (open_side == 'BUY')
         delta = abs(take_profit - entry_price)
@@ -339,7 +428,10 @@ class TradeExecutor:
                         sl_price = round(sl_price, precision)
                     else:
                         sl_price = round(sl_price, filters['price_precision'])
-                    ok = self._place_stop_protection(symbol, side, sl_price)
+                    
+                    # [更新] 传入数量，以支持降级到 reduceOnly
+                    ok = self._place_stop_protection(symbol, side, sl_price, quantity=quantity)
+                    
                     if ok:
                         print(f"   已设置止损触发价: {sl_price}")
 
@@ -370,6 +462,78 @@ class TradeExecutor:
             print(">>>【交易执行】交易失败")
             
         return order
+
+    def update_stop_loss(self, symbol, side, new_price):
+        """
+        更新止损价格 (先撤单再挂单)
+        """
+        print(f">>> [Trader] 正在更新 {symbol} 止损到 {new_price}...")
+        try:
+            # 1. 撤销所有止损单 (STOP_MARKET / STOP)
+            # 注意：这里我们只撤销止损类订单，保留止盈
+            # [修正] get_open_orders 需要传入 symbol 参数，否则会报错 "unexpected keyword argument"
+            # 虽然在 binance_client.py 中定义为 get_open_orders(self, symbol=None)
+            # 但为了保险，显式传递
+            open_orders = self.client.get_open_orders(symbol=symbol)
+            sl_orders = [o for o in open_orders if o.get('type') in ['STOP_MARKET', 'STOP'] and (o.get('reduceOnly') or o.get('closePosition'))]
+            
+            for o in sl_orders:
+                self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'])
+                
+            # 2. 重新设置止损
+            return self._place_stop_protection(symbol, side, new_price)
+        except Exception as e:
+            print(f"   更新止损失败: {e}")
+            return False
+
+    def update_take_profit(self, symbol, side, new_price):
+        """
+        更新止盈价格 (先撤单再挂单)
+        """
+        print(f">>> [Trader] 正在更新 {symbol} 止盈到 {new_price}...")
+        try:
+            # 1. 撤销所有止盈单 (TAKE_PROFIT / LIMIT reduceOnly)
+            open_orders = self.client.get_open_orders(symbol=symbol)
+            tp_orders = [o for o in open_orders if o.get('type') in ['TAKE_PROFIT', 'TAKE_PROFIT_MARKET', 'LIMIT'] and (o.get('reduceOnly') or o.get('closePosition'))]
+            
+            for o in tp_orders:
+                self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'])
+            
+            if new_price <= 0:
+                print(f"   已取消所有止盈单")
+                return True
+
+            # 2. 重新设置止盈 (使用 LIMIT 单)
+            # 需要知道数量，这里默认全平
+            # 获取当前持仓数量
+            positions = self.client.get_current_positions()
+            target_pos = next((p for p in positions if p['symbol'] == symbol), None)
+            if not target_pos:
+                print("   未找到持仓，无法设置止盈")
+                return False
+                
+            quantity = abs(float(target_pos['amount']))
+            close_side = 'SELL' if side == 'BUY' else 'BUY'
+            
+            # 精度处理
+            filters = self.client.get_symbol_filters(symbol)
+            if filters:
+                new_price = self._quantize_price(new_price, filters)
+                quantity = self._quantize_quantity(quantity, filters)
+            
+            self.client.place_order(
+                symbol=symbol,
+                side=close_side,
+                quantity=quantity,
+                order_type='LIMIT',
+                price=str(new_price),
+                reduce_only=True
+            )
+            print(f"   新止盈已设置: {new_price}")
+            return True
+        except Exception as e:
+            print(f"   更新止盈失败: {e}")
+            return False
 
     def close_position(self, symbol):
         """
@@ -537,7 +701,7 @@ class TradeExecutor:
                 # 只在第一次大幅移动止损时执行，避免频繁操作
                 if roi_pct > 0.05:
                     try:
-                        open_orders = self.client.get_all_open_orders(symbol=symbol)
+                        open_orders = self.client.get_open_orders(symbol=symbol)
                         tp_orders = [o for o in open_orders if o.get('type') in ['TAKE_PROFIT', 'TAKE_PROFIT_MARKET', 'LIMIT'] and (o.get('reduceOnly') or o.get('closePosition'))]
                         
                         # 如果还有止盈单，且利润已经很不错了，撤销止盈单，完全依赖移动止损

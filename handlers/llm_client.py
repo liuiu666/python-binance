@@ -119,15 +119,20 @@ class LLMClient:
            - 做多时：只有当资金明显流出 (净流出且 CMF < 0) 或 价格有效跌破 MA20 时，才建议 CLOSE。
            - 做空时：只有当资金明显流入 (净流入且 CMF > 0) 或 价格有效站上 MA20 时，才建议 CLOSE。
         3. 如果资金流向与持仓方向一致（例如做多且资金净流入），请坚定 HOLD，哪怕有浮亏。
-        4. **检查挂单合理性**：
-           - 如果建议 HOLD 且趋势强劲，请检查是否有过早的止盈单。如果有，建议指出。
-           - 如果建议 HOLD 但风险增加，请检查止损是否过远。
+        4. **检查挂单合理性 (动态调整)**：
+           - **关键**: 如果当前没有止损单 (open_orders 中无 STOP 类订单)，**必须**建议设置止损 (SET_SL)，价格建议参考 ATR 或技术位。
+           - 如果建议 HOLD 且趋势强劲，检查是否需要取消止盈 (CANCEL_TP) 或 上移止盈 (MOVE_TP)。
+           - 如果建议 HOLD 但风险增加，检查是否需要上移/下移止损 (MOVE_SL)。
+           - 如果当前没有止盈且趋势变弱，建议设置止盈 (SET_TP)。
         
         请输出 JSON: 
         - action (HOLD/CLOSE)
         - reason (简短理由)
         - confidence (0-100)
-        - adjust_suggestion (可选，针对挂单的调整建议，例如 "建议取消止盈" 或 "建议上移止损到 xxx")
+        - adjustment (可选对象):
+            - type: "CANCEL_TP" | "MOVE_SL" | "MOVE_TP" | "SET_SL" | "SET_TP" | "NONE"
+            - value: 数值 (新的价格)
+            - reason: 调整理由
         """
         
         try:

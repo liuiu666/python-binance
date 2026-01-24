@@ -462,8 +462,8 @@ class BinanceClient:
                 error_code = int(e.code)
             
             if error_code in [-4120, -4136]:
-                # 仅在 debug 模式或第一次遇到时提示，避免刷屏
-                print(f"   [提示] 该币种不支持交易所止损单 (Error {error_code})，已自动切换为本地止损监控。")
+                # 用户要求完全忽略此错误，不打印提示，直接返回 None
+                # print(f"   [提示] 该币种不支持交易所止损单 (Error {error_code})，已自动切换为本地止损监控。")
                 return None
 
             print(f"下单失败: {symbol} - {str(e)}")

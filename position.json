@@ -1,24 +1,24 @@
 {
     "current_position": {
-        "symbol": "RIVERUSDT",
+        "symbol": "ACUUSDT",
         "side": "BUY",
-        "entry_price": 52.974,
-        "quantity": 0.9,
-        "open_ts": 1769247542.0437567,
-        "update_ts": 1769247563.437191,
-        "local_stop": 51.526102541070166,
-        "local_stop_side": "BUY"
+        "entry_price": 0.23896,
+        "quantity": 431.0,
+        "open_ts": 1769249013.8734906,
+        "update_ts": 1769249820.7123027,
+        "local_stop": null,
+        "local_stop_side": null
     },
     "daily_stats": {
         "date": "2026-01-24",
         "initial_balance": 0.0,
-        "realized_pnl": 0.18485895000000052,
-        "trade_count": 37
+        "realized_pnl": -1.0608864799999993,
+        "trade_count": 38
     },
     "cooldowns": {
         "ACUUSDT": 1769244060.703115,
         "ENSOUSDT": 1769247523.3720422,
-        "RIVERUSDT": 1769241394.1651354,
+        "RIVERUSDT": 1769248933.8764014,
         "SPACEUSDT": 1769244612.0400975,
         "INUSDT": 1769227095.6571825,
         "KAIAUSDT": 1769241502.0184453
@@ -26,13 +26,13 @@
     "positions": {
         "ACUUSDT": {
             "symbol": "ACUUSDT",
-            "side": "SELL",
-            "entry_price": 0.23987,
-            "quantity": 203.0,
-            "open_ts": 1769246367.6002672,
-            "update_ts": 1769246390.109432,
-            "local_stop": 0.2455,
-            "local_stop_side": "SELL"
+            "side": "BUY",
+            "entry_price": 0.23896,
+            "quantity": 431.0,
+            "open_ts": 1769249013.8734906,
+            "update_ts": 1769249820.7123027,
+            "local_stop": null,
+            "local_stop_side": null
         },
         "ENSOUSDT": {
             "symbol": "ENSOUSDT",
@@ -73,9 +73,10 @@
             "entry_price": 52.974,
             "quantity": 0.9,
             "open_ts": 1769247542.0437567,
-            "update_ts": 1769247563.437191,
-            "local_stop": 51.526102541070166,
-            "local_stop_side": "BUY"
+            "update_ts": 1769248933.875556,
+            "local_stop": null,
+            "local_stop_side": null,
+            "closed_ts": 1769248933.8764005
         },
         "KAIAUSDT": {
             "symbol": "KAIAUSDT",
