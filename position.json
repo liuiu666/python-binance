@@ -1,27 +1,18 @@
 {
-    "current_position": {
-        "symbol": "KAIAUSDT",
-        "side": "BUY",
-        "entry_price": 0.08096,
-        "quantity": "194",
-        "open_ts": 1769238889.5082765,
-        "update_ts": 1769240594.7168703,
-        "local_stop": 0.08129,
-        "local_stop_side": "BUY"
-    },
+    "current_position": null,
     "daily_stats": {
         "date": "2026-01-24",
         "initial_balance": 0.0,
-        "realized_pnl": 0.25489446000000054,
-        "trade_count": 27
+        "realized_pnl": 0.20134751000000053,
+        "trade_count": 29
     },
     "cooldowns": {
-        "ACUUSDT": 1769238868.2063026,
-        "ENSOUSDT": 1769237365.8021626,
-        "RIVERUSDT": 1769238877.3223042,
+        "ACUUSDT": 1769240916.5647647,
+        "ENSOUSDT": 1769241231.4866145,
+        "RIVERUSDT": 1769241394.1651354,
         "SPACEUSDT": 1769238803.711609,
         "INUSDT": 1769227095.6571825,
-        "KAIAUSDT": 1769234896.7454524
+        "KAIAUSDT": 1769240851.9220352
     },
     "positions": {
         "ACUUSDT": {
@@ -37,14 +28,14 @@
         },
         "ENSOUSDT": {
             "symbol": "ENSOUSDT",
-            "side": "BUY",
-            "entry_price": 1.2208,
-            "quantity": "8.0",
-            "open_ts": 1769228607.9982703,
-            "update_ts": 1769228699.2484488,
+            "side": "SELL",
+            "entry_price": 1.0822,
+            "quantity": "10.6",
+            "open_ts": 1769240932.6329749,
+            "update_ts": 1769241231.485905,
             "local_stop": null,
             "local_stop_side": null,
-            "closed_ts": 1769228699.250049
+            "closed_ts": 1769241231.486613
         },
         "INUSDT": {
             "symbol": "INUSDT",
@@ -85,9 +76,10 @@
             "entry_price": 0.08096,
             "quantity": "194",
             "open_ts": 1769238889.5082765,
-            "update_ts": 1769240594.7168703,
-            "local_stop": 0.08129,
-            "local_stop_side": "BUY"
+            "update_ts": 1769240851.9200919,
+            "local_stop": null,
+            "local_stop_side": null,
+            "closed_ts": 1769240851.9220314
         }
     }
 }

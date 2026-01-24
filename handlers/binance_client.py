@@ -305,7 +305,7 @@ class BinanceClient:
             print(f"获取 K 线失败: {symbol} - {str(e)}")
             return None
 
-    def place_order(self, symbol, side, quantity=None, order_type='MARKET', price=None, stop_price=None, reduce_only=False, close_position=False):
+    def place_order(self, symbol, side, quantity=None, order_type='MARKET', price=None, stop_price=None, reduce_only=False, close_position=False, working_type='MARK_PRICE', price_protect=False):
         """
         下单
         """
@@ -321,7 +321,10 @@ class BinanceClient:
 
             if stop_price is not None:
                 params['stopPrice'] = str(stop_price)
-                params['workingType'] = 'MARK_PRICE'
+                if working_type:
+                    params['workingType'] = working_type
+                if price_protect:
+                    params['priceProtect'] = 'true'
 
             if close_position:
                 params['closePosition'] = 'true'

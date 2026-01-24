@@ -53,82 +53,73 @@ class TradeExecutor:
 
         close_side = 'SELL' if side == 'BUY' else 'BUY'
         
-        # 尝试1: 使用 closePosition=True
-        order = self.client.place_order(
-            symbol=symbol,
-            side=close_side,
-            order_type='STOP_MARKET',
-            stop_price=str(stop_price),
-            close_position=True
-        )
+        # 标准且稳定的 API 调用流程：
+        # 1. 获取当前持仓数量
+        # 2. 使用 STOP_MARKET + reduceOnly=True + 明确数量
         
-        if order:
-            return True
-            
-        # 尝试2: 失败后尝试使用 reduceOnly=True (针对 Error -4120)
-        # 获取持仓数量
+        # 步骤 1: 获取持仓数量
         positions = self.client.get_current_positions()
         target_pos = next((p for p in positions if p['symbol'] == symbol), None)
         
-        if target_pos:
-            quantity = abs(float(target_pos['amount']))
-            filters = self.client.get_symbol_filters(symbol)
-            if filters:
-                quantity = self._quantize_quantity(quantity, filters)
-                
-            print(f"   [重试] 尝试使用 ReduceOnly 模式挂止损 (数量: {quantity})...")
-            order = self.client.place_order(
-                symbol=symbol,
-                side=close_side,
-                quantity=quantity,
-                order_type='STOP_MARKET',
-                stop_price=str(stop_price),
-                reduce_only=True
-            )
-            if order:
-                print(f"   [成功] ReduceOnly 止损单下单成功")
-                return True
+        if not target_pos:
+            print(f"   [失败] 无法获取持仓信息，转为本地止损")
+            self._set_local_stop(symbol, side, stop_price)
+            return False
 
-        # 尝试3: 尝试使用 STOP (Limit Stop) 模拟市价单 (针对不支持 STOP_MARKET 的情况)
-        if target_pos:
-            # 重新计算 quantity (以防上面没算)
-            if 'quantity' not in locals():
-                quantity = abs(float(target_pos['amount']))
-                filters = self.client.get_symbol_filters(symbol)
-                if filters:
-                    quantity = self._quantize_quantity(quantity, filters)
+        quantity = abs(float(target_pos['amount']))
+        filters = self.client.get_symbol_filters(symbol)
+        if filters:
+            quantity = self._quantize_quantity(quantity, filters)
+        
+        # 步骤 2: 下单 (优先尝试最标准的 STOP_MARKET)
+        print(f"   [止损] 正在设置 STOP_MARKET 止损单 (触发价: {stop_price}, 数量: {quantity})...")
+        order = self.client.place_order(
+            symbol=symbol,
+            side=close_side,
+            quantity=quantity,
+            order_type='STOP_MARKET',
+            stop_price=str(stop_price),
+            reduce_only=True
+        )
+        
+        if order:
+            print(f"   [成功] 止损单设置成功")
+            return True
 
-            # 计算激进的限价以确保成交 (模拟市价)
-            # 做多止损(卖出): 限价 = 止损价 * 0.95
-            # 做空止损(买入): 限价 = 止损价 * 1.05
-            limit_price = 0
-            stop_price_float = float(stop_price)
-            if close_side == 'SELL':
-                limit_price = stop_price_float * 0.95
-            else:
-                limit_price = stop_price_float * 1.05
-            
-            # 价格精度调整
-            filters = self.client.get_symbol_filters(symbol)
-            if filters:
-                limit_price = self._quantize_price(limit_price, filters)
+        # 如果标准市价止损失败，尝试限价止损 (STOP) 作为兜底
+        # 某些极端情况下，交易所可能暂时不支持市价止损
+        print(f"   [警告] 市价止损下单失败，尝试使用限价止损 (STOP)...")
+        
+        # 计算激进的限价以确保成交 (模拟市价)
+        # 做多止损(卖出): 限价 = 止损价 * 0.95
+        # 做空止损(买入): 限价 = 止损价 * 1.05
+        limit_price = 0
+        stop_price_float = float(stop_price)
+        if close_side == 'SELL':
+            limit_price = stop_price_float * 0.95
+        else:
+            limit_price = stop_price_float * 1.05
+        
+        # 价格精度调整
+        if filters:
+            limit_price = self._quantize_price(limit_price, filters)
 
-            print(f"   [重试] 尝试使用 STOP 限价止损 (Stop: {stop_price}, Limit: {limit_price})...")
-            order = self.client.place_order(
-                symbol=symbol,
-                side=close_side,
-                quantity=quantity,
-                order_type='STOP',
-                stop_price=str(stop_price),
-                price=str(limit_price),
-                reduce_only=True
-            )
-            if order:
-                print(f"   [成功] STOP 限价止损单下单成功")
-                return True
+        print(f"   [重试] 尝试使用 STOP 限价止损 (Stop: {stop_price}, Limit: {limit_price})...")
+        order = self.client.place_order(
+            symbol=symbol,
+            side=close_side,
+            quantity=quantity,
+            order_type='STOP',
+            stop_price=str(stop_price),
+            price=str(limit_price),
+            reduce_only=True
+        )
+        if order:
+            print(f"   [成功] STOP 限价止损单下单成功")
+            return True
 
         self._set_local_stop(symbol, side, stop_price)
-        print(f"   [本地止损] 条件单下单失败，本地止损价: {self._get_local_stop(symbol):.4f}")
+        print(f"   [本地止损] 所有条件单下单失败，启用本地止损，止损价: {self._get_local_stop(symbol):.4f}")
         return False
 
     def _quantize_price(self, price, filters):
