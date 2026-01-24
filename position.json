@@ -1,5 +1,12 @@
 {
-    "current_position": null,
+    "current_position": {
+        "symbol": "ACUUSDT",
+        "side": "SELL",
+        "entry_price": 0.2451,
+        "quantity": "41",
+        "open_ts": 1769241547.6070342,
+        "update_ts": 1769241547.6070342
+    },
     "daily_stats": {
         "date": "2026-01-24",
         "initial_balance": 0.0,
@@ -12,19 +19,16 @@
         "RIVERUSDT": 1769241394.1651354,
         "SPACEUSDT": 1769238803.711609,
         "INUSDT": 1769227095.6571825,
-        "KAIAUSDT": 1769240851.9220352
+        "KAIAUSDT": 1769241502.0184453
     },
     "positions": {
         "ACUUSDT": {
             "symbol": "ACUUSDT",
-            "side": "BUY",
-            "entry_price": 0.25864,
-            "quantity": "37",
-            "open_ts": 1769236605.6098077,
-            "update_ts": 1769237300.7731235,
-            "local_stop": null,
-            "local_stop_side": null,
-            "closed_ts": 1769237300.774518
+            "side": "SELL",
+            "entry_price": 0.2451,
+            "quantity": "41",
+            "open_ts": 1769241547.6070342,
+            "update_ts": 1769241547.6070342
         },
         "ENSOUSDT": {
             "symbol": "ENSOUSDT",
