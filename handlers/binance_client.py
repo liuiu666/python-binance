@@ -331,9 +331,9 @@ class BinanceClient:
                     return None
                 params['quantity'] = quantity
 
-            if order_type == 'LIMIT':
+            if order_type in ['LIMIT', 'STOP', 'TAKE_PROFIT']:
                 if price is None:
-                    print("限价单必须指定价格")
+                    print(f"{order_type} 必须指定价格")
                     return None
                 params['timeInForce'] = 'GTC'
                 params['price'] = str(price)

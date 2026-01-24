@@ -49,6 +49,12 @@ class MarketAnalyzer:
         data['BOLL_LOWER'] = boll.bollinger_lband()
         data['BOLL_MID'] = boll.bollinger_mavg()
         
+        # 计算 ADX (用于判断趋势强度)
+        adx = ta.trend.ADXIndicator(data['最高价'], data['最低价'], data['收盘价'], window=14)
+        data['ADX'] = adx.adx()
+        data['ADX_POS'] = adx.adx_pos()
+        data['ADX_NEG'] = adx.adx_neg()
+
         # --- 资金流向分析 (新增) ---
         if '主动买入成交量' in data.columns:
             # 1. 资金净流入 (Taker Buy - Taker Sell)
@@ -100,6 +106,40 @@ class MarketAnalyzer:
             
         return None
 
+    def suggest_leverage(self, df):
+        """
+        根据 ATR 波动率动态建议杠杆
+        :param df: K线数据 (建议使用 1m 数据)
+        :return: 建议的杠杆倍数 (int)
+        """
+        if df is None or len(df) < 20:
+            return 3
+            
+        last = df.iloc[-1]
+        price = float(last.get('收盘价', 0) or 0)
+        atr = float(last.get('ATR', 0) or 0)
+        
+        if price <= 0:
+            return 3
+            
+        # 计算波动率百分比 (ATR / Price)
+        atr_pct = (atr / price) * 100
+        
+        # 动态杠杆逻辑
+        # 波动率极高 (>0.5%) -> 3x (防爆仓)
+        # 波动率高 (>0.3%)   -> 5x
+        # 波动率中等 (>0.1%) -> 10x
+        # 波动率低 (<=0.1%)  -> 20x
+        
+        if atr_pct > 0.5:
+            return 3
+        elif atr_pct > 0.3:
+            return 5
+        elif atr_pct > 0.1:
+            return 10
+        else:
+            return 20
+
     def check_trend_following(self, df, trend_bias=None, volume_ratio=0.8, check_money_flow=True):
         if df is None or len(df) < 50:
             return None, {}
@@ -111,6 +151,7 @@ class MarketAnalyzer:
         atr = float(last.get('ATR', 0) or 0)
         vol = float(last.get('成交量', 0) or 0)
         vol_ma20 = float(last.get('VOL_MA20', 0) or 0)
+        adx = float(last.get('ADX', 0) or 0)
         
         # 资金流向数据
         net_flow = float(last.get('Net_Flow_MA5', 0) or 0)
@@ -120,6 +161,10 @@ class MarketAnalyzer:
         if price <= 0:
             return None, {}
             
+        # [优化1] ADX 过滤：如果 ADX < 20，说明是震荡行情，不建议趋势操作
+        if adx < 20:
+            return None, {}
+
         # [放宽] 不再强制要求放量，只要不极度缩量即可
         # if vol_ma20 > 0 and vol < vol_ma20 * volume_ratio:
         #    return None, {}
@@ -150,15 +195,23 @@ class MarketAnalyzer:
                 if cmf < -0.1:
                     signal = None
                     reason = f"趋势虽好但资金严重流出 (CMF: {cmf:.2f})"
+                # [优化2] MFI 过滤：避免超买 (MFI > 85)
+                elif mfi > 85:
+                    signal = None
+                    reason = f"MFI 超买 ({mfi:.1f})，谨防回调"
                 else:
-                    reason += f" (资金面 CMF: {cmf:.2f})"
+                    reason += f" (资金面 CMF: {cmf:.2f}, ADX: {adx:.1f})"
                     
             elif signal == 'SELL':
                 if cmf > 0.1:
                     signal = None
                     reason = f"趋势虽差但资金严重流入 (CMF: {cmf:.2f})"
+                # [优化2] MFI 过滤：避免超卖 (MFI < 15)
+                elif mfi < 15:
+                    signal = None
+                    reason = f"MFI 超卖 ({mfi:.1f})，谨防反弹"
                 else:
-                    reason += f" (资金面 CMF: {cmf:.2f})"
+                    reason += f" (资金面 CMF: {cmf:.2f}, ADX: {adx:.1f})"
 
         if not signal:
             return None, {}

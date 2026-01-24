@@ -89,6 +89,44 @@ class TradeExecutor:
                 print(f"   [成功] ReduceOnly 止损单下单成功")
                 return True
 
+        # 尝试3: 尝试使用 STOP (Limit Stop) 模拟市价单 (针对不支持 STOP_MARKET 的情况)
+        if target_pos:
+            # 重新计算 quantity (以防上面没算)
+            if 'quantity' not in locals():
+                quantity = abs(float(target_pos['amount']))
+                filters = self.client.get_symbol_filters(symbol)
+                if filters:
+                    quantity = self._quantize_quantity(quantity, filters)
+
+            # 计算激进的限价以确保成交 (模拟市价)
+            # 做多止损(卖出): 限价 = 止损价 * 0.95
+            # 做空止损(买入): 限价 = 止损价 * 1.05
+            limit_price = 0
+            stop_price_float = float(stop_price)
+            if close_side == 'SELL':
+                limit_price = stop_price_float * 0.95
+            else:
+                limit_price = stop_price_float * 1.05
+            
+            # 价格精度调整
+            filters = self.client.get_symbol_filters(symbol)
+            if filters:
+                limit_price = self._quantize_price(limit_price, filters)
+
+            print(f"   [重试] 尝试使用 STOP 限价止损 (Stop: {stop_price}, Limit: {limit_price})...")
+            order = self.client.place_order(
+                symbol=symbol,
+                side=close_side,
+                quantity=quantity,
+                order_type='STOP',
+                stop_price=str(stop_price),
+                price=str(limit_price),
+                reduce_only=True
+            )
+            if order:
+                print(f"   [成功] STOP 限价止损单下单成功")
+                return True
+
         self._set_local_stop(symbol, side, stop_price)
         print(f"   [本地止损] 条件单下单失败，本地止损价: {self._get_local_stop(symbol):.4f}")
         return False

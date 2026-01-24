@@ -232,6 +232,8 @@ def run_bot():
             for sym in tickers:
                 # 冷却检查
                 if state_manager.is_in_cooldown(sym):
+                    # 检查是否真的还在冷却期 (1小时)
+                    # 优化：如果是 ADX 过滤导致的，可以缩短冷却时间
                     continue
                     
                 # 获取 1m K线确认趋势
@@ -310,7 +312,10 @@ def run_bot():
                 total_equity = balance_info.get('总权益', 0) if balance_info else 0
                 
                 trade_amount = 20 # 默认最小额
-                leverage = 3      # 默认 3倍杠杆
+                
+                # [优化] 根据 ATR 动态调整杠杆
+                leverage = analyzer.suggest_leverage(df_1m_analyzed)
+                print(f"   【风控】当前市场波动建议杠杆: {leverage}x")
                 
                 stop_loss = info.get('stop_loss')
                 current_price = info.get('current_price')
