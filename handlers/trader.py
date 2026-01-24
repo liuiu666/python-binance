@@ -96,28 +96,10 @@ class TradeExecutor:
                     pass # 继续尝试下一方案
 
             # 方案 2: STOP (限价止损) + closePosition
-            # 即使没有明确说支持，也尝试一下
-            try:
-                # 构造一个肯定能成交的价格
-                # 卖出止损：价格 = 触发价 * 0.9
-                # 买入止损：价格 = 触发价 * 1.1
-                limit_price = stop_price * 0.9 if close_side == 'SELL' else stop_price * 1.1
-                limit_price = self._quantize_price(limit_price, filters)
-                
-                order = self.client.place_order(
-                    symbol=symbol,
-                    side=close_side,
-                    order_type='STOP',
-                    stop_price=stop_price,
-                    price=limit_price,
-                    close_position=True,
-                    quantity=None
-                )
-                if order:
-                    print(f"   [成功] 交易所止损单已设置 (STOP 限价, 触发价: {stop_price})")
-                    return True
-            except Exception:
-                pass
+            # 经确认，Binance Futures API 对 STOP/TAKE_PROFIT 订单通常不支持 closePosition=True
+            # 因此，这里不再尝试方案 2，而是直接跳到方案 3/4 (使用 reduceOnly)
+            # 这样可以避免参数错误
+            pass
 
             # 如果没有提供数量，尝试获取当前持仓
             if quantity is None:
@@ -429,8 +411,30 @@ class TradeExecutor:
                     else:
                         sl_price = round(sl_price, filters['price_precision'])
                     
-                    # [更新] 传入数量，以支持降级到 reduceOnly
+                    # [关键修正] 下单后立即挂 reduceOnly 止损可能会因为开仓单未完全成交（持仓不足）而失败
+                    # 因此，我们需要先尝试挂 "closePosition=True" (无需数量) 的止损
+                    # 如果不支持，则需要等待持仓更新后再挂 reduceOnly
+                    
+                    # 第一次尝试：直接挂，传入 quantity (如果支持 STOP_MARKET + closePosition 会自动忽略 quantity)
                     ok = self._place_stop_protection(symbol, side, sl_price, quantity=quantity)
+                    
+                    if not ok:
+                        print(f"   [提示] 初次止损设置失败 (可能是持仓未更新)，正在重试...")
+                        # 简单的重试机制：等待 1 秒让成交数据同步
+                        import time
+                        time.sleep(1)
+                        # 重新获取持仓
+                        try:
+                            positions = self.client.get_current_positions()
+                            target = next((p for p in positions if p['symbol'] == symbol), None)
+                            if target:
+                                current_qty = abs(float(target['amount']))
+                                if current_qty > 0:
+                                    # 量化
+                                    current_qty = self._quantize_quantity(current_qty, filters)
+                                    ok = self._place_stop_protection(symbol, side, sl_price, quantity=current_qty)
+                        except Exception as e:
+                            print(f"   重试获取持仓失败: {e}")
                     
                     if ok:
                         print(f"   已设置止损触发价: {sl_price}")
@@ -481,7 +485,21 @@ class TradeExecutor:
                 self.client.client.futures_cancel_order(symbol=symbol, orderId=o['orderId'])
                 
             # 2. 重新设置止损
-            return self._place_stop_protection(symbol, side, new_price)
+            # [关键] 必须先获取持仓数量，以便支持降级方案 (reduceOnly + quantity)
+            quantity = None
+            try:
+                positions = self.client.get_current_positions()
+                target_pos = next((p for p in positions if p['symbol'] == symbol), None)
+                if target_pos:
+                    quantity = abs(float(target_pos['amount']))
+                    # 精度量化
+                    filters = self.client.get_symbol_filters(symbol)
+                    if filters:
+                        quantity = self._quantize_quantity(quantity, filters)
+            except Exception:
+                pass
+
+            return self._place_stop_protection(symbol, side, new_price, quantity=quantity)
         except Exception as e:
             print(f"   更新止损失败: {e}")
             return False
