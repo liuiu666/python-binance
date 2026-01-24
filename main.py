@@ -201,39 +201,65 @@ def run_bot():
                         # 浮动加减仓逻辑
                         is_scaling_op = False
                         
-                        # 加仓逻辑：浮盈 > 2.5 倍波动率
-                        if atr_multiple > 2.5 and alignment_score >= 2:
-                            # 智能过滤：如果建议平仓且信心尚可，则不加仓
-                            if ai_action == 'CLOSE' and ai_confidence > 50:
-                                print(f"   【策略】规则触发加仓，但智能评估建议平仓（信心 {ai_confidence}）-> 取消加仓")
-                            else:
-                                # 检查是否已达到最大仓位（例如总权益的 10%）
-                                balance_info = client.get_balance()
-                                total_equity = balance_info.get('总权益', 0) if balance_info else 0
-                                current_position_value = amount * current_price
-                                
-                                if total_equity > 0 and current_position_value < (total_equity * 0.40):
-                                    # 加仓：按当前仓位价值的 50% 加
-                                    add_amount = current_position_value * 0.5 
-                                    # 最小加仓限制
-                                    if add_amount > 10:
-                                        success = trader.increase_position(p, add_amount, current_price, current_atr)
-                                        if success:
-                                            is_scaling_op = True
+                        # [AI 动态加减仓] 优先执行 AI 的明确指令
+                        if ai_action == 'ADD' and ai_confidence >= 65:
+                            # 检查资金
+                            balance_info = client.get_balance()
+                            total_equity = balance_info.get('总权益', 0) if balance_info else 0
+                            current_position_value = abs(float(p['amount'])) * current_price
+                            
+                            if total_equity > 0 and current_position_value < (total_equity * 0.40):
+                                print(f">>>【智能加仓】AI 建议加仓 (信心 {ai_confidence}), 理由: {ai_reason}")
+                                # 默认加仓 30%
+                                add_amount = current_position_value * 0.3
+                                if add_amount > 10:
+                                    success = trader.increase_position(p, add_amount, current_price, current_atr)
+                                    if success:
+                                        is_scaling_op = True
+                                        
+                        elif ai_action == 'REDUCE' and ai_confidence >= 65:
+                            print(f">>>【智能减仓】AI 建议减仓 (信心 {ai_confidence}), 理由: {ai_reason}")
+                            # 默认减仓 30%
+                            pnl = trader.reduce_position(p, 0.3, current_price)
+                            if pnl is not None:
+                                is_scaling_op = True
+                                state_manager.update_pnl(pnl)
                         
-                        # 减仓逻辑：浮盈 > 4 倍波动率
-                        elif atr_multiple > 4.0 or (has_alignment_data and alignment_score <= 1 and atr_multiple > 1.8):
-                            # 智能过滤：如果强烈建议持有，则推迟减仓
-                            if ai_action == 'HOLD' and ai_confidence >= 80 and opposite_score < 2:
-                                print(f"   【策略】规则触发减仓，但智能评估强烈建议持有（信心 {ai_confidence}）-> 暂不减仓")
-                            else:
-                                # 减仓 30%
-                                pnl = trader.reduce_position(p, 0.3, current_price)
-                                if pnl is not None:
-                                    is_scaling_op = True
-                                    # 更新已实现盈亏
-                                    state_manager.update_pnl(pnl)
-                                    print(f"   【状态】减仓已实现盈亏: {pnl:.2f} 美元")
+                        # [规则加减仓] 仅当 AI 未操作时执行
+                        if not is_scaling_op:
+                            # 加仓逻辑：浮盈 > 2.5 倍波动率
+                            if atr_multiple > 2.5 and alignment_score >= 2:
+                                # 智能过滤：如果建议平仓且信心尚可，则不加仓
+                                if ai_action == 'CLOSE' and ai_confidence > 50:
+                                    print(f"   【策略】规则触发加仓，但智能评估建议平仓（信心 {ai_confidence}）-> 取消加仓")
+                                else:
+                                    # 检查是否已达到最大仓位（例如总权益的 10%）
+                                    balance_info = client.get_balance()
+                                    total_equity = balance_info.get('总权益', 0) if balance_info else 0
+                                    current_position_value = abs(float(p['amount'])) * current_price
+                                    
+                                    if total_equity > 0 and current_position_value < (total_equity * 0.40):
+                                        # 加仓：按当前仓位价值的 50% 加
+                                        add_amount = current_position_value * 0.5 
+                                        # 最小加仓限制
+                                        if add_amount > 10:
+                                            success = trader.increase_position(p, add_amount, current_price, current_atr)
+                                            if success:
+                                                is_scaling_op = True
+                            
+                            # 减仓逻辑：浮盈 > 4 倍波动率
+                            elif atr_multiple > 4.0 or (has_alignment_data and alignment_score <= 1 and atr_multiple > 1.8):
+                                # 智能过滤：如果强烈建议持有，则推迟减仓
+                                if ai_action == 'HOLD' and ai_confidence >= 80 and opposite_score < 2:
+                                    print(f"   【策略】规则触发减仓，但智能评估强烈建议持有（信心 {ai_confidence}）-> 暂不减仓")
+                                else:
+                                    # 减仓 30%
+                                    pnl = trader.reduce_position(p, 0.3, current_price)
+                                    if pnl is not None:
+                                        is_scaling_op = True
+                                        # 更新已实现盈亏
+                                        state_manager.update_pnl(pnl)
+                                        print(f"   【状态】减仓已实现盈亏: {pnl:.2f} 美元")
                                 
                         # 如果没有执行加减仓
                         if not is_scaling_op:

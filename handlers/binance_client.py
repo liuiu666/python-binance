@@ -442,10 +442,15 @@ class BinanceClient:
 
             if order_type in ['LIMIT', 'STOP', 'TAKE_PROFIT']:
                 if price is None:
-                    print(f"{order_type} 必须指定价格")
-                    return None
-                params['timeInForce'] = 'GTC'
-                params['price'] = str(price)
+                    # [关键修正] 对于 STOP 单，如果目的是触发止损单（Stop Loss），有时 price 不是必须的（如果是 STOP_MARKET）
+                    # 但如果是 LIMIT 类型的 STOP，必须有 price
+                    # 这里我们宽容处理：如果 type 是 STOP 且 price 为 None，打印警告但不阻断（交给 API 报错）
+                    # 或者如果是 STOP 但没有 price，可能是调用方想发 STOP_MARKET 但传错了 type
+                    print(f"警告: {order_type} 通常需要指定价格 (price)，当前为 None")
+                    # return None # 暂时注释掉 return，让 API 决定是否报错
+                else:
+                    params['timeInForce'] = 'GTC'
+                    params['price'] = str(price)
 
             if reduce_only and not close_position:
                 params['reduceOnly'] = 'true'
@@ -462,8 +467,10 @@ class BinanceClient:
                 error_code = int(e.code)
             
             if error_code in [-4120, -4136]:
-                # 用户要求完全忽略此错误，不打印提示，直接返回 None
-                # print(f"   [提示] 该币种不支持交易所止损单 (Error {error_code})，已自动切换为本地止损监控。")
+                # 用户要求完全忽略此错误 (不抛出异常)，但为了排查问题，打印一条温和的提示
+                if self.debug: # 只在 debug 模式下打印
+                    msg = getattr(e, 'message', str(e))
+                    print(f"   [API信息] 该订单类型被交易所拒绝 (Code {error_code}): {msg}，将尝试备用方案。")
                 return None
 
             print(f"下单失败: {symbol} - {str(e)}")

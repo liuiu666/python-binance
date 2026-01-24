@@ -1,40 +1,51 @@
 {
-    "current_position": null,
+    "current_position": {
+        "symbol": "SPACEUSDT",
+        "side": "BUY",
+        "entry_price": 0.017447,
+        "quantity": 2923.0,
+        "open_ts": 1769258393.7451544,
+        "update_ts": 1769270683.728951,
+        "local_stop": 0.01745,
+        "local_stop_side": "BUY",
+        "closed_ts": 1769267795.979021
+    },
     "daily_stats": {
         "date": "2026-01-24",
         "initial_balance": 0.0,
-        "realized_pnl": -0.5104996902113992,
-        "trade_count": 52
+        "realized_pnl": -0.938253690211399,
+        "trade_count": 64
     },
     "cooldowns": {
-        "ACUUSDT": 1769262900.1525552,
-        "ENSOUSDT": 1769260999.853484,
-        "RIVERUSDT": 1769251816.397818,
-        "SPACEUSDT": 1769261436.2455273,
+        "ACUUSDT": 1769270537.771715,
+        "ENSOUSDT": 1769267852.8706932,
+        "RIVERUSDT": 1769270555.5189674,
+        "SPACEUSDT": 1769267795.9790246,
         "INUSDT": 1769227095.6571825,
-        "KAIAUSDT": 1769261452.2910035,
-        "SOMIUSDT": 1769261287.923425
+        "KAIAUSDT": 1769265431.0069742,
+        "SOMIUSDT": 1769265716.1190116
     },
     "positions": {
         "ACUUSDT": {
             "symbol": "ACUUSDT",
-            "side": "SELL",
-            "entry_price": 0.21013,
-            "quantity": 202.0,
+            "side": "BUY",
+            "entry_price": 0.21513,
+            "quantity": 247.0,
             "open_ts": 1769253361.4146762,
-            "update_ts": 1769259617.8525162,
-            "local_stop": 0.21582,
-            "local_stop_side": "SELL"
+            "update_ts": 1769265640.1135263,
+            "local_stop": null,
+            "local_stop_side": null,
+            "closed_ts": 1769265640.1149848
         },
         "ENSOUSDT": {
             "symbol": "ENSOUSDT",
-            "side": "BUY",
-            "entry_price": 1.1773,
-            "quantity": 57.2,
+            "side": "SELL",
+            "entry_price": 1.3647,
+            "quantity": 47.2,
             "open_ts": 1769251639.4289718,
-            "update_ts": 1769251739.4778495,
-            "local_stop": null,
-            "local_stop_side": null,
+            "update_ts": 1769270233.4931366,
+            "local_stop": 1.3625,
+            "local_stop_side": "SELL",
             "closed_ts": 1769251739.4791873
         },
         "INUSDT": {
@@ -51,12 +62,13 @@
         "SPACEUSDT": {
             "symbol": "SPACEUSDT",
             "side": "BUY",
-            "entry_price": 0.017383,
-            "quantity": 2097.0,
+            "entry_price": 0.017447,
+            "quantity": 2923.0,
             "open_ts": 1769258393.7451544,
-            "update_ts": 1769262913.9381154,
-            "local_stop": 0.017292,
-            "local_stop_side": "BUY"
+            "update_ts": 1769270683.728951,
+            "local_stop": 0.01745,
+            "local_stop_side": "BUY",
+            "closed_ts": 1769267795.979021
         },
         "RIVERUSDT": {
             "symbol": "RIVERUSDT",
@@ -70,23 +82,23 @@
         },
         "KAIAUSDT": {
             "symbol": "KAIAUSDT",
-            "side": "SELL",
-            "entry_price": 0.08237,
-            "quantity": 1243.0,
+            "side": "BUY",
+            "entry_price": 0.0886,
+            "quantity": 725.0,
             "open_ts": 1769244630.5925753,
-            "update_ts": 1769258820.7352715,
+            "update_ts": 1769265054.2718632,
             "local_stop": null,
             "local_stop_side": null
         },
         "SOMIUSDT": {
-            "local_stop": null,
-            "local_stop_side": null,
+            "local_stop": 0.315,
+            "local_stop_side": "SELL",
             "symbol": "SOMIUSDT",
-            "update_ts": 1769261210.659078,
+            "update_ts": 1769268261.2799737,
             "open_ts": 1769261028.2480159,
-            "side": "BUY",
-            "entry_price": 0.3046,
-            "quantity": 202.0
+            "side": "SELL",
+            "entry_price": 0.3086,
+            "quantity": 139.0
         }
     }
 }

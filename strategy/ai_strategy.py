@@ -63,7 +63,8 @@ class AIStrategy:
         
         # 2.5 提取最近 K 线序列（用于形态识别）
         recent_klines = []
-        subset = df.tail(30)
+        # [优化] 增加 K 线数量到 60 (约1小时数据)，以便 AI 识别更有效的支撑压力位
+        subset = df.tail(60)
         for idx, row in subset.iterrows():
             k_str = f"时间: {row.name}, 开: {row['开盘价']}, 高: {row['最高价']}, 低: {row['最低价']}, 收: {row['收盘价']}, 量: {row['成交量']}"
             recent_klines.append(k_str)
@@ -136,11 +137,38 @@ class AIStrategy:
         if vol_prev_10m > 0:
             vol_change_pct = (vol_10m - vol_prev_10m) / vol_prev_10m * 100
 
+        # 2.7 获取买卖盘口深度 (Wall)
+        book_ticker = self.client.get_book_tickers(symbol)
+        bid_wall = "无显著买单"
+        ask_wall = "无显著卖单"
+        bid_qty = 0
+        ask_qty = 0
+        bid_price = 0
+        ask_price = 0
+        
+        if book_ticker:
+            bid_qty = float(book_ticker.get('bidQty', 0))
+            ask_qty = float(book_ticker.get('askQty', 0))
+            bid_price = float(book_ticker.get('bidPrice', 0))
+            ask_price = float(book_ticker.get('askPrice', 0))
+            
+            # 简单的墙判定：如果买一量是卖一量的 5 倍以上
+            if ask_qty > 0 and bid_qty > 5 * ask_qty and bid_qty * bid_price > 50000:
+                bid_wall = f"强支撑 (量: {bid_qty:.0f}, 额: {bid_qty*bid_price/10000:.1f}万)"
+            if bid_qty > 0 and ask_qty > 5 * bid_qty and ask_qty * ask_price > 50000:
+                ask_wall = f"强压盘 (量: {ask_qty:.0f}, 额: {ask_qty*ask_price/10000:.1f}万)"
+
         market_data = {
             "symbol": symbol,
             "funding_rate": f"{fr_val:.6f} ({fr_desc})",
             "open_interest": open_interest,
             "money_flow": money_flow,
+            "bid_wall": bid_wall,
+            "ask_wall": ask_wall,
+            "bid_qty": bid_qty,
+            "ask_qty": ask_qty,
+            "bid_price": bid_price,
+            "ask_price": ask_price,
             "volume_10m": vol_10m,
             "volume_10m_prev": vol_prev_10m,
             "volume_10m_avg": vol_10m_avg,

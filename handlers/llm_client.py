@@ -39,7 +39,7 @@ class LLMClient:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "你是一个专业的加密货币趋势与资金面分析师，目标是显著提升胜率并降低无效交易。决策时必须综合资金流向、10分钟成交量变化、合约持仓(OI)、资金费率与大周期趋势；若关键维度缺失或相互矛盾，直接给出 HOLD 并降低信心。请只输出 JSON 格式，包含字段: signal (BUY/SELL/HOLD), reason (简短理由), confidence (0-100), stop_loss, take_profit。reason 必须同时提及资金流向与10分钟成交量的变化结论。"},
+                    {"role": "system", "content": "你是一个专业的加密货币趋势与资金面分析师，目标是显著提升胜率并降低无效交易。决策时必须综合资金流向、10分钟成交量变化、合约持仓(OI)、资金费率与大周期趋势；若关键维度缺失或相互矛盾，直接给出 HOLD 并降低信心。请只输出 JSON 格式，包含字段: signal (BUY/SELL/HOLD), reason (简短理由), confidence (0-100), stop_loss (止损价), take_profit (止盈价), support_level (支撑位), resistance_level (压力位)。reason 必须同时提及资金流向与10分钟成交量的变化结论。请根据提供的 K 线数据精确识别当前的支撑位和压力位。"},
                     {"role": "user", "content": prompt}
                 ],
                 response_format={"type": "json_object"}
@@ -102,6 +102,13 @@ class LLMClient:
         - 杠杆: {position_data.get('leverage')}x
         - 当前挂单: {open_orders_desc}
         
+        [订单簿深度 (挂单墙)]
+        **请重点分析此数据，判断是否有主力压盘或托单**
+        - 买单墙 (支撑): {market_data.get('bid_wall', '无显著买单')}
+        - 卖单墙 (压力): {market_data.get('ask_wall', '无显著卖单')}
+        - 买一价: {market_data.get('bid_price')} (量: {market_data.get('bid_qty')})
+        - 卖一价: {market_data.get('ask_price')} (量: {market_data.get('ask_qty')})
+        
         [关键资金数据 (核心依据)]
         - 资金流向 (5m): {flow_text}
         - CMF指标: {market_data.get('cmf', 0):.4f} (Chaikin Money Flow)
@@ -116,18 +123,21 @@ class LLMClient:
         [决策规则]
         1. **严禁单纯依赖 RSI 超买超卖平仓**。在强趋势中，RSI > 70 或 < 30 是常态，除非伴随资金大幅撤退，否则不要平仓。
         2. **核心看资金**：
-           - 做多时：只有当资金明显流出 (净流出且 CMF < 0) 或 价格有效跌破 MA20 时，才建议 CLOSE。
-           - 做空时：只有当资金明显流入 (净流入且 CMF > 0) 或 价格有效站上 MA20 时，才建议 CLOSE。
+           - 做多时：只有当资金明显流出 (净流出且 CMF < 0) 或 价格有效跌破 MA20 或 **跌破关键支撑位** 时，才建议 CLOSE。
+           - 做空时：只有当资金明显流入 (净流入且 CMF > 0) 或 价格有效站上 MA20 或 **突破关键压力位** 时，才建议 CLOSE。
         3. 如果资金流向与持仓方向一致（例如做多且资金净流入），请坚定 HOLD，哪怕有浮亏。
-        4. **检查挂单合理性 (动态调整)**：
-           - **关键**: 如果当前没有止损单 (open_orders 中无 STOP 类订单)，**必须**建议设置止损 (SET_SL)，价格建议参考 ATR 或技术位。
+        4. **加减仓判断 (Pyramiding/Scaling)**:
+           - **ADD (加仓)**: 当趋势极强 (CMF>0.1, 净流入>0, 成交量放大) 且 浮盈 > 2% 且 当前价格突破关键阻力位/均线发散向上时。
+           - **REDUCE (减仓)**: 当趋势受阻但未完全反转 (例如遇到强阻力位滞涨, 资金流出但均线未破) 且 浮盈 > 5% 时，建议减仓锁定利润。
+        5. **检查挂单合理性 (动态调整)**：
+           - **关键**: 如果当前没有止损单 (open_orders 中无 STOP 类订单)，**必须**建议设置止损 (SET_SL)，价格建议参考 ATR 或 **K线支撑压力位**。
            - 如果建议 HOLD 且趋势强劲，检查是否需要取消止盈 (CANCEL_TP) 或 上移止盈 (MOVE_TP)。
-           - 如果建议 HOLD 但风险增加，检查是否需要上移/下移止损 (MOVE_SL)。
-           - 如果当前没有止盈且趋势变弱，建议设置止盈 (SET_TP)。
+           - 如果建议 HOLD 但风险增加，检查是否需要上移/下移止损 (MOVE_SL)，参考 **近期K线形成的支撑/压力位**。
+           - 如果当前没有止盈且趋势变弱，建议设置止盈 (SET_TP)，参考 **上方压力位/下方支撑位**。
            - **盈利时止损必须上移到盈利区间**：做多止损不得低于开仓价，做空止损不得高于开仓价；若给出 MOVE_SL/SET_SL，必须满足该条件。
         
         请输出 JSON: 
-        - action (HOLD/CLOSE)
+        - action (HOLD / CLOSE / ADD / REDUCE)
         - reason (简短理由)
         - confidence (0-100)
         - adjustment (可选对象):
@@ -192,7 +202,8 @@ class LLMClient:
         - 10m量能变化: {data.get('volume_10m_change_pct', 0):.2f}% (倍数: {data.get('volume_10m_ratio', 0):.2f})
         - 10m价格变动: {data.get('price_10m_change_pct', 0):.2f}%
         
-        [最近 12 小时价格走势 (从旧到新)]
+        [最近 60 根 1m K线价格走势 (从旧到新)]
+        (请基于此数据识别支撑位 support_level 和 压力位 resistance_level)
         {kline_text}
         
         [当前技术指标 (辅助参考)]
