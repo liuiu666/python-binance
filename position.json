@@ -1,46 +1,44 @@
 {
     "current_position": {
-        "symbol": "ENSOUSDT",
+        "open_ts": 1769320428.235872,
+        "symbol": "NOMUSDT",
         "side": "BUY",
-        "entry_price": 2.0531,
-        "quantity": 16.6,
-        "open_ts": 1769251639.4289718,
-        "update_ts": 1769306054.6750076,
-        "local_stop": 2.016,
-        "local_stop_side": "BUY",
-        "closed_ts": 1769282496.1054745
+        "entry_price": 0.015035,
+        "quantity": 2338.0,
+        "update_ts": 1769321928.5922723
     },
     "daily_stats": {
         "date": "2026-01-25",
         "initial_balance": 0.0,
-        "realized_pnl": -0.17096541999999992,
-        "trade_count": 12
+        "realized_pnl": -2.4708292199999997,
+        "trade_count": 22
     },
     "cooldowns": {
-        "ACUUSDT": 1769303057.6501386,
-        "ENSOUSDT": 1769305277.953515,
+        "ACUUSDT": 1769317544.3896947,
+        "ENSOUSDT": 1769319311.7630656,
         "RIVERUSDT": 1769305843.242407,
-        "SOMIUSDT": 1769305830.0584383
+        "SOMIUSDT": 1769320320.6597767,
+        "NOMUSDT": 1769317529.830511
     },
     "positions": {
         "ACUUSDT": {
             "symbol": "ACUUSDT",
-            "side": "BUY",
-            "entry_price": 0.20571,
-            "quantity": 431.0,
+            "side": "SELL",
+            "entry_price": 0.18683,
+            "quantity": 393.0,
             "open_ts": 1769253361.4146762,
-            "update_ts": 1769295043.1579258,
+            "update_ts": 1769318408.6297932,
             "local_stop": null,
             "local_stop_side": null,
-            "closed_ts": 1769295043.1594524
+            "closed_ts": 1769316896.919178
         },
         "ENSOUSDT": {
             "symbol": "ENSOUSDT",
             "side": "BUY",
-            "entry_price": 2.0531,
-            "quantity": 16.6,
+            "entry_price": 2.0953,
+            "quantity": 33.1,
             "open_ts": 1769251639.4289718,
-            "update_ts": 1769306054.6750076,
+            "update_ts": 1769317560.5824661,
             "local_stop": 2.016,
             "local_stop_side": "BUY",
             "closed_ts": 1769282496.1054745
@@ -89,15 +87,15 @@
             "local_stop_side": null
         },
         "SOMIUSDT": {
-            "local_stop": 0.3514,
-            "local_stop_side": "SELL",
+            "local_stop": null,
+            "local_stop_side": null,
             "symbol": "SOMIUSDT",
-            "update_ts": 1769305128.6972363,
+            "update_ts": 1769319330.5593164,
             "open_ts": 1769261028.2480159,
             "side": "SELL",
-            "entry_price": 0.3579,
-            "quantity": 75.0,
-            "closed_ts": 1769281298.0033576
+            "entry_price": 0.3448,
+            "quantity": 261.0,
+            "closed_ts": 1769320320.6597712
         },
         "FIGHTUSDT": {
             "local_stop": 0.02584,
@@ -108,6 +106,22 @@
             "side": "SELL",
             "entry_price": 0.025544,
             "quantity": 1232.0
+        },
+        "DUSKUSDT": {
+            "open_ts": 1769317041.3133068,
+            "symbol": "DUSKUSDT",
+            "side": "SELL",
+            "entry_price": 0.18561,
+            "quantity": 166.0,
+            "update_ts": 1769317964.8561277
+        },
+        "NOMUSDT": {
+            "open_ts": 1769320428.235872,
+            "symbol": "NOMUSDT",
+            "side": "BUY",
+            "entry_price": 0.015035,
+            "quantity": 2338.0,
+            "update_ts": 1769321928.5922723
         }
     }
 }

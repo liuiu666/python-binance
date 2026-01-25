@@ -1,12 +1,7 @@
-import requests
-from binance.client import Client
-from binance.enums import *
-from binance.exceptions import BinanceAPIException
 import os
 import time
-import hashlib
-import hmac
-from urllib.parse import urlencode
+from binance.client import Client
+from binance.enums import *
 from dotenv import load_dotenv
 
 # 加载环境变量
@@ -39,8 +34,6 @@ class BinanceClient:
         # 初始化币安客户端
         try:
             self._init_client()
-            self._algo_disabled_until_ts = 0.0
-            self._last_algo_warning_ts = 0.0
         except Exception as e:
             print(f">>> [System] 致命错误: 无法连接币安 API (Timeout/Proxy Error)")
             print(f"    详情: {e}")
@@ -80,20 +73,6 @@ class BinanceClient:
                     continue
                 # 如果不是连接错误，或者是最后一次重试，则抛出
                 raise e
-
-
-
-    def is_algo_available(self):
-        return time.time() >= self._algo_disabled_until_ts
-
-    def _disable_algo_temporarily(self, seconds=300):
-        self._algo_disabled_until_ts = max(self._algo_disabled_until_ts, time.time() + seconds)
-
-    def _warn_once(self, msg, min_interval_seconds=60):
-        now = time.time()
-        if now - self._last_algo_warning_ts >= min_interval_seconds:
-            print(msg)
-            self._last_algo_warning_ts = now
 
     def get_account_info(self):
         """
@@ -461,24 +440,14 @@ class BinanceClient:
                 
         except Exception as e:
             # 忽略 -4120 (Order type not supported) 和 -4136 (Target strategy invalid) 错误
-            # 这些错误通常表示交易所不支持此类止损单 (不管是 STOP_MARKET 还是 STOP)
-            error_code = 0
-            if hasattr(e, 'code'):
-                error_code = int(e.code)
+            error_code = getattr(e, 'code', 0)
             
-            if error_code in [-4120, -4136]:
-                # 用户要求完全忽略此错误 (不抛出异常)，但为了排查问题，打印一条温和的提示
-                if self.debug: # 只在 debug 模式下打印
-                    msg = getattr(e, 'message', str(e))
-                    print(f"   [API信息] 该订单类型被交易所拒绝 (Code {error_code}): {msg}，将尝试备用方案。")
+            if int(error_code) in [-4120, -4136]:
+                if self.debug:
+                    print(f"   [API信息] 订单类型被拒绝 (Code {error_code})，尝试备用方案")
                 return None
 
             print(f"下单失败: {symbol} - {str(e)}")
-            
-            if hasattr(e, 'message'):
-                print(f"   Error Message: {e.message}")
-            if hasattr(e, 'code'):
-                print(f"   Error Code: {e.code}")
             return None
 
 
@@ -493,6 +462,7 @@ class BinanceClient:
         except Exception as e:
             print(f"获取 24h Ticker 失败: {str(e)}")
             return []
+
 
     def get_symbol_ticker(self, symbol):
         """

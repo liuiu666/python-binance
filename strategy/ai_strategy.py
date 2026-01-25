@@ -7,13 +7,14 @@ class AIStrategy:
         self.llm = LLMClient()
         self.client = client or BinanceClient()
 
-    def analyze(self, df, symbol, trend_bias=None, df_larger=None):
+    def analyze(self, df, symbol, trend_bias=None, df_larger=None, df_1h=None):
         """
         使用大模型分析市场数据并生成信号
         :param df: 包含技术指标的 DataFrame (1m)
         :param symbol: 交易对名称
         :param trend_bias: 趋势偏向
-        :param df_larger: 更大周期的 DataFrame (如 5m 或 15m)
+        :param df_larger: 更大周期的 DataFrame (如 5m)
+        :param df_1h: 1小时周期的 DataFrame (用于稳健止损)
         :return: (signal, info)
         """
         if df is None or len(df) < 20:
@@ -31,6 +32,19 @@ class AIStrategy:
                 "ma20": float(curr_large.get('MA20', 0) or 0),
                 "rsi": float(curr_large.get('RSI', 50) or 50),
                 "trend": "看多" if float(curr_large.get('MA5', 0) or 0) > float(curr_large.get('MA20', 0) or 0) else "看空"
+            }
+            
+        # 获取 1小时周期数据 (用于关键支撑压力位)
+        h1_info = {}
+        if df_1h is not None and not df_1h.empty:
+            curr_1h = df_1h.iloc[-1]
+            h1_info = {
+                "ma5": float(curr_1h.get('MA5', 0) or 0),
+                "ma20": float(curr_1h.get('MA20', 0) or 0),
+                "rsi": float(curr_1h.get('RSI', 50) or 50),
+                "boll_upper": float(curr_1h.get('BOLL_UPPER', 0) or 0),
+                "boll_lower": float(curr_1h.get('BOLL_LOWER', 0) or 0),
+                "trend": "看多" if float(curr_1h.get('MA5', 0) or 0) > float(curr_1h.get('MA20', 0) or 0) else "看空"
             }
 
         price = float(current['收盘价'])
@@ -190,6 +204,7 @@ class AIStrategy:
             "boll_lower": current.get('BOLL_LOWER', 0),
             "ma_status": "看多" if current.get('MA5', 0) > current.get('MA20', 0) else "看空",
             "larger_timeframe_trend": larger_info,
+            "h1_timeframe_trend": h1_info, # [新增] 1h 趋势信息
             "recent_klines": recent_klines
         }
 
@@ -263,11 +278,12 @@ class AIStrategy:
         if signal_raw:
             signal_raw = str(signal_raw).upper()
             if signal_raw in ['BUY', 'SELL']:
-                if confidence >= 75:
+                # [强化] 提高开仓信心阈值到 85
+                if confidence >= 85:
                     signal = signal_raw
                 else:
                     zh = "做多" if signal_raw == 'BUY' else "做空"
-                    reason = f"信心不足（{confidence} < 75），忽略信号：{zh}"
+                    reason = f"信心不足（{confidence} < 85），忽略信号：{zh}"
                     signal_raw = None
 
         if signal and trend_bias in ['BUY_ONLY', 'SELL_ONLY']:
@@ -324,12 +340,13 @@ class AIStrategy:
 
         return signal, info
 
-    def audit_position(self, position, df, open_orders=None):
+    def audit_position(self, position, df, open_orders=None, df_1h=None):
         """
         评估当前持仓
         :param position: 持仓字典
         :param df: K线数据
         :param open_orders: 当前挂单列表
+        :param df_1h: 1小时周期 K线数据
         :return: (action, info) action: 'HOLD' 或 'CLOSE'
         """
         if df is None or len(df) < 5:
@@ -351,6 +368,19 @@ class AIStrategy:
         cmf = float(current.get('CMF', 0) or 0)
         net_flow_ma = float(current.get('Net_Flow_MA5', 0) or 0)
 
+        # 获取 1h 趋势信息
+        h1_info = {}
+        if df_1h is not None and not df_1h.empty:
+            curr_1h = df_1h.iloc[-1]
+            h1_info = {
+                "ma5": float(curr_1h.get('MA5', 0) or 0),
+                "ma20": float(curr_1h.get('MA20', 0) or 0),
+                "rsi": float(curr_1h.get('RSI', 50) or 50),
+                "boll_upper": float(curr_1h.get('BOLL_UPPER', 0) or 0),
+                "boll_lower": float(curr_1h.get('BOLL_LOWER', 0) or 0),
+                "trend": "看多" if float(curr_1h.get('MA5', 0) or 0) > float(curr_1h.get('MA20', 0) or 0) else "看空"
+            }
+
         market_data = {
             "current_price": current['收盘价'],
             "atr": current.get('ATR', 0),
@@ -359,7 +389,8 @@ class AIStrategy:
             "net_flow_ma": net_flow_ma,
             "ma_status": "看多" if current.get('MA5', 0) > current.get('MA20', 0) else "看空",
             "money_flow": money_flow,
-            "open_orders": open_orders  # [新增] 传入挂单信息
+            "open_orders": open_orders,  # [新增] 传入挂单信息
+            "h1_timeframe_trend": h1_info # [新增] 1h 趋势信息
         }
         
         print(f">>>【智能策略】正在评估持仓 {position['symbol']} ...")
