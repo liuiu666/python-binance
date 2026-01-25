@@ -20,7 +20,6 @@ from dotenv import load_dotenv
 class Settings:
     binance_api_key: str | None
     binance_api_secret: str | None
-    binance_testnet: bool
     binance_futures_base_url: str | None
     http_proxy: str | None
     https_proxy: str | None
@@ -55,19 +54,12 @@ class Settings:
             value = value.strip()
             return value if value else None
 
-        def get_env_bool(name: str, default: bool = False) -> bool:
-            value = get_env(name)
-            if value is None:
-                return default
-            return value.lower() in {"1", "true", "yes", "on"}
-
         timeout = get_env("REQUEST_TIMEOUT_SEC")
         request_timeout = int(timeout) if timeout and timeout.isdigit() else 15
 
         return Settings(
             binance_api_key=get_env("BINANCE_API_KEY"),
             binance_api_secret=get_env("BINANCE_API_SECRET"),
-            binance_testnet=get_env_bool("BINANCE_TESTNET", default=False),
             binance_futures_base_url=get_env("BINANCE_FUTURES_BASE_URL"),
             http_proxy=get_env("HTTP_PROXY"),
             https_proxy=get_env("HTTPS_PROXY"),

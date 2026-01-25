@@ -142,17 +142,23 @@ class OrderExecutor:
         *,
         symbol: str,
         entry_side: str,
-        quantity: Decimal,
+        quantity: Decimal | None = None,
         stop_price: Decimal,
         trigger_type: str = "MARK_PRICE",
         position_side: str | None = None,
+        close_position: bool = False,
     ) -> StopResult:
         rules = self._ex.get_symbol_rules(symbol)
         close_side = _opposite_side(entry_side)
         sp = clamp_price(stop_price, rules.tick_size, rules.price_precision)
-        qty = clamp_qty(quantity, rules.step_size, rules.quantity_precision)
-        if qty <= 0:
-            raise RuntimeError("数量异常")
+        
+        qty = Decimal(0)
+        if not close_position:
+            if quantity is None:
+                raise ValueError("若不启用 close_position，必须提供 quantity")
+            qty = clamp_qty(quantity, rules.step_size, rules.quantity_precision)
+            if qty <= 0:
+                raise RuntimeError("数量异常")
 
         order_params: dict[str, Any] = {
             "symbol": symbol,
@@ -163,13 +169,21 @@ class OrderExecutor:
         }
 
         try:
-            resp = call_with_retry(
-                lambda: self._client.futures_create_order(
-                    **order_params,
-                    quantity=str(qty),
-                    reduceOnly=True,
+            if close_position:
+                 resp = call_with_retry(
+                    lambda: self._client.futures_create_order(
+                        **order_params,
+                        closePosition=True,
+                    )
                 )
-            )
+            else:
+                resp = call_with_retry(
+                    lambda: self._client.futures_create_order(
+                        **order_params,
+                        quantity=str(qty),
+                        reduceOnly=True,
+                    )
+                )
             stop_order_id = int(resp.get("orderId"))
             return StopResult(
                 symbol=symbol,
@@ -177,7 +191,7 @@ class OrderExecutor:
                 stop_order_id=stop_order_id,
                 stop_price=sp,
                 quantity=qty,
-                close_position=False,
+                close_position=close_position,
             )
         except BinanceAPIException as e:
             msg = str(getattr(e, "message", "")) or str(e)
@@ -245,17 +259,23 @@ class OrderExecutor:
         *,
         symbol: str,
         entry_side: str,
-        quantity: Decimal,
+        quantity: Decimal | None = None,
         take_profit_price: Decimal,
         trigger_type: str = "MARK_PRICE",
         position_side: str | None = None,
+        close_position: bool = False,
     ) -> TakeProfitResult:
         rules = self._ex.get_symbol_rules(symbol)
         close_side = _opposite_side(entry_side)
         tp = clamp_price(take_profit_price, rules.tick_size, rules.price_precision)
-        qty = clamp_qty(quantity, rules.step_size, rules.quantity_precision)
-        if qty <= 0:
-            raise RuntimeError("数量异常")
+        
+        qty = Decimal(0)
+        if not close_position:
+            if quantity is None:
+                 raise ValueError("若不启用 close_position，必须提供 quantity")
+            qty = clamp_qty(quantity, rules.step_size, rules.quantity_precision)
+            if qty <= 0:
+                raise RuntimeError("数量异常")
 
         order_params: dict[str, Any] = {
             "symbol": symbol,
@@ -266,13 +286,21 @@ class OrderExecutor:
         }
 
         try:
-            resp = call_with_retry(
-                lambda: self._client.futures_create_order(
-                    **order_params,
-                    quantity=str(qty),
-                    reduceOnly=True,
+            if close_position:
+                resp = call_with_retry(
+                    lambda: self._client.futures_create_order(
+                        **order_params,
+                        closePosition=True,
+                    )
                 )
-            )
+            else:
+                resp = call_with_retry(
+                    lambda: self._client.futures_create_order(
+                        **order_params,
+                        quantity=str(qty),
+                        reduceOnly=True,
+                    )
+                )
             tp_order_id = int(resp.get("orderId"))
             return TakeProfitResult(
                 symbol=symbol,
@@ -280,7 +308,7 @@ class OrderExecutor:
                 tp_order_id=tp_order_id,
                 tp_price=tp,
                 quantity=qty,
-                close_position=False,
+                close_position=close_position,
             )
         except BinanceAPIException as e:
             msg = str(getattr(e, "message", "")) or str(e)

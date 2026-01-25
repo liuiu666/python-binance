@@ -34,16 +34,11 @@ def create_client(settings: Settings) -> Client:
         api_key=settings.binance_api_key,
         api_secret=settings.binance_api_secret,
         requests_params=requests_params,
-        testnet=settings.binance_testnet,
+        testnet=False,
     )
     if settings.binance_futures_base_url:
         try:
             client.FUTURES_URL = settings.binance_futures_base_url.rstrip("/")
-        except Exception:
-            pass
-    elif settings.binance_testnet:
-        try:
-            client.FUTURES_URL = "https://testnet.binancefuture.com/fapi"
         except Exception:
             pass
     return client
