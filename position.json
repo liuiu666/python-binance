@@ -1,52 +1,49 @@
 {
     "current_position": {
-        "symbol": "SPACEUSDT",
+        "symbol": "ENSOUSDT",
         "side": "BUY",
-        "entry_price": 0.017447,
-        "quantity": 2923.0,
-        "open_ts": 1769258393.7451544,
-        "update_ts": 1769270683.728951,
-        "local_stop": 0.01745,
+        "entry_price": 2.0531,
+        "quantity": 16.6,
+        "open_ts": 1769251639.4289718,
+        "update_ts": 1769306054.6750076,
+        "local_stop": 2.016,
         "local_stop_side": "BUY",
-        "closed_ts": 1769267795.979021
+        "closed_ts": 1769282496.1054745
     },
     "daily_stats": {
-        "date": "2026-01-24",
+        "date": "2026-01-25",
         "initial_balance": 0.0,
-        "realized_pnl": -0.938253690211399,
-        "trade_count": 64
+        "realized_pnl": -0.17096541999999992,
+        "trade_count": 12
     },
     "cooldowns": {
-        "ACUUSDT": 1769270537.771715,
-        "ENSOUSDT": 1769267852.8706932,
-        "RIVERUSDT": 1769270555.5189674,
-        "SPACEUSDT": 1769267795.9790246,
-        "INUSDT": 1769227095.6571825,
-        "KAIAUSDT": 1769265431.0069742,
-        "SOMIUSDT": 1769265716.1190116
+        "ACUUSDT": 1769303057.6501386,
+        "ENSOUSDT": 1769305277.953515,
+        "RIVERUSDT": 1769305843.242407,
+        "SOMIUSDT": 1769305830.0584383
     },
     "positions": {
         "ACUUSDT": {
             "symbol": "ACUUSDT",
             "side": "BUY",
-            "entry_price": 0.21513,
-            "quantity": 247.0,
+            "entry_price": 0.20571,
+            "quantity": 431.0,
             "open_ts": 1769253361.4146762,
-            "update_ts": 1769265640.1135263,
+            "update_ts": 1769295043.1579258,
             "local_stop": null,
             "local_stop_side": null,
-            "closed_ts": 1769265640.1149848
+            "closed_ts": 1769295043.1594524
         },
         "ENSOUSDT": {
             "symbol": "ENSOUSDT",
-            "side": "SELL",
-            "entry_price": 1.3647,
-            "quantity": 47.2,
+            "side": "BUY",
+            "entry_price": 2.0531,
+            "quantity": 16.6,
             "open_ts": 1769251639.4289718,
-            "update_ts": 1769270233.4931366,
-            "local_stop": 1.3625,
-            "local_stop_side": "SELL",
-            "closed_ts": 1769251739.4791873
+            "update_ts": 1769306054.6750076,
+            "local_stop": 2.016,
+            "local_stop_side": "BUY",
+            "closed_ts": 1769282496.1054745
         },
         "INUSDT": {
             "symbol": "INUSDT",
@@ -61,24 +58,25 @@
         },
         "SPACEUSDT": {
             "symbol": "SPACEUSDT",
-            "side": "BUY",
-            "entry_price": 0.017447,
-            "quantity": 2923.0,
+            "side": "SELL",
+            "entry_price": 0.016732,
+            "quantity": 4728.0,
             "open_ts": 1769258393.7451544,
-            "update_ts": 1769270683.728951,
-            "local_stop": 0.01745,
-            "local_stop_side": "BUY",
+            "update_ts": 1769283003.7179403,
+            "local_stop": 0.0168,
+            "local_stop_side": "SELL",
             "closed_ts": 1769267795.979021
         },
         "RIVERUSDT": {
             "symbol": "RIVERUSDT",
             "side": "BUY",
-            "entry_price": 52.273,
-            "quantity": 1.4,
+            "entry_price": 59.266,
+            "quantity": 1.2,
             "open_ts": 1769250668.207181,
-            "update_ts": 1769251552.0159113,
-            "local_stop": null,
-            "local_stop_side": null
+            "update_ts": 1769305764.6653762,
+            "local_stop": 58.5,
+            "local_stop_side": "BUY",
+            "closed_ts": 1769302729.5014417
         },
         "KAIAUSDT": {
             "symbol": "KAIAUSDT",
@@ -91,14 +89,25 @@
             "local_stop_side": null
         },
         "SOMIUSDT": {
-            "local_stop": 0.315,
+            "local_stop": 0.3514,
             "local_stop_side": "SELL",
             "symbol": "SOMIUSDT",
-            "update_ts": 1769268261.2799737,
+            "update_ts": 1769305128.6972363,
             "open_ts": 1769261028.2480159,
             "side": "SELL",
-            "entry_price": 0.3086,
-            "quantity": 139.0
+            "entry_price": 0.3579,
+            "quantity": 75.0,
+            "closed_ts": 1769281298.0033576
+        },
+        "FIGHTUSDT": {
+            "local_stop": 0.02584,
+            "local_stop_side": "SELL",
+            "symbol": "FIGHTUSDT",
+            "update_ts": 1769289827.6928186,
+            "open_ts": 1769287797.574375,
+            "side": "SELL",
+            "entry_price": 0.025544,
+            "quantity": 1232.0
         }
     }
 }

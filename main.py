@@ -169,12 +169,9 @@ def run_bot():
                             elif adj_type in ['MOVE_SL', 'SET_SL'] and adj_val:
                                 try:
                                     new_sl = float(adj_val)
-                                    if side == 'BUY' and current_price > entry_price and new_sl < entry_price:
-                                        print(f"       止损低于开仓价，已修正为保本价: {entry_price}")
-                                        new_sl = entry_price
-                                    if side == 'SELL' and current_price < entry_price and new_sl > entry_price:
-                                        print(f"       止损高于开仓价，已修正为保本价: {entry_price}")
-                                        new_sl = entry_price
+                                    # [修改] 移除强制保本逻辑，允许 AI 根据支撑压力位设置止损 (哪怕低于开仓价)
+                                    # 用户要求: "这个去掉，用AI动态计算得出，不要写死"
+                                    
                                     if side == 'BUY' and new_sl >= current_price:
                                         print(f"       止损触发价不合理，已忽略: {new_sl}")
                                     elif side == 'SELL' and new_sl <= current_price:
@@ -272,7 +269,14 @@ def run_bot():
                                     print(f"   {symbol} 已平仓")
                             else:
                                 # 移动止损 (仅在未做其他操作时执行)
-                                trader.check_trailing_stop(p, current_price, atr=current_atr)
+                                # [新增] 传入 AI 计算的建议止损价
+                                ai_sl = ai_info.get('stop_loss')
+                                if ai_sl:
+                                    try:
+                                        ai_sl = float(ai_sl)
+                                    except:
+                                        ai_sl = None
+                                trader.check_trailing_stop(p, current_price, atr=current_atr, ai_sl=ai_sl)
                 
                 print(">>> [策略限制] 持仓中，暂停开新仓")
                 time.sleep(60)
@@ -385,7 +389,15 @@ def run_bot():
             
             # 只有当 AI 明确给出信号时才使用，否则回退到规则策略
             if not signal:
+                 # [Fix] 保留 AI 分析结果中的止损建议，防止回退到规则策略时丢失 AI 的风控智慧
+                 ai_stop_loss = info.get('stop_loss')
+                 
                  signal, info = analyzer.check_trend_following(df_1m_analyzed, trend_bias=trend_bias)
+                 
+                 # 如果规则策略触发了信号，尝试回填 AI 的止损
+                 if signal and ai_stop_loss:
+                     info['stop_loss'] = ai_stop_loss
+                     print(f"   【策略融合】使用规则信号 + AI 建议止损: {ai_stop_loss}")
             
             if signal:
                 signal_text = "做多" if signal == 'BUY' else "做空"
@@ -433,11 +445,15 @@ def run_bot():
                     if fallback_atr <= 0:
                         fallback_atr = fallback_price * 0.01 # 默认 1% 波动
                     
+                    # [调整] 放宽默认止损到 5.0 ATR (原 3.0)，避免太灵敏被震出
+                    # 后续交给 trader 的 check_trailing_stop 去动态收紧
+                    fallback_multiplier = 5.0
+                    
                     if signal == 'BUY':
-                        stop_loss = fallback_price - (3.0 * fallback_atr)
+                        stop_loss = fallback_price - (fallback_multiplier * fallback_atr)
                     else:
-                        stop_loss = fallback_price + (3.0 * fallback_atr)
-                    print(f"   【风控修正】缺失止损价，已自动生成兜底止损: {stop_loss:.4f}")
+                        stop_loss = fallback_price + (fallback_multiplier * fallback_atr)
+                    print(f"   【风控修正】缺失止损价，已自动生成宽幅兜底止损 ({fallback_multiplier} ATR): {stop_loss:.4f}")
 
                 order = trader.execute_trade(
                     symbol=target_symbol, 

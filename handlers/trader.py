@@ -188,29 +188,43 @@ class TradeExecutor:
                         print(f"   [Debug] 方案5 (STOP_MARKET Protect) 失败: {e}")
                         pass
 
-                # 方案 6: STOP_MARKET + reduceOnly (无 priceProtect, 无 quantity) - 市价止损
+                # 方案 6: STOP_MARKET + reduceOnly (无 priceProtect) - 强制带上 quantity
                 # 如果上述所有带 quantity 的方案都失败 (可能是 quantity 精度问题或 reduceOnly 限制)，
-                # 尝试最简单的 STOP_MARKET + closePosition=False + reduceOnly=True (不带 quantity, 某些交易所版本可能允许自动推断)
-                # 或者如果支持 STOP_MARKET，再试一次带 quantity 但不带 priceProtect
-                # [增强] 依次尝试 MARK_PRICE (标记价格) 和 CONTRACT_PRICE (最新成交价)
-                for wt in ['MARK_PRICE', 'CONTRACT_PRICE']:
+                # 尝试最简单的 STOP_MARKET + reduceOnly=True
+                # [Fix] 非全平模式下，STOP 订单必须带 quantity。如果 quantity 为 None，尝试获取当前持仓
+                if quantity is None:
                     try:
-                        order = self.client.place_order(
-                            symbol=symbol,
-                            side=close_side,
-                            order_type='STOP_MARKET',
-                            stop_price=stop_price,
-                            reduce_only=True,
-                            quantity=quantity,
-                            price_protect=False, # 显式关闭
-                            working_type=wt
-                        )
-                        if order:
-                            print(f"   [成功] 交易所止损单已设置 (STOP_MARKET reduceOnly NoProtect {wt}, 触发价: {stop_price})")
-                            return True
-                    except Exception as e:
-                        print(f"   [Debug] 方案6 (STOP_MARKET NoProtect {wt}) 失败: {e}")
+                        positions = self.client.get_current_positions()
+                        target = next((p for p in positions if p['symbol'] == symbol), None)
+                        if target:
+                            quantity = abs(float(target['amount']))
+                            if filters:
+                                quantity = self._quantize_quantity(quantity, filters)
+                    except:
                         pass
+                
+                if quantity and quantity > 0:
+                    # [增强] 依次尝试 MARK_PRICE (标记价格) 和 CONTRACT_PRICE (最新成交价)
+                    for wt in ['MARK_PRICE', 'CONTRACT_PRICE']:
+                        try:
+                            order = self.client.place_order(
+                                symbol=symbol,
+                                side=close_side,
+                                order_type='STOP_MARKET',
+                                stop_price=stop_price,
+                                reduce_only=True,
+                                quantity=quantity,
+                                price_protect=False, # 显式关闭
+                                working_type=wt
+                            )
+                            if order:
+                                print(f"   [成功] 交易所止损单已设置 (STOP_MARKET reduceOnly NoProtect {wt}, 触发价: {stop_price})")
+                                return True
+                        except Exception as e:
+                            print(f"   [Debug] 方案6 (STOP_MARKET NoProtect {wt}) 失败: {e}")
+                            pass
+                else:
+                    print(f"   [Debug] 方案6 跳过: 无法获取持仓数量，无法设置 STOP_MARKET")
 
                 # 方案 7: TRAILING_STOP_MARKET (移动止损单)
                 # 如果上述普通止损都失败，尝试使用交易所自带的移动止损单作为最后尝试
@@ -601,6 +615,7 @@ class TradeExecutor:
 
             # 2. 重新设置止损
             # [关键] 必须先获取持仓数量，以便支持降级方案 (reduceOnly + quantity)
+            # 如果是 update_stop_loss，我们必须确保获取到 quantity，因为非全平模式下，STOP 订单需要数量
             quantity = None
             try:
                 positions = self.client.get_current_positions()
@@ -610,6 +625,11 @@ class TradeExecutor:
                     filters = self.client.get_symbol_filters(symbol)
                     if filters:
                         quantity = self._quantize_quantity(quantity, filters)
+                else:
+                    # 如果获取不到持仓，可能是 API 延迟，但也可能是真的没持仓
+                    # 此时如果不传 quantity，_place_stop_protection 会尝试 closePosition=True 或自行获取
+                    # 但为了保险，我们打印个警告
+                    print(f"   [警告] 更新止损时未获取到持仓数量，将尝试无数量模式")
             except Exception:
                 pass
 
@@ -749,12 +769,10 @@ class TradeExecutor:
             print(f"   强平失败: {e}")
             return False
 
-    def check_trailing_stop(self, position, current_price, atr=0):
+    def check_trailing_stop(self, position, current_price, atr=0, ai_sl=None):
         """
         检查并更新移动止损
-        策略:
-        1. 盈利 > 1.5 倍波动率：将止损上移到开仓价（保本）
-        2. 盈利 > 3.0 倍波动率：将止损上移到更接近当前价（锁定利润）
+        :param ai_sl: AI 计算出的建议止损价 (可选)
         """
         symbol = position['symbol']
         entry_price = position['entry_price']
@@ -788,13 +806,19 @@ class TradeExecutor:
             
             # 如果当前没有本地止损，计算初始止损
             if current_sl is None:
-                print(f">>>【移动止损】{symbol} 未检测到本地止损，正在计算初始值...")
-                if side == 'BUY':
-                    current_sl = entry_price - (2 * atr)
-                    if current_sl >= current_price: current_sl = current_price - (2 * atr)
+                # [关键修复] 如果传入了 AI 建议的止损，优先使用 AI 止损作为初始止损
+                if ai_sl and ai_sl > 0:
+                    print(f">>>【移动止损】{symbol} 初始止损采用 AI 建议值: {ai_sl}")
+                    current_sl = ai_sl
                 else:
-                    current_sl = entry_price + (2 * atr)
-                    if current_sl <= current_price: current_sl = current_price + (2 * atr)
+                    print(f">>>【移动止损】{symbol} 未检测到本地止损，正在计算初始值 (3.0 ATR)...")
+                    # [调整] 初始默认止损放宽到 3.0 ATR (原 2.0)，避免开仓即平仓
+                    if side == 'BUY':
+                        current_sl = entry_price - (3.0 * atr)
+                        if current_sl >= current_price: current_sl = current_price - (3.0 * atr)
+                    else:
+                        current_sl = entry_price + (3.0 * atr)
+                        if current_sl <= current_price: current_sl = current_price + (3.0 * atr)
                 
                 # 立即设置初始止损
                 self._place_stop_protection(symbol, side, current_sl)
@@ -802,12 +826,34 @@ class TradeExecutor:
 
             action_desc = ""
             
-            # 混合移动止损逻辑：波动率跟踪 + 收益率锁定
+            # 混合移动止损逻辑：波动率跟踪 + 收益率锁定 + [新增] AI 支撑阻力位
             roi_pct = (current_price - entry_price) / entry_price if side == 'BUY' else (entry_price - current_price) / entry_price
             
             # 临时变量，用于比较最优止损位
             candidate_sl = current_sl 
             
+            # [AI 融合] 如果 AI 提供了基于 K 线支撑的建议止损，且该止损位比当前更优，则优先采用
+            used_ai_sl = False
+            if ai_sl and ai_sl > 0:
+                # 检查 AI 止损的合理性
+                is_valid_ai = False
+                if side == 'BUY':
+                    # AI 止损必须低于当前价
+                    if ai_sl < current_price:
+                        # 如果 AI 止损比当前止损更高（更紧），或者当前还没有止损，则采用
+                        if ai_sl > candidate_sl:
+                            candidate_sl = ai_sl
+                            action_desc = "触发 AI 动态止损 (支撑位)"
+                            used_ai_sl = True
+                else:
+                    # AI 止损必须高于当前价
+                    if ai_sl > current_price:
+                        # 如果 AI 止损比当前止损更低（更紧），则采用
+                        if ai_sl < candidate_sl:
+                            candidate_sl = ai_sl
+                            action_desc = "触发 AI 动态止损 (压力位)"
+                            used_ai_sl = True
+
             if side == 'BUY':
                 # 1. 基础保本：盈利 > 3% (原 2%) 且 止损还未到开仓价，立刻提到保本
                 # [策略调整] 放宽保本门槛，给小波段更多呼吸空间，防止被小回调打掉
@@ -815,21 +861,22 @@ class TradeExecutor:
                     candidate_sl = entry_price * 1.002 # 保本 + 手续费
                     action_desc = "触发保本止损"
                 
-                # 2. 趋势跟踪 (Trend Runner)：
-                # [策略调整] 将 ATR 倍数维持在 4.5，但门槛提高
-                atr_trail = current_price - (4.5 * atr) 
-                
-                # [新增] 温和移动止损：在 ROI 3%~8% 区间，使用 4.0 ATR 缓慢跟进
-                if 0.03 < roi_pct <= 0.08:
-                     atr_moderate = current_price - (4.0 * atr)
-                     if atr_moderate > candidate_sl:
-                         candidate_sl = atr_moderate
-                         action_desc = "触发温和移动止损 (4.0 ATR)"
+                # 2. 趋势跟踪 (仅当未采用 AI 止损时执行，避免机械逻辑覆盖 AI 的智能判断)
+                if not used_ai_sl:
+                    # [策略调整] 将 ATR 倍数维持在 4.5，但门槛提高
+                    atr_trail = current_price - (4.5 * atr) 
+                    
+                    # [新增] 温和移动止损：在 ROI 3%~8% 区间，使用 4.0 ATR 缓慢跟进
+                    if 0.03 < roi_pct <= 0.08:
+                        atr_moderate = current_price - (4.0 * atr)
+                        if atr_moderate > candidate_sl:
+                            candidate_sl = atr_moderate
+                            action_desc = "触发温和移动止损 (4.0 ATR)"
 
-                # 只有当盈利 > 8% (原 5%) 时才启用宽幅移动，给初期波动留空间
-                if roi_pct > 0.08 and atr_trail > candidate_sl: 
-                    candidate_sl = atr_trail
-                    action_desc = "触发宽幅移动止损 (4.5 ATR)"
+                    # 只有当盈利 > 8% (原 5%) 时才启用宽幅移动，给初期波动留空间
+                    if roi_pct > 0.08 and atr_trail > candidate_sl: 
+                        candidate_sl = atr_trail
+                        action_desc = "触发宽幅移动止损 (4.5 ATR)"
                 
                 # 3. 利润回撤保护 (延迟启动)：
                 # [策略调整] 保持 > 20% 才开始锁利润
@@ -853,22 +900,23 @@ class TradeExecutor:
             else:
                 # 1. 基础保本
                 if roi_pct > 0.03 and candidate_sl > entry_price:
-                    candidate_sl = entry_price * 0.998
+                    candidate_sl = entry_price * 0.998 # 保本 + 手续费 (对于空单，价格要低于开仓价)
                     action_desc = "触发保本止损"
                 
-                # 2. 趋势跟踪
-                atr_trail = current_price + (4.5 * atr)
-                
-                # [新增] 温和移动止损
-                if 0.03 < roi_pct <= 0.08:
-                     atr_moderate = current_price + (4.0 * atr)
-                     if atr_moderate < candidate_sl:
-                         candidate_sl = atr_moderate
-                         action_desc = "触发温和移动止损 (4.0 ATR)"
-                         
-                if roi_pct > 0.08 and atr_trail < candidate_sl:
-                    candidate_sl = atr_trail
-                    action_desc = "触发宽幅移动止损 (4.5 ATR)"
+                # 2. 趋势跟踪 (仅当未采用 AI 止损时执行)
+                if not used_ai_sl:
+                    atr_trail = current_price + (4.5 * atr)
+                    
+                    # [新增] 温和移动止损
+                    if 0.03 < roi_pct <= 0.08:
+                        atr_moderate = current_price + (4.0 * atr)
+                        if atr_moderate < candidate_sl:
+                            candidate_sl = atr_moderate
+                            action_desc = "触发温和移动止损 (4.0 ATR)"
+                            
+                    if roi_pct > 0.08 and atr_trail < candidate_sl:
+                        candidate_sl = atr_trail
+                        action_desc = "触发宽幅移动止损 (4.5 ATR)"
                     
                 # 3. 利润回撤保护
                 if roi_pct > 0.20:

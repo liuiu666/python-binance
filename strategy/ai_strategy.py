@@ -436,7 +436,8 @@ class AIStrategy:
             "reason": reason,
             "confidence": confidence,
             "adjust_suggestion": llm_result.get('adjust_suggestion'), # 保留旧字段兼容
-            "adjustment": llm_result.get('adjustment') # [新增] 结构化调整建议
+            "adjustment": llm_result.get('adjustment'), # [新增] 结构化调整建议
+            "stop_loss": llm_result.get('suggested_stop_loss') # [新增] 提取建议止损价
         }
         
         return action, info
