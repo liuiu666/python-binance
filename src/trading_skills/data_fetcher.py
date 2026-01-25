@@ -104,6 +104,19 @@ class FuturesDataFetcher:
             return None
         return _to_float(data.get("openInterest"))
 
+    def fetch_open_interest_hist(self, symbol: str, period: str = "5m", limit: int = 30) -> pd.DataFrame:
+        """获取持仓量历史数据 (用于判断OI趋势)"""
+        raw = call_with_retry(
+            lambda: self._client.futures_open_interest_hist(symbol=symbol, period=period, limit=limit)
+        )
+        df = pd.DataFrame(raw)
+        if df.empty:
+            return df
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+        df["sumOpenInterest"] = pd.to_numeric(df["sumOpenInterest"], errors="coerce")
+        df["sumOpenInterestValue"] = pd.to_numeric(df["sumOpenInterestValue"], errors="coerce")
+        return df
+
     def fetch_funding_rate(self, symbol: str, limit: int = 100) -> pd.DataFrame:
         raw = call_with_retry(lambda: self._client.futures_funding_rate(symbol=symbol, limit=limit))
         df = pd.DataFrame(raw)
