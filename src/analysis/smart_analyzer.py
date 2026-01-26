@@ -96,8 +96,8 @@ def analyze_snapshot_mode(data):
     result['score'] = score
     result['direction_score'] = direction_score
     
-    # 判定通过标准: 偏离中性区间 [40, 60]
-    if score >= 65 or score <= 35:
+    # 判定通过标准: 只要评分达到40分（即有一定信号或未被严重扣分）即通过
+    if score >= 40:
         result['passed_screening'] = True
         
     return result

@@ -17,7 +17,7 @@ from binance.client import Client
 
 from .binance_client import call_with_retry
 from .exchange_info import FuturesExchangeInfo
-from .execution_utils import clamp_qty
+from .execution_utils import clamp_qty, clamp_price
 from .order_executor import OrderExecutor, StopResult, TakeProfitResult
 
 
@@ -82,6 +82,127 @@ class FuturesTrader:
         raw = self._request_futures_algo("delete", "algoOpenOrders", {"symbol": symbol})
         return raw if isinstance(raw, list) else []
 
+    def get_position(self, symbol: str) -> dict[str, Any] | None:
+        """获取当前持仓信息"""
+        try:
+            positions = call_with_retry(lambda: self._client.futures_position_information(symbol=symbol))
+            # futures_position_information returns a list, usually one item if symbol is specified
+            if isinstance(positions, list) and len(positions) > 0:
+                # Find the one with non-zero amount if multiple (e.g. hedge mode), or just the first
+                for p in positions:
+                    amt = float(p.get('positionAmt', 0))
+                    if abs(amt) > 0:
+                        return p
+                # If all zero, return the first one (empty position) or None?
+                # Let's return the first one so we can see it's zero
+                return positions[0]
+            return None
+        except Exception:
+            return None
+
+    def get_active_positions(self) -> list[dict[str, Any]]:
+        """获取所有当前活跃持仓（持仓量不为0）"""
+        try:
+            positions = call_with_retry(lambda: self._client.futures_position_information())
+            active = []
+            if isinstance(positions, list):
+                for p in positions:
+                    amt = float(p.get('positionAmt', 0))
+                    if abs(amt) > 0:
+                        active.append(p)
+            return active
+        except Exception:
+            return []
+
+    def close_position(self, symbol: str) -> dict[str, Any]:
+        """市价全平当前持仓"""
+        pos = self.get_position(symbol)
+        if not pos:
+            return {}
+            
+        amt = Decimal(str(pos.get('positionAmt', 0)))
+        if amt == 0:
+            return {}
+            
+        side = "SELL" if amt > 0 else "BUY"
+        qty = abs(amt)
+        
+        # Cancel all open orders first
+        self.cancel_all_open_orders(symbol)
+        
+        # Place market order to close
+        resp = call_with_retry(
+            lambda: self._client.futures_create_order(
+                symbol=symbol,
+                side=side,
+                type="MARKET",
+                quantity=str(qty),
+                reduceOnly=True
+            )
+        )
+        return resp if isinstance(resp, dict) else {}
+
+    def reduce_position(self, symbol: str, quantity: Decimal) -> dict[str, Any]:
+        """减仓指定数量 (市价单)"""
+        pos = self.get_position(symbol)
+        if not pos:
+            return {}
+        amt = Decimal(str(pos.get('positionAmt', 0)))
+        if amt == 0:
+            return {}
+            
+        side = "SELL" if amt > 0 else "BUY"
+        
+        # Ensure quantity is valid
+        rules = self._ex.get_symbol_rules(symbol)
+        qty = clamp_qty(quantity, rules.step_size, rules.quantity_precision)
+        
+        # Cannot reduce more than current position
+        if qty > abs(amt):
+            qty = abs(amt)
+        
+        if qty <= 0:
+             return {}
+
+        resp = call_with_retry(
+            lambda: self._client.futures_create_order(
+                symbol=symbol,
+                side=side,
+                type="MARKET",
+                quantity=str(qty),
+                reduceOnly=True
+            )
+        )
+        return resp if isinstance(resp, dict) else {}
+
+    def place_limit_reduce_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: Decimal,
+        price: Decimal
+    ) -> dict[str, Any]:
+        """放置限价减仓单 (Reduce Only)"""
+        rules = self._ex.get_symbol_rules(symbol)
+        qty = clamp_qty(quantity, rules.step_size, rules.quantity_precision)
+        p = clamp_price(price, rules.tick_size, rules.price_precision)
+        
+        if qty <= 0 or p <= 0:
+            return {}
+
+        resp = call_with_retry(
+            lambda: self._client.futures_create_order(
+                symbol=symbol,
+                side=side,
+                type="LIMIT",
+                timeInForce="GTC",
+                quantity=str(qty),
+                price=str(p),
+                reduceOnly=True
+            )
+        )
+        return resp if isinstance(resp, dict) else {}
+
     def place_market_entry_by_usdt(
         self,
         *,
@@ -133,10 +254,11 @@ class FuturesTrader:
         *,
         symbol: str,
         entry_side: str,
-        quantity: Decimal,
+        quantity: Decimal | None = None,
         stop_price: Decimal,
         trigger_type: str = "MARK_PRICE",
         position_side: str | None = None,
+        close_position: bool = False,
     ) -> StopResult:
         return self.executor.place_stop_loss_market(
             symbol=symbol,
@@ -145,6 +267,7 @@ class FuturesTrader:
             stop_price=stop_price,
             trigger_type=trigger_type,
             position_side=position_side,
+            close_position=close_position,
         )
 
     def place_take_profit_market(
@@ -152,10 +275,11 @@ class FuturesTrader:
         *,
         symbol: str,
         entry_side: str,
-        quantity: Decimal,
+        quantity: Decimal | None = None,
         take_profit_price: Decimal,
         trigger_type: str = "MARK_PRICE",
         position_side: str | None = None,
+        close_position: bool = False,
     ) -> TakeProfitResult:
         return self.executor.place_take_profit_market(
             symbol=symbol,
@@ -164,4 +288,5 @@ class FuturesTrader:
             take_profit_price=take_profit_price,
             trigger_type=trigger_type,
             position_side=position_side,
+            close_position=close_position,
         )

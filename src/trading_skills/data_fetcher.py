@@ -197,26 +197,29 @@ class FuturesDataFetcher:
 
         Path(orderbook_path).write_text(json.dumps(snapshot.order_book, ensure_ascii=False), encoding="utf-8")
         Path(premium_path).write_text(json.dumps(snapshot.premium_index, ensure_ascii=False), encoding="utf-8")
-        Path(meta_path).write_text(
-            json.dumps(
-                {
-                    "symbol": snapshot.symbol,
-                    "interval": snapshot.interval,
-                    "open_interest": snapshot.open_interest,
-                    "saved_at_utc": ts,
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
+        return {"out_dir": out_dir}
 
-        return {
-            "目录": out_dir.replace("\\", "/"),
-            "K线": kline_path.replace("\\", "/"),
-            "订单簿": orderbook_path.replace("\\", "/"),
-            "成交": trades_path.replace("\\", "/"),
-            "资金费率": funding_path.replace("\\", "/"),
-            "溢价指数": premium_path.replace("\\", "/"),
-            "多空比": ratio_path.replace("\\", "/"),
-            "元数据": meta_path.replace("\\", "/"),
+    def fetch_analysis_data(self, symbol: str) -> dict[str, Any]:
+        """Fetch all necessary data for quantitative analysis."""
+        # Fetch data needed for analyze_symbol
+        klines_1h = self.fetch_klines(symbol, "1h", limit=100)
+        klines_15m = self.fetch_klines(symbol, "15m", limit=100)
+        klines_1m = self.fetch_klines(symbol, "1m", limit=100)
+        orderbook = self.fetch_order_book(symbol)
+        premium_index = self.fetch_mark_price(symbol)
+        oi_hist = self.fetch_open_interest_hist(symbol, period="5m", limit=30)
+        
+        # Extract funding rate from premium index
+        funding_rate = float(premium_index.get("lastFundingRate", 0)) if premium_index else 0.0
+
+        data = {
+            "symbol": symbol,
+            "klines_1h": klines_1h,
+            "klines_15m": klines_15m,
+            "klines_1m": klines_1m,
+            "orderbook": orderbook,
+            "premium_index": premium_index,
+            "funding_rate": funding_rate,
+            "oi_hist": oi_hist
         }
+        return data

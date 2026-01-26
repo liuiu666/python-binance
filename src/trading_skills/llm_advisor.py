@@ -1,0 +1,1570 @@
+"""
+LLM Trading Advisor Skill
+Combines quantitative analysis with Large Language Models for automated trading decisions.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import time
+from dataclasses import dataclass
+from decimal import Decimal
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import requests
+import pandas as pd
+from binance.client import Client
+
+from .settings import Settings
+from .data_fetcher import FuturesDataFetcher
+from .trader import FuturesTrader
+
+try:
+    from analysis.smart_analyzer import analyze_symbol
+except ImportError:
+    from src.analysis.smart_analyzer import analyze_symbol
+
+logger = logging.getLogger(__name__)
+
+@dataclass
+class LLMDecision:
+    action: str  # "BUY", "SELL", "HOLD"
+    direction: str  # "LONG", "SHORT", "NONE"
+    reasoning: str
+    confidence: float  # 0.0 - 1.0
+    suggested_params: Dict[str, Any]  # e.g. {"leverage": 10, "usdt_amount": 100, "stop_loss": 0.1, "take_profit": 0.2}
+
+@dataclass
+class _SymbolState:
+    initial_qty: Decimal | None = None
+    partial_tp_percent: Decimal = Decimal("0.5")
+    profit_locked: bool = False
+    in_position: bool = False
+    last_scalp_add_ts: float = 0.0
+    scalp_peak_price: float | None = None
+    scalp_trough_price: float | None = None
+
+class LLMAdvisor:
+    def __init__(self, client: Client):
+        self.settings = Settings.load()
+        self.client = client
+        self.data_fetcher = FuturesDataFetcher(client)
+        self.trader = FuturesTrader(client)
+        self._symbol_states: dict[str, _SymbolState] = {}
+        self._analysis_cache: dict[str, tuple[float, Dict[str, Any]]] = {}
+        self._event_log_dir = Path(__file__).resolve().parents[2] / "logs"
+        try:
+            self._event_log_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        
+        self.api_key = self.settings.llm_api_key
+        self.base_url = self.settings.llm_base_url
+        self.model = self.settings.llm_model or "deepseek-ai/DeepSeek-V3"
+
+    def clear_symbol_state(self, symbol: str) -> None:
+        self._symbol_states.pop(symbol, None)
+
+    def _calc_dynamic_partial_tp_price(
+        self,
+        *,
+        direction: str,
+        entry_price: float,
+        current_price: float,
+        analysis: dict[str, Any],
+    ) -> float | None:
+        try:
+            if entry_price <= 0 or current_price <= 0:
+                return None
+
+            atr_pct = float(analysis.get("atr_pct") or 0)
+            if atr_pct <= 0:
+                atr_pct = 0.35
+
+            direction_score = float(analysis.get("direction_score") or 0)
+            volume_ratio = float(analysis.get("volume_ratio") or 1)
+
+            atr_abs = current_price * (atr_pct / 100.0)
+            mult = 0.6
+            if volume_ratio >= 1.5:
+                mult += 0.2
+            if abs(direction_score) >= 2:
+                mult += 0.2
+            elif abs(direction_score) <= 0.5:
+                mult -= 0.1
+            if mult < 0.4:
+                mult = 0.4
+            if mult > 1.0:
+                mult = 1.0
+
+            min_profit_pct = 0.005
+            if abs(direction_score) >= 2:
+                min_profit_pct = 0.007
+            elif abs(direction_score) <= 0.5:
+                min_profit_pct = 0.004
+
+            tp_distance = max(entry_price * min_profit_pct, atr_abs * mult)
+            buffer_dist = max(atr_abs * 0.1, current_price * 0.001)
+
+            d = (direction or "").upper()
+            if d == "LONG":
+                return max(entry_price + tp_distance, current_price + buffer_dist)
+            if d == "SHORT":
+                return min(entry_price - tp_distance, current_price - buffer_dist)
+            return None
+        except Exception:
+            return None
+
+    def _log_event(self, payload: dict[str, Any]) -> None:
+        try:
+            line = json.dumps(payload, ensure_ascii=False)
+        except Exception:
+            line = str(payload)
+
+        try:
+            symbol = payload.get("symbol") if isinstance(payload, dict) else None
+        except Exception:
+            symbol = None
+
+        if isinstance(symbol, str) and symbol.strip():
+            safe_symbol = "".join([c if (c.isalnum() or c in ["_", "-"]) else "_" for c in symbol.strip().upper()])
+            date_str = time.strftime("%Y-%m-%d", time.localtime())
+            state = self._symbol_states.get(symbol.strip().upper())
+            if state is None:
+                state = self._symbol_states.get(symbol.strip())
+            phase = "pos" if (state is not None and getattr(state, "in_position", False)) else "watch"
+            file_path = self._event_log_dir / f"{date_str}_{safe_symbol}_{phase}.log"
+            try:
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                with file_path.open("a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+            except Exception:
+                pass
+
+        logger.info(line)
+
+    def fetch_market_data(self, symbol: str) -> Dict[str, Any]:
+        """Fetch all necessary data for analysis."""
+        start = time.time()
+        data = self.data_fetcher.fetch_analysis_data(symbol)
+        try:
+            keys = sorted(list(data.keys())) if isinstance(data, dict) else []
+        except Exception:
+            keys = []
+        self._log_event(
+            {
+                "event": "market_data_fetched",
+                "symbol": symbol,
+                "duration_ms": int((time.time() - start) * 1000),
+                "keys": keys,
+            }
+        )
+        return data
+
+    def get_analysis_report(self, symbol: str) -> Dict[str, Any]:
+        """Generate quantitative analysis report."""
+        now = time.time()
+        cached = self._analysis_cache.get(symbol)
+        if cached is not None:
+            ts, report = cached
+            if now - ts <= 25:
+                self._log_event({"event": "analysis_cache_hit", "symbol": symbol, "age_sec": round(now - ts, 2)})
+                return report
+
+        data = self.fetch_market_data(symbol)
+        start = time.time()
+        report = analyze_symbol(data)
+        self._log_event(
+            {
+                "event": "analysis_generated",
+                "symbol": symbol,
+                "duration_ms": int((time.time() - start) * 1000),
+                "score": report.get("score") if isinstance(report, dict) else None,
+                "direction_score": report.get("direction_score") if isinstance(report, dict) else None,
+                "current_price": report.get("current_price") if isinstance(report, dict) else None,
+            }
+        )
+        self._analysis_cache[symbol] = (now, report)
+        return report
+
+    def _construct_prompt(self, symbol: str, analysis: Dict[str, Any]) -> str:
+        """Construct the prompt for the LLM."""
+        
+        prompt = f"""
+You are an Execution Trader. The asset {symbol} has ALREADY passed our quantitative screening algorithm (Top candidate from market scan).
+Your job is NOT to re-evaluate if it's "worth watching", but to VALIDATE the direction and PLAN the trade execution.
+
+Technical Analysis Report:
+- Score: {analysis.get('score')} (Quantitative Score. >40 is PASS. Higher is better.)
+- Direction Score: {analysis.get('direction_score')} (Positive = Bullish, Negative = Bearish)
+- Signals: {', '.join(analysis.get('signals', []))}
+- Risk Factors: {', '.join(analysis.get('risk_factors', []))}
+- Current Price: {analysis.get('current_price')}
+- ATR %: {analysis.get('atr_pct', 'N/A')}
+- Volume Ratio: {analysis.get('volume_ratio', 'N/A')}
+- Spread (bps): {analysis.get('spread_bps', 'N/A')}
+- Orderbook Imbalance: {analysis.get('imbalance', 'N/A')} (>0.15 Bullish, <-0.15 Bearish)
+- Funding Rate: {analysis.get('funding_rate', 'N/A')}
+- Open Interest Change (30m): {analysis.get('oi_change_30m', 'N/A')}
+
+Execution Guidelines:
+1. **Role**: You are an Execution Trader. The asset has passed quantitative screening. Your goal is to find the **OPTIMAL ENTRY**.
+2. **Direction**: Trust the "Direction Score". If >0 (Bullish) -> Buy Dip / Breakout. If <0 (Bearish) -> Sell Rally / Breakdown.
+3. **Timing**: 
+   - If the price is good and momentum supports it -> **OPEN** immediately.
+   - If the price is overextended or you see a temporary counter-move -> **WAIT** for a better entry (e.g. pullback).
+   - If you see a major trend reversal or danger signal -> **WAIT** (do not force a trade).
+4. **Risk Management**:
+   - Stop Loss: MUST be set (use ATR or Swing Low/High).
+   - Take Profit: Target >1.5 Risk/Reward.
+
+Provide the execution plan in JSON format:
+- action: "OPEN" or "WAIT"
+- direction: "LONG" or "SHORT"
+- confidence: float (0.0 - 1.0)
+- reasoning: Explain why you are opening NOW or why you are WAITING.
+- leverage: Recommended leverage (int, max 20)
+- allocation_usdt: Recommended USDT amount (e.g. 20-50)
+- stop_loss: Precise price
+- take_profit: Precise price
+- partial_tp_price: float | null (FIRST-LADDER limit reduce-only price for scalp)
+- partial_tp_percent: float | null (0.05~0.8, default 0.5)
+
+Respond ONLY with the JSON.
+"""
+        return prompt.strip()
+
+    def ask_llm(self, symbol: str) -> Optional[LLMDecision]:
+        """Get trading advice from LLM."""
+        if not self.api_key:
+            logger.error("LLM API Key not found in settings.")
+            return None
+
+        analysis = self.get_analysis_report(symbol)
+        prompt = self._construct_prompt(symbol, analysis)
+        self._log_event(
+            {
+                "event": "llm_entry_request",
+                "symbol": symbol,
+                "analysis": {
+                    "score": analysis.get("score") if isinstance(analysis, dict) else None,
+                    "direction_score": analysis.get("direction_score") if isinstance(analysis, dict) else None,
+                    "current_price": analysis.get("current_price") if isinstance(analysis, dict) else None,
+                },
+            }
+        )
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": "You are an aggressive but calculated Execution Trader. You trust the quantitative screening and focus on optimal entry/exit parameters."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.1,
+            "max_tokens": 500
+        }
+        
+        try:
+            # 禁用代理请求，防止本地环境代理干扰 api.siliconflow.cn
+            response = requests.post(
+                f"{self.base_url}/chat/completions", 
+                headers=headers, 
+                json=payload, 
+                timeout=30,
+                proxies={"http": None, "https": None}
+            )
+            response.raise_for_status()
+            result = response.json()
+            content = result['choices'][0]['message']['content']
+            
+            # Clean content (remove markdown code blocks if any)
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+            content = content.strip()
+            
+            data = json.loads(content)
+            self._log_event({"event": "llm_entry_raw", "symbol": symbol, "raw": data})
+            
+            # Map OPEN/LONG -> BUY, OPEN/SHORT -> SELL
+            action = "HOLD"
+            if data.get("action") == "OPEN":
+                if data.get("direction") == "LONG":
+                    action = "BUY"
+                elif data.get("direction") == "SHORT":
+                    action = "SELL"
+            
+            direction = data.get("direction", "NONE")
+            if action == "HOLD": direction = "NONE"
+
+            return LLMDecision(
+                action=action,
+                direction=direction,
+                reasoning=data.get("reasoning", ""),
+                confidence=float(data.get("confidence", 0)),
+                suggested_params={
+                    "leverage": int(data.get("leverage", 1)),
+                    "usdt_amount": float(data.get("allocation_usdt", 0)),
+                    "stop_loss": float(data.get("stop_loss", 0)) if data.get("stop_loss") else None,
+                    "take_profit": float(data.get("take_profit", 0)) if data.get("take_profit") else None,
+                    "partial_tp_price": float(data.get("partial_tp_price", 0)) if data.get("partial_tp_price") else None,
+                    "partial_tp_percent": float(data.get("partial_tp_percent", 0)) if data.get("partial_tp_percent") else None,
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"LLM call failed: {e}")
+            return None
+
+    def monitor_position(self, symbol: str, pos: dict[str, Any] | None = None) -> bool:
+        """Monitor existing position and ask LLM for adjustments."""
+        # 1. 获取最新持仓
+        if pos is None:
+            pos = self.trader.get_position(symbol)
+        if not pos:
+            self._symbol_states.pop(symbol, None)
+            return False
+
+        try:
+            amt_dec = Decimal(str(pos.get("positionAmt", 0)))
+        except Exception:
+            amt_dec = Decimal("0")
+
+        if amt_dec == 0:
+            self._symbol_states.pop(symbol, None)
+            return False
+            
+        amt = float(amt_dec)
+        abs_amt_dec = abs(amt_dec)
+        direction = "LONG" if amt_dec > 0 else "SHORT"
+        exit_side = "SELL" if direction == "LONG" else "BUY"
+
+        # 2. Get Market Data & Analysis (Moved up for validation)
+        analysis = self.get_analysis_report(symbol)
+        current_price = analysis.get('current_price')
+        if not current_price or current_price <= 0:
+            logger.warning(f"无法获取 {symbol} 当前价格，跳过校验")
+            return False
+
+        state = self._symbol_states.get(symbol)
+        if state is None:
+            state = _SymbolState()
+            self._symbol_states[symbol] = state
+        prev_profit_locked = state.profit_locked
+        state.in_position = True
+
+        if state.initial_qty is None or state.initial_qty <= 0:
+            state.initial_qty = abs_amt_dec
+
+        if abs_amt_dec > 0 and state.initial_qty and state.initial_qty > 0:
+            if abs_amt_dec > state.initial_qty * Decimal("1.05"):
+                state.initial_qty = abs_amt_dec
+
+        initial_qty = state.initial_qty or abs_amt_dec
+        partial_pct = state.partial_tp_percent
+        scalp_qty = initial_qty * partial_pct
+        core_qty = initial_qty - scalp_qty
+
+        if not state.profit_locked and initial_qty > 0:
+            filled_ratio = abs_amt_dec / initial_qty
+            if filled_ratio <= (Decimal("1") - partial_pct + Decimal("0.05")):
+                state.profit_locked = True
+
+        profit_locked = state.profit_locked
+        if profit_locked and not prev_profit_locked:
+            try:
+                cp = float(current_price)
+            except Exception:
+                cp = 0.0
+            if cp > 0:
+                state.scalp_peak_price = cp
+                state.scalp_trough_price = cp
+        need_partial_tp = (not profit_locked) or (abs_amt_dec > core_qty + (initial_qty * Decimal("0.01")))
+        self._log_event(
+            {
+                "event": "monitor_context",
+                "symbol": symbol,
+                "direction": direction,
+                "entry_price": float(pos.get("entryPrice", 0) or 0),
+                "current_price": current_price,
+                "qty": str(abs_amt_dec),
+                "baseline_qty": str(initial_qty),
+                "core_qty": str(core_qty),
+                "scalp_qty": str(scalp_qty),
+                "profit_locked": profit_locked,
+                "need_partial_tp": need_partial_tp,
+            }
+        )
+
+        # 3. 获取当前挂单，检查止损/止盈状态
+        open_orders = self.trader.list_open_orders(symbol)
+        self._log_event({"event": "open_orders_fetched", "symbol": symbol, "count": len(open_orders)})
+        
+        current_sl_price = None
+        sl_order_ids = []
+        current_tp_price = None
+        tp_order_ids = []
+        current_limit_tp_price = None
+        current_limit_tp_qty = None
+        limit_tp_order_ids = []
+        
+        for o in open_orders:
+            # --- 逻辑校验 (Logical Validation) ---
+            is_valid = True
+            invalid_reason = ""
+            
+            oid = o.get('orderId')
+            otype = o.get('type')
+            oside = o.get('side')
+            
+            # 价格获取
+            oprice = 0.0
+            if otype in ['STOP_MARKET', 'TAKE_PROFIT_MARKET']:
+                oprice = float(o.get('stopPrice', 0))
+            elif otype == 'LIMIT':
+                oprice = float(o.get('price', 0))
+                
+            # 1. 检查方向 (Side Check)
+            # 对于我们管理的 SL/TP/Limit(ReduceOnly)，方向必须是 exit_side
+            if otype in ['STOP_MARKET', 'TAKE_PROFIT_MARKET'] or (otype == 'LIMIT' and o.get('reduceOnly')):
+                if oside != exit_side:
+                    is_valid = False
+                    invalid_reason = f"Wrong Side: {oside} != {exit_side}"
+
+            # 2. 检查价格逻辑 (Price Logic Check)
+            if is_valid and oprice > 0:
+                if direction == "LONG": # 持有多单，卖出平仓
+                    if otype == 'STOP_MARKET' and oprice >= current_price:
+                        # 止损价 >= 当前价 -> 应该已经触发，若未触发则逻辑异常 (或价格刚变动)
+                        # 为防止误判，留 0.1% 缓冲
+                        if oprice > current_price * 1.001: 
+                            is_valid = False
+                            invalid_reason = f"Long SL {oprice} > Current {current_price}"
+                    elif otype == 'TAKE_PROFIT_MARKET' and oprice <= current_price:
+                        # 止盈价 <= 当前价 -> 应该已经触发
+                        if oprice < current_price * 0.999:
+                            is_valid = False
+                            invalid_reason = f"Long TP {oprice} < Current {current_price}"
+                    elif otype == 'LIMIT' and oprice <= current_price:
+                        # 限价卖单 <= 当前价 -> 应该立刻成交
+                        if oprice < current_price * 0.999:
+                            is_valid = False
+                            invalid_reason = f"Long Limit {oprice} < Current {current_price}"
+                            
+                elif direction == "SHORT": # 持有空单，买入平仓
+                    if otype == 'STOP_MARKET' and oprice <= current_price:
+                        # 止损价 <= 当前价
+                        if oprice < current_price * 0.999:
+                            is_valid = False
+                            invalid_reason = f"Short SL {oprice} < Current {current_price}"
+                    elif otype == 'TAKE_PROFIT_MARKET' and oprice >= current_price:
+                        # 止盈价 >= 当前价
+                        if oprice > current_price * 1.001:
+                            is_valid = False
+                            invalid_reason = f"Short TP {oprice} > Current {current_price}"
+                    elif otype == 'LIMIT' and oprice >= current_price:
+                        # 限价买单 >= 当前价
+                        if oprice > current_price * 1.001:
+                            is_valid = False
+                            invalid_reason = f"Short Limit {oprice} > Current {current_price}"
+
+            if not is_valid:
+                self._log_event(
+                    {
+                        "event": "order_invalid",
+                        "symbol": symbol,
+                        "order_id": oid,
+                        "type": otype,
+                        "side": oside,
+                        "price": oprice,
+                        "reason": invalid_reason,
+                    }
+                )
+                try:
+                    self._log_event({"event": "order_cancel_requested", "symbol": symbol, "order_id": oid})
+                    resp = self.trader.cancel_order(symbol, oid)
+                    self._log_event({"event": "order_cancel_result", "symbol": symbol, "order_id": oid, "resp": resp})
+                except Exception as e:
+                    logger.error(f"取消异常挂单失败: {e}")
+                continue # 跳过后续统计
+            
+            # --- 统计有效订单 ---
+            if otype == 'STOP_MARKET':
+                current_sl_price = oprice
+                sl_order_ids.append(oid)
+            elif otype == 'TAKE_PROFIT_MARKET':
+                current_tp_price = oprice
+                tp_order_ids.append(oid)
+            elif otype == 'LIMIT' and oside == exit_side:
+                current_limit_tp_price = float(o.get('price', 0))
+                current_limit_tp_qty = float(o.get('origQty', 0))
+                limit_tp_order_ids.append(oid)
+        
+        # Use the last found order as the current reference price
+        current_sl_order_id = sl_order_ids[-1] if sl_order_ids else None
+        current_tp_order_id = tp_order_ids[-1] if tp_order_ids else None
+        current_limit_tp_order_id = limit_tp_order_ids[-1] if limit_tp_order_ids else None
+        
+        has_stop_loss = (current_sl_price is not None)
+
+        try:
+            if profit_locked and has_stop_loss and (not need_partial_tp) and (current_limit_tp_price is None):
+                now_ts = time.time()
+                if state.last_scalp_add_ts <= 0 or now_ts - state.last_scalp_add_ts >= 240:
+                    gap_qty = initial_qty - abs_amt_dec
+                    min_gap_qty = initial_qty * Decimal("0.02")
+                    if gap_qty > min_gap_qty:
+                        desired_add_qty = gap_qty
+                        if desired_add_qty > scalp_qty:
+                            desired_add_qty = scalp_qty
+
+                        try:
+                            dir_score = float(analysis.get("direction_score") or 0)
+                        except Exception:
+                            dir_score = 0.0
+
+                        try:
+                            atr_pct = float(analysis.get("atr_pct") or 0)
+                        except Exception:
+                            atr_pct = 0.0
+                        if atr_pct <= 0:
+                            atr_pct = 0.35
+
+                        cp = float(current_price)
+                        pullback_dist = max(cp * (atr_pct / 100.0) * 0.6, cp * 0.002)
+
+                        should_add = False
+                        ref_price = None
+                        if direction == "LONG":
+                            peak = state.scalp_peak_price
+                            if peak is None or cp > peak:
+                                peak = cp
+                                state.scalp_peak_price = cp
+                            ref_price = peak
+                            if peak is not None and dir_score >= 0.3 and cp <= peak - pullback_dist:
+                                should_add = True
+                        else:
+                            trough = state.scalp_trough_price
+                            if trough is None or cp < trough:
+                                trough = cp
+                                state.scalp_trough_price = cp
+                            ref_price = trough
+                            if trough is not None and dir_score <= -0.3 and cp >= trough + pullback_dist:
+                                should_add = True
+
+                        self._log_event(
+                            {
+                                "event": "auto_scalp_eval",
+                                "symbol": symbol,
+                                "direction": direction,
+                                "profit_locked": True,
+                                "dir_score": dir_score,
+                                "current_price": cp,
+                                "ref_price": ref_price,
+                                "pullback_dist": pullback_dist,
+                                "gap_qty": str(gap_qty),
+                                "desired_add_qty": str(desired_add_qty),
+                                "cooldown_sec_left": max(0, int(240 - (now_ts - state.last_scalp_add_ts))) if state.last_scalp_add_ts > 0 else 0,
+                                "should_add": should_add,
+                            }
+                        )
+
+                        if should_add and desired_add_qty > 0:
+                            entry_side = "BUY" if direction == "LONG" else "SELL"
+                            add_usdt_dec = desired_add_qty * Decimal(str(cp))
+                            if add_usdt_dec > 0:
+                                self._log_event(
+                                    {
+                                        "event": "auto_scalp_add_requested",
+                                        "symbol": symbol,
+                                        "side": entry_side,
+                                        "usdt": str(add_usdt_dec),
+                                    }
+                                )
+                                r = self.trader.place_market_entry_by_usdt(
+                                    symbol=symbol,
+                                    side=entry_side,
+                                    usdt_amount=add_usdt_dec,
+                                )
+                                executed_qty = getattr(r, "executed_qty", None)
+                                avg_price = getattr(r, "avg_price", None)
+                                self._log_event(
+                                    {
+                                        "event": "auto_scalp_add_result",
+                                        "symbol": symbol,
+                                        "side": entry_side,
+                                        "order_id": getattr(r, "order_id", None),
+                                        "executed_qty": str(executed_qty) if executed_qty is not None else None,
+                                        "avg_price": str(avg_price) if avg_price is not None else None,
+                                    }
+                                )
+
+                                try:
+                                    if executed_qty is not None and executed_qty > 0:
+                                        scalp_entry_price = cp
+                                        if avg_price is not None and avg_price > 0:
+                                            scalp_entry_price = float(avg_price)
+
+                                        dyn_tp = self._calc_dynamic_partial_tp_price(
+                                            direction=direction,
+                                            entry_price=scalp_entry_price,
+                                            current_price=cp,
+                                            analysis=analysis if isinstance(analysis, dict) else {},
+                                        )
+                                        if dyn_tp is None or dyn_tp <= 0:
+                                            dyn_tp = scalp_entry_price * (1.008 if direction == "LONG" else 0.992)
+
+                                        self._log_event(
+                                            {
+                                                "event": "order_place_requested",
+                                                "symbol": symbol,
+                                                "kind": "auto_scalp_partial_tp",
+                                                "type": "LIMIT",
+                                                "reduce_only": True,
+                                                "side": exit_side,
+                                                "price": str(dyn_tp),
+                                                "quantity": str(executed_qty),
+                                            }
+                                        )
+                                        resp = self.trader.place_limit_reduce_order(
+                                            symbol=symbol,
+                                            side=exit_side,
+                                            quantity=executed_qty,
+                                            price=Decimal(str(dyn_tp)),
+                                        )
+                                        self._log_event(
+                                            {
+                                                "event": "order_place_result",
+                                                "symbol": symbol,
+                                                "kind": "auto_scalp_partial_tp",
+                                                "order_id": resp.get("orderId") if isinstance(resp, dict) else None,
+                                                "resp": resp,
+                                            }
+                                        )
+                                except Exception as e:
+                                    logger.error(f"Failed to place auto scalp partial TP: {e}")
+
+                                state.last_scalp_add_ts = now_ts
+                                return True
+        except Exception as e:
+            logger.error(f"Auto scalp logic failed: {e}")
+        
+        # (Remove duplicated analysis call)
+        # analysis = self.get_analysis_report(symbol) # REMOVED
+        
+        # Construct monitoring prompt
+        # amt and direction are already calculated above
+        entry_price = float(pos.get('entryPrice', 0))
+        unrealized_profit = float(pos.get('unRealizedProfit', 0))
+        leverage = float(pos.get('leverage', 1))
+        
+        # Approximate margin for PnL % calculation
+        initial_margin = (entry_price * abs(amt)) / leverage if leverage else 0
+        unrealized_profit_pct = (unrealized_profit / initial_margin * 100) if initial_margin else 0
+        
+        current_price = analysis.get('current_price')
+        
+        # Calculate ATR if not present (approximate)
+        atr = analysis.get('atr', 0)
+        if not atr and analysis.get('atr_pct') and current_price:
+             atr = current_price * (analysis.get('atr_pct') / 100)
+
+        # Smart Suggestions Logic
+        suggested_sl = None
+        suggestion_reason = ""
+        
+        # 1. 保本损 (Break Even): 盈利超过 1.5% 时，建议移至开仓价附近
+        if unrealized_profit_pct > 1.5:
+             if direction == "LONG":
+                 be_price = entry_price * 1.002 # +0.2% to cover fees
+                 if not current_sl_price or current_sl_price < be_price:
+                     suggested_sl = be_price
+                     suggestion_reason = "Protect Profit (Break Even)"
+             else:
+                 be_price = entry_price * 0.998
+                 if not current_sl_price or current_sl_price > be_price:
+                     suggested_sl = be_price
+                     suggestion_reason = "Protect Profit (Break Even)"
+
+        # 2. 移动止损 (Trailing Stop): 盈利超过 3% 时，建议使用 ATR 跟踪
+        if unrealized_profit_pct > 3.0 and atr:
+             if direction == "LONG":
+                 ts_price = current_price - (2 * atr)
+                 # 只有当跟踪止损比当前止损和开仓价都高时才建议
+                 if ts_price > entry_price and (not current_sl_price or ts_price > current_sl_price):
+                     suggested_sl = ts_price
+                     suggestion_reason = "Trailing Stop (Lock Profit)"
+             else:
+                 ts_price = current_price + (2 * atr)
+                 if ts_price < entry_price and (not current_sl_price or ts_price < current_sl_price):
+                     suggested_sl = ts_price
+                     suggestion_reason = "Trailing Stop (Lock Profit)"
+        
+        prompt = f"""
+You are managing an existing {direction} position on {symbol}.
+
+1. Position Status:
+- Entry Price: {entry_price}
+- Size: {amt}
+- Unrealized PnL: {unrealized_profit:.2f} USDT ({unrealized_profit_pct:.2f}%)
+- Current Price: {current_price}
+- Baseline Size (Initial): {initial_qty}
+- Core Size (After Partial TP): {core_qty}
+- Scalp Size (Partial TP Size): {scalp_qty}
+- Profit Locked: {profit_locked}
+
+2. Active Orders:
+- Stop Loss: {current_sl_price if current_sl_price else "WARNING: NONE"}
+- Final Take Profit: {current_tp_price if current_tp_price else "None"}
+- Partial Take Profit (Limit): {current_limit_tp_price if current_limit_tp_price else "None"} (Need: {need_partial_tp})
+
+3. Market Analysis (Live):
+- Trend Score: {analysis.get('score')} (Previous entry was based on >40)
+- Signals: {', '.join(analysis.get('signals', []))}
+- Imbalance: {analysis.get('imbalance', 'N/A')}
+
+4. Smart Suggestions (Algo Calculated):
+- Suggested Action: {"Update SL to " + str(round(suggested_sl, 4)) if suggested_sl else "None"}
+- Reason: {suggestion_reason}
+
+5. Decision Guidelines:
+- **STRATEGY**:
+    1. Always keep a FULL Stop Loss (close position).
+    2. Always keep a FULL Final Take Profit (close position).
+    3. Use a FIRST-LADDER Partial Take Profit (limit reduce-only) for the scalp size.
+- **PROFIT LOCK**:
+    - If Profit Locked is true, never loosen stop loss. Stop loss must be at least break-even (+fees).
+- **SCALPING**:
+    - If Profit Locked is true and current size < Baseline Size, you may "ADD" but do not exceed Baseline Size.
+    - After adding, set a reduce-only limit order to sell the added part back at a higher price (partial_tp_price).
+- **STABILITY**: Do NOT change orders for minor price fluctuations. Only update if:
+    a) You need to lock in profits (Smart Suggestion).
+    b) Market structure has INVALIDATED the trade (Close).
+    c) Stop Loss is missing or too risky.
+
+Decide action:
+- "HOLD": Keep current orders.
+- "CLOSE": Close immediately.
+- "ADJUST_TP_SL": Update SL/TP and Partial TP.
+- "REDUCE": Immediate partial close (market).
+- "ADD": Increase position (scalp).
+
+Output JSON:
+{{
+    "action": "HOLD" | "CLOSE" | "ADJUST_TP_SL" | "REDUCE" | "ADD",
+    "reasoning": "...",
+    "new_stop_loss": float | null,
+    "new_take_profit": float | null,
+    "partial_tp_price": float | null (Limit Order price for partial exit),
+    "partial_tp_percent": float | null (e.g. 0.5 for 50%),
+    "reduce_percent": float | null,
+    "add_usdt": float | null
+}}
+"""
+        # Call LLM
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": "You are a risk-averse crypto trader managing an open position. You MUST ensure a Stop Loss is always active."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.1
+        }
+        
+        try:
+            # 禁用代理请求
+            response = requests.post(
+                f"{self.base_url}/chat/completions", 
+                headers=headers, 
+                json=payload, 
+                timeout=30,
+                proxies={"http": None, "https": None}
+            )
+            result = response.json()
+            content = result['choices'][0]['message']['content']
+             # Clean content
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+            content = content.strip()
+            
+            data = json.loads(content)
+            action = data.get("action")
+            self._log_event({"event": "llm_monitor_raw", "symbol": symbol, "raw": data})
+            logger.info(f"Monitor decision for {symbol}: {action} - {data.get('reasoning')}")
+
+            force_adjust = (
+                (not has_stop_loss)
+                or (not current_tp_price)
+                or (need_partial_tp and not current_limit_tp_price)
+                or ((not need_partial_tp) and (current_limit_tp_price is not None))
+            )
+            
+            if action == "CLOSE":
+                self._log_event({"event": "position_close_requested", "symbol": symbol})
+                self.trader.close_position(symbol)
+                self._log_event({"event": "position_closed", "symbol": symbol})
+                self._symbol_states.pop(symbol, None)
+                logger.info(f"Position closed for {symbol}")
+                return True
+            
+            elif action == "REDUCE":
+                reduce_pct = data.get("reduce_percent", 0.5)
+                try:
+                    reduce_pct = float(reduce_pct)
+                except (ValueError, TypeError):
+                    reduce_pct = 0.5
+                # Ensure reduce_pct is valid
+                if reduce_pct <= 0 or reduce_pct > 1:
+                    reduce_pct = 0.5
+                
+                qty_to_reduce = abs_amt_dec * Decimal(str(reduce_pct))
+                self._log_event(
+                    {
+                        "event": "position_reduce_requested",
+                        "symbol": symbol,
+                        "reduce_pct": reduce_pct,
+                        "qty": str(qty_to_reduce),
+                    }
+                )
+                resp = self.trader.reduce_position(symbol, qty_to_reduce)
+                self._log_event({"event": "position_reduce_result", "symbol": symbol, "resp": resp})
+                return True
+
+            elif action == "ADD":
+                if not profit_locked:
+                    logger.info(f"Ignoring ADD for {symbol} because profit is not locked yet")
+                    return False
+
+                try:
+                    add_usdt = float(data.get("add_usdt", 20.0))
+                except (ValueError, TypeError):
+                    add_usdt = 20.0
+
+                if add_usdt <= 0:
+                    return False
+
+                if initial_qty <= 0 or abs_amt_dec >= initial_qty:
+                    logger.info(f"Ignoring ADD for {symbol} because size already at baseline")
+                    return False
+
+                try:
+                    desired_add_qty = initial_qty - abs_amt_dec
+                    usdt_needed = desired_add_qty * Decimal(str(current_price))
+                    add_usdt_dec = Decimal(str(add_usdt))
+                    if add_usdt_dec > usdt_needed:
+                        add_usdt_dec = usdt_needed
+
+                    if add_usdt_dec <= 0:
+                        return False
+
+                    entry_side = "BUY" if direction == "LONG" else "SELL"
+                    self._log_event({"event": "scalp_add_requested", "symbol": symbol, "side": entry_side, "usdt": str(add_usdt_dec)})
+                    r = self.trader.place_market_entry_by_usdt(
+                        symbol=symbol,
+                        side=entry_side,
+                        usdt_amount=add_usdt_dec,
+                    )
+                    self._log_event(
+                        {
+                            "event": "scalp_add_result",
+                            "symbol": symbol,
+                            "side": entry_side,
+                            "order_id": getattr(r, "order_id", None),
+                            "executed_qty": str(getattr(r, "executed_qty", "")),
+                            "avg_price": str(getattr(r, "avg_price", "")),
+                        }
+                    )
+                    try:
+                        executed_qty = getattr(r, "executed_qty", None)
+                        avg_price = getattr(r, "avg_price", None)
+                        if executed_qty is not None and executed_qty > 0:
+                            new_limit_tp = data.get("partial_tp_price")
+                            try:
+                                if new_limit_tp is not None:
+                                    new_limit_tp = float(new_limit_tp)
+                                else:
+                                    new_limit_tp = None
+                            except Exception:
+                                new_limit_tp = None
+
+                            scalp_entry_price = float(avg_price) if avg_price is not None and avg_price > 0 else float(current_price)
+                            if new_limit_tp is None or new_limit_tp <= 0:
+                                dyn_tp = self._calc_dynamic_partial_tp_price(
+                                    direction=direction,
+                                    entry_price=scalp_entry_price,
+                                    current_price=float(current_price),
+                                    analysis=analysis if isinstance(analysis, dict) else {},
+                                )
+                                if dyn_tp is not None and dyn_tp > 0:
+                                    new_limit_tp = dyn_tp
+                                else:
+                                    new_limit_tp = scalp_entry_price * (1.008 if direction == "LONG" else 0.992)
+
+                            self._log_event(
+                                {
+                                    "event": "order_place_requested",
+                                    "symbol": symbol,
+                                    "kind": "scalp_partial_tp",
+                                    "type": "LIMIT",
+                                    "reduce_only": True,
+                                    "side": exit_side,
+                                    "price": str(new_limit_tp),
+                                    "quantity": str(executed_qty),
+                                }
+                            )
+                            resp = self.trader.place_limit_reduce_order(
+                                symbol=symbol,
+                                side=exit_side,
+                                quantity=executed_qty,
+                                price=Decimal(str(new_limit_tp)),
+                            )
+                            self._log_event(
+                                {
+                                    "event": "order_place_result",
+                                    "symbol": symbol,
+                                    "kind": "scalp_partial_tp",
+                                    "order_id": resp.get("orderId") if isinstance(resp, dict) else None,
+                                    "resp": resp,
+                                }
+                            )
+                    except Exception as e:
+                        logger.error(f"Failed to place scalp partial TP after ADD: {e}")
+
+                    try:
+                        state.last_scalp_add_ts = time.time()
+                    except Exception:
+                        pass
+                    return True
+                except Exception as e:
+                    logger.error(f"Failed to add position: {e}")
+                    return False
+
+            elif action == "ADJUST_TP_SL" or (force_adjust and action == "HOLD"):
+                # 如果是 HOLD 但没有止损或止盈或部分止盈，强制进入调整逻辑
+                if action == "HOLD":
+                    if not has_stop_loss:
+                        logger.warning("发现无止损 HOLD，强制触发止损设置")
+                    if not current_tp_price:
+                        logger.warning("发现无止盈 HOLD，强制触发止盈设置")
+                    if need_partial_tp and not current_limit_tp_price:
+                        logger.warning("发现无部分止盈 HOLD，强制触发部分止盈设置")
+                    if (not need_partial_tp) and (current_limit_tp_price is not None):
+                        logger.warning("发现不需要部分止盈但仍有挂单，强制触发清理")
+                
+                new_sl = data.get("new_stop_loss")
+                new_tp = data.get("new_take_profit")
+                new_limit_tp = data.get("partial_tp_price")
+                
+                # Ensure values are floats
+                if new_sl is not None:
+                    try: new_sl = float(new_sl)
+                    except (ValueError, TypeError): new_sl = None
+                
+                if new_tp is not None:
+                    try: new_tp = float(new_tp)
+                    except (ValueError, TypeError): new_tp = None
+                    
+                if new_limit_tp is not None:
+                    try: new_limit_tp = float(new_limit_tp)
+                    except (ValueError, TypeError): new_limit_tp = None
+                
+                # Ensure partial_tp_percent is valid
+                new_limit_pct = data.get("partial_tp_percent")
+                if new_limit_pct is None:
+                    new_limit_pct = 0.5
+                else:
+                    try:
+                        new_limit_pct = float(new_limit_pct)
+                    except (ValueError, TypeError):
+                        new_limit_pct = 0.5
+                
+                if new_limit_pct <= 0 or new_limit_pct >= 1:
+                    new_limit_pct = float(partial_pct)
+                if new_limit_pct < 0.05:
+                    new_limit_pct = 0.05
+                if new_limit_pct > 0.8:
+                    new_limit_pct = 0.8
+                try:
+                    partial_pct = Decimal(str(new_limit_pct))
+                    state.partial_tp_percent = partial_pct
+                except Exception:
+                    pass
+                
+                # 如果 LLM 没给新止损，且当前无止损，计算默认值
+                if not new_sl and not has_stop_loss:
+                    if direction == "LONG":
+                        new_sl = current_price * 0.98
+                    else:
+                        new_sl = current_price * 1.02
+                    logger.warning(f"使用默认止损补单: {new_sl}")
+
+                # 如果 LLM 没给新止盈，且当前无止盈，计算默认值 (3% 止盈)
+                if not new_tp and not current_tp_price:
+                    if direction == "LONG":
+                        new_tp = entry_price * 1.03
+                    else:
+                        new_tp = entry_price * 0.97
+                    logger.warning(f"使用默认止盈补单: {new_tp}")
+                
+                # 如果 LLM 没给部分止盈，且当前无部分止盈，计算默认值 (1.5% 止盈)
+                if need_partial_tp and not new_limit_tp and not current_limit_tp_price:
+                    if direction == "LONG":
+                        new_limit_tp = entry_price * 1.015
+                    else:
+                        new_limit_tp = entry_price * 0.985
+                    logger.warning(f"使用默认部分止盈补单: {new_limit_tp}")
+
+                if profit_locked:
+                    if direction == "LONG":
+                        min_sl = entry_price * 1.002
+                        if not new_sl or new_sl < min_sl:
+                            new_sl = min_sl
+                    else:
+                        min_sl = entry_price * 0.998
+                        if not new_sl or new_sl > min_sl:
+                            new_sl = min_sl
+
+                # 检查是否真的需要修改 (防止微小变动导致的频繁撤单下单)
+                need_update = False
+                
+                # 检查止损变动
+                if new_sl:
+                    if not current_sl_price:
+                        need_update = True
+                    else:
+                        diff_pct = abs(new_sl - current_sl_price) / current_sl_price
+                        if diff_pct > 0.002: # 只有变动超过 0.2% 才更新，避免频繁刷单
+                             need_update = True
+                
+                # 检查止盈变动
+                if new_tp:
+                    if not current_tp_price:
+                        need_update = True
+                    else:
+                        diff_pct = abs(new_tp - current_tp_price) / current_tp_price
+                        if diff_pct > 0.002:
+                             need_update = True
+                             
+                if not need_partial_tp:
+                    if current_limit_tp_price is not None:
+                        need_update = True
+                else:
+                    desired_partial_qty = (abs_amt_dec - core_qty) if profit_locked else (initial_qty * partial_pct)
+
+                    if current_limit_tp_price is None:
+                        if desired_partial_qty > 0:
+                            need_update = True
+                    else:
+                        if new_limit_tp:
+                            diff_pct = abs(new_limit_tp - current_limit_tp_price) / current_limit_tp_price
+                            if diff_pct > 0.002:
+                                need_update = True
+
+                        if current_limit_tp_qty is not None and desired_partial_qty > 0:
+                            try:
+                                curr_qty_dec = Decimal(str(current_limit_tp_qty))
+                            except Exception:
+                                curr_qty_dec = Decimal("0")
+                            if curr_qty_dec > 0:
+                                qty_diff = abs(desired_partial_qty - curr_qty_dec) / curr_qty_dec
+                                if qty_diff > Decimal("0.1"):
+                                    need_update = True
+                
+                if not need_update and has_stop_loss:
+                    logger.info("SL/TP 变动过小，忽略更新")
+                    return False
+
+                # 执行调整：仅调整需要修改的订单
+                entry_side = "BUY" if direction == "LONG" else "SELL"
+                exit_side = "SELL" if direction == "LONG" else "BUY"
+                
+                # --- Stop Loss Update ---
+                update_sl = False
+                if new_sl:
+                    if not current_sl_price:
+                        update_sl = True
+                    else:
+                        # 检查是否有反向移动风险 (已锁定利润时不应该回调到亏损)
+                        is_profit_locked = False
+                        if direction == "LONG" and current_sl_price > entry_price:
+                            is_profit_locked = True
+                        elif direction == "SHORT" and current_sl_price < entry_price:
+                            is_profit_locked = True
+                            
+                        # 如果已锁定利润，且新 SL 比当前 SL 差，则拒绝更新 (除非是极端的 LLM 决策，但这里我们偏向稳健)
+                        is_sl_worse = False
+                        if direction == "LONG" and new_sl < current_sl_price:
+                            is_sl_worse = True
+                        elif direction == "SHORT" and new_sl > current_sl_price:
+                            is_sl_worse = True
+                            
+                        if is_profit_locked and is_sl_worse:
+                             logger.warning(f"Refusing to lower SL from {current_sl_price} to {new_sl} as profit is already locked.")
+                             update_sl = False
+                        else:
+                            diff_pct = abs(new_sl - current_sl_price) / current_sl_price
+                            if diff_pct > 0.002:
+                                update_sl = True
+                
+                if update_sl and new_sl:
+                    if sl_order_ids:
+                        for oid in sl_order_ids:
+                            try:
+                                self._log_event({"event": "order_cancel_requested", "symbol": symbol, "order_id": oid})
+                                resp = self.trader.cancel_order(symbol, oid)
+                                self._log_event({"event": "order_cancel_result", "symbol": symbol, "order_id": oid, "resp": resp})
+                            except Exception as e:
+                                logger.warning(f"Failed to cancel SL order {oid}: {e}")
+                    
+                    try:
+                        self._log_event(
+                            {
+                                "event": "order_place_requested",
+                                "symbol": symbol,
+                                "kind": "stop_loss",
+                                "type": "STOP_MARKET",
+                                "close_position": True,
+                                "stop_price": new_sl,
+                            }
+                        )
+                        r = self.trader.place_stop_loss_market(
+                            symbol=symbol,
+                            entry_side=entry_side,
+                            quantity=None,
+                            stop_price=Decimal(f"{new_sl:.4f}"),
+                            close_position=True
+                        )
+                        self._log_event(
+                            {
+                                "event": "order_place_result",
+                                "symbol": symbol,
+                                "kind": "stop_loss",
+                                "order_id": getattr(r, "stop_order_id", None),
+                                "stop_price": str(getattr(r, "stop_price", "")),
+                                "close_position": getattr(r, "close_position", True),
+                            }
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to update Stop Loss: {e}")
+
+                # --- Take Profit Update ---
+                update_tp = False
+                if new_tp:
+                    if not current_tp_price:
+                        update_tp = True
+                    else:
+                        diff_pct = abs(new_tp - current_tp_price) / current_tp_price
+                        if diff_pct > 0.002:
+                             update_tp = True
+                
+                if update_tp and new_tp:
+                    if tp_order_ids:
+                        for oid in tp_order_ids:
+                            try:
+                                self._log_event({"event": "order_cancel_requested", "symbol": symbol, "order_id": oid})
+                                resp = self.trader.cancel_order(symbol, oid)
+                                self._log_event({"event": "order_cancel_result", "symbol": symbol, "order_id": oid, "resp": resp})
+                            except Exception as e:
+                                logger.warning(f"Failed to cancel TP order {oid}: {e}")
+                    
+                    try:
+                        self._log_event(
+                            {
+                                "event": "order_place_requested",
+                                "symbol": symbol,
+                                "kind": "take_profit",
+                                "type": "TAKE_PROFIT_MARKET",
+                                "close_position": True,
+                                "take_profit_price": new_tp,
+                            }
+                        )
+                        r = self.trader.place_take_profit_market(
+                            symbol=symbol,
+                            entry_side=entry_side,
+                            quantity=None,
+                            take_profit_price=Decimal(f"{new_tp:.4f}"),
+                            close_position=True
+                        )
+                        self._log_event(
+                            {
+                                "event": "order_place_result",
+                                "symbol": symbol,
+                                "kind": "take_profit",
+                                "order_id": getattr(r, "tp_order_id", None),
+                                "take_profit_price": str(getattr(r, "tp_price", "")),
+                                "close_position": getattr(r, "close_position", True),
+                            }
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to update Take Profit: {e}")
+
+                # --- Partial Limit TP Update ---
+                try:
+                    if not need_partial_tp:
+                        if limit_tp_order_ids:
+                            for oid in limit_tp_order_ids:
+                                try:
+                                    self._log_event({"event": "order_cancel_requested", "symbol": symbol, "order_id": oid})
+                                    resp = self.trader.cancel_order(symbol, oid)
+                                    self._log_event({"event": "order_cancel_result", "symbol": symbol, "order_id": oid, "resp": resp})
+                                except Exception as e:
+                                    logger.warning(f"Failed to cancel Limit TP order {oid}: {e}")
+                    else:
+                        desired_limit_tp = new_limit_tp if new_limit_tp else None
+                        if not desired_limit_tp:
+                            dyn = self._calc_dynamic_partial_tp_price(
+                                direction=direction,
+                                entry_price=float(entry_price),
+                                current_price=float(current_price),
+                                analysis=analysis if isinstance(analysis, dict) else {},
+                            )
+                            desired_limit_tp = dyn if dyn else current_limit_tp_price
+                        if not desired_limit_tp:
+                            desired_limit_tp = (entry_price * 1.015) if direction == "LONG" else (entry_price * 0.985)
+
+                        if profit_locked:
+                            desired_qty = abs_amt_dec - core_qty
+                        else:
+                            desired_qty = initial_qty * partial_pct
+
+                        if desired_qty <= 0:
+                            if limit_tp_order_ids:
+                                for oid in limit_tp_order_ids:
+                                    try:
+                                        self.trader.cancel_order(symbol, oid)
+                                        logger.info(f"Cancelled old Limit TP order {oid}")
+                                    except Exception as e:
+                                        logger.warning(f"Failed to cancel Limit TP order {oid}: {e}")
+                        else:
+                            update_limit = False
+                            if not current_limit_tp_price:
+                                update_limit = True
+                            else:
+                                diff_pct = abs(desired_limit_tp - current_limit_tp_price) / current_limit_tp_price
+                                if diff_pct > 0.002:
+                                    update_limit = True
+
+                            if not update_limit and current_limit_tp_qty is not None:
+                                try:
+                                    curr_qty_dec = Decimal(str(current_limit_tp_qty))
+                                except Exception:
+                                    curr_qty_dec = Decimal("0")
+                                if curr_qty_dec > 0:
+                                    qty_diff = abs(desired_qty - curr_qty_dec) / curr_qty_dec
+                                    if qty_diff > Decimal("0.1"):
+                                        update_limit = True
+
+                            if update_limit:
+                                if limit_tp_order_ids:
+                                    for oid in limit_tp_order_ids:
+                                        try:
+                                            self._log_event({"event": "order_cancel_requested", "symbol": symbol, "order_id": oid})
+                                            resp = self.trader.cancel_order(symbol, oid)
+                                            self._log_event({"event": "order_cancel_result", "symbol": symbol, "order_id": oid, "resp": resp})
+                                        except Exception as e:
+                                            logger.warning(f"Failed to cancel Limit TP order {oid}: {e}")
+
+                                self._log_event(
+                                    {
+                                        "event": "order_place_requested",
+                                        "symbol": symbol,
+                                        "kind": "partial_tp",
+                                        "type": "LIMIT",
+                                        "reduce_only": True,
+                                        "side": exit_side,
+                                        "price": float(desired_limit_tp),
+                                        "quantity": str(desired_qty),
+                                    }
+                                )
+                                resp = self.trader.place_limit_reduce_order(
+                                    symbol=symbol,
+                                    side=exit_side,
+                                    quantity=desired_qty,
+                                    price=Decimal(str(desired_limit_tp)),
+                                )
+                                self._log_event(
+                                    {
+                                        "event": "order_place_result",
+                                        "symbol": symbol,
+                                        "kind": "partial_tp",
+                                        "order_id": resp.get("orderId") if isinstance(resp, dict) else None,
+                                        "resp": resp,
+                                    }
+                                )
+                except Exception as e:
+                    logger.error(f"Failed to update Partial TP: {e}")
+
+        except Exception as e:
+            logger.error(f"Monitor LLM call failed: {e}")
+            
+        return False
+
+    def execute_trade(self, symbol: str, decision: LLMDecision) -> bool:
+        """Execute the trade if valid, including Stop Loss and Take Profit."""
+        if decision.action == "HOLD":
+            logger.info(f"LLM suggests HOLD for {symbol}. Reasoning: {decision.reasoning}")
+            return False
+            
+        self._log_event(
+            {
+                "event": "execute_trade_request",
+                "symbol": symbol,
+                "action": decision.action,
+                "direction": decision.direction,
+                "confidence": decision.confidence,
+                "params": decision.suggested_params,
+            }
+        )
+        
+        # Set leverage
+        leverage = decision.suggested_params.get("leverage", 5)
+        try:
+            self._log_event({"event": "leverage_set_requested", "symbol": symbol, "leverage": leverage})
+            resp = self.trader.set_leverage(symbol, leverage)
+            self._log_event({"event": "leverage_set_result", "symbol": symbol, "resp": resp})
+        except Exception as e:
+            logger.error(f"Failed to set leverage: {e}")
+            # Continue anyway, might already be set
+            
+        # Place entry order
+        side = decision.action # BUY or SELL
+        usdt_amount = Decimal(str(decision.suggested_params.get("usdt_amount", 20)))
+        
+        entry_result = None
+        try:
+            self._log_event(
+                {
+                    "event": "order_place_requested",
+                    "symbol": symbol,
+                    "kind": "entry",
+                    "type": "MARKET",
+                    "side": side,
+                    "usdt_amount": str(usdt_amount),
+                }
+            )
+            entry_result = self.trader.place_market_entry_by_usdt(
+                symbol=symbol,
+                side=side,
+                usdt_amount=usdt_amount
+            )
+            state = self._symbol_states.get(symbol)
+            if state is None:
+                state = _SymbolState()
+            state.in_position = True
+            self._symbol_states[symbol] = state
+            self._log_event(
+                {
+                    "event": "order_place_result",
+                    "symbol": symbol,
+                    "kind": "entry",
+                    "order_id": entry_result.order_id,
+                    "executed_qty": str(entry_result.executed_qty),
+                    "avg_price": str(entry_result.avg_price) if entry_result.avg_price is not None else None,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Entry execution failed: {e}")
+            return False
+            
+        # Place Stop Loss and Take Profit if executed successfully
+        if entry_result and entry_result.executed_qty > 0:
+            qty = entry_result.executed_qty
+            
+            # Stop Loss
+            sl_price = decision.suggested_params.get("stop_loss")
+            avg_price = entry_result.avg_price
+            
+            # 强制止损逻辑：如果 LLM 未提供或无效，使用默认 2% 止损
+            if not sl_price and avg_price:
+                if side == "BUY":
+                    sl_price = float(avg_price) * 0.98
+                else: # SELL
+                    sl_price = float(avg_price) * 1.02
+                logger.warning(f"LLM 未提供止损，使用默认 2% 止损: {sl_price}")
+            
+            if sl_price:
+                try:
+                    # 使用 close_position=True (条件单), 这样就不需要传具体的数量，
+                    # 而是根据触发时的持仓全平。这更安全，也符合"不需要传[数量/价格]"的语义（如果是指不需要Limit Price或Quantity）
+                    self._log_event(
+                        {
+                            "event": "order_place_requested",
+                            "symbol": symbol,
+                            "kind": "stop_loss",
+                            "type": "STOP_MARKET",
+                            "close_position": True,
+                            "stop_price": sl_price,
+                        }
+                    )
+                    r = self.trader.place_stop_loss_market(
+                        symbol=symbol,
+                        entry_side=side, # BUY implies Long, so SL is SELL; SELL implies Short, so SL is BUY
+                        quantity=None, # close_position=True 不需要 quantity
+                        stop_price=Decimal(f"{sl_price:.4f}"),
+                        close_position=True
+                    )
+                    self._log_event(
+                        {
+                            "event": "order_place_result",
+                            "symbol": symbol,
+                            "kind": "stop_loss",
+                            "order_id": getattr(r, "stop_order_id", None),
+                            "stop_price": str(getattr(r, "stop_price", "")),
+                            "close_position": getattr(r, "close_position", True),
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to place Stop Loss: {e}")
+                    # 如果止损下单失败，为了安全起见，应该平仓？
+                    # 这里是一个激进的风险控制决策。如果是“一定要设置上条件止损”，那么失败就应该平仓。
+                    logger.critical("止损设置失败，紧急平仓！")
+                    self.trader.close_position(symbol)
+                    return False
+            
+            # Take Profit
+            tp_price = decision.suggested_params.get("take_profit")
+            
+            # 默认止盈逻辑：如果 LLM 未提供，使用 1.5 倍风险回报比 (默认止损是 2%，所以止盈 3%)
+            if not tp_price and avg_price:
+                if side == "BUY":
+                    tp_price = float(avg_price) * 1.03
+                else:
+                    tp_price = float(avg_price) * 0.97
+                logger.warning(f"LLM 未提供止盈，使用默认 3% 止盈: {tp_price}")
+
+            if tp_price:
+                try:
+                    self._log_event(
+                        {
+                            "event": "order_place_requested",
+                            "symbol": symbol,
+                            "kind": "take_profit",
+                            "type": "TAKE_PROFIT_MARKET",
+                            "close_position": True,
+                            "take_profit_price": tp_price,
+                        }
+                    )
+                    r = self.trader.place_take_profit_market(
+                        symbol=symbol,
+                        entry_side=side,
+                        quantity=None,
+                        take_profit_price=Decimal(str(tp_price)),
+                        close_position=True
+                    )
+                    self._log_event(
+                        {
+                            "event": "order_place_result",
+                            "symbol": symbol,
+                            "kind": "take_profit",
+                            "order_id": getattr(r, "tp_order_id", None),
+                            "take_profit_price": str(getattr(r, "tp_price", "")),
+                            "close_position": getattr(r, "close_position", True),
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to place Take Profit: {e}")
+
+            state = _SymbolState(
+                initial_qty=qty,
+                partial_tp_percent=Decimal("0.5"),
+                profit_locked=False,
+                in_position=True,
+            )
+            try:
+                suggested_pct = decision.suggested_params.get("partial_tp_percent")
+                if suggested_pct is not None:
+                    sp = float(suggested_pct)
+                    if sp > 0 and sp < 1:
+                        if sp < 0.05:
+                            sp = 0.05
+                        if sp > 0.8:
+                            sp = 0.8
+                        state.partial_tp_percent = Decimal(str(sp))
+            except Exception:
+                pass
+            self._symbol_states[symbol] = state
+
+            try:
+                partial_qty = qty * state.partial_tp_percent
+                if partial_qty > 0:
+                    exit_side = "SELL" if side == "BUY" else "BUY"
+                    partial_price: Decimal | None = None
+                    try:
+                        suggested_price = decision.suggested_params.get("partial_tp_price")
+                        if suggested_price is not None:
+                            p = float(suggested_price)
+                            if p > 0:
+                                partial_price = Decimal(str(p))
+                    except Exception:
+                        pass
+                    if avg_price is not None:
+                        try:
+                            analysis = self.get_analysis_report(symbol)
+                        except Exception:
+                            analysis = {}
+                        try:
+                            cp = float(analysis.get("current_price") or 0) if isinstance(analysis, dict) else 0.0
+                        except Exception:
+                            cp = 0.0
+                        if cp <= 0:
+                            cp = float(avg_price)
+                        dyn = self._calc_dynamic_partial_tp_price(
+                            direction=("LONG" if side == "BUY" else "SHORT"),
+                            entry_price=float(avg_price),
+                            current_price=cp,
+                            analysis=analysis if isinstance(analysis, dict) else {},
+                        )
+                        if partial_price is None:
+                            if dyn:
+                                partial_price = Decimal(str(dyn))
+                            else:
+                                partial_price = (avg_price * Decimal("1.015")) if side == "BUY" else (avg_price * Decimal("0.985"))
+
+                    if partial_price is not None and partial_price > 0:
+                        self._log_event(
+                            {
+                                "event": "order_place_requested",
+                                "symbol": symbol,
+                                "kind": "partial_tp",
+                                "type": "LIMIT",
+                                "reduce_only": True,
+                                "side": exit_side,
+                                "price": str(partial_price),
+                                "quantity": str(partial_qty),
+                            }
+                        )
+                        resp = self.trader.place_limit_reduce_order(
+                            symbol=symbol,
+                            side=exit_side,
+                            quantity=partial_qty,
+                            price=partial_price,
+                        )
+                        self._log_event(
+                            {
+                                "event": "order_place_result",
+                                "symbol": symbol,
+                                "kind": "partial_tp",
+                                "order_id": resp.get("orderId") if isinstance(resp, dict) else None,
+                                "resp": resp,
+                            }
+                        )
+            except Exception as e:
+                logger.error(f"Failed to place Partial TP (Limit): {e}")
+                    
+            return True
+            
+        return False

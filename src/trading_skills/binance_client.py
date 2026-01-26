@@ -17,9 +17,13 @@ from requests import RequestException
 from .settings import Settings
 
 T = TypeVar("T")
+_CACHED_TS_OFFSET_MS: int | None = None
 
 
 def create_client(settings: Settings) -> Client:
+    if not settings.binance_api_key or not settings.binance_api_secret:
+        raise RuntimeError("缺少 BINANCE_API_KEY 或 BINANCE_API_SECRET，无法进行签名请求")
+
     requests_params: dict[str, Any] = {"timeout": settings.request_timeout_sec}
 
     proxies: dict[str, str] = {}
@@ -41,6 +45,48 @@ def create_client(settings: Settings) -> Client:
             client.FUTURES_URL = settings.binance_futures_base_url.rstrip("/")
         except Exception:
             pass
+
+    try:
+        client.REQUEST_RECVWINDOW = 10_000
+    except Exception:
+        pass
+
+    global _CACHED_TS_OFFSET_MS
+    if _CACHED_TS_OFFSET_MS is not None:
+        try:
+            client.timestamp_offset = _CACHED_TS_OFFSET_MS
+        except Exception:
+            setattr(client, "timestamp_offset", _CACHED_TS_OFFSET_MS)
+        return client
+
+    server_ts: int | None = None
+    try:
+        if hasattr(client, "futures_time"):
+            data = client.futures_time()
+            if isinstance(data, dict) and data.get("serverTime") is not None:
+                server_ts = int(data["serverTime"])
+    except Exception:
+        server_ts = None
+
+    if server_ts is None:
+        try:
+            if hasattr(client, "get_server_time"):
+                data = client.get_server_time()
+                if isinstance(data, dict) and data.get("serverTime") is not None:
+                    server_ts = int(data["serverTime"])
+        except Exception:
+            server_ts = None
+
+    if server_ts is not None:
+        local_ts = int(time.time() * 1000)
+        _CACHED_TS_OFFSET_MS = server_ts - local_ts
+        try:
+            client.timestamp_offset = _CACHED_TS_OFFSET_MS
+        except Exception:
+            setattr(client, "timestamp_offset", _CACHED_TS_OFFSET_MS)
+    else:
+        if not hasattr(client, "timestamp_offset"):
+            setattr(client, "timestamp_offset", 0)
     return client
 
 

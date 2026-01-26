@@ -11,6 +11,7 @@ __all__ = [
     "FuturesSymbolSelector",
     "OrderPrecheck",
     "FuturesTrader",
+    "LLMAdvisor",
 ]
 
 from .settings import Settings
@@ -19,3 +20,4 @@ from .data_fetcher import FuturesDataFetcher
 from .symbol_selector import FuturesSymbolSelector
 from .order_precheck import OrderPrecheck
 from .trader import FuturesTrader
+from .llm_advisor import LLMAdvisor
