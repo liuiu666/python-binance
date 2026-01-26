@@ -126,21 +126,29 @@ class OrderExecutor:
             return data if isinstance(data, dict) else {}
 
     def _create_algo_order_compat(self, params: dict[str, Any]) -> dict[str, Any]:
+        # 强制将所有参数值转换为字符串（除了布尔值 closePosition 这种特殊情况，但即使是布尔值，有些签名函数也期望字符串）
+        # 安全起见，我们复制一份并处理
+        # 注意：Binance 签名对布尔值敏感，如果是 Python bool，requests 库可能会转为 "True"/"False"
+        # 但 Binance API 通常期望 "true"/"false" 或者就是 bool 类型
+        # 这里我们不做全量转换，而是依赖上层传入正确类型。
+        # 但为了避免 -1022，我们确保没有任何 None 值
+        clean_params = {k: v for k, v in params.items() if v is not None}
+        
         try:
-            return self._create_algo_order(params)
+            return self._create_algo_order(clean_params)
         except BinanceAPIException as e:
             msg = str(getattr(e, "message", "")) or str(e)
             if "Mandatory parameter 'type'" in msg or "parameter 'type'" in msg:
-                p2 = dict(params)
+                p2 = dict(clean_params)
                 if "type" not in p2 and "orderType" in p2:
                     p2["type"] = p2["orderType"]
                 p2.pop("orderType", None)
                 return self._create_algo_order(p2)
             if "Unknown parameter 'orderType'" in msg:
-                p2 = dict(params)
+                p2 = dict(clean_params)
                 p2.pop("orderType", None)
-                if "type" not in p2 and "orderType" in params:
-                    p2["type"] = params["orderType"]
+                if "type" not in p2 and "orderType" in clean_params:
+                    p2["type"] = clean_params["orderType"]
                 return self._create_algo_order(p2)
             raise
 
@@ -387,6 +395,12 @@ class OrderExecutor:
                     if "Signature" in msg2 or "-1022" in msg2:
                          algo_params_bool = dict(algo_params)
                          algo_params_bool["closePosition"] = True
+                         # 某些库要求布尔值转字符串 "true"，某些要求 bool True
+                         # 如果第一次失败，这里尝试用 "true"
+                         # 但之前经验表明 True 更好。
+                         # 也许是参数中包含了 None 值？清理一下
+                         algo_params_bool = {k: v for k, v in algo_params_bool.items() if v is not None}
+                         
                          try:
                              resp = self._create_algo_order_compat(algo_params_bool)
                              algo_id = int(resp.get("algoId"))
@@ -398,7 +412,25 @@ class OrderExecutor:
                                  quantity=qty,
                                  close_position=True,
                              )
-                         except: pass
+                         except BinanceAPIException as e3:
+                              # 如果还是 -1022，尝试用字符串 "true"
+                              msg3 = str(getattr(e3, "message", "")) or str(e3)
+                              if "Signature" in msg3 or "-1022" in msg3:
+                                   algo_params_str = dict(algo_params_bool)
+                                   algo_params_str["closePosition"] = "true"
+                                   try:
+                                        resp = self._create_algo_order_compat(algo_params_str)
+                                        algo_id = int(resp.get("algoId"))
+                                        return TakeProfitResult(
+                                            symbol=symbol,
+                                            side=close_side,
+                                            tp_order_id=algo_id,
+                                            tp_price=tp,
+                                            quantity=qty,
+                                            close_position=True,
+                                        )
+                                   except: pass
+                              pass
 
                     msg2 = str(getattr(e2, "message", "")) or str(e2)
                     if "reduceOnly" in msg2 or "-4046" in msg2:

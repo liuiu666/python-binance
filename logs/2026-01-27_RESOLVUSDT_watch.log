@@ -75,3 +75,14 @@
 {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2151, "score": 45, "direction_score": 2.5, "current_price": 0.12676}
 {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2132, "kline_count": 100, "current_price": 0.12618}
 {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2141, "score": 45, "direction_score": 2.5, "current_price": 0.12611}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2124, "kline_count": 100, "current_price": 0.12734}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2131, "score": 65, "direction_score": 3.5, "current_price": 0.12732}
+{"event": "llm_entry_request", "symbol": "RESOLVUSDT", "analysis_score": 65, "current_price": 0.12732}
+{"event": "llm_response_parsed", "symbol": "RESOLVUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The asset has passed quantitative screening with a bullish Direction Score (3.5) and shows strong bullish signals including 1H均线多头排列, RSI in强势区, and买盘强劲(失衡+17%). Despite成交量萎缩, the orderbook imbalance (0.172) supports bullish momentum. Current price is acceptable for entry given the technical setup.", "leverage": 5, "allocation_usdt": 30.0, "stop_loss": 0.12, "take_profit": 0.142, "partial_tp_price": 0.135, "partial_tp_percent": 0.5}}
+{"event": "trade_execution_start", "symbol": "RESOLVUSDT", "side": "BUY", "usdt": 30.0}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2134, "kline_count": 100, "current_price": 0.12743}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2141, "score": 45, "direction_score": 2.5, "current_price": 0.12743}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2135, "kline_count": 100, "current_price": 0.12819}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2138, "score": 45, "direction_score": 2.5, "current_price": 0.12818}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2134, "kline_count": 100, "current_price": 0.12895}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2143, "score": 45, "direction_score": 2.5, "current_price": 0.129}

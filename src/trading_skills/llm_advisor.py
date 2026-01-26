@@ -888,10 +888,18 @@ Guidelines:
                      if is_invalid:
                          logger.warning(f"跳过止损设置: 价格 {new_sl} 过于接近或劣于现价 {current_price}，可能导致立即触发")
                      else:
-                         try:
-                            self.trader.place_stop_loss_market(symbol=symbol, entry_side=entry_side, stop_price=Decimal(str(new_sl)), close_position=True)
-                         except Exception as e:
-                            logger.error(f"设置新止损失败 {new_sl}: {e}")
+                         # Retry logic for SL
+                         max_retries = 3
+                         for i in range(max_retries):
+                             try:
+                                self.trader.place_stop_loss_market(symbol=symbol, entry_side=entry_side, stop_price=Decimal(str(new_sl)), close_position=True)
+                                break
+                             except Exception as e:
+                                if i == max_retries - 1:
+                                    logger.error(f"设置新止损失败 {new_sl} (重试{max_retries}次后): {e}")
+                                else:
+                                    logger.warning(f"设置止损失败，准备重试 ({i+1}/{max_retries}): {e}")
+                                    time.sleep(1.0 * (i + 1))
                         
                  if new_tp:
                      # 检查是否会立即触发
@@ -902,10 +910,18 @@ Guidelines:
                      if is_invalid:
                          logger.warning(f"跳过止盈设置: 价格 {new_tp} 过于接近或劣于现价 {current_price}，可能导致立即触发")
                      else:
-                         try:
-                            self.trader.place_take_profit_market(symbol=symbol, entry_side=entry_side, take_profit_price=Decimal(str(new_tp)), close_position=True)
-                         except Exception as e:
-                            logger.error(f"设置新止盈失败 {new_tp}: {e}")
+                         # Retry logic for TP
+                         max_retries = 3
+                         for i in range(max_retries):
+                             try:
+                                self.trader.place_take_profit_market(symbol=symbol, entry_side=entry_side, take_profit_price=Decimal(str(new_tp)), close_position=True)
+                                break
+                             except Exception as e:
+                                if i == max_retries - 1:
+                                    logger.error(f"设置新止盈失败 {new_tp} (重试{max_retries}次后): {e}")
+                                else:
+                                    logger.warning(f"设置止盈失败，准备重试 ({i+1}/{max_retries}): {e}")
+                                    time.sleep(1.0 * (i + 1))
                  
                  # 如果需要，重新设置部分止盈
                  if need_partial_tp:
