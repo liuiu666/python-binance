@@ -761,7 +761,10 @@ Decide Action (JSON):
 Guidelines:
 1. If PnL is bad AND trend is invalid -> CLOSE.
 2. If SL/TP is missing -> PREFER 'ADJUST_TP_SL' to set them immediately (do not CLOSE just because they are missing, unless the trade is bad).
-3. If profit > 1.5% -> Consider moving SL to Break Even.
+3. If action is 'ADJUST_TP_SL':
+    - You MUST provide 'new_stop_loss' and 'new_take_profit' values.
+    - If 'Need Partial TP' is True (see Context), you MUST provide 'partial_tp_price'. It should be a limit price between Entry and Take Profit to secure some profit.
+4. If profit > 1.5% -> Consider moving SL to Break Even.
 """
         messages = [
             {"role": "system", "content": "You are a Risk Manager. Protect capital and maximize trend profits."},
@@ -834,6 +837,20 @@ Guidelines:
                         if new_sl <= current_price: new_sl = current_price * 1.02 # Safety
                     logger.info(f"强制设置默认止损: {new_sl} (3*ATR)")
 
+            # Fallback: 如果没有止盈且 LLM 也没给，强制计算一个 (Risk:Reward 1:2)
+            if not current_tp and not new_tp:
+                 if direction == "LONG":
+                     dist = current_price * 0.02 # 默认2%
+                     if new_sl:
+                        dist = abs(current_price - new_sl) * 2
+                     new_tp = current_price + dist
+                 else:
+                     dist = current_price * 0.02
+                     if new_sl:
+                        dist = abs(current_price - new_sl) * 2
+                     new_tp = current_price - dist
+                 logger.info(f"强制设置默认止盈: {new_tp}")
+
             # 验证: 如果利润已锁定，不要放宽止损
             if profit_locked and current_sl:
                 if direction == "LONG" and new_sl and new_sl < current_sl: return
@@ -855,62 +872,46 @@ Guidelines:
                      should_update = True
 
             if should_update:
-                 # 不再暴力取消所有订单，而是根据需要更新
-                 # 如果有新的止损，先取消旧的止损（如果有）
-                 if new_sl and current_sl:
-                     # 查找旧的止损单 ID 并取消
-                     for o in open_orders:
-                        if o.get('type') in ['STOP_MARKET', 'STOP', 'STOP_LOSS']:
-                             try:
-                                 self.trader.cancel_order(symbol, o.get('orderId'))
-                             except: pass
-                     time.sleep(0.5) # 等待撤单生效
-
-                 if new_tp and current_tp:
-                     for o in open_orders:
-                        if o.get('type') in ['TAKE_PROFIT_MARKET', 'TAKE_PROFIT']:
-                             try:
-                                 self.trader.cancel_order(symbol, o.get('orderId'))
-                             except: pass
-                     time.sleep(0.5) # 等待撤单生效
+                 try:
+                     self.trader.cancel_all_open_orders(symbol)
+                     time.sleep(1.0) # 等待撤单生效，防止状态未同步
+                 except Exception as e:
+                     logger.error(f"取消订单失败: {e}")
                  
-                 side = "SELL" if direction == "LONG" else "BUY"
+                 entry_side = "BUY" if direction == "LONG" else "SELL"
                  if new_sl:
-                     try:
-                        self.trader.place_stop_loss_market(symbol=symbol, entry_side=side, stop_price=Decimal(str(new_sl)), close_position=True)
-                     except Exception as e:
-                        logger.error(f"设置新止损失败 {new_sl}: {e}")
-                        # 失败重试逻辑: 稍微偏移一点价格再试 (避免 -2021)
-                        try:
-                            adj_sl = new_sl * (0.999 if direction == "LONG" else 1.001)
-                            self.trader.place_stop_loss_market(symbol=symbol, entry_side=side, stop_price=Decimal(str(adj_sl)), close_position=True)
-                            logger.info(f"重试设置止损成功: {adj_sl}")
-                        except Exception as e2:
-                            logger.error(f"重试设置止损也失败: {e2}")
+                     # 检查是否会立即触发
+                     is_invalid = False
+                     if direction == "LONG" and new_sl >= current_price: is_invalid = True
+                     if direction == "SHORT" and new_sl <= current_price: is_invalid = True
+                     
+                     if is_invalid:
+                         logger.warning(f"跳过止损设置: 价格 {new_sl} 过于接近或劣于现价 {current_price}，可能导致立即触发")
+                     else:
+                         try:
+                            self.trader.place_stop_loss_market(symbol=symbol, entry_side=entry_side, stop_price=Decimal(str(new_sl)), close_position=True)
+                         except Exception as e:
+                            logger.error(f"设置新止损失败 {new_sl}: {e}")
                         
                  if new_tp:
-                     try:
-                        self.trader.place_take_profit_market(symbol=symbol, entry_side=side, take_profit_price=Decimal(str(new_tp)), close_position=True)
-                     except Exception as e:
-                        logger.error(f"设置新止盈失败 {new_tp}: {e}")
-                        # 失败重试逻辑
-                        try:
-                            adj_tp = new_tp * (1.001 if direction == "LONG" else 0.999)
-                            self.trader.place_take_profit_market(symbol=symbol, entry_side=side, take_profit_price=Decimal(str(adj_tp)), close_position=True)
-                            logger.info(f"重试设置止盈成功: {adj_tp}")
-                        except Exception as e2:
-                             logger.error(f"重试设置止盈也失败: {e2}")
+                     # 检查是否会立即触发
+                     is_invalid = False
+                     if direction == "LONG" and new_tp <= current_price: is_invalid = True
+                     if direction == "SHORT" and new_tp >= current_price: is_invalid = True
+
+                     if is_invalid:
+                         logger.warning(f"跳过止盈设置: 价格 {new_tp} 过于接近或劣于现价 {current_price}，可能导致立即触发")
+                     else:
+                         try:
+                            self.trader.place_take_profit_market(symbol=symbol, entry_side=entry_side, take_profit_price=Decimal(str(new_tp)), close_position=True)
+                         except Exception as e:
+                            logger.error(f"设置新止盈失败 {new_tp}: {e}")
                  
                  # 如果需要，重新设置部分止盈
                  if need_partial_tp:
-                     # 先取消旧的部分止盈
-                     if current_limit_tp_price:
-                         for o in open_orders:
-                             if o.get('type') == 'LIMIT':
-                                 try:
-                                     self.trader.cancel_order(symbol, o.get('orderId'))
-                                 except: pass
-
+                     # 部分止盈是限价平仓单，需要使用 exit_side
+                     exit_side = "SELL" if direction == "LONG" else "BUY"
+                     
                      target_ptp = new_ptp if new_ptp else current_limit_tp_price
                      # 如果 LLM 没有给出一个并且我们也没有，计算默认值
                      if not target_ptp:
@@ -920,6 +921,6 @@ Guidelines:
                      qty_to_sell = abs_amt_dec - core_qty
                      if qty_to_sell > 0:
                          try:
-                            self.trader.place_limit_reduce_order(symbol=symbol, side=side, quantity=qty_to_sell, price=Decimal(str(target_ptp)))
+                            self.trader.place_limit_reduce_order(symbol=symbol, side=exit_side, quantity=qty_to_sell, price=Decimal(str(target_ptp)))
                          except Exception as e:
                             logger.error(f"设置部分止盈失败: {e}")

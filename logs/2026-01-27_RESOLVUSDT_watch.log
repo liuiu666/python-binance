@@ -49,3 +49,29 @@
 {"event": "llm_entry_request", "symbol": "RESOLVUSDT", "analysis_score": 45, "current_price": 0.12383}
 {"event": "llm_response_parsed", "symbol": "RESOLVUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The Direction Score is positive (2.5), indicating bullish sentiment. Technical signals include 1H均线多头排列 (bullish MA alignment) and RSI in强势区 (62.6), supporting upward momentum. Despite volume contraction, liquidity and volatility (ATR=6.45%) are favorable for entry. Current price is acceptable with no immediate overextension.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.115, "take_profit": 0.14, "partial_tp_price": 0.13, "partial_tp_percent": 0.5}}
 {"event": "trade_execution_start", "symbol": "RESOLVUSDT", "side": "BUY", "usdt": 20.0}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2272, "kline_count": 100, "current_price": 0.12441}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2275, "score": 65, "direction_score": 1.5, "current_price": 0.12437}
+{"event": "llm_entry_request", "symbol": "RESOLVUSDT", "analysis_score": 65, "current_price": 0.12437}
+{"event": "llm_response_parsed", "symbol": "RESOLVUSDT", "data": {"action": "WAIT", "direction": "LONG", "confidence": 0.7, "reasoning": "The Direction Score is bullish (1.5), and technical signals like 1H均线多头排列 and RSI强势区 support a long position. However, the orderbook imbalance (-0.154) indicates some bearish pressure, and the volume ratio is low (0.361), suggesting weak momentum. Waiting for a pullback or stronger bullish confirmation would provide a better entry.", "leverage": 10, "allocation_usdt": 20, "stop_loss": 0.116, "take_profit": 0.14, "partial_tp_price": 0.132, "partial_tp_percent": 0.5}}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2282, "kline_count": 100, "current_price": 0.12465}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2289, "score": 45, "direction_score": 2.5, "current_price": 0.12463}
+{"event": "llm_entry_request", "symbol": "RESOLVUSDT", "analysis_score": 45, "current_price": 0.12463}
+{"event": "llm_response_parsed", "symbol": "RESOLVUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The Direction Score is positive (2.5), indicating bullish sentiment. Technical signals include a 1H均线多头排列 (bullish MA alignment) and RSI in the强势区 (63.4), supporting upward momentum. Despite成交量萎缩 (volume contraction), the volatility (ATR=6.41%) and liquidity are合格 (qualified). The current price is not overextended, and there are no immediate danger signals.", "leverage": 5, "allocation_usdt": 20, "stop_loss": 0.1165, "take_profit": 0.142, "partial_tp_price": 0.134, "partial_tp_percent": 0.5}}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2266, "kline_count": 100, "current_price": 0.12583}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2273, "score": 45, "direction_score": 2.5, "current_price": 0.12586}
+{"event": "llm_entry_request", "symbol": "RESOLVUSDT", "analysis_score": 45, "current_price": 0.12586}
+{"event": "llm_response_parsed", "symbol": "RESOLVUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The Direction Score is positive (2.5), indicating bullish sentiment. Technical signals include 1H均线多头排列 (bullish MA alignment), RSI in strong zone (64.4), and acceptable volatility (ATR=6.37%). Although volume is shrinking, liquidity is good and orderbook imbalance is slightly positive (0.141). Current price seems acceptable for entry given the bullish momentum.", "leverage": 5, "allocation_usdt": 20, "stop_loss": 0.118, "take_profit": 0.142, "partial_tp_price": 0.135, "partial_tp_percent": 0.5}}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 1290, "kline_count": 100, "current_price": 0.12535}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 1297, "score": 65, "direction_score": 3.5, "current_price": 0.12535}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 1289, "kline_count": 100, "current_price": 0.12567}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 1299, "score": 45, "direction_score": 2.5, "current_price": 0.1257}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2125, "kline_count": 100, "current_price": 0.12617}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2136, "score": 65, "direction_score": 3.5, "current_price": 0.12614}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2122, "kline_count": 100, "current_price": 0.12637}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2127, "score": 65, "direction_score": 3.5, "current_price": 0.1264}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2200, "kline_count": 100, "current_price": 0.12603}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2203, "score": 45, "direction_score": 2.5, "current_price": 0.12596}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2145, "kline_count": 100, "current_price": 0.12673}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2151, "score": 45, "direction_score": 2.5, "current_price": 0.12676}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2132, "kline_count": 100, "current_price": 0.12618}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2141, "score": 45, "direction_score": 2.5, "current_price": 0.12611}

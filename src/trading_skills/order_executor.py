@@ -84,6 +84,13 @@ class OrderExecutor:
         if not all(hasattr(self._client, x) for x in required):
             raise RuntimeError("当前binance库不支持raw签名请求")
 
+        # 同步服务器时间
+        try:
+            if not getattr(self._client, "timestamp_offset", 0):
+                server_time = self._client.futures_time()
+                self._client.timestamp_offset = server_time['serverTime'] - int(time.time() * 1000)
+        except: pass
+
         uri = self._client._create_futures_api_uri(path, 1)
         data = dict(params)
         data["timestamp"] = int(time.time() * 1000 + self._client.timestamp_offset)
@@ -173,7 +180,7 @@ class OrderExecutor:
                  resp = call_with_retry(
                     lambda: self._client.futures_create_order(
                         **order_params,
-                        closePosition="true",
+                        closePosition=True,
                     )
                 )
             else:
@@ -195,7 +202,7 @@ class OrderExecutor:
             )
         except BinanceAPIException as e:
             msg = str(getattr(e, "message", "")) or str(e)
-            if _is_algo_switch_error(msg):
+            if _is_algo_switch_error(msg) or "-1022" in msg:
                 algo_params: dict[str, Any] = {
                     "algoType": "CONDITIONAL",
                     "type": "STOP_MARKET",
@@ -205,7 +212,7 @@ class OrderExecutor:
                     "positionSide": position_side or "BOTH",
                     "triggerPrice": str(sp),
                     "workingType": trigger_type,
-                    "closePosition": "true",
+                    "closePosition": True,
                 }
                 try:
                     resp = self._create_algo_order_compat(algo_params)
@@ -237,6 +244,27 @@ class OrderExecutor:
                              )
                          except: pass
 
+                    msg2 = str(getattr(e2, "message", "")) or str(e2)
+                    if "reduceOnly" in msg2 or "-4046" in msg2:
+                         algo_params_noreduce = dict(algo_params)
+                         # Algo order 不支持 reduceOnly，应该移除
+                         algo_params_noreduce.pop("reduceOnly", None)
+                         # 确保有 closePosition
+                         algo_params_noreduce["closePosition"] = True
+                         
+                         try:
+                             resp = self._create_algo_order_compat(algo_params_noreduce)
+                             algo_id = int(resp.get("algoId"))
+                             return StopResult(
+                                 symbol=symbol,
+                                 side=close_side,
+                                 stop_order_id=algo_id,
+                                 stop_price=sp,
+                                 quantity=qty,
+                                 close_position=True,
+                             )
+                         except: pass
+                    
                     msg2 = str(getattr(e2, "message", "")) or str(e2)
                     if "positionSide" in msg2 or "Hedge" in msg2:
                         ps = position_side or _position_side_for_entry(entry_side)
@@ -308,7 +336,7 @@ class OrderExecutor:
                 resp = call_with_retry(
                     lambda: self._client.futures_create_order(
                         **order_params,
-                        closePosition="true",
+                        closePosition=True,
                     )
                 )
             else:
@@ -330,7 +358,7 @@ class OrderExecutor:
             )
         except BinanceAPIException as e:
             msg = str(getattr(e, "message", "")) or str(e)
-            if _is_algo_switch_error(msg):
+            if _is_algo_switch_error(msg) or "-1022" in msg:
                 algo_params: dict[str, Any] = {
                     "algoType": "CONDITIONAL",
                     "type": "TAKE_PROFIT_MARKET",
@@ -340,7 +368,7 @@ class OrderExecutor:
                     "positionSide": position_side or "BOTH",
                     "triggerPrice": str(tp),
                     "workingType": trigger_type,
-                    "closePosition": "true",
+                    "closePosition": True,
                 }
                 try:
                     resp = self._create_algo_order_compat(algo_params)
@@ -372,6 +400,25 @@ class OrderExecutor:
                              )
                          except: pass
 
+                    msg2 = str(getattr(e2, "message", "")) or str(e2)
+                    if "reduceOnly" in msg2 or "-4046" in msg2:
+                         algo_params_noreduce = dict(algo_params)
+                         algo_params_noreduce.pop("reduceOnly", None)
+                         algo_params_noreduce["closePosition"] = True
+                         
+                         try:
+                             resp = self._create_algo_order_compat(algo_params_noreduce)
+                             algo_id = int(resp.get("algoId"))
+                             return TakeProfitResult(
+                                 symbol=symbol,
+                                 side=close_side,
+                                 tp_order_id=algo_id,
+                                 tp_price=tp,
+                                 quantity=qty,
+                                 close_position=True,
+                             )
+                         except: pass
+                    
                     msg2 = str(getattr(e2, "message", "")) or str(e2)
                     if "positionSide" in msg2 or "Hedge" in msg2:
                         ps = position_side or _position_side_for_entry(entry_side)

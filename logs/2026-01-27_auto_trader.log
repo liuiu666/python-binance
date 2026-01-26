@@ -425,3 +425,153 @@
 2026-01-27 04:38:53,715 - INFO - 检测到 RESOLVUSDT 持仓已结束，正在清理剩余挂单...
 2026-01-27 04:38:56,284 - ERROR - 清理挂单失败: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server's time.
 2026-01-27 04:38:56,285 - INFO - 无持仓且无观察对象，开始全市场选币...
+2026-01-27 04:39:38,055 - INFO - 锁定候选标的: RESOLVUSDT，进入入场监控阶段
+2026-01-27 04:39:38,056 - INFO - 正在监控入场机会: RESOLVUSDT (已观察 0 分钟)
+2026-01-27 04:39:40,329 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2272, "kline_count": 100, "current_price": 0.12441}
+2026-01-27 04:39:40,332 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2275, "score": 65, "direction_score": 1.5, "current_price": 0.12437}
+2026-01-27 04:39:42,924 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "RESOLVUSDT", "analysis_score": 65, "current_price": 0.12437}
+2026-01-27 04:39:49,396 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "RESOLVUSDT", "data": {"action": "WAIT", "direction": "LONG", "confidence": 0.7, "reasoning": "The Direction Score is bullish (1.5), and technical signals like 1H均线多头排列 and RSI强势区 support a long position. However, the orderbook imbalance (-0.154) indicates some bearish pressure, and the volume ratio is low (0.361), suggesting weak momentum. Waiting for a pullback or stronger bullish confirmation would provide a better entry.", "leverage": 10, "allocation_usdt": 20, "stop_loss": 0.116, "take_profit": 0.14, "partial_tp_price": 0.132, "partial_tp_percent": 0.5}}
+2026-01-27 04:39:49,398 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.7 symbol=RESOLVUSDT
+2026-01-27 04:39:49,398 - INFO - AI 建议继续等待: RESOLVUSDT (信号尚未确认)
+2026-01-27 04:39:49,399 - INFO - 周期结束，等待 60 秒...
+2026-01-27 04:40:49,400 - INFO - --- 周期开始 2026-01-27 04:40:49 ---
+2026-01-27 04:40:51,957 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 04:40:52,410 - WARNING - 全局挂单清理执行异常 (可能是网络波动): APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server's time.
+2026-01-27 04:40:52,411 - INFO - 正在监控入场机会: RESOLVUSDT (已观察 1 分钟)
+2026-01-27 04:40:54,696 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2282, "kline_count": 100, "current_price": 0.12465}
+2026-01-27 04:40:54,701 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2289, "score": 45, "direction_score": 2.5, "current_price": 0.12463}
+2026-01-27 04:40:57,254 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "RESOLVUSDT", "analysis_score": 45, "current_price": 0.12463}
+2026-01-27 04:41:09,453 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "RESOLVUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The Direction Score is positive (2.5), indicating bullish sentiment. Technical signals include a 1H均线多头排列 (bullish MA alignment) and RSI in the强势区 (63.4), supporting upward momentum. Despite成交量萎缩 (volume contraction), the volatility (ATR=6.41%) and liquidity are合格 (qualified). The current price is not overextended, and there are no immediate danger signals.", "leverage": 5, "allocation_usdt": 20, "stop_loss": 0.1165, "take_profit": 0.142, "partial_tp_price": 0.134, "partial_tp_percent": 0.5}}
+2026-01-27 04:41:09,454 - INFO - [DECISION] entry action=BUY direction=LONG conf=0.75 symbol=RESOLVUSDT
+2026-01-27 04:41:09,455 - INFO - AI 决定入场: BUY RESOLVUSDT (信心: 0.75)
+2026-01-27 04:41:12,024 - ERROR - RESOLVUSDT 交易执行失败: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server's time.
+2026-01-27 04:41:12,025 - ERROR - 开仓执行失败，继续观察
+2026-01-27 04:41:12,025 - INFO - 周期结束，等待 60 秒...
+2026-01-27 04:42:12,026 - INFO - --- 周期开始 2026-01-27 04:42:12 ---
+2026-01-27 04:42:14,584 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 04:42:15,035 - WARNING - 全局挂单清理执行异常 (可能是网络波动): APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server's time.
+2026-01-27 04:42:15,036 - INFO - 正在监控入场机会: RESOLVUSDT (已观察 2 分钟)
+2026-01-27 04:42:17,304 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2266, "kline_count": 100, "current_price": 0.12583}
+2026-01-27 04:42:17,311 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2273, "score": 45, "direction_score": 2.5, "current_price": 0.12586}
+2026-01-27 04:42:19,867 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "RESOLVUSDT", "analysis_score": 45, "current_price": 0.12586}
+2026-01-27 04:42:28,985 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "RESOLVUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The Direction Score is positive (2.5), indicating bullish sentiment. Technical signals include 1H均线多头排列 (bullish MA alignment), RSI in strong zone (64.4), and acceptable volatility (ATR=6.37%). Although volume is shrinking, liquidity is good and orderbook imbalance is slightly positive (0.141). Current price seems acceptable for entry given the bullish momentum.", "leverage": 5, "allocation_usdt": 20, "stop_loss": 0.118, "take_profit": 0.142, "partial_tp_price": 0.135, "partial_tp_percent": 0.5}}
+2026-01-27 04:42:28,985 - INFO - [DECISION] entry action=BUY direction=LONG conf=0.75 symbol=RESOLVUSDT
+2026-01-27 04:42:28,985 - INFO - AI 决定入场: BUY RESOLVUSDT (信心: 0.75)
+2026-01-27 04:42:31,566 - ERROR - RESOLVUSDT 交易执行失败: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server's time.
+2026-01-27 04:42:31,567 - ERROR - 开仓执行失败，继续观察
+2026-01-27 04:42:31,568 - INFO - 周期结束，等待 60 秒...
+2026-01-27 04:42:35,157 - INFO - 用户停止程序
+2026-01-27 04:42:55,297 - INFO - === 启动自动化交易机器人 (Auto Trader) ===
+2026-01-27 04:42:57,594 - INFO - --- 周期开始 2026-01-27 04:42:57 ---
+2026-01-27 04:42:57,852 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 04:42:58,103 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 04:42:58,104 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 04:42:58,104 - INFO - 持仓量: 161.0, 未实现盈亏: 0.23587144 USDT
+2026-01-27 04:42:59,396 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 1290, "kline_count": 100, "current_price": 0.12535}
+2026-01-27 04:42:59,403 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 1297, "score": 65, "direction_score": 3.5, "current_price": 0.12535}
+2026-01-27 04:42:59,655 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.1827718623666466, "has_sl": true}
+2026-01-27 04:43:29,911 - ERROR - RESOLVUSDT LLM Monitor 失败: HTTPSConnectionPool(host='api.siliconflow.cn', port=443): Read timed out. (read timeout=30)
+2026-01-27 04:43:29,911 - INFO - 周期结束，等待 120 秒...
+2026-01-27 04:45:28,690 - INFO - 用户停止程序
+2026-01-27 04:46:12,415 - INFO - === 启动自动化交易机器人 (Auto Trader) ===
+2026-01-27 04:46:14,842 - INFO - --- 周期开始 2026-01-27 04:46:14 ---
+2026-01-27 04:46:15,093 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 04:46:15,340 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 04:46:15,340 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 04:46:15,340 - INFO - 持仓量: 161.0, 未实现盈亏: 0.31259277 USDT
+2026-01-27 04:46:16,632 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 1289, "kline_count": 100, "current_price": 0.12567}
+2026-01-27 04:46:16,641 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 1299, "score": 45, "direction_score": 2.5, "current_price": 0.1257}
+2026-01-27 04:46:16,890 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.5674891912952615, "has_sl": true}
+2026-01-27 04:46:22,247 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Current PnL is positive (1.57%) and the suggested SL is at break-even (0.1241) to protect profits. The trend direction score is weak (2.5), indicating limited upside potential. Adjusting SL to secure profits while maintaining TP at 0.14 aligns with risk management principles.", "new_stop_loss": 0.1241, "new_take_profit": 0.14, "partial_tp_price": null}}
+2026-01-27 04:46:22,248 - ERROR - 发生错误: name 'open_orders' is not defined
+2026-01-27 04:47:22,251 - INFO - --- 周期开始 2026-01-27 04:47:22 ---
+2026-01-27 04:47:25,210 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 04:47:25,476 - WARNING - 全局挂单清理执行异常 (可能是网络波动): APIError(code=-1003): Way too many requests; IP(103.62.49.130) banned until 1769461978848. Please use the websocket for live updates to avoid bans.
+2026-01-27 04:47:25,476 - INFO - 检测到 RESOLVUSDT 持仓已结束，正在清理剩余挂单...
+2026-01-27 04:47:25,740 - INFO - 已清理 RESOLVUSDT 的所有挂单
+2026-01-27 04:47:25,740 - INFO - 无持仓且无观察对象，开始全市场选币...
+2026-01-27 04:47:44,099 - INFO - 用户停止程序
+2026-01-27 04:51:06,749 - INFO - === 启动自动化交易机器人 (Auto Trader) ===
+2026-01-27 04:51:08,601 - INFO - --- 周期开始 2026-01-27 04:51:08 ---
+2026-01-27 04:51:09,087 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 04:51:09,509 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 04:51:09,510 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 04:51:09,510 - INFO - 持仓量: 161.0, 未实现盈亏: 0.37291786 USDT
+2026-01-27 04:51:11,642 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2125, "kline_count": 100, "current_price": 0.12617}
+2026-01-27 04:51:11,648 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2136, "score": 65, "direction_score": 3.5, "current_price": 0.12614}
+2026-01-27 04:51:12,073 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.86998795522673, "has_sl": false}
+2026-01-27 04:51:25,786 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade currently has a PnL of 1.87%, which is above the 1.5% threshold, suggesting it's prudent to protect profits by moving the stop loss to break-even. Additionally, the absence of SL/TP levels poses unnecessary risk. The Direction Score of 3.5 indicates weak momentum, so securing profits and defining risk parameters is prioritized over adding or holding aggressively.", "new_stop_loss": 0.1238649689441, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 04:51:39,043 - ERROR - 设置新止损失败 0.1238649689441: APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 04:51:39,932 - INFO - 周期结束，等待 120 秒...
+2026-01-27 04:52:37,855 - INFO - 用户停止程序
+2026-01-27 04:57:12,097 - INFO - === 启动自动化交易机器人 (Auto Trader) ===
+2026-01-27 04:57:13,929 - INFO - --- 周期开始 2026-01-27 04:57:13 ---
+2026-01-27 04:57:14,358 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 04:57:14,785 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 04:57:14,786 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 04:57:14,786 - INFO - 持仓量: 161.0, 未实现盈亏: 0.41092996 USDT
+2026-01-27 04:57:16,910 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2122, "kline_count": 100, "current_price": 0.12637}
+2026-01-27 04:57:16,914 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2127, "score": 65, "direction_score": 3.5, "current_price": 0.1264}
+2026-01-27 04:57:17,338 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 2.0605987485871604, "has_sl": false}
+2026-01-27 04:57:30,786 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Current PnL is positive (2.06%) and profit locking is enabled, suggesting a need to protect gains. The trade lacks SL/TP, which should be set immediately. The suggested SL (0.1241) aligns with protecting profits near break-even. Direction score (3.5) is neutral, but the overall score (65) is acceptable.", "new_stop_loss": 0.1241, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 04:57:44,119 - ERROR - 设置新止损失败 0.1241: APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 04:57:45,030 - INFO - 周期结束，等待 120 秒...
+2026-01-27 04:57:52,227 - INFO - 用户停止程序
+2026-01-27 05:00:46,408 - INFO - === 启动自动化交易机器人 (Auto Trader) ===
+2026-01-27 05:00:48,308 - INFO - --- 周期开始 2026-01-27 05:00:48 ---
+2026-01-27 05:00:48,767 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:00:49,206 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 05:00:49,207 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:00:49,207 - INFO - 持仓量: 161.0, 未实现盈亏: 0.33730144 USDT
+2026-01-27 05:00:51,409 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2200, "kline_count": 100, "current_price": 0.12603}
+2026-01-27 05:00:51,412 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2203, "score": 45, "direction_score": 2.5, "current_price": 0.12596}
+2026-01-27 05:00:51,839 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.691390243633361, "has_sl": false}
+2026-01-27 05:01:02,954 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade currently has a PnL of 1.69%, which is above the 1.5% threshold, suggesting it's prudent to protect profits by moving the stop loss to break-even. Additionally, the absence of SL/TP levels poses unnecessary risk. The Direction Score of 2.5 indicates weak trend confirmation, but not outright invalidation, so adjusting rather than closing is preferred.", "new_stop_loss": 0.1238649689441, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 05:01:17,326 - ERROR - 设置新止损失败 0.1238649689441: APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 05:01:18,212 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:03:18,213 - INFO - --- 周期开始 2026-01-27 05:03:18 ---
+2026-01-27 05:03:18,648 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:03:19,078 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 05:03:19,078 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:03:19,079 - INFO - 持仓量: 81.0, 未实现盈亏: 0.17864064 USDT
+2026-01-27 05:03:21,216 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2134, "kline_count": 100, "current_price": 0.12612}
+2026-01-27 05:03:21,222 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2142, "score": 45, "direction_score": 2.5, "current_price": 0.12612}
+2026-01-27 05:03:21,648 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.7805195599696233, "has_sl": false}
+2026-01-27 05:03:21,874 - INFO - 用户停止程序
+2026-01-27 05:05:22,845 - INFO - === 启动自动化交易机器人 (Auto Trader) ===
+2026-01-27 05:05:24,703 - INFO - --- 周期开始 2026-01-27 05:05:24 ---
+2026-01-27 05:05:25,128 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:05:25,553 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 05:05:25,554 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:05:25,554 - INFO - 持仓量: 81.0, 未实现盈亏: 0.23368824 USDT
+2026-01-27 05:05:27,702 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2145, "kline_count": 100, "current_price": 0.12673}
+2026-01-27 05:05:27,707 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2151, "score": 45, "direction_score": 2.5, "current_price": 0.12676}
+2026-01-27 05:05:28,132 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 2.329181547126543, "has_sl": false}
+2026-01-27 05:05:42,872 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade currently has a PnL of 2.33%, which is positive, and profit locking is enabled. However, there is no stop loss or take profit set, which is risky. The Direction Score is low (2.5), indicating weak trend confirmation. To protect profits and manage risk, setting a break-even stop loss and a reasonable take profit is advisable.", "new_stop_loss": 0.1238649689441, "new_take_profit": 0.1263, "partial_tp_price": null}}
+2026-01-27 05:05:50,690 - ERROR - 设置新止盈失败 0.1263: APIError(code=-2021): Order would immediately trigger.
+2026-01-27 05:05:51,569 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:06:55,490 - INFO - === 启动自动化交易机器人 (Auto Trader) ===
+2026-01-27 05:06:57,361 - INFO - --- 周期开始 2026-01-27 05:06:57 ---
+2026-01-27 05:06:57,789 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:06:58,213 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 05:06:58,213 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:06:58,214 - INFO - 持仓量: 41.0, 未实现盈亏: 0.09368664 USDT
+2026-01-27 05:07:00,349 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2132, "kline_count": 100, "current_price": 0.12618}
+2026-01-27 05:07:00,357 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2141, "score": 45, "direction_score": 2.5, "current_price": 0.12611}
+2026-01-27 05:07:00,782 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.844783088777291, "has_sl": false}
+2026-01-27 05:07:10,745 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Current PnL is positive (1.84%) and profit locking is enabled. The trend score is weak (Direction Score: 2.5), so protecting profits is prioritized. Setting a break-even stop-loss ensures capital protection while allowing room for potential upside. A take-profit is also needed to define risk-reward.", "new_stop_loss": 0.1238649689441, "new_take_profit": 0.1263, "partial_tp_price": null}}
+2026-01-27 05:07:15,606 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:09:15,608 - INFO - --- 周期开始 2026-01-27 05:09:15 ---
+2026-01-27 05:09:16,035 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 05:09:16,458 - INFO - [DATA] all_open_orders_count=1
+2026-01-27 05:09:16,458 - INFO - [DECISION] orphan_cleanup symbols=['RESOLVUSDT']
+2026-01-27 05:09:16,458 - INFO - 检测到 RESOLVUSDT 无持仓但有挂单，正在执行清理...
+2026-01-27 05:09:16,883 - INFO - 检测到 RESOLVUSDT 持仓已结束，正在清理剩余挂单...
+2026-01-27 05:09:17,310 - WARNING - Double Check 持仓失败 ('NoneType' object has no attribute 'get')，跳过清理挂单，以策安全
+2026-01-27 05:09:17,310 - ERROR - 清理挂单失败或跳过: 'NoneType' object has no attribute 'get'
+2026-01-27 05:09:17,311 - INFO - 无持仓且无观察对象，开始全市场选币...
+2026-01-27 05:10:55,977 - INFO - === 启动自动化交易机器人 (Auto Trader) ===
+2026-01-27 05:10:57,817 - INFO - --- 周期开始 2026-01-27 05:10:57 ---
+2026-01-27 05:10:58,243 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 05:10:58,672 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 05:10:58,672 - INFO - 无持仓且无观察对象，开始全市场选币...

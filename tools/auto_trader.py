@@ -94,17 +94,43 @@ def main():
             # 2. 检查当前持仓
             # 检查是否有持仓刚结束（如止损/止盈触发，或外部平仓）
             if last_active_symbol and last_active_symbol not in active_symbols:
+                # 只有当 active_positions 列表确实为空，或者获取列表没有异常时，才清理
+                # 如果 active_positions 是空的，但这是因为获取失败导致的（虽然 get_active_positions 内部会捕获并返回空列表，但这里我们最好保守一点）
+                # 简单起见，这里假设 get_active_positions 返回空列表就是真的没有持仓
+                
                 logger.info(f"检测到 {last_active_symbol} 持仓已结束，正在清理剩余挂单...")
                 try:
+                    # 再次确认一下真的没有持仓了 (double check)
+                    try:
+                        double_check_pos = advisor.trader.get_position(last_active_symbol)
+                        amt = float(double_check_pos.get('positionAmt', 0))
+                        if amt != 0:
+                            logger.warning(f"清理挂单前 Double Check 发现 {last_active_symbol} 仍有持仓 {amt}，跳过清理")
+                            # 恢复 last_active_symbol
+                            if last_active_symbol not in active_symbols:
+                                active_symbols.add(last_active_symbol)
+                            raise RuntimeError("持仓仍存在")
+                    except Exception as e:
+                        if "持仓仍存在" in str(e): raise
+                        # 如果 double check 失败（网络错误），则不要清理，以防万一
+                        logger.warning(f"Double Check 持仓失败 ({e})，跳过清理挂单，以策安全")
+                        raise
+
                     advisor.trader.cancel_all_open_orders(last_active_symbol)
                     logger.info(f"已清理 {last_active_symbol} 的所有挂单")
                 except Exception as e:
-                    logger.error(f"清理挂单失败: {e}")
+                    logger.error(f"清理挂单失败或跳过: {e}")
+                
                 try:
+                    # 只有真正清理成功了才清除状态
+                    # 或者如果只是清理挂单失败，但持仓确实没了，也可以清除状态
+                    # 这里简化处理：只要没报错持仓仍存在，就清除状态
                     advisor.clear_symbol_state(last_active_symbol)
                 except Exception:
                     pass
-                last_active_symbol = None
+                
+                if last_active_symbol not in active_symbols:
+                    last_active_symbol = None
 
             current_symbol = None
             
@@ -157,6 +183,20 @@ def main():
                     logger.info(f"正在监控入场机会: {watch_candidate} (已观察 {int(elapsed_min)} 分钟)")
                     
                     # LLM 决策
+                    # 在做决策前，先检查一下是否已经有挂单了，防止重复开单
+                    has_open_orders = False
+                    try:
+                        orders = advisor.trader.list_open_orders(watch_candidate)
+                        if orders and len(orders) > 0:
+                            has_open_orders = True
+                    except: pass
+
+                    if has_open_orders:
+                        logger.info(f"跳过 {watch_candidate}: 检测到已有挂单，等待成交")
+                        # 如果有挂单，重置观察时间，继续等待
+                        watch_start_time = time.time()
+                        continue
+
                     decision = advisor.ask_llm(watch_candidate)
                     if decision:
                         logger.info(f"[DECISION] entry action={decision.action} direction={decision.direction} conf={decision.confidence} symbol={watch_candidate}")
