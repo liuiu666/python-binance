@@ -1,0 +1,11 @@
+{"event": "market_data_fetched", "symbol": "WLFIUSDT", "duration_ms": 2218, "kline_count": 100, "current_price": 0.1594}
+{"event": "analysis_generated", "symbol": "WLFIUSDT", "duration_ms": 2226, "score": 45, "direction_score": -2.5, "current_price": 0.1594}
+{"event": "market_data_fetched", "symbol": "WLFIUSDT", "duration_ms": 2230, "kline_count": 100, "current_price": 0.1592}
+{"event": "analysis_generated", "symbol": "WLFIUSDT", "duration_ms": 2235, "score": 65, "direction_score": -3.5, "current_price": 0.1593}
+{"event": "llm_monitor_request", "symbol": "WLFIUSDT", "pnl_pct": -0.06281407035175879, "has_sl": false}
+{"event": "llm_monitor_response", "symbol": "WLFIUSDT", "data": {"action": "HOLD", "reasoning": "The current PnL is only -0.06%, which is minimal, and there is no immediate risk requiring a stop-loss or take-profit adjustment. The Direction Score of -3.5 suggests slight bearish momentum, but the overall Score of 65 indicates the trade still has potential. Since no critical levels are breached, holding the position allows for further downside movement. Monitor for any significant reversal signals or changes in market structure before considering adjustments.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+{"event": "market_data_fetched", "symbol": "WLFIUSDT", "duration_ms": 2220, "kline_count": 100, "current_price": 0.1591}
+{"event": "analysis_generated", "symbol": "WLFIUSDT", "duration_ms": 2223, "score": 65, "direction_score": -3.5, "current_price": 0.1591}
+{"event": "llm_monitor_request", "symbol": "WLFIUSDT", "pnl_pct": 0.031055276381909545, "has_sl": false}
+{"event": "llm_monitor_request", "symbol": "WLFIUSDT", "pnl_pct": -0.16374999999999995, "has_sl": false}
+{"event": "llm_monitor_response", "symbol": "WLFIUSDT", "data": {"action": "CLOSE", "reasoning": "The Direction Score is -3.5, indicating weak bearish momentum, and the overall Score is neutral at 50. With no SL or TP set and a slight negative PnL, closing the position minimizes risk and avoids further potential losses in an uncertain market.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}

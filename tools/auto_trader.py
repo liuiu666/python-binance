@@ -16,7 +16,7 @@ from datetime import datetime
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from trading_skills import Settings, create_client, LLMAdvisor, FuturesSymbolSelector
+from trading_skills import Settings, create_client, LLMAdvisor, FuturesSymbolSelector, FuturesTrader
 
 # Configure logging
 LOG_DIR = ROOT / "logs"
@@ -41,7 +41,10 @@ def main():
     settings = Settings.load(ROOT)
     client = create_client(settings)
     selector = FuturesSymbolSelector(client)
-    advisor = LLMAdvisor(client)
+    
+    # 初始化 Trader 和 Advisor
+    trader = FuturesTrader(client)
+    advisor = LLMAdvisor(trader)
     
     # 状态变量
     watch_candidate = None # 当前锁定的候选币种
@@ -65,7 +68,8 @@ def main():
                 active_symbols_set = active_symbols
                 
                 # 获取账户所有挂单 (symbol=None 返回所有)
-                all_open_orders = advisor.client.futures_get_open_orders()
+                # Use local client instead of advisor.client to be safe
+                all_open_orders = client.futures_get_open_orders()
                 open_orders_count = len(all_open_orders) if isinstance(all_open_orders, list) else 0
                 logger.info(f"[DATA] all_open_orders_count={open_orders_count}")
                 

@@ -25,8 +25,8 @@ def _decimals_from_step(step: Decimal) -> int:
 
 def round_down_to_step(value: Decimal, step: Decimal) -> Decimal:
     if step <= 0:
-        return value
-    q = (value / step).to_integral_value(rounding=ROUND_DOWN)
+        return _d(value)
+    q = (_d(value) / step).to_integral_value(rounding=ROUND_DOWN)
     return (q * step).quantize(step, rounding=ROUND_DOWN)
 
 

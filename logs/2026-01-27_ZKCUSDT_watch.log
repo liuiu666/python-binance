@@ -1,0 +1,13 @@
+{"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2223, "kline_count": 100, "current_price": 0.1386}
+{"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2229, "score": 65, "direction_score": 2.5, "current_price": 0.1386}
+{"event": "llm_entry_request", "symbol": "ZKCUSDT", "analysis_score": 65, "current_price": 0.1386}
+{"event": "llm_response_parsed", "symbol": "ZKCUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The asset has passed quantitative screening with a bullish Direction Score (2.5) and shows strong signals including 1H均线多头排列, increased volume (1.8x), and good liquidity. The current price is acceptable, and momentum supports an immediate entry.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.1333, "take_profit": 0.1486, "partial_tp_price": 0.1436, "partial_tp_percent": 0.5}}
+{"event": "trade_execution_start", "symbol": "ZKCUSDT", "side": "BUY", "usdt": 20.0}
+{"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2225, "kline_count": 100, "current_price": 0.1375}
+{"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2230, "score": 50, "direction_score": 0.5, "current_price": 0.1375}
+{"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2218, "kline_count": 100, "current_price": 0.1375}
+{"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2225, "score": 50, "direction_score": 0.5, "current_price": 0.1374}
+{"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2237, "kline_count": 100, "current_price": 0.1384}
+{"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2245, "score": 50, "direction_score": 0.5, "current_price": 0.1383}
+{"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 3103, "kline_count": 100, "current_price": 0.1397}
+{"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 3111, "score": 65, "direction_score": 2.5, "current_price": 0.1397}

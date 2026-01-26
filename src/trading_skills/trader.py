@@ -114,6 +114,47 @@ class FuturesTrader:
         except Exception:
             return []
 
+    def get_usdt_balance(self) -> Decimal:
+        """获取 USDT 可用余额"""
+        try:
+            balances = call_with_retry(lambda: self._client.futures_account_balance())
+            if isinstance(balances, list):
+                for b in balances:
+                    if b.get("asset") == "USDT":
+                        # 优先使用 availableBalance (可用下单余额)
+                        val = b.get("availableBalance")
+                        if val is not None:
+                            return Decimal(str(val))
+                        
+                        # 其次使用 crossWalletBalance (全仓钱包余额)
+                        val = b.get("crossWalletBalance")
+                        if val is not None:
+                            return Decimal(str(val))
+                            
+                        # 最后尝试 maxWithdrawAmount
+                        val = b.get("maxWithdrawAmount")
+                        if val is not None:
+                            return Decimal(str(val))
+                            
+                        return Decimal("0")
+            return Decimal("0")
+        except Exception:
+            return Decimal("0")
+
+    def get_klines(self, symbol: str, interval: str, limit: int = 100) -> list[list[Any]]:
+        """获取K线数据"""
+        try:
+            return call_with_retry(lambda: self._client.futures_klines(symbol=symbol, interval=interval, limit=limit))
+        except Exception:
+            return []
+
+    def get_ticker(self, symbol: str) -> dict[str, Any]:
+        """获取行情 ticker"""
+        try:
+            return call_with_retry(lambda: self._client.futures_symbol_ticker(symbol=symbol))
+        except Exception:
+            return {}
+
     def close_position(self, symbol: str) -> dict[str, Any]:
         """市价全平当前持仓"""
         pos = self.get_position(symbol)
@@ -184,8 +225,8 @@ class FuturesTrader:
     ) -> dict[str, Any]:
         """放置限价减仓单 (Reduce Only)"""
         rules = self._ex.get_symbol_rules(symbol)
-        qty = clamp_qty(quantity, rules.step_size, rules.quantity_precision)
-        p = clamp_price(price, rules.tick_size, rules.price_precision)
+        qty = clamp_qty(_d(quantity), rules.step_size, rules.quantity_precision)
+        p = clamp_price(_d(price), rules.tick_size, rules.price_precision)
         
         if qty <= 0 or p <= 0:
             return {}
@@ -216,7 +257,7 @@ class FuturesTrader:
         if mark_price <= 0:
             raise RuntimeError("标记价格异常")
 
-        raw_qty = usdt_amount / mark_price
+        raw_qty = _d(usdt_amount) / mark_price
         qty = clamp_qty(raw_qty, rules.step_size, rules.quantity_precision)
         if qty <= 0:
             raise RuntimeError("数量异常")

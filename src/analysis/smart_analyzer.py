@@ -368,6 +368,8 @@ def save_individual_report(result, symbol_dir):
     if mode == 'full':
         content += f"- **波动率 (ATR)**: {result.get('atr_pct', 0):.2f}%\n"
         content += f"- **量比 (Vol Ratio)**: {result.get('volume_ratio', 0):.2f}\n"
+        if 'net_inflow_24h' in result:
+             content += f"- **24H资金净流入**: {result['net_inflow_24h']/10000:.2f}万 USDT\n"
     elif mode == 'snapshot':
         content += f"- **资金费率**: {result.get('funding_rate', 0)*100:.4f}%\n"
     content += "\n"

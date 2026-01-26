@@ -173,7 +173,7 @@ class OrderExecutor:
                  resp = call_with_retry(
                     lambda: self._client.futures_create_order(
                         **order_params,
-                        closePosition=True,
+                        closePosition="true",
                     )
                 )
             else:
@@ -219,6 +219,24 @@ class OrderExecutor:
                         close_position=True,
                     )
                 except BinanceAPIException as e2:
+                    # 某些错误可能需要 retry 或者 closePosition=True (bool)
+                    msg2 = str(getattr(e2, "message", "")) or str(e2)
+                    if "Signature" in msg2 or "-1022" in msg2:
+                         algo_params_bool = dict(algo_params)
+                         algo_params_bool["closePosition"] = True
+                         try:
+                             resp = self._create_algo_order_compat(algo_params_bool)
+                             algo_id = int(resp.get("algoId"))
+                             return StopResult(
+                                 symbol=symbol,
+                                 side=close_side,
+                                 stop_order_id=algo_id,
+                                 stop_price=sp,
+                                 quantity=qty,
+                                 close_position=True,
+                             )
+                         except: pass
+
                     msg2 = str(getattr(e2, "message", "")) or str(e2)
                     if "positionSide" in msg2 or "Hedge" in msg2:
                         ps = position_side or _position_side_for_entry(entry_side)
@@ -290,7 +308,7 @@ class OrderExecutor:
                 resp = call_with_retry(
                     lambda: self._client.futures_create_order(
                         **order_params,
-                        closePosition=True,
+                        closePosition="true",
                     )
                 )
             else:
@@ -336,6 +354,24 @@ class OrderExecutor:
                         close_position=True,
                     )
                 except BinanceAPIException as e2:
+                    # 某些错误可能需要 retry 或者 closePosition=True (bool)
+                    msg2 = str(getattr(e2, "message", "")) or str(e2)
+                    if "Signature" in msg2 or "-1022" in msg2:
+                         algo_params_bool = dict(algo_params)
+                         algo_params_bool["closePosition"] = True
+                         try:
+                             resp = self._create_algo_order_compat(algo_params_bool)
+                             algo_id = int(resp.get("algoId"))
+                             return TakeProfitResult(
+                                 symbol=symbol,
+                                 side=close_side,
+                                 tp_order_id=algo_id,
+                                 tp_price=tp,
+                                 quantity=qty,
+                                 close_position=True,
+                             )
+                         except: pass
+
                     msg2 = str(getattr(e2, "message", "")) or str(e2)
                     if "positionSide" in msg2 or "Hedge" in msg2:
                         ps = position_side or _position_side_for_entry(entry_side)
