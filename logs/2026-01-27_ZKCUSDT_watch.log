@@ -11,3 +11,8 @@
 {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2245, "score": 50, "direction_score": 0.5, "current_price": 0.1383}
 {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 3103, "kline_count": 100, "current_price": 0.1397}
 {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 3111, "score": 65, "direction_score": 2.5, "current_price": 0.1397}
+{"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2320, "kline_count": 100, "current_price": 0.1444}
+{"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2328, "score": 60, "direction_score": 3, "current_price": 0.1445}
+{"event": "llm_entry_request", "symbol": "ZKCUSDT", "analysis_score": 60, "current_price": 0.1445}
+{"event": "llm_response_parsed", "symbol": "ZKCUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The asset has passed quantitative screening with a bullish Direction Score (3) and shows strong buy-side imbalance (0.159). Technical signals include bullish MA alignment and acceptable volatility (ATR=3.30%). Current price offers a reasonable entry with momentum support.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.1385, "take_profit": 0.1565, "partial_tp_price": 0.1505, "partial_tp_percent": 0.5}}
+{"event": "trade_execution_start", "symbol": "ZKCUSDT", "side": "BUY", "usdt": 20.0}

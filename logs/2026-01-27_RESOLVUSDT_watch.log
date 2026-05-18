@@ -86,3 +86,12 @@
 {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2138, "score": 45, "direction_score": 2.5, "current_price": 0.12818}
 {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2134, "kline_count": 100, "current_price": 0.12895}
 {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2143, "score": 45, "direction_score": 2.5, "current_price": 0.129}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2512, "kline_count": 100, "current_price": 0.13122}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2515, "score": 30, "direction_score": 1.5, "current_price": 0.13109}
+{"event": "llm_entry_request", "symbol": "RESOLVUSDT", "analysis_score": 30, "current_price": 0.13109}
+{"event": "llm_response_parsed", "symbol": "RESOLVUSDT", "data": {"action": "WAIT", "direction": "LONG", "confidence": 0.6, "reasoning": "The Direction Score is positive (1.5), indicating a bullish bias, but the Volume Ratio is low (0.45) and there is a noted risk of volume-price divergence (price up, volume down). Additionally, the Orderbook Imbalance is only slightly positive (0.05), not strongly bullish (>0.15). Waiting for a pullback or stronger volume confirmation would provide a better entry.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.125, "take_profit": 0.145, "partial_tp_price": 0.138, "partial_tp_percent": 0.5}}
+{"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2233, "kline_count": 100, "current_price": 0.13226}
+{"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2237, "score": 45, "direction_score": 2.5, "current_price": 0.13236}
+{"event": "llm_entry_request", "symbol": "RESOLVUSDT", "analysis_score": 45, "current_price": 0.13236}
+{"event": "llm_response_parsed", "symbol": "RESOLVUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The Direction Score is positive (2.5), indicating bullish sentiment. The technical signals include a bullish 1H moving average alignment and RSI in a strong zone (50.2). Although volume is slightly萎缩, liquidity is good, and the orderbook imbalance is slightly positive (0.075). The current price seems acceptable given the momentum, and the ATR suggests manageable volatility.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.12618, "take_profit": 0.1456, "partial_tp_price": 0.13898, "partial_tp_percent": 0.5}}
+{"event": "trade_execution_start", "symbol": "RESOLVUSDT", "side": "BUY", "usdt": 20.0}

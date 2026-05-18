@@ -665,3 +665,1350 @@
 2026-01-27 05:26:30,861 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a small profit (1.24%) but lacks a take profit level, which is essential for risk management. The Direction Score is neutral (2.5), indicating no strong trend confirmation. Setting TP and SL will secure downside risk and lock in upside potential. A partial TP is also needed to secure some profits early.", "new_stop_loss": 0.1245, "new_take_profit": 0.1325, "partial_tp_price": 0.1295}}
 2026-01-27 05:26:45,169 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
 2026-01-27 05:26:51,675 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:28:51,676 - INFO - --- 周期开始 2026-01-27 05:28:51 ---
+2026-01-27 05:28:52,101 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:28:52,532 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 05:28:52,532 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:28:52,532 - INFO - 持仓量: 235.0, 未实现盈亏: 0.40467000 USDT
+2026-01-27 05:28:54,660 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2126, "kline_count": 100, "current_price": 0.12905}
+2026-01-27 05:28:54,667 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2133, "score": 45, "direction_score": 2.5, "current_price": 0.12898}
+2026-01-27 05:28:55,094 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.3520940969550401, "has_sl": true}
+2026-01-27 05:29:05,910 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The PnL is positive (1.35%) but below the 1.5% threshold for moving SL to break-even. The Direction Score is weak (2.5), indicating a lack of strong trend confirmation. A partial take-profit is needed to secure some profits early, and the stop-loss should be adjusted to protect capital while allowing room for the trade to develop.", "new_stop_loss": 0.1255, "new_take_profit": 0.1325, "partial_tp_price": 0.1295}}
+2026-01-27 05:29:12,273 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:31:12,274 - INFO - --- 周期开始 2026-01-27 05:31:12 ---
+2026-01-27 05:31:12,701 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:31:13,127 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:31:13,127 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:31:13,128 - INFO - 持仓量: 118.0, 未实现盈亏: 0.26583276 USDT
+2026-01-27 05:31:15,254 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2123, "kline_count": 100, "current_price": 0.12966}
+2026-01-27 05:31:15,260 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2130, "score": 65, "direction_score": 3.5, "current_price": 0.12955}
+2026-01-27 05:31:15,685 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.7688877023822613, "has_sl": true}
+2026-01-27 05:31:21,066 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Profit is currently at 1.77%, which is above the 1.5% threshold, suggesting a move to break-even SL to protect capital. The Direction Score of 3.5 indicates weak momentum, so securing profits is prudent. The suggested SL aligns with this logic.", "new_stop_loss": 0.1276, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 05:31:42,072 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 05:31:44,774 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:33:44,775 - INFO - --- 周期开始 2026-01-27 05:33:44 ---
+2026-01-27 05:33:45,199 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:33:45,636 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:33:45,636 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:33:45,636 - INFO - 持仓量: 118.0, 未实现盈亏: 0.19175354 USDT
+2026-01-27 05:33:47,796 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2158, "kline_count": 100, "current_price": 0.12885}
+2026-01-27 05:33:47,798 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2161, "score": 30, "direction_score": 2.5, "current_price": 0.12888}
+2026-01-27 05:33:48,224 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.2759543962687856, "has_sl": true}
+2026-01-27 05:34:01,407 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Current PnL is positive (1.28%) and profit is locked, but the Direction Score is weak (2.5). Adjusting TP/SL to secure profits and manage risk. Moving SL to break-even since profit exceeds 1.5%.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 05:34:01,410 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:36:01,411 - INFO - --- 周期开始 2026-01-27 05:36:01 ---
+2026-01-27 05:36:01,839 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:36:02,265 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:36:02,266 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:36:02,266 - INFO - 持仓量: 118.0, 未实现盈亏: 0.17133600 USDT
+2026-01-27 05:36:04,391 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2123, "kline_count": 100, "current_price": 0.12877}
+2026-01-27 05:36:04,393 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2126, "score": 50, "direction_score": 3.5, "current_price": 0.12882}
+2026-01-27 05:36:04,823 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.140093280359302, "has_sl": true}
+2026-01-27 05:36:16,160 - ERROR - RESOLVUSDT LLM Monitor 失败: Expecting property name enclosed in double quotes: line 4 column 31 (char 446)
+2026-01-27 05:36:16,162 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:38:16,164 - INFO - --- 周期开始 2026-01-27 05:38:16 ---
+2026-01-27 05:38:16,589 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:38:17,016 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:38:17,017 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:38:17,017 - INFO - 持仓量: 118.0, 未实现盈亏: 0.18785600 USDT
+2026-01-27 05:38:19,140 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2120, "kline_count": 100, "current_price": 0.12895}
+2026-01-27 05:38:19,144 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2126, "score": 30, "direction_score": 2.5, "current_price": 0.12895}
+2026-01-27 05:38:19,567 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.2500196297052404, "has_sl": true}
+2026-01-27 05:38:29,484 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Current PnL is positive (1.25%) and profit is locked, but the Direction Score is low (2.5), indicating weak trend confirmation. Adjusting TP/SL to protect capital while allowing room for potential upside.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 05:38:29,488 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:40:29,488 - INFO - --- 周期开始 2026-01-27 05:40:29 ---
+2026-01-27 05:40:29,914 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:40:30,341 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:40:30,342 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:40:30,342 - INFO - 持仓量: 118.0, 未实现盈亏: 0.15835600 USDT
+2026-01-27 05:40:32,483 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2138, "kline_count": 100, "current_price": 0.12861}
+2026-01-27 05:40:32,488 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2144, "score": 30, "direction_score": 2.5, "current_price": 0.12863}
+2026-01-27 05:40:32,914 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.0537225773017793, "has_sl": true}
+2026-01-27 05:40:44,115 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is positive (1.05%), but the Direction Score is low (2.5), indicating weak trend confirmation. Profit is locked, but the trade lacks a partial take-profit mechanism. Adjusting TP/SL to secure profits and manage risk is prudent.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": 0.13}}
+2026-01-27 05:40:44,118 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:42:44,119 - INFO - --- 周期开始 2026-01-27 05:42:44 ---
+2026-01-27 05:42:44,545 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:42:44,969 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:42:44,970 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:42:44,971 - INFO - 持仓量: 118.0, 未实现盈亏: 0.18729078 USDT
+2026-01-27 05:42:47,119 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2146, "kline_count": 100, "current_price": 0.12884}
+2026-01-27 05:42:47,123 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2150, "score": 30, "direction_score": 2.5, "current_price": 0.12896}
+2026-01-27 05:42:47,557 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.24625857818119, "has_sl": true}
+2026-01-27 05:42:52,853 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "HOLD", "reasoning": "The current PnL is 1.25%, which is below the 1.5% threshold for moving SL to Break Even. The trend is still valid as indicated by the Direction Score of 2.5, albeit weak. The existing SL and TP are set, and there is no immediate need to adjust them. Since the profit is locked, it is prudent to hold the position and monitor for further developments.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 05:42:52,855 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:44:52,856 - INFO - --- 周期开始 2026-01-27 05:44:52 ---
+2026-01-27 05:44:53,286 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:44:53,714 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:44:53,714 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:44:53,715 - INFO - 持仓量: 118.0, 未实现盈亏: 0.26379726 USDT
+2026-01-27 05:44:55,850 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2132, "kline_count": 100, "current_price": 0.12954}
+2026-01-27 05:44:55,856 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2139, "score": 45, "direction_score": 2.5, "current_price": 0.12948}
+2026-01-27 05:44:56,285 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.7553432057664222, "has_sl": true}
+2026-01-27 05:45:04,726 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Profit is above 1.5%, so moving SL to break-even to protect capital. The trend direction score is low (2.5), indicating weak momentum, but the PnL is positive. Adjusting SL to secure profits while maintaining TP.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 05:45:04,728 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:47:04,729 - INFO - --- 周期开始 2026-01-27 05:47:04 ---
+2026-01-27 05:47:05,156 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:47:05,579 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:47:05,579 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:47:05,579 - INFO - 持仓量: 118.0, 未实现盈亏: 0.44593144 USDT
+2026-01-27 05:47:07,733 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2151, "kline_count": 100, "current_price": 0.13123}
+2026-01-27 05:47:07,737 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2157, "score": 65, "direction_score": 3.5, "current_price": 0.13098}
+2026-01-27 05:47:08,165 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 2.9672890591874874, "has_sl": true}
+2026-01-27 05:47:18,269 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Profit is locked and PnL is positive (2.97%), but the Direction Score is only 3.5, indicating weak trend strength. To protect capital and secure profits, adjust SL to break-even and maintain TP at current level. No partial TP needed as per context.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 05:47:18,272 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:49:18,273 - INFO - --- 周期开始 2026-01-27 05:49:18 ---
+2026-01-27 05:49:18,696 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:49:19,141 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:49:19,141 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:49:19,141 - INFO - 持仓量: 118.0, 未实现盈亏: 0.30349600 USDT
+2026-01-27 05:49:21,278 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2136, "kline_count": 100, "current_price": 0.12993}
+2026-01-27 05:49:21,284 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2141, "score": 45, "direction_score": 2.5, "current_price": 0.12991}
+2026-01-27 05:49:21,709 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 2.019504075126808, "has_sl": true}
+2026-01-27 05:49:33,542 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is positive (2.02%) and profit is locked, suggesting a favorable position. However, the Direction Score is low (2.5), indicating weak trend confirmation. To protect capital and maximize trend profits, it's prudent to adjust the stop loss to break-even (entry price) and maintain the existing take profit level. No partial TP is needed as per the context.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 05:49:33,544 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:51:33,544 - INFO - --- 周期开始 2026-01-27 05:51:33 ---
+2026-01-27 05:51:33,970 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:51:34,394 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:51:34,395 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:51:34,395 - INFO - 持仓量: 118.0, 未实现盈亏: 0.25880704 USDT
+2026-01-27 05:51:36,530 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2134, "kline_count": 100, "current_price": 0.12953}
+2026-01-27 05:51:36,533 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2137, "score": 45, "direction_score": 2.5, "current_price": 0.12953}
+2026-01-27 05:51:36,959 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.7221375963818528, "has_sl": true}
+2026-01-27 05:51:41,206 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Profit is above 1.5%, so moving SL to break-even to protect capital. The current TP remains valid as the target is still achievable. No partial TP is needed as per the context.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 05:51:41,209 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:53:41,210 - INFO - --- 周期开始 2026-01-27 05:53:41 ---
+2026-01-27 05:53:41,641 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:53:42,065 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:53:42,066 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:53:42,067 - INFO - 持仓量: 118.0, 未实现盈亏: 0.22027768 USDT
+2026-01-27 05:53:44,200 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2131, "kline_count": 100, "current_price": 0.12919}
+2026-01-27 05:53:44,207 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2138, "score": 50, "direction_score": 3.5, "current_price": 0.12934}
+2026-01-27 05:53:44,635 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.4657579421787403, "has_sl": true}
+2026-01-27 05:53:50,333 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is 1.47%, which is close to the 1.5% threshold for moving SL to break-even. The trend direction score is neutral (3.5), and the current SL is very close to the entry price, providing little room for the trade to breathe. Adjusting the SL to break-even and setting a TP will help protect capital and lock in profits if the trend continues.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 05:53:50,337 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:55:50,339 - INFO - --- 周期开始 2026-01-27 05:55:50 ---
+2026-01-27 05:55:50,766 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:55:51,190 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:55:51,191 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:55:51,191 - INFO - 持仓量: 118.0, 未实现盈亏: 0.22032960 USDT
+2026-01-27 05:55:53,339 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2146, "kline_count": 100, "current_price": 0.12919}
+2026-01-27 05:55:53,345 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2153, "score": 30, "direction_score": 2.5, "current_price": 0.1292}
+2026-01-27 05:55:53,775 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.4661034249909703, "has_sl": true}
+2026-01-27 05:56:04,582 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Current PnL is 1.47%, which is close to the 1.5% threshold for moving SL to break-even. The trend direction score is low (2.5), indicating weak momentum. Profit is locked, but the TP is set aggressively at 0.1325 (~4% from entry) without partial TP. Adjusting SL to break-even (entry price) protects capital while maintaining upside potential.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 05:56:04,585 - INFO - 周期结束，等待 120 秒...
+2026-01-27 05:58:04,586 - INFO - --- 周期开始 2026-01-27 05:58:04 ---
+2026-01-27 05:58:05,010 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 05:58:05,435 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 05:58:05,436 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 05:58:05,437 - INFO - 持仓量: 118.0, 未实现盈亏: 0.18797046 USDT
+2026-01-27 05:58:07,574 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2136, "kline_count": 100, "current_price": 0.12881}
+2026-01-27 05:58:07,576 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2138, "score": 50, "direction_score": 3.5, "current_price": 0.12904}
+2026-01-27 05:58:08,002 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.250781262268566, "has_sl": true}
+2026-01-27 05:58:22,464 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade currently has a small profit (1.25%) and profit locking is enabled, but the Direction Score is neutral (3.5). The stop loss is set very close to the entry price, which may not provide enough room for the trade to breathe. Adjusting the stop loss to break-even (entry price) and maintaining the take profit level will protect capital while allowing for potential upside.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 05:58:22,467 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:00:22,468 - INFO - --- 周期开始 2026-01-27 06:00:22 ---
+2026-01-27 06:00:22,902 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:00:23,330 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:00:23,330 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:00:23,330 - INFO - 持仓量: 118.0, 未实现盈亏: 0.25063200 USDT
+2026-01-27 06:00:25,461 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2128, "kline_count": 100, "current_price": 0.12945}
+2026-01-27 06:00:25,467 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2135, "score": 70, "direction_score": 1.5, "current_price": 0.12942}
+2026-01-27 06:00:25,895 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.667739757219806, "has_sl": true}
+2026-01-27 06:00:37,596 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Profit is above 1.5%, so moving SL to break-even to protect capital. The trend remains valid (Direction Score: 1.5), and no partial TP is needed.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:00:37,598 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:02:37,599 - INFO - --- 周期开始 2026-01-27 06:02:37 ---
+2026-01-27 06:02:38,026 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:02:38,454 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:02:38,455 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:02:38,456 - INFO - 持仓量: 118.0, 未实现盈亏: 0.20791600 USDT
+2026-01-27 06:02:40,598 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2141, "kline_count": 100, "current_price": 0.12911}
+2026-01-27 06:02:40,601 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2144, "score": 70, "direction_score": 3.5, "current_price": 0.12916}
+2026-01-27 06:02:41,028 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.383501625339594, "has_sl": true}
+2026-01-27 06:02:46,843 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "HOLD", "reasoning": "The current PnL is 1.38%, which is close to the 1.5% threshold for moving SL to Break Even. The trend direction score is 3.5, indicating a neutral to slightly positive trend. Since the profit is locked and there is no immediate need for adjustment, holding the position is advisable until either the PnL reaches 1.5% (to consider moving SL to Break Even) or the market shows clearer directional movement.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 06:02:46,846 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:04:46,847 - INFO - --- 周期开始 2026-01-27 06:04:46 ---
+2026-01-27 06:04:47,284 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:04:47,750 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:04:47,750 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:04:47,751 - INFO - 持仓量: 118.0, 未实现盈亏: 0.18313600 USDT
+2026-01-27 06:04:49,884 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2131, "kline_count": 100, "current_price": 0.12895}
+2026-01-27 06:04:49,888 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2136, "score": 35, "direction_score": 2.5, "current_price": 0.12898}
+2026-01-27 06:04:50,318 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.2186121013206865, "has_sl": true}
+2026-01-27 06:04:55,257 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is positive (1.22%) and profit is locked, but the Direction Score is low (2.5), indicating weak trend confirmation. To protect capital and maximize potential gains, adjusting the stop loss to break-even (entry price) and maintaining the existing take profit is prudent. No partial TP is needed as per the context.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:04:55,258 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:06:55,260 - INFO - --- 周期开始 2026-01-27 06:06:55 ---
+2026-01-27 06:06:55,685 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:06:56,114 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:06:56,114 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:06:56,115 - INFO - 持仓量: 118.0, 未实现盈亏: 0.26026080 USDT
+2026-01-27 06:06:58,266 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2149, "kline_count": 100, "current_price": 0.12958}
+2026-01-27 06:06:58,270 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2154, "score": 50, "direction_score": 2.5, "current_price": 0.12951}
+2026-01-27 06:06:58,695 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.7318111151242956, "has_sl": true}
+2026-01-27 06:07:13,606 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Profit is above 1.5%, so moving SL to break-even to protect capital. The trend direction score is neutral (2.5), so no strong reason to add or reduce position. Adjusting TP/SL to lock in profits and manage risk.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:07:13,607 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:09:13,608 - INFO - --- 周期开始 2026-01-27 06:09:13 ---
+2026-01-27 06:09:14,031 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:09:14,498 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:09:14,499 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:09:14,499 - INFO - 持仓量: 118.0, 未实现盈亏: 0.26337600 USDT
+2026-01-27 06:09:16,629 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2127, "kline_count": 100, "current_price": 0.12959}
+2026-01-27 06:09:16,635 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2134, "score": 50, "direction_score": 2.5, "current_price": 0.12958}
+2026-01-27 06:09:17,064 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.7525400838581011, "has_sl": true}
+2026-01-27 06:09:37,389 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Current PnL is positive (1.75%) and profit lock is enabled, suggesting a defensive approach to protect gains. The Direction Score is neutral (2.5), indicating no strong trend continuation or reversal. Moving SL to breakeven (suggested: 0.1276) aligns with profit protection while maintaining exposure to potential upside. No partial TP is needed as per context.", "new_stop_loss": 0.1276, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:09:37,392 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:11:37,393 - INFO - --- 周期开始 2026-01-27 06:11:37 ---
+2026-01-27 06:11:37,819 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:11:38,244 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:11:38,245 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:11:38,245 - INFO - 持仓量: 118.0, 未实现盈亏: 0.22545906 USDT
+2026-01-27 06:11:40,379 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2133, "kline_count": 100, "current_price": 0.12924}
+2026-01-27 06:11:40,383 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2137, "score": 50, "direction_score": 2.5, "current_price": 0.12924}
+2026-01-27 06:11:40,813 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.5002355564628842, "has_sl": true}
+2026-01-27 06:11:52,737 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Current PnL is positive (1.50%) and profit is locked, but the Direction Score is weak (2.5). The suggested SL is already at breakeven (0.1276), which protects capital. The TP (0.1325) is reasonable for capturing upside. No partial TP is needed as per the context. Adjusting SL/TP to lock in risk-reward while respecting the weak trend strength.", "new_stop_loss": 0.1276, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:11:52,740 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:13:52,741 - INFO - --- 周期开始 2026-01-27 06:13:52 ---
+2026-01-27 06:13:53,165 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:13:53,592 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:13:53,592 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:13:53,592 - INFO - 持仓量: 118.0, 未实现盈亏: 0.10777058 USDT
+2026-01-27 06:13:55,719 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2125, "kline_count": 100, "current_price": 0.12827}
+2026-01-27 06:13:55,725 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2131, "score": 55, "direction_score": 3.5, "current_price": 0.12825}
+2026-01-27 06:13:56,152 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 0.7171202437224203, "has_sl": true}
+2026-01-27 06:14:08,431 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "HOLD", "reasoning": "The current PnL is positive (0.72%) and profit locking is enabled, indicating some protection is already in place. The Direction Score of 3.5 suggests weak but not invalid trend confirmation. Since the SL and TP are already set and the PnL is not yet at the 1.5% threshold to move SL to breakeven, holding the position is justified while monitoring for further trend strength or weakness.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 06:14:08,435 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:16:08,436 - INFO - --- 周期开始 2026-01-27 06:16:08 ---
+2026-01-27 06:16:08,859 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:16:09,286 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:16:09,286 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:16:09,287 - INFO - 持仓量: 118.0, 未实现盈亏: 0.21735600 USDT
+2026-01-27 06:16:11,419 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2130, "kline_count": 100, "current_price": 0.1292}
+2026-01-27 06:16:11,423 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2135, "score": 45, "direction_score": 2.5, "current_price": 0.12932}
+2026-01-27 06:16:11,848 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.4463166821087015, "has_sl": true}
+2026-01-27 06:16:29,301 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is 1.45%, which is close to the 1.5% threshold for moving SL to break-even. The Direction Score is low (2.5), indicating weak trend confirmation. To protect capital and lock in minimal profits, adjust SL to break-even and maintain TP at 0.1325.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:16:29,302 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:18:29,303 - INFO - --- 周期开始 2026-01-27 06:18:29 ---
+2026-01-27 06:18:29,741 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:18:30,179 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:18:30,180 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:18:30,181 - INFO - 持仓量: 118.0, 未实现盈亏: 0.20054454 USDT
+2026-01-27 06:18:32,315 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2132, "kline_count": 100, "current_price": 0.12905}
+2026-01-27 06:18:32,320 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2138, "score": 45, "direction_score": 2.5, "current_price": 0.12908}
+2026-01-27 06:18:32,747 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.334450917885017, "has_sl": true}
+2026-01-27 06:18:38,877 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is positive (1.33%) and profit is locked, but the Direction Score is low (2.5), indicating weak trend strength. To protect capital and maximize trend profits, it's prudent to adjust the stop loss to break-even and set a take profit level. Since the PnL is close to 1.5%, moving the stop loss to break-even is justified.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:18:38,880 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:20:38,881 - INFO - --- 周期开始 2026-01-27 06:20:38 ---
+2026-01-27 06:20:39,313 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:20:39,736 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:20:39,737 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:20:39,738 - INFO - 持仓量: 118.0, 未实现盈亏: 0.21971600 USDT
+2026-01-27 06:20:41,873 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2133, "kline_count": 100, "current_price": 0.12922}
+2026-01-27 06:20:41,879 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2139, "score": 45, "direction_score": 2.5, "current_price": 0.12922}
+2026-01-27 06:20:42,307 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.4620204463009785, "has_sl": true}
+2026-01-27 06:20:46,195 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The PnL is currently positive at 1.46%, and profit locking is enabled. However, the Direction Score is low (2.5), indicating weak trend confirmation. To protect capital and maximize trend profits, it's prudent to adjust the stop loss to break-even (entry price) and maintain the existing take profit level.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:20:46,198 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:22:46,199 - INFO - --- 周期开始 2026-01-27 06:22:46 ---
+2026-01-27 06:22:46,625 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:22:47,051 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:22:47,051 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:22:47,052 - INFO - 持仓量: 118.0, 未实现盈亏: 0.21884870 USDT
+2026-01-27 06:22:49,187 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2133, "kline_count": 100, "current_price": 0.12919}
+2026-01-27 06:22:49,194 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2141, "score": 45, "direction_score": 2.5, "current_price": 0.12919}
+2026-01-27 06:22:49,622 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.4562493129603167, "has_sl": true}
+2026-01-27 06:23:09,785 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The PnL is positive (1.46%) and profit is locked, but the Direction Score is low (2.5), indicating weak trend confirmation. The current SL is very close to the entry price, providing little room for volatility. Adjusting TP/SL to better reflect risk-reward while protecting capital.", "new_stop_loss": 0.1268, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:23:09,788 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:25:09,788 - INFO - --- 周期开始 2026-01-27 06:25:09 ---
+2026-01-27 06:25:10,219 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:25:10,644 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:25:10,645 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:25:10,645 - INFO - 持仓量: 118.0, 未实现盈亏: 0.23576754 USDT
+2026-01-27 06:25:12,770 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2123, "kline_count": 100, "current_price": 0.12912}
+2026-01-27 06:25:12,774 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2127, "score": 45, "direction_score": 2.5, "current_price": 0.12934}
+2026-01-27 06:25:13,204 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.5688295984547498, "has_sl": true}
+2026-01-27 06:25:23,348 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Profit is above 1.5%, so moving SL to break-even to protect capital. The Direction Score is low (2.5), indicating weak trend confirmation, but since profit is locked and PnL is positive, adjusting SL to secure minimal profit is prudent. No partial TP is needed as per the context.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:25:23,349 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:27:23,350 - INFO - --- 周期开始 2026-01-27 06:27:23 ---
+2026-01-27 06:27:23,784 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:27:24,211 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:27:24,211 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:27:24,212 - INFO - 持仓量: 118.0, 未实现盈亏: 0.22030954 USDT
+2026-01-27 06:27:26,355 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2138, "kline_count": 100, "current_price": 0.12921}
+2026-01-27 06:27:26,362 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2149, "score": 65, "direction_score": 1.5, "current_price": 0.12917}
+2026-01-27 06:27:26,789 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.4659699429953361, "has_sl": true}
+2026-01-27 06:27:32,429 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The PnL is positive (1.47%) and the trend direction score is favorable (1.5). Profit is locked, but the stop loss is currently above the entry price, which is unusual for a LONG position. Adjusting the stop loss to a more logical level below the entry price will better protect capital while maintaining the take profit level to maximize trend profits.", "new_stop_loss": 0.126, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:27:32,432 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:29:32,434 - INFO - --- 周期开始 2026-01-27 06:29:32 ---
+2026-01-27 06:29:32,875 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:29:33,301 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:29:33,301 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:29:33,302 - INFO - 持仓量: 118.0, 未实现盈亏: 0.25747600 USDT
+2026-01-27 06:29:35,422 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2117, "kline_count": 100, "current_price": 0.12958}
+2026-01-27 06:29:35,428 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2125, "score": 45, "direction_score": 2.5, "current_price": 0.12958}
+2026-01-27 06:29:35,853 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.7132806733774086, "has_sl": true}
+2026-01-27 06:29:47,273 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Current PnL is positive (1.71%) and profit is locked, but the Direction Score is weak (2.5). Moving SL to break-even protects capital while maintaining exposure to potential upside. No partial TP needed as per context.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:29:47,276 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:31:47,278 - INFO - --- 周期开始 2026-01-27 06:31:47 ---
+2026-01-27 06:31:47,702 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:31:48,125 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:31:48,126 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:31:48,126 - INFO - 持仓量: 118.0, 未实现盈亏: 0.21381600 USDT
+2026-01-27 06:31:50,257 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2129, "kline_count": 100, "current_price": 0.12911}
+2026-01-27 06:31:50,262 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2135, "score": 50, "direction_score": 3.5, "current_price": 0.12911}
+2026-01-27 06:31:50,689 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.4227610358202862, "has_sl": true}
+2026-01-27 06:32:05,597 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is positive (1.42%) and profit is locked, but the Direction Score is low (3.5), indicating weak trend confirmation. To protect capital and maximize potential gains, we should adjust the stop loss to break-even (entry price) and maintain the existing take profit level.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:32:05,599 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:34:05,599 - INFO - --- 周期开始 2026-01-27 06:34:05 ---
+2026-01-27 06:34:06,023 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:34:06,448 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:34:06,449 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:34:06,450 - INFO - 持仓量: 118.0, 未实现盈亏: 0.26573600 USDT
+2026-01-27 06:34:08,574 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2121, "kline_count": 100, "current_price": 0.12961}
+2026-01-27 06:34:08,580 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2128, "score": 30, "direction_score": 2.5, "current_price": 0.12956}
+2026-01-27 06:34:09,007 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 1.7682438480503782, "has_sl": true}
+2026-01-27 06:34:12,894 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Profit is above 1.5%, so moving SL to break-even to protect capital. The current TP is reasonable, so no adjustment is needed there. No partial TP is required as per the context.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:34:12,897 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:36:12,898 - INFO - --- 周期开始 2026-01-27 06:36:12 ---
+2026-01-27 06:36:13,326 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:36:13,751 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:36:13,752 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:36:13,752 - INFO - 持仓量: 118.0, 未实现盈亏: 0.31007922 USDT
+2026-01-27 06:36:15,888 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2135, "kline_count": 100, "current_price": 0.12996}
+2026-01-27 06:36:15,891 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2138, "score": 65, "direction_score": 3.5, "current_price": 0.12996}
+2026-01-27 06:36:16,317 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 2.0633097253411643, "has_sl": true}
+2026-01-27 06:36:28,814 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Current PnL is positive (2.06%) and profit is locked, but the Direction Score is weak (3.5). To protect capital and maximize trend profits, adjust SL to break-even and maintain TP to secure potential upside.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:36:28,816 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:38:28,816 - INFO - --- 周期开始 2026-01-27 06:38:28 ---
+2026-01-27 06:38:29,245 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:38:29,670 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:38:29,671 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:38:29,672 - INFO - 持仓量: 118.0, 未实现盈亏: 0.32355600 USDT
+2026-01-27 06:38:31,789 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2116, "kline_count": 100, "current_price": 0.13007}
+2026-01-27 06:38:31,792 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2119, "score": 45, "direction_score": 2.5, "current_price": 0.13007}
+2026-01-27 06:38:32,215 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 2.1529860707611617, "has_sl": true}
+2026-01-27 06:38:44,371 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Profit is locked and PnL is positive (2.15%), but the Direction Score is weak (2.5). Moving stop loss to break-even protects capital while allowing room for potential upside. No partial TP is needed as per the context.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:38:44,373 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:40:44,374 - INFO - --- 周期开始 2026-01-27 06:40:44 ---
+2026-01-27 06:40:44,797 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:40:45,223 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:40:45,224 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:40:45,225 - INFO - 持仓量: 118.0, 未实现盈亏: 0.31397676 USDT
+2026-01-27 06:40:47,354 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2127, "kline_count": 100, "current_price": 0.12996}
+2026-01-27 06:40:47,356 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2130, "score": 65, "direction_score": 1.5, "current_price": 0.12997}
+2026-01-27 06:40:47,782 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 2.0892444919047097, "has_sl": true}
+2026-01-27 06:40:52,077 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Profit is above 1.5%, so moving SL to break-even to protect capital. The current TP remains valid as the trend direction score is positive (1.5). No partial TP is needed.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:40:52,079 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:42:52,081 - INFO - --- 周期开始 2026-01-27 06:42:52 ---
+2026-01-27 06:42:52,509 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:42:52,932 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:42:52,932 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:42:52,932 - INFO - 持仓量: 118.0, 未实现盈亏: 0.34298706 USDT
+2026-01-27 06:42:55,072 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2137, "kline_count": 100, "current_price": 0.13024}
+2026-01-27 06:42:55,077 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2143, "score": 45, "direction_score": 2.5, "current_price": 0.13019}
+2026-01-27 06:42:55,501 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 2.2822830132382737, "has_sl": true}
+2026-01-27 06:43:00,707 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is positive (2.28%) and profit is locked, but the Direction Score is weak (2.5). To protect capital and maximize trend profits, it's prudent to adjust the stop loss to break-even (entry price) and maintain the existing take profit level. No partial take profit is needed as per the context.", "new_stop_loss": 0.127358, "new_take_profit": 0.1325, "partial_tp_price": null}}
+2026-01-27 06:43:00,710 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:45:00,711 - INFO - --- 周期开始 2026-01-27 06:45:00 ---
+2026-01-27 06:45:01,206 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:45:01,665 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:45:01,666 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:45:01,666 - INFO - 持仓量: 118.0, 未实现盈亏: 0.37191594 USDT
+2026-01-27 06:45:03,836 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2168, "kline_count": 100, "current_price": 0.13051}
+2026-01-27 06:45:03,839 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2171, "score": 45, "direction_score": 2.5, "current_price": 0.13046}
+2026-01-27 06:45:04,272 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 2.4747797547072037, "has_sl": true}
+2026-01-27 06:45:20,129 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Profit is locked and PnL is positive (2.47%), but the Direction Score is weak (2.5). The current SL is already at breakeven (0.1276), protecting capital. However, the TP (0.1325) may be too ambitious given the weak trend. Adjusting TP to a more conservative level to secure profits while maintaining breakeven SL.", "new_stop_loss": 0.1276, "new_take_profit": 0.13, "partial_tp_price": null}}
+2026-01-27 06:45:23,282 - WARNING - 跳过止盈设置: 价格 0.13 过于接近或劣于现价 0.13046，可能导致立即触发
+2026-01-27 06:45:23,283 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:47:23,284 - INFO - --- 周期开始 2026-01-27 06:47:23 ---
+2026-01-27 06:47:23,718 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:47:24,143 - INFO - [DATA] all_open_orders_count=1
+2026-01-27 06:47:24,143 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:47:24,143 - INFO - 持仓量: 118.0, 未实现盈亏: 0.37548544 USDT
+2026-01-27 06:47:26,285 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2139, "kline_count": 100, "current_price": 0.13053}
+2026-01-27 06:47:26,330 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2145, "score": 45, "direction_score": 2.5, "current_price": 0.13058}
+2026-01-27 06:47:26,758 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 2.4985316980480223, "has_sl": true}
+2026-01-27 06:47:42,018 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Current PnL is positive (2.50%) and profit is locked, but the Direction Score is weak (2.5). The suggested SL is already at break-even (0.1276), which protects capital. However, the trade lacks a TP, which is critical for risk management. Given the mediocre Score (45), setting a conservative TP will lock in gains if the trend reverses.", "new_stop_loss": 0.1276, "new_take_profit": 0.13, "partial_tp_price": null}}
+2026-01-27 06:47:45,140 - WARNING - 跳过止盈设置: 价格 0.13 过于接近或劣于现价 0.13058，可能导致立即触发
+2026-01-27 06:47:45,141 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:49:45,142 - INFO - --- 周期开始 2026-01-27 06:49:45 ---
+2026-01-27 06:49:45,569 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:49:45,997 - INFO - [DATA] all_open_orders_count=1
+2026-01-27 06:49:45,998 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:49:45,998 - INFO - 持仓量: 118.0, 未实现盈亏: 0.41717130 USDT
+2026-01-27 06:49:48,135 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2134, "kline_count": 100, "current_price": 0.13087}
+2026-01-27 06:49:48,141 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2141, "score": 65, "direction_score": 1.5, "current_price": 0.13082}
+2026-01-27 06:49:48,570 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 2.775915136858305, "has_sl": true}
+2026-01-27 06:49:56,746 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is positive (2.78%) and profit is locked, but there is no take profit set. The trend direction score is positive (1.5), indicating the trend is still favorable. To protect profits and ensure risk management, we should set a stop loss at break-even and establish a take profit level.", "new_stop_loss": 0.127358, "new_take_profit": 0.1312, "partial_tp_price": null}}
+2026-01-27 06:49:56,748 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:51:56,748 - INFO - --- 周期开始 2026-01-27 06:51:56 ---
+2026-01-27 06:51:57,174 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:51:57,598 - INFO - [DATA] all_open_orders_count=1
+2026-01-27 06:51:57,599 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:51:57,600 - INFO - 持仓量: 118.0, 未实现盈亏: 0.44981600 USDT
+2026-01-27 06:51:59,724 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2123, "kline_count": 100, "current_price": 0.13113}
+2026-01-27 06:51:59,730 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2129, "score": 45, "direction_score": 2.5, "current_price": 0.13117}
+2026-01-27 06:52:00,159 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 2.9931374550479752, "has_sl": true}
+2026-01-27 06:52:23,183 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "Current PnL is positive (2.99%) and profit is locked, but the Direction Score is weak (2.5). The suggested SL is already at breakeven (0.1276), which protects capital. However, the trade lacks a TP, which is critical for risk management. Given the mediocre Score (45), setting a conservative TP will lock in gains if the trend reverses.", "new_stop_loss": 0.1276, "new_take_profit": 0.13, "partial_tp_price": null}}
+2026-01-27 06:52:26,305 - WARNING - 跳过止盈设置: 价格 0.13 过于接近或劣于现价 0.13117，可能导致立即触发
+2026-01-27 06:52:26,306 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:54:26,307 - INFO - --- 周期开始 2026-01-27 06:54:26 ---
+2026-01-27 06:54:26,739 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 06:54:27,166 - INFO - [DATA] all_open_orders_count=1
+2026-01-27 06:54:27,166 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 06:54:27,166 - INFO - 持仓量: 118.0, 未实现盈亏: 0.47563912 USDT
+2026-01-27 06:54:29,297 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2129, "kline_count": 100, "current_price": 0.13145}
+2026-01-27 06:54:29,304 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2136, "score": 65, "direction_score": 1.5, "current_price": 0.13132}
+2026-01-27 06:54:29,729 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": 3.164968042839869, "has_sl": true}
+2026-01-27 06:54:45,536 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is positive (3.16%) and profit is locked, indicating a favorable trend. However, the trade lacks a take profit level, which is essential for capitalizing on the trend. The stop loss is already set at breakeven (0.1276), protecting capital. Adding a take profit will ensure profits are captured if the trend continues.", "new_stop_loss": 0.1276, "new_take_profit": 0.1315, "partial_tp_price": null}}
+2026-01-27 06:54:48,721 - INFO - 周期结束，等待 120 秒...
+2026-01-27 06:56:48,721 - INFO - --- 周期开始 2026-01-27 06:56:48 ---
+2026-01-27 06:56:49,147 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 06:56:49,571 - INFO - [DATA] all_open_orders_count=1
+2026-01-27 06:56:49,571 - INFO - [DECISION] orphan_cleanup symbols=['RESOLVUSDT']
+2026-01-27 06:56:49,571 - INFO - 检测到 RESOLVUSDT 无持仓但有挂单，正在执行清理...
+2026-01-27 06:56:49,991 - INFO - 检测到 RESOLVUSDT 持仓已结束，正在清理剩余挂单...
+2026-01-27 06:56:50,416 - WARNING - Double Check 持仓失败 ('NoneType' object has no attribute 'get')，跳过清理挂单，以策安全
+2026-01-27 06:56:50,417 - ERROR - 清理挂单失败或跳过: 'NoneType' object has no attribute 'get'
+2026-01-27 06:56:50,418 - INFO - 无持仓且无观察对象，开始全市场选币...
+2026-01-27 06:57:29,887 - INFO - 锁定候选标的: BTRUSDT，进入入场监控阶段
+2026-01-27 06:57:29,887 - INFO - 正在监控入场机会: BTRUSDT (已观察 0 分钟)
+2026-01-27 06:57:32,544 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2231, "kline_count": 100, "current_price": 0.13564}
+2026-01-27 06:57:32,546 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2234, "score": 60, "direction_score": 1, "current_price": 0.13653}
+2026-01-27 06:57:32,973 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "BTRUSDT", "analysis_score": 60, "current_price": 0.13653}
+2026-01-27 06:57:39,529 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "BTRUSDT", "data": {"action": "WAIT", "direction": "LONG", "confidence": 0.65, "reasoning": "The asset has passed quantitative screening with a bullish direction score, but the orderbook imbalance shows significant sell pressure (-50%). This suggests a potential pullback or consolidation before a move higher. Waiting for a better entry point to mitigate the risk of entering during temporary counter-move.", "leverage": 5, "allocation_usdt": 3.24, "stop_loss": 0.128, "take_profit": 0.15, "partial_tp_price": 0.142, "partial_tp_percent": 0.5}}
+2026-01-27 06:57:39,532 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.65 symbol=BTRUSDT
+2026-01-27 06:57:39,533 - INFO - AI 建议继续等待: BTRUSDT (信号尚未确认)
+2026-01-27 06:57:39,533 - INFO - 周期结束，等待 60 秒...
+2026-01-27 06:58:39,534 - INFO - --- 周期开始 2026-01-27 06:58:39 ---
+2026-01-27 06:58:39,963 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 06:58:40,389 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 06:58:40,390 - INFO - 正在监控入场机会: BTRUSDT (已观察 1 分钟)
+2026-01-27 06:58:42,949 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2134, "kline_count": 100, "current_price": 0.13668}
+2026-01-27 06:58:42,956 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2142, "score": 40, "direction_score": 2, "current_price": 0.13668}
+2026-01-27 06:58:43,383 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "BTRUSDT", "analysis_score": 40, "current_price": 0.13668}
+2026-01-27 06:58:48,494 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "BTRUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The asset has passed quantitative screening with a bullish Direction Score (2) and shows positive signals such as 1H均线多头排列 (bullish MA alignment) and acceptable volatility (ATR=6.50%). The current price is not overextended, and momentum supports a long entry. Orderbook imbalance is slightly negative but not strongly bearish (<-0.15), so it doesn't override the bullish signals.", "leverage": 10, "allocation_usdt": 20.0, "stop_loss": 0.128, "take_profit": 0.152, "partial_tp_price": 0.144, "partial_tp_percent": 0.5}}
+2026-01-27 06:58:48,496 - INFO - [DECISION] entry action=BUY direction=LONG conf=0.75 symbol=BTRUSDT
+2026-01-27 06:58:48,497 - INFO - AI 决定入场: BUY BTRUSDT (信心: 0.75)
+2026-01-27 06:58:48,925 - INFO - LLM_EVENT: {"event": "trade_execution_start", "symbol": "BTRUSDT", "side": "BUY", "usdt": 20.0}
+2026-01-27 06:58:54,006 - INFO - 设置止损 BTRUSDT: 0.128 (ID: 2000000284323419)
+2026-01-27 06:58:54,880 - INFO - 设置止盈 BTRUSDT: 0.152 (ID: 429130069)
+2026-01-27 06:58:55,741 - INFO - 开仓成功: BTRUSDT
+2026-01-27 06:58:55,742 - INFO - 周期结束，等待 60 秒...
+2026-01-27 06:59:55,742 - INFO - --- 周期开始 2026-01-27 06:59:55 ---
+2026-01-27 06:59:56,168 - INFO - [DATA] active_positions_count=1 symbols=['BTRUSDT']
+2026-01-27 06:59:56,591 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 06:59:56,592 - INFO - 监控持仓: BTRUSDT
+2026-01-27 06:59:56,592 - INFO - 持仓量: 145.0, 未实现盈亏: -0.13591140 USDT
+2026-01-27 06:59:58,726 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2130, "kline_count": 100, "current_price": 0.13624}
+2026-01-27 06:59:58,731 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2137, "score": 60, "direction_score": 1, "current_price": 0.13627}
+2026-01-27 06:59:59,158 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "BTRUSDT", "pnl_pct": -0.6822186761651777, "has_sl": false}
+2026-01-27 07:00:03,958 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "BTRUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade currently lacks a stop loss and partial take profit, which are essential for risk management. The PnL is slightly negative (-0.68%), but the trend direction score is positive (1), indicating the trend may still be valid. Setting a stop loss will protect capital, and adding a partial take profit will secure some profits if the price moves favorably.", "new_stop_loss": 0.132, "new_take_profit": 0.152, "partial_tp_price": 0.144}}
+2026-01-27 07:00:10,148 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:02:10,149 - INFO - --- 周期开始 2026-01-27 07:02:10 ---
+2026-01-27 07:02:10,575 - INFO - [DATA] active_positions_count=1 symbols=['BTRUSDT']
+2026-01-27 07:02:11,001 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 07:02:11,002 - INFO - 监控持仓: BTRUSDT
+2026-01-27 07:02:11,003 - INFO - 持仓量: 145.0, 未实现盈亏: -0.50356905 USDT
+2026-01-27 07:02:13,147 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2141, "kline_count": 100, "current_price": 0.13389}
+2026-01-27 07:02:13,194 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2148, "score": 60, "direction_score": 0, "current_price": 0.13399}
+2026-01-27 07:02:13,621 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "BTRUSDT", "pnl_pct": -2.5277070992481585, "has_sl": true}
+2026-01-27 07:02:26,339 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "BTRUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a negative PnL (-2.53%) and lacks a partial take profit, which is needed. The trend score is neutral (Direction Score: 0), but the overall score (60) suggests the trade still has potential. Adjusting TP/SL and adding a partial TP will help manage risk and secure some profit if the price moves favorably.", "new_stop_loss": 0.132, "new_take_profit": 0.152, "partial_tp_price": 0.144}}
+2026-01-27 07:02:34,471 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:04:34,473 - INFO - --- 周期开始 2026-01-27 07:04:34 ---
+2026-01-27 07:04:35,812 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 07:04:36,265 - INFO - [DATA] all_open_orders_count=1
+2026-01-27 07:04:36,266 - INFO - [DECISION] orphan_cleanup symbols=['BTRUSDT']
+2026-01-27 07:04:36,266 - INFO - 检测到 BTRUSDT 无持仓但有挂单，正在执行清理...
+2026-01-27 07:04:36,725 - INFO - 检测到 BTRUSDT 持仓已结束，正在清理剩余挂单...
+2026-01-27 07:04:37,179 - WARNING - Double Check 持仓失败 ('NoneType' object has no attribute 'get')，跳过清理挂单，以策安全
+2026-01-27 07:04:37,180 - ERROR - 清理挂单失败或跳过: 'NoneType' object has no attribute 'get'
+2026-01-27 07:04:37,181 - INFO - 无持仓且无观察对象，开始全市场选币...
+2026-01-27 07:05:19,462 - INFO - 锁定候选标的: RESOLVUSDT，进入入场监控阶段
+2026-01-27 07:05:19,462 - INFO - 正在监控入场机会: RESOLVUSDT (已观察 0 分钟)
+2026-01-27 07:05:22,427 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2512, "kline_count": 100, "current_price": 0.13122}
+2026-01-27 07:05:22,430 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2515, "score": 30, "direction_score": 1.5, "current_price": 0.13109}
+2026-01-27 07:05:22,889 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "RESOLVUSDT", "analysis_score": 30, "current_price": 0.13109}
+2026-01-27 07:05:29,056 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "RESOLVUSDT", "data": {"action": "WAIT", "direction": "LONG", "confidence": 0.6, "reasoning": "The Direction Score is positive (1.5), indicating a bullish bias, but the Volume Ratio is low (0.45) and there is a noted risk of volume-price divergence (price up, volume down). Additionally, the Orderbook Imbalance is only slightly positive (0.05), not strongly bullish (>0.15). Waiting for a pullback or stronger volume confirmation would provide a better entry.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.125, "take_profit": 0.145, "partial_tp_price": 0.138, "partial_tp_percent": 0.5}}
+2026-01-27 07:05:29,059 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.6 symbol=RESOLVUSDT
+2026-01-27 07:05:29,059 - INFO - AI 建议继续等待: RESOLVUSDT (信号尚未确认)
+2026-01-27 07:05:29,060 - INFO - 周期结束，等待 60 秒...
+2026-01-27 07:06:29,060 - INFO - --- 周期开始 2026-01-27 07:06:29 ---
+2026-01-27 07:06:30,164 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 07:06:30,605 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 07:06:30,606 - INFO - 正在监控入场机会: RESOLVUSDT (已观察 1 分钟)
+2026-01-27 07:06:33,284 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2233, "kline_count": 100, "current_price": 0.13226}
+2026-01-27 07:06:33,287 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2237, "score": 45, "direction_score": 2.5, "current_price": 0.13236}
+2026-01-27 07:06:33,728 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "RESOLVUSDT", "analysis_score": 45, "current_price": 0.13236}
+2026-01-27 07:06:39,395 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "RESOLVUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The Direction Score is positive (2.5), indicating bullish sentiment. The technical signals include a bullish 1H moving average alignment and RSI in a strong zone (50.2). Although volume is slightly萎缩, liquidity is good, and the orderbook imbalance is slightly positive (0.075). The current price seems acceptable given the momentum, and the ATR suggests manageable volatility.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.12618, "take_profit": 0.1456, "partial_tp_price": 0.13898, "partial_tp_percent": 0.5}}
+2026-01-27 07:06:39,398 - INFO - [DECISION] entry action=BUY direction=LONG conf=0.75 symbol=RESOLVUSDT
+2026-01-27 07:06:39,399 - INFO - AI 决定入场: BUY RESOLVUSDT (信心: 0.75)
+2026-01-27 07:06:39,855 - INFO - LLM_EVENT: {"event": "trade_execution_start", "symbol": "RESOLVUSDT", "side": "BUY", "usdt": 20.0}
+2026-01-27 07:06:42,772 - INFO - 设置止损 RESOLVUSDT: 0.12618 (ID: 2166257017)
+2026-01-27 07:06:46,336 - INFO - 设置止盈 RESOLVUSDT: 0.1456 (ID: 2000000284358817)
+2026-01-27 07:06:47,352 - INFO - 开仓成功: RESOLVUSDT
+2026-01-27 07:06:47,353 - INFO - 周期结束，等待 60 秒...
+2026-01-27 07:07:47,353 - INFO - --- 周期开始 2026-01-27 07:07:47 ---
+2026-01-27 07:07:47,828 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 07:07:48,271 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 07:07:48,271 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 07:07:48,272 - INFO - 持仓量: 151.0, 未实现盈亏: -0.16459000 USDT
+2026-01-27 07:07:50,500 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2226, "kline_count": 100, "current_price": 0.13109}
+2026-01-27 07:07:50,507 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2234, "score": 50, "direction_score": 2.5, "current_price": 0.13121}
+2026-01-27 07:07:50,960 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": -0.8240719739925908, "has_sl": true}
+2026-01-27 07:07:56,580 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current position has a negative PnL and lacks both stop loss and take profit levels. The trend direction score is neutral (2.5), indicating no strong trend. To manage risk and secure potential profits, it's essential to set both stop loss and take profit levels. Additionally, since 'Partial TP' is needed, a partial take profit level will be set to lock in some profits early.", "new_stop_loss": 0.12618, "new_take_profit": 0.13888, "partial_tp_price": 0.135}}
+2026-01-27 07:08:20,035 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:08:25,195 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:10:25,197 - INFO - --- 周期开始 2026-01-27 07:10:25 ---
+2026-01-27 07:10:25,645 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 07:10:26,096 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 07:10:26,096 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 07:10:26,096 - INFO - 持仓量: 151.0, 未实现盈亏: -0.06946000 USDT
+2026-01-27 07:10:28,319 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2221, "kline_count": 100, "current_price": 0.13179}
+2026-01-27 07:10:28,323 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2226, "score": 30, "direction_score": 1.5, "current_price": 0.13184}
+2026-01-27 07:10:28,763 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": -0.3477734936115521, "has_sl": false}
+2026-01-27 07:10:36,092 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current position has a negative PnL (-0.35%) and lacks a stop-loss, which exposes the trade to unnecessary risk. The trend direction score is positive (1.5), suggesting the trend may still be valid, but the overall score is low (30), indicating weak confidence. Setting a stop-loss and take-profit will help manage risk and lock in potential gains. A partial take-profit is also recommended to secure some profits early.", "new_stop_loss": 0.129, "new_take_profit": 0.13888, "partial_tp_price": 0.135}}
+2026-01-27 07:10:50,770 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:11:05,390 - WARNING - 设置止损失败，准备重试 (2/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:11:11,234 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:13:11,235 - INFO - --- 周期开始 2026-01-27 07:13:11 ---
+2026-01-27 07:13:11,687 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 07:13:12,134 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 07:13:12,135 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 07:13:12,135 - INFO - 持仓量: 151.0, 未实现盈亏: -0.08003000 USDT
+2026-01-27 07:13:14,352 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2216, "kline_count": 100, "current_price": 0.13167}
+2026-01-27 07:13:14,355 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2219, "score": 30, "direction_score": 1.5, "current_price": 0.13151}
+2026-01-27 07:13:14,807 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": -0.4006955469872231, "has_sl": true}
+2026-01-27 07:13:30,486 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is slightly negative (-0.40%), but the Direction Score of 1.5 suggests a weak but still valid trend. Since there is no partial TP set and it is needed, we will adjust the TP/SL and introduce a partial TP to secure some profit early.", "new_stop_loss": 0.129, "new_take_profit": 0.13888, "partial_tp_price": 0.135}}
+2026-01-27 07:13:51,129 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:14:11,066 - WARNING - 设置止盈失败，准备重试 (2/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:14:31,374 - ERROR - 设置新止盈失败 0.13888 (重试3次后): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:14:32,291 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:16:32,293 - INFO - --- 周期开始 2026-01-27 07:16:32 ---
+2026-01-27 07:16:32,740 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 07:16:33,190 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 07:16:33,191 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 07:16:33,191 - INFO - 持仓量: 151.0, 未实现盈亏: -0.21291000 USDT
+2026-01-27 07:16:35,421 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2228, "kline_count": 100, "current_price": 0.13075}
+2026-01-27 07:16:35,425 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2232, "score": 55, "direction_score": 0.5, "current_price": 0.13076}
+2026-01-27 07:16:35,872 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": -1.066001360852801, "has_sl": true}
+2026-01-27 07:16:44,467 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current position has a negative PnL (-1.07%) and lacks both a take profit and partial take profit, which are essential for risk management. The Direction Score is neutral (0.5), indicating no strong trend confirmation. Setting a take profit and partial take profit will help secure potential gains and manage risk effectively.", "new_stop_loss": 0.129, "new_take_profit": 0.13888, "partial_tp_price": 0.135}}
+2026-01-27 07:17:05,931 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:17:10,842 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:19:10,843 - INFO - --- 周期开始 2026-01-27 07:19:10 ---
+2026-01-27 07:19:11,293 - INFO - [DATA] active_positions_count=1 symbols=['RESOLVUSDT']
+2026-01-27 07:19:11,735 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 07:19:11,736 - INFO - 监控持仓: RESOLVUSDT
+2026-01-27 07:19:11,736 - INFO - 持仓量: 151.0, 未实现盈亏: -0.37375067 USDT
+2026-01-27 07:19:13,969 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "RESOLVUSDT", "duration_ms": 2231, "kline_count": 100, "current_price": 0.12968}
+2026-01-27 07:19:13,972 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "RESOLVUSDT", "duration_ms": 2235, "score": 35, "direction_score": 1.5, "current_price": 0.12967}
+2026-01-27 07:19:14,412 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "RESOLVUSDT", "pnl_pct": -1.8713011264837074, "has_sl": true}
+2026-01-27 07:19:23,469 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "RESOLVUSDT", "data": {"action": "CLOSE", "reasoning": "The PnL is negative (-1.87%) and the Direction Score is low (1.5), indicating a weak or invalid trend. Given the poor performance and lack of strong directional bias, it is prudent to close the position to protect capital.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 07:19:23,469 - INFO - LLM 建议平仓 RESOLVUSDT: The PnL is negative (-1.87%) and the Direction Score is low (1.5), indicating a weak or invalid trend. Given the poor performance and lack of strong directional bias, it is prudent to close the position to protect capital.
+2026-01-27 07:19:24,808 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:21:24,809 - INFO - --- 周期开始 2026-01-27 07:21:24 ---
+2026-01-27 07:21:25,263 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 07:21:25,708 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 07:21:25,708 - INFO - 检测到 RESOLVUSDT 持仓已结束，正在清理剩余挂单...
+2026-01-27 07:21:26,162 - WARNING - Double Check 持仓失败 ('NoneType' object has no attribute 'get')，跳过清理挂单，以策安全
+2026-01-27 07:21:26,163 - ERROR - 清理挂单失败或跳过: 'NoneType' object has no attribute 'get'
+2026-01-27 07:21:26,163 - INFO - 无持仓且无观察对象，开始全市场选币...
+2026-01-27 07:22:07,107 - INFO - 锁定候选标的: ZKCUSDT，进入入场监控阶段
+2026-01-27 07:22:07,107 - INFO - 正在监控入场机会: ZKCUSDT (已观察 0 分钟)
+2026-01-27 07:22:09,880 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2320, "kline_count": 100, "current_price": 0.1444}
+2026-01-27 07:22:09,887 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2328, "score": 60, "direction_score": 3, "current_price": 0.1445}
+2026-01-27 07:22:10,330 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "ZKCUSDT", "analysis_score": 60, "current_price": 0.1445}
+2026-01-27 07:22:17,898 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "ZKCUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The asset has passed quantitative screening with a bullish Direction Score (3) and shows strong buy-side imbalance (0.159). Technical signals include bullish MA alignment and acceptable volatility (ATR=3.30%). Current price offers a reasonable entry with momentum support.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.1385, "take_profit": 0.1565, "partial_tp_price": 0.1505, "partial_tp_percent": 0.5}}
+2026-01-27 07:22:17,901 - INFO - [DECISION] entry action=BUY direction=LONG conf=0.75 symbol=ZKCUSDT
+2026-01-27 07:22:17,901 - INFO - AI 决定入场: BUY ZKCUSDT (信心: 0.75)
+2026-01-27 07:22:18,348 - INFO - LLM_EVENT: {"event": "trade_execution_start", "symbol": "ZKCUSDT", "side": "BUY", "usdt": 20.0}
+2026-01-27 07:22:21,921 - INFO - 设置止损 ZKCUSDT: 0.1385 (ID: 605698806)
+2026-01-27 07:22:23,667 - INFO - 设置止盈 ZKCUSDT: 0.1565 (ID: 605698866)
+2026-01-27 07:22:24,588 - INFO - 开仓成功: ZKCUSDT
+2026-01-27 07:22:24,588 - INFO - 周期结束，等待 60 秒...
+2026-01-27 07:23:24,589 - INFO - --- 周期开始 2026-01-27 07:23:24 ---
+2026-01-27 07:23:25,032 - INFO - [DATA] active_positions_count=1 symbols=['ZKCUSDT']
+2026-01-27 07:23:25,476 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 07:23:25,510 - INFO - 监控持仓: ZKCUSDT
+2026-01-27 07:23:25,510 - INFO - 持仓量: 137.0, 未实现盈亏: 0.15784181 USDT
+2026-01-27 07:23:27,738 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2226, "kline_count": 100, "current_price": 0.1459}
+2026-01-27 07:23:27,742 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2230, "score": 40, "direction_score": 2, "current_price": 0.1459}
+2026-01-27 07:23:28,188 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "ZKCUSDT", "pnl_pct": 0.7934779614325069, "has_sl": true}
+2026-01-27 07:23:48,471 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "ZKCUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a positive PnL (0.79%) but lacks a partial take profit, which is needed to secure some profits early. The Direction Score is low (2), indicating weak trend confirmation, so adjusting TP/SL and adding a partial TP is prudent.", "new_stop_loss": 0.1385, "new_take_profit": 0.1565, "partial_tp_price": 0.148}}
+2026-01-27 07:23:56,013 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:25:56,014 - INFO - --- 周期开始 2026-01-27 07:25:56 ---
+2026-01-27 07:25:56,460 - INFO - [DATA] active_positions_count=1 symbols=['ZKCUSDT']
+2026-01-27 07:25:56,904 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 07:25:56,905 - INFO - 监控持仓: ZKCUSDT
+2026-01-27 07:25:56,905 - INFO - 持仓量: 137.0, 未实现盈亏: 0.01370000 USDT
+2026-01-27 07:25:59,147 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2239, "kline_count": 100, "current_price": 0.1453}
+2026-01-27 07:25:59,152 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2246, "score": 40, "direction_score": 2, "current_price": 0.1453}
+2026-01-27 07:25:59,594 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "ZKCUSDT", "pnl_pct": 0.06887052341597796, "has_sl": true}
+2026-01-27 07:26:15,409 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "ZKCUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a low score (40) and a weak direction score (2), indicating poor momentum. However, the PnL is slightly positive (0.07%), so instead of closing immediately, it's prudent to set a stop-loss and take-profit to manage risk. Since 'Partial TP' is needed, we'll set a partial take-profit level to secure some profits early.", "new_stop_loss": 0.1385, "new_take_profit": 0.1525, "partial_tp_price": 0.148}}
+2026-01-27 07:26:38,816 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:26:42,527 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:28:42,528 - INFO - --- 周期开始 2026-01-27 07:28:42 ---
+2026-01-27 07:28:42,969 - INFO - [DATA] active_positions_count=1 symbols=['ZKCUSDT']
+2026-01-27 07:28:43,417 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 07:28:43,417 - INFO - 监控持仓: ZKCUSDT
+2026-01-27 07:28:43,417 - INFO - 持仓量: 137.0, 未实现盈亏: 0.04110000 USDT
+2026-01-27 07:28:45,655 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2236, "kline_count": 100, "current_price": 0.1455}
+2026-01-27 07:28:45,657 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2239, "score": 40, "direction_score": 2, "current_price": 0.1455}
+2026-01-27 07:28:46,096 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "ZKCUSDT", "pnl_pct": 0.2066115702479339, "has_sl": true}
+2026-01-27 07:28:55,426 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "ZKCUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current position has a low score (40) and direction score (2), indicating weak trend confirmation. However, the PnL is slightly positive (0.21%), and there's no immediate reason to close the trade. Since partial TP is needed and no TP/SL adjustments have been made yet, it's prudent to secure some profit and manage risk by setting a partial TP and adjusting SL.", "new_stop_loss": 0.1385, "new_take_profit": 0.1525, "partial_tp_price": 0.148}}
+2026-01-27 07:29:02,987 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:31:02,988 - INFO - --- 周期开始 2026-01-27 07:31:02 ---
+2026-01-27 07:31:03,433 - INFO - [DATA] active_positions_count=1 symbols=['ZKCUSDT']
+2026-01-27 07:31:03,876 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 07:31:03,876 - INFO - 监控持仓: ZKCUSDT
+2026-01-27 07:31:03,877 - INFO - 持仓量: 137.0, 未实现盈亏: 0.05625494 USDT
+2026-01-27 07:31:06,105 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2226, "kline_count": 100, "current_price": 0.1455}
+2026-01-27 07:31:06,112 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2233, "score": 40, "direction_score": 1, "current_price": 0.1458}
+2026-01-27 07:31:06,556 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "ZKCUSDT", "pnl_pct": 0.28279614325068875, "has_sl": false}
+2026-01-27 07:31:13,153 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "ZKCUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade lacks both stop loss and take profit levels, which are essential for risk management. The current PnL is positive but minimal (0.28%), and the Direction Score of 1 suggests weak trend confirmation. Setting a stop loss will protect capital, while adjusting the take profit and adding a partial take profit will secure some profits early.", "new_stop_loss": 0.142, "new_take_profit": 0.1525, "partial_tp_price": 0.148}}
+2026-01-27 07:31:20,677 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:33:20,678 - INFO - --- 周期开始 2026-01-27 07:33:20 ---
+2026-01-27 07:33:21,125 - INFO - [DATA] active_positions_count=1 symbols=['ZKCUSDT']
+2026-01-27 07:33:21,572 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 07:33:21,573 - INFO - 监控持仓: ZKCUSDT
+2026-01-27 07:33:21,574 - INFO - 持仓量: 137.0, 未实现盈亏: 0.09942227 USDT
+2026-01-27 07:33:23,798 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2222, "kline_count": 100, "current_price": 0.1459}
+2026-01-27 07:33:23,804 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2229, "score": 40, "direction_score": 1, "current_price": 0.1457}
+2026-01-27 07:33:24,254 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "ZKCUSDT", "pnl_pct": 0.4998002754820936, "has_sl": true}
+2026-01-27 07:33:34,309 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "ZKCUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a small profit (0.50%) and lacks a partial take-profit, which is needed. The score is low (40), indicating weak confidence, but the direction score is positive (1), suggesting the trend may still hold. Adjusting TP/SL and adding a partial TP will help secure some profit and manage risk.", "new_stop_loss": 0.142, "new_take_profit": 0.1525, "partial_tp_price": 0.1475}}
+2026-01-27 07:33:41,395 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:35:41,396 - INFO - --- 周期开始 2026-01-27 07:35:41 ---
+2026-01-27 07:35:41,850 - INFO - [DATA] active_positions_count=1 symbols=['ZKCUSDT']
+2026-01-27 07:35:42,291 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 07:35:42,292 - INFO - 监控持仓: ZKCUSDT
+2026-01-27 07:35:42,292 - INFO - 持仓量: 137.0, 未实现盈亏: 0.01370000 USDT
+2026-01-27 07:35:44,562 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2267, "kline_count": 100, "current_price": 0.1453}
+2026-01-27 07:35:44,565 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2272, "score": 40, "direction_score": 1, "current_price": 0.1453}
+2026-01-27 07:35:45,007 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "ZKCUSDT", "pnl_pct": 0.06887052341597796, "has_sl": true}
+2026-01-27 07:35:49,134 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "ZKCUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a low score (40) and lacks a partial take profit, which is needed to secure some profits early. Adjusting TP/SL and adding a partial TP will help manage risk and lock in gains.", "new_stop_loss": 0.142, "new_take_profit": 0.1525, "partial_tp_price": 0.148}}
+2026-01-27 07:35:54,151 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:37:54,152 - INFO - --- 周期开始 2026-01-27 07:37:54 ---
+2026-01-27 07:37:54,599 - INFO - [DATA] active_positions_count=1 symbols=['ZKCUSDT']
+2026-01-27 07:37:55,046 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 07:37:55,046 - INFO - 监控持仓: ZKCUSDT
+2026-01-27 07:37:55,047 - INFO - 持仓量: 137.0, 未实现盈亏: 0.14198817 USDT
+2026-01-27 07:37:57,282 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2234, "kline_count": 100, "current_price": 0.1462}
+2026-01-27 07:37:57,285 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2237, "score": 55, "direction_score": 3, "current_price": 0.1462}
+2026-01-27 07:37:57,738 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "ZKCUSDT", "pnl_pct": 0.7137809917355372, "has_sl": true}
+2026-01-27 07:38:03,292 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "ZKCUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The PnL is positive but below the 1.5% threshold for moving SL to break-even. The Direction Score is neutral (3), indicating no strong trend confirmation. Since Partial TP is needed and none is set, we will secure some profit by setting a partial TP while maintaining the existing SL and TP levels to protect capital and maximize trend profits.", "new_stop_loss": 0.142, "new_take_profit": 0.1525, "partial_tp_price": 0.148}}
+2026-01-27 07:38:08,324 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:40:08,326 - INFO - --- 周期开始 2026-01-27 07:40:08 ---
+2026-01-27 07:40:08,772 - INFO - [DATA] active_positions_count=1 symbols=['ZKCUSDT']
+2026-01-27 07:40:09,220 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 07:40:09,220 - INFO - 监控持仓: ZKCUSDT
+2026-01-27 07:40:09,221 - INFO - 持仓量: 137.0, 未实现盈亏: 0.04110000 USDT
+2026-01-27 07:40:11,454 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2231, "kline_count": 100, "current_price": 0.1455}
+2026-01-27 07:40:11,459 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2236, "score": 40, "direction_score": 1, "current_price": 0.1455}
+2026-01-27 07:40:11,909 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "ZKCUSDT", "pnl_pct": 0.2066115702479339, "has_sl": true}
+2026-01-27 07:40:30,845 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "ZKCUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a low score (40) and direction score (1), indicating weak confidence in the trend. However, the PnL is slightly positive (0.21%), so closing immediately isn't necessary. Since there's no partial TP set and 'Need Partial TP' is True, we'll secure some profit by adding a partial TP. The SL is already set, but we'll adjust the TP to ensure a balanced risk-reward ratio.", "new_stop_loss": 0.142, "new_take_profit": 0.1525, "partial_tp_price": 0.148}}
+2026-01-27 07:40:45,518 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:41:06,543 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:41:11,829 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:43:11,830 - INFO - --- 周期开始 2026-01-27 07:43:11 ---
+2026-01-27 07:43:12,280 - INFO - [DATA] active_positions_count=1 symbols=['ZKCUSDT']
+2026-01-27 07:43:12,724 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 07:43:12,725 - INFO - 监控持仓: ZKCUSDT
+2026-01-27 07:43:12,725 - INFO - 持仓量: 137.0, 未实现盈亏: -0.04858431 USDT
+2026-01-27 07:43:14,955 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2228, "kline_count": 100, "current_price": 0.1448}
+2026-01-27 07:43:14,961 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2234, "score": 60, "direction_score": 2, "current_price": 0.1448}
+2026-01-27 07:43:15,406 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "ZKCUSDT", "pnl_pct": -0.24423553719008267, "has_sl": true}
+2026-01-27 07:43:20,367 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "ZKCUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade currently has a small negative PnL (-0.24%) and lacks a partial take profit despite the 'Need Partial TP' flag being True. The Direction Score of 2 suggests weak trend confirmation, but the Score of 60 indicates the trade still has some merit. Adjusting the stop loss and take profit levels while adding a partial take profit will help manage risk and lock in some profits if the price moves favorably.", "new_stop_loss": 0.142, "new_take_profit": 0.1525, "partial_tp_price": 0.1488}}
+2026-01-27 07:43:35,026 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:43:39,620 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:45:39,621 - INFO - --- 周期开始 2026-01-27 07:45:39 ---
+2026-01-27 07:45:40,071 - INFO - [DATA] active_positions_count=1 symbols=['ZKCUSDT']
+2026-01-27 07:45:40,521 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 07:45:40,521 - INFO - 监控持仓: ZKCUSDT
+2026-01-27 07:45:40,522 - INFO - 持仓量: 137.0, 未实现盈亏: 0.06850000 USDT
+2026-01-27 07:45:42,734 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2211, "kline_count": 100, "current_price": 0.1457}
+2026-01-27 07:45:42,738 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2215, "score": 40, "direction_score": 2, "current_price": 0.1457}
+2026-01-27 07:45:43,179 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "ZKCUSDT", "pnl_pct": 0.34435261707988984, "has_sl": true}
+2026-01-27 07:45:48,691 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "ZKCUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is low (0.34%) and the Direction Score is weak (2), indicating limited upside momentum. However, the trade is not yet in a losing position, and closing it prematurely may not be optimal. Setting a partial take-profit level can help secure some profits while allowing room for further upside. The stop-loss remains valid at 0.142 to protect capital.", "new_stop_loss": 0.142, "new_take_profit": 0.1525, "partial_tp_price": 0.148}}
+2026-01-27 07:46:11,529 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:46:30,801 - WARNING - 设置止盈失败，准备重试 (2/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 07:46:36,712 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:48:36,713 - INFO - --- 周期开始 2026-01-27 07:48:36 ---
+2026-01-27 07:48:37,160 - INFO - [DATA] active_positions_count=1 symbols=['ZKCUSDT']
+2026-01-27 07:48:37,604 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 07:48:37,605 - INFO - 监控持仓: ZKCUSDT
+2026-01-27 07:48:37,605 - INFO - 持仓量: 137.0, 未实现盈亏: -0.06850000 USDT
+2026-01-27 07:48:39,858 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "ZKCUSDT", "duration_ms": 2250, "kline_count": 100, "current_price": 0.1447}
+2026-01-27 07:48:39,864 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "ZKCUSDT", "duration_ms": 2256, "score": 25, "direction_score": 2, "current_price": 0.1447}
+2026-01-27 07:48:40,315 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "ZKCUSDT", "pnl_pct": -0.34435261707988984, "has_sl": true}
+2026-01-27 07:48:45,208 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "ZKCUSDT", "data": {"action": "CLOSE", "reasoning": "The PnL is negative (-0.34%) and the Direction Score is very low (2), indicating a weak or invalid trend. According to guideline 1, if the PnL is bad and the trend is invalid, the action should be to CLOSE the position to protect capital.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 07:48:45,209 - INFO - LLM 建议平仓 ZKCUSDT: The PnL is negative (-0.34%) and the Direction Score is very low (2), indicating a weak or invalid trend. According to guideline 1, if the PnL is bad and the trend is invalid, the action should be to CLOSE the position to protect capital.
+2026-01-27 07:48:46,543 - INFO - 周期结束，等待 120 秒...
+2026-01-27 07:50:46,544 - INFO - --- 周期开始 2026-01-27 07:50:46 ---
+2026-01-27 07:50:46,991 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 07:50:47,432 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 07:50:47,433 - INFO - 检测到 ZKCUSDT 持仓已结束，正在清理剩余挂单...
+2026-01-27 07:50:47,874 - WARNING - Double Check 持仓失败 ('NoneType' object has no attribute 'get')，跳过清理挂单，以策安全
+2026-01-27 07:50:47,874 - ERROR - 清理挂单失败或跳过: 'NoneType' object has no attribute 'get'
+2026-01-27 07:50:47,875 - INFO - 无持仓且无观察对象，开始全市场选币...
+2026-01-27 07:51:28,613 - INFO - 锁定候选标的: BTRUSDT，进入入场监控阶段
+2026-01-27 07:51:28,614 - INFO - 正在监控入场机会: BTRUSDT (已观察 0 分钟)
+2026-01-27 07:51:31,287 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2230, "kline_count": 100, "current_price": 0.13479}
+2026-01-27 07:51:31,293 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2238, "score": 60, "direction_score": 0, "current_price": 0.13476}
+2026-01-27 07:51:31,738 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "BTRUSDT", "analysis_score": 60, "current_price": 0.13476}
+2026-01-27 07:51:41,908 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "BTRUSDT", "data": {"action": "WAIT", "direction": "SHORT", "confidence": 0.65, "reasoning": "The Direction Score is 0, indicating no clear directional bias, but the Orderbook Imbalance (-0.97) and signals like '放量下跌(1.2x)' and '卖盘压制(失衡-97%)' suggest bearish pressure. However, the '量价背离(涨价缩量/流出)' risk factor and lack of strong momentum warrant caution. Waiting for a clearer bearish confirmation or a better entry point (e.g., a rally into resistance) would be prudent.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.14, "take_profit": 0.125, "partial_tp_price": null, "partial_tp_percent": null}}
+2026-01-27 07:51:41,911 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.65 symbol=BTRUSDT
+2026-01-27 07:51:41,911 - INFO - AI 建议继续等待: BTRUSDT (信号尚未确认)
+2026-01-27 07:51:41,911 - INFO - 周期结束，等待 60 秒...
+2026-01-27 07:52:41,913 - INFO - --- 周期开始 2026-01-27 07:52:41 ---
+2026-01-27 07:52:42,358 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 07:52:42,805 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 07:52:42,805 - INFO - 正在监控入场机会: BTRUSDT (已观察 1 分钟)
+2026-01-27 07:52:45,467 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2213, "kline_count": 100, "current_price": 0.13475}
+2026-01-27 07:52:45,473 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2220, "score": 60, "direction_score": 0, "current_price": 0.13472}
+2026-01-27 07:52:45,920 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "BTRUSDT", "analysis_score": 60, "current_price": 0.13472}
+2026-01-27 07:52:54,916 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "BTRUSDT", "data": {"action": "WAIT", "direction": "SHORT", "confidence": 0.65, "reasoning": "The Direction Score is 0, indicating neutral bias, but the Orderbook Imbalance (-0.74) and signals like '放量下跌' (volume-supported decline) and '卖盘压制' (selling pressure) suggest bearish conditions. However, the '量价背离' (divergence) risk factor and neutral Direction Score warrant caution. Waiting for clearer confirmation (e.g., breakdown below key support or rally to short into) is prudent.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.14, "take_profit": 0.125, "partial_tp_price": 0.129, "partial_tp_percent": 0.5}}
+2026-01-27 07:52:54,919 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.65 symbol=BTRUSDT
+2026-01-27 07:52:54,919 - INFO - AI 建议继续等待: BTRUSDT (信号尚未确认)
+2026-01-27 07:52:54,919 - INFO - 周期结束，等待 60 秒...
+2026-01-27 07:53:54,920 - INFO - --- 周期开始 2026-01-27 07:53:54 ---
+2026-01-27 07:53:55,365 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 07:53:55,809 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 07:53:55,809 - INFO - 正在监控入场机会: BTRUSDT (已观察 2 分钟)
+2026-01-27 07:53:58,477 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2224, "kline_count": 100, "current_price": 0.13405}
+2026-01-27 07:53:58,480 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2226, "score": 60, "direction_score": 0, "current_price": 0.13427}
+2026-01-27 07:53:58,929 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "BTRUSDT", "analysis_score": 60, "current_price": 0.13427}
+2026-01-27 07:54:07,580 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "BTRUSDT", "data": {"action": "WAIT", "direction": "SHORT", "confidence": 0.65, "reasoning": "The Direction Score is 0, indicating no clear directional bias, but the orderbook imbalance (-0.68) and signals like '放量下跌' (volume selling) and '卖盘压制' (selling pressure) suggest bearish conditions. However, the price may be overextended due to the '放量下跌' signal, and the '量价背离' (divergence) risk factor warrants caution. Waiting for a better entry, such as a pullback or confirmation of continued selling pressure, would be prudent.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.14, "take_profit": 0.125, "partial_tp_price": 0.13, "partial_tp_percent": 0.5}}
+2026-01-27 07:54:07,581 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.65 symbol=BTRUSDT
+2026-01-27 07:54:07,581 - INFO - AI 建议继续等待: BTRUSDT (信号尚未确认)
+2026-01-27 07:54:07,581 - INFO - 周期结束，等待 60 秒...
+2026-01-27 07:55:07,582 - INFO - --- 周期开始 2026-01-27 07:55:07 ---
+2026-01-27 07:55:08,030 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 07:55:08,475 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 07:55:08,476 - INFO - 正在监控入场机会: BTRUSDT (已观察 3 分钟)
+2026-01-27 07:55:11,197 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2276, "kline_count": 100, "current_price": 0.13458}
+2026-01-27 07:55:11,203 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2283, "score": 60, "direction_score": 0, "current_price": 0.13483}
+2026-01-27 07:55:11,649 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "BTRUSDT", "analysis_score": 60, "current_price": 0.13483}
+2026-01-27 07:55:19,076 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "BTRUSDT", "data": {"action": "WAIT", "direction": "SHORT", "confidence": 0.65, "reasoning": "The Direction Score is 0, indicating no clear directional bias, but the Orderbook Imbalance (-0.95) and signals like '卖盘压制(失衡-95%)' suggest strong selling pressure. However, the '放量下跌(1.2x)' and '量价背离(涨价缩量/流出)' risk factors indicate potential volatility and possible counter-moves. Waiting for a clearer confirmation or a better entry point (e.g., a rally into resistance) would be prudent.", "leverage": 10, "allocation_usdt": 20.0, "stop_loss": 0.14157, "take_profit": 0.12809, "partial_tp_price": null, "partial_tp_percent": null}}
+2026-01-27 07:55:19,078 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.65 symbol=BTRUSDT
+2026-01-27 07:55:19,079 - INFO - AI 建议继续等待: BTRUSDT (信号尚未确认)
+2026-01-27 07:55:19,079 - INFO - 周期结束，等待 60 秒...
+2026-01-27 07:56:19,080 - INFO - --- 周期开始 2026-01-27 07:56:19 ---
+2026-01-27 07:56:19,524 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 07:56:19,966 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 07:56:19,966 - INFO - 正在监控入场机会: BTRUSDT (已观察 4 分钟)
+2026-01-27 07:56:22,652 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2236, "kline_count": 100, "current_price": 0.13433}
+2026-01-27 07:56:22,658 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2243, "score": 60, "direction_score": 0, "current_price": 0.13437}
+2026-01-27 07:56:23,109 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "BTRUSDT", "analysis_score": 60, "current_price": 0.13437}
+2026-01-27 07:56:31,609 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "BTRUSDT", "data": {"action": "WAIT", "direction": "SHORT", "confidence": 0.65, "reasoning": "The Direction Score is 0, indicating no clear directional bias, but the Orderbook Imbalance (-0.65) and signals like '放量下跌(1.2x)' and '卖盘压制(失衡-65%)' suggest bearish pressure. However, the '量价背离(涨价缩量/流出)' risk factor and lack of strong momentum warrant waiting for a better entry, possibly on a rally or breakdown confirmation.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.14, "take_profit": 0.125, "partial_tp_price": null, "partial_tp_percent": null}}
+2026-01-27 07:56:31,613 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.65 symbol=BTRUSDT
+2026-01-27 07:56:31,613 - INFO - AI 建议继续等待: BTRUSDT (信号尚未确认)
+2026-01-27 07:56:31,614 - INFO - 周期结束，等待 60 秒...
+2026-01-27 07:57:31,615 - INFO - --- 周期开始 2026-01-27 07:57:31 ---
+2026-01-27 07:57:32,063 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 07:57:32,518 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 07:57:32,518 - INFO - 正在监控入场机会: BTRUSDT (已观察 6 分钟)
+2026-01-27 07:57:35,197 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2233, "kline_count": 100, "current_price": 0.13412}
+2026-01-27 07:57:35,203 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2241, "score": 60, "direction_score": 0, "current_price": 0.13411}
+2026-01-27 07:57:35,646 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "BTRUSDT", "analysis_score": 60, "current_price": 0.13411}
+2026-01-27 07:57:42,560 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "BTRUSDT", "data": {"action": "WAIT", "direction": "SHORT", "confidence": 0.65, "reasoning": "The Direction Score is 0, indicating no clear directional bias, but the Orderbook Imbalance (-0.459) suggests bearish pressure. However, the price has recently shown a '放量下跌' (volume-supported drop) and '卖盘压制' (selling pressure), which aligns with potential short opportunities. Yet, the '量价背离' (divergence between price and volume) introduces risk. Waiting for a clearer confirmation or a pullback to a better resistance level would improve the risk/reward ratio.", "leverage": 10, "allocation_usdt": 20.0, "stop_loss": 0.1385, "take_profit": 0.128, "partial_tp_price": 0.1305, "partial_tp_percent": 0.5}}
+2026-01-27 07:57:42,561 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.65 symbol=BTRUSDT
+2026-01-27 07:57:42,562 - INFO - AI 建议继续等待: BTRUSDT (信号尚未确认)
+2026-01-27 07:57:42,562 - INFO - 周期结束，等待 60 秒...
+2026-01-27 07:58:42,563 - INFO - --- 周期开始 2026-01-27 07:58:42 ---
+2026-01-27 07:58:43,014 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 07:58:43,460 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 07:58:43,461 - INFO - 正在监控入场机会: BTRUSDT (已观察 7 分钟)
+2026-01-27 07:58:46,150 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2246, "kline_count": 100, "current_price": 0.13406}
+2026-01-27 07:58:46,153 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2249, "score": 60, "direction_score": 0, "current_price": 0.134}
+2026-01-27 07:58:46,596 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "BTRUSDT", "analysis_score": 60, "current_price": 0.134}
+2026-01-27 07:58:52,753 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "BTRUSDT", "data": {"action": "WAIT", "direction": "LONG", "confidence": 0.6, "reasoning": "The Direction Score is neutral (0), but the orderbook imbalance is bearish (-0.33) and there is a noted risk of price-volume divergence. Although the asset has passed quantitative screening, current conditions suggest waiting for a better entry point, possibly after a pullback or when orderbook imbalance improves.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.125, "take_profit": 0.15, "partial_tp_price": 0.145, "partial_tp_percent": 0.5}}
+2026-01-27 07:58:52,754 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.6 symbol=BTRUSDT
+2026-01-27 07:58:52,755 - INFO - AI 建议继续等待: BTRUSDT (信号尚未确认)
+2026-01-27 07:58:52,755 - INFO - 周期结束，等待 60 秒...
+2026-01-27 07:59:52,755 - INFO - --- 周期开始 2026-01-27 07:59:52 ---
+2026-01-27 07:59:53,199 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 07:59:53,642 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 07:59:53,643 - INFO - 正在监控入场机会: BTRUSDT (已观察 8 分钟)
+2026-01-27 07:59:56,316 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2228, "kline_count": 100, "current_price": 0.13424}
+2026-01-27 07:59:56,322 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2236, "score": 60, "direction_score": 0, "current_price": 0.13431}
+2026-01-27 07:59:56,764 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "BTRUSDT", "analysis_score": 60, "current_price": 0.13431}
+2026-01-27 08:00:04,461 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "BTRUSDT", "data": {"action": "WAIT", "direction": "SHORT", "confidence": 0.65, "reasoning": "The Direction Score is 0, indicating no clear directional bias, but the Orderbook Imbalance (-0.83) and signals like '放量下跌' (volume selling) and '卖盘压制' (selling pressure) suggest bearish conditions. However, the price might be overextended due to the '放量下跌' signal, and waiting for a pullback or confirmation of continued downward momentum could provide a better entry. Risk factors like '量价背离' (divergence) also suggest caution.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.14, "take_profit": 0.125, "partial_tp_price": 0.129, "partial_tp_percent": 0.5}}
+2026-01-27 08:00:04,463 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.65 symbol=BTRUSDT
+2026-01-27 08:00:04,463 - INFO - AI 建议继续等待: BTRUSDT (信号尚未确认)
+2026-01-27 08:00:04,463 - INFO - 周期结束，等待 60 秒...
+2026-01-27 08:01:04,464 - INFO - --- 周期开始 2026-01-27 08:01:04 ---
+2026-01-27 08:01:05,101 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 08:01:05,548 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 08:01:05,548 - INFO - 正在监控入场机会: BTRUSDT (已观察 9 分钟)
+2026-01-27 08:01:08,227 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2234, "kline_count": 100, "current_price": 0.13226}
+2026-01-27 08:01:08,230 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2238, "score": 40, "direction_score": 1, "current_price": 0.13262}
+2026-01-27 08:01:08,676 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "BTRUSDT", "analysis_score": 40, "current_price": 0.13262}
+2026-01-27 08:01:14,006 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "BTRUSDT", "data": {"action": "OPEN", "direction": "LONG", "confidence": 0.75, "reasoning": "The asset has passed quantitative screening with a bullish Direction Score (1). The 1H均线多头排列 indicates a bullish trend, and the volatility is acceptable (ATR=6.12%). Despite the risk factor of 量价背离, the current price and momentum support an immediate entry.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.1245, "take_profit": 0.14588, "partial_tp_price": 0.138, "partial_tp_percent": 0.5}}
+2026-01-27 08:01:14,009 - INFO - [DECISION] entry action=BUY direction=LONG conf=0.75 symbol=BTRUSDT
+2026-01-27 08:01:14,010 - INFO - AI 决定入场: BUY BTRUSDT (信心: 0.75)
+2026-01-27 08:01:14,468 - INFO - LLM_EVENT: {"event": "trade_execution_start", "symbol": "BTRUSDT", "side": "BUY", "usdt": 20.0}
+2026-01-27 08:01:19,725 - INFO - 设置止损 BTRUSDT: 0.1245 (ID: 2000000284586424)
+2026-01-27 08:01:22,729 - INFO - 设置止盈 BTRUSDT: 0.14588 (ID: 430144722)
+2026-01-27 08:01:23,644 - INFO - 开仓成功: BTRUSDT
+2026-01-27 08:01:23,645 - INFO - 周期结束，等待 60 秒...
+2026-01-27 08:02:23,646 - INFO - --- 周期开始 2026-01-27 08:02:23 ---
+2026-01-27 08:02:24,088 - INFO - [DATA] active_positions_count=1 symbols=['BTRUSDT']
+2026-01-27 08:02:24,780 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 08:02:24,781 - INFO - 监控持仓: BTRUSDT
+2026-01-27 08:02:24,782 - INFO - 持仓量: 151.0, 未实现盈亏: -0.05889000 USDT
+2026-01-27 08:02:27,027 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "BTRUSDT", "duration_ms": 2243, "kline_count": 100, "current_price": 0.13201}
+2026-01-27 08:02:27,035 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "BTRUSDT", "duration_ms": 2252, "score": 70, "direction_score": 2.5, "current_price": 0.13179}
+2026-01-27 08:02:27,475 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "BTRUSDT", "pnl_pct": -0.2951191827468786, "has_sl": false}
+2026-01-27 08:02:40,399 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "BTRUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a negative PnL (-0.30%) but the score is still favorable (70) and the direction score is neutral (2.5). Since there is no stop loss set, it's prudent to define risk management parameters to protect capital while allowing the trade room to develop. A partial take profit is also needed to secure some profits if the price moves favorably.", "new_stop_loss": 0.12815, "new_take_profit": 0.14588, "partial_tp_price": 0.13815}}
+2026-01-27 08:02:47,793 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:04:47,795 - INFO - --- 周期开始 2026-01-27 08:04:47 ---
+2026-01-27 08:04:48,243 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 08:04:48,703 - INFO - [DATA] all_open_orders_count=1
+2026-01-27 08:04:48,703 - INFO - [DECISION] orphan_cleanup symbols=['BTRUSDT']
+2026-01-27 08:04:48,704 - INFO - 检测到 BTRUSDT 无持仓但有挂单，正在执行清理...
+2026-01-27 08:04:49,146 - INFO - 检测到 BTRUSDT 持仓已结束，正在清理剩余挂单...
+2026-01-27 08:04:49,594 - WARNING - Double Check 持仓失败 ('NoneType' object has no attribute 'get')，跳过清理挂单，以策安全
+2026-01-27 08:04:49,595 - ERROR - 清理挂单失败或跳过: 'NoneType' object has no attribute 'get'
+2026-01-27 08:04:49,595 - INFO - 无持仓且无观察对象，开始全市场选币...
+2026-01-27 08:05:30,478 - INFO - 锁定候选标的: SUIUSDT，进入入场监控阶段
+2026-01-27 08:05:30,479 - INFO - 正在监控入场机会: SUIUSDT (已观察 0 分钟)
+2026-01-27 08:05:33,143 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2213, "kline_count": 100, "current_price": 1.4402}
+2026-01-27 08:05:33,149 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2226, "score": 45, "direction_score": -1.5, "current_price": 1.4405}
+2026-01-27 08:05:33,598 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "SUIUSDT", "analysis_score": 45, "current_price": 1.4405}
+2026-01-27 08:05:42,316 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "SUIUSDT", "data": {"action": "WAIT", "direction": "SHORT", "confidence": 0.7, "reasoning": "The Direction Score is -1.5 indicating a bearish bias, but the current price may be overextended given the RSI is in a neutral zone (52.8) and the orderbook imbalance is not strongly bearish (-0.027). Waiting for a better entry point such as a rally or breakdown confirmation would improve risk/reward.", "leverage": 10, "allocation_usdt": 20.0, "stop_loss": 1.4565, "take_profit": 1.41, "partial_tp_price": 1.425, "partial_tp_percent": 0.5}}
+2026-01-27 08:05:42,317 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.7 symbol=SUIUSDT
+2026-01-27 08:05:42,317 - INFO - AI 建议继续等待: SUIUSDT (信号尚未确认)
+2026-01-27 08:05:42,317 - INFO - 周期结束，等待 60 秒...
+2026-01-27 08:06:42,319 - INFO - --- 周期开始 2026-01-27 08:06:42 ---
+2026-01-27 08:06:42,761 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 08:06:43,203 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 08:06:43,203 - INFO - 正在监控入场机会: SUIUSDT (已观察 1 分钟)
+2026-01-27 08:06:45,865 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2219, "kline_count": 100, "current_price": 1.4392}
+2026-01-27 08:06:45,870 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2225, "score": 45, "direction_score": -1.5, "current_price": 1.4392}
+2026-01-27 08:06:46,316 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "SUIUSDT", "analysis_score": 45, "current_price": 1.4392}
+2026-01-27 08:06:52,361 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "SUIUSDT", "data": {"action": "OPEN", "direction": "SHORT", "confidence": 0.7, "reasoning": "The Direction Score is -1.5 indicating bearish sentiment, supported by 1H均线空头排列 (bearish moving average alignment) and orderbook imbalance favoring sellers. Despite volume contraction, liquidity and volatility are adequate for execution. Current price is acceptable for entry without signs of overextension.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 1.455, "take_profit": 1.415, "partial_tp_price": 1.425, "partial_tp_percent": 0.5}}
+2026-01-27 08:06:52,363 - INFO - [DECISION] entry action=SELL direction=SHORT conf=0.7 symbol=SUIUSDT
+2026-01-27 08:06:52,364 - INFO - AI 决定入场: SELL SUIUSDT (信心: 0.7)
+2026-01-27 08:06:52,808 - INFO - LLM_EVENT: {"event": "trade_execution_start", "symbol": "SUIUSDT", "side": "SELL", "usdt": 20.0}
+2026-01-27 08:06:56,376 - INFO - 设置止损 SUIUSDT: 1.455 (ID: 36930343867)
+2026-01-27 08:06:58,129 - INFO - 设置止盈 SUIUSDT: 1.415 (ID: 36930344034)
+2026-01-27 08:06:59,031 - INFO - 开仓成功: SUIUSDT
+2026-01-27 08:06:59,032 - INFO - 周期结束，等待 60 秒...
+2026-01-27 08:07:59,033 - INFO - --- 周期开始 2026-01-27 08:07:59 ---
+2026-01-27 08:07:59,479 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:07:59,928 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:07:59,929 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:07:59,931 - INFO - 持仓量: -13.8, 未实现盈亏: -0.01625032 USDT
+2026-01-27 08:08:02,170 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2236, "kline_count": 100, "current_price": 1.4401}
+2026-01-27 08:08:02,177 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2244, "score": 45, "direction_score": -1.5, "current_price": 1.4401}
+2026-01-27 08:08:02,623 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.0818204155287559, "has_sl": true}
+2026-01-27 08:08:11,170 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is slightly negative (-0.08%), and the Direction Score is -1.5, indicating a weak bearish trend. However, the trade is not yet invalid, and there is no immediate need to close it. The stop loss and take profit levels are set, but the partial take profit is needed to secure some profit early. Adjusting the TP/SL levels and adding a partial TP will help manage risk and lock in some profits if the price moves favorably.", "new_stop_loss": 1.455, "new_take_profit": 1.415, "partial_tp_price": 1.425}}
+2026-01-27 08:08:17,415 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:10:17,416 - INFO - --- 周期开始 2026-01-27 08:10:17 ---
+2026-01-27 08:10:17,866 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:10:18,312 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:10:18,312 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:10:18,313 - INFO - 持仓量: -13.8, 未实现盈亏: -0.00276000 USDT
+2026-01-27 08:10:20,537 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2221, "kline_count": 100, "current_price": 1.439}
+2026-01-27 08:10:20,542 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2227, "score": 45, "direction_score": -1.5, "current_price": 1.4392}
+2026-01-27 08:10:20,984 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.013896609227348524, "has_sl": true}
+2026-01-27 08:10:28,288 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "HOLD", "reasoning": "The current PnL is only -0.01%, which is negligible, and the Direction Score of -1.5 suggests a slight bearish bias but not strong enough to warrant immediate action. The trade has both SL and TP set, so there's no need to adjust them yet. Since the Profit Locked is False and the PnL is not bad, holding the position is the best course of action to see if the trend develops further.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 08:10:28,289 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:12:28,290 - INFO - --- 周期开始 2026-01-27 08:12:28 ---
+2026-01-27 08:12:28,731 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:12:29,172 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:12:29,172 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:12:29,172 - INFO - 持仓量: -13.8, 未实现盈亏: -0.00950557 USDT
+2026-01-27 08:12:31,400 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2226, "kline_count": 100, "current_price": 1.4397}
+2026-01-27 08:12:31,405 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2232, "score": 45, "direction_score": -1.5, "current_price": 1.4398}
+2026-01-27 08:12:31,851 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.04786057672942294, "has_sl": true}
+2026-01-27 08:12:37,077 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is slightly negative (-0.05%), and the Direction Score is -1.5, indicating weak bearish momentum. However, the trade is not yet invalidated. Since there is no partial TP set and 'Need Partial TP' is True, it's prudent to secure some profit by setting a partial TP. Additionally, adjusting the SL and TP to tighter levels can help manage risk better given the weak momentum.", "new_stop_loss": 1.445, "new_take_profit": 1.425, "partial_tp_price": 1.43}}
+2026-01-27 08:12:43,354 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:14:43,355 - INFO - --- 周期开始 2026-01-27 08:14:43 ---
+2026-01-27 08:14:43,801 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:14:44,253 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:14:44,254 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:14:44,254 - INFO - 持仓量: -13.8, 未实现盈亏: 0.00265153 USDT
+2026-01-27 08:14:46,479 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2223, "kline_count": 100, "current_price": 1.439}
+2026-01-27 08:14:46,483 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2228, "score": 45, "direction_score": -1.5, "current_price": 1.439}
+2026-01-27 08:14:46,921 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": 0.013350462414707043, "has_sl": true}
+2026-01-27 08:14:59,796 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a slightly positive PnL but a negative Direction Score, indicating weak momentum in the short direction. The current SL and TP are set, but the trade could benefit from a partial TP to lock in some profits early given the uncertain trend. Adjusting TP/SL to manage risk while allowing for potential further downside.", "new_stop_loss": 1.445, "new_take_profit": 1.425, "partial_tp_price": 1.432}}
+2026-01-27 08:15:08,707 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:17:08,708 - INFO - --- 周期开始 2026-01-27 08:17:08 ---
+2026-01-27 08:17:09,148 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:17:09,643 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 08:17:09,644 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:17:09,644 - INFO - 持仓量: -13.8, 未实现盈亏: -0.02008769 USDT
+2026-01-27 08:17:11,851 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2204, "kline_count": 100, "current_price": 1.4405}
+2026-01-27 08:17:11,854 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2208, "score": 35, "direction_score": -1.5, "current_price": 1.4406}
+2026-01-27 08:17:12,295 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.10114158630801329, "has_sl": true}
+2026-01-27 08:17:18,608 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is slightly negative (-0.10%), but the Direction Score is -1.5, indicating a weak bearish trend. Since there is no TP set and the SL is very close to the entry, it's prudent to adjust the SL and set a TP to manage risk and potential profit. Given the weak trend, a conservative approach is recommended.", "new_stop_loss": 1.445, "new_take_profit": 1.42, "partial_tp_price": 1.43}}
+2026-01-27 08:17:23,623 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:19:23,624 - INFO - --- 周期开始 2026-01-27 08:19:23 ---
+2026-01-27 08:19:24,064 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:19:24,514 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:19:24,515 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:19:24,516 - INFO - 持仓量: -13.8, 未实现盈亏: -0.02208000 USDT
+2026-01-27 08:19:26,748 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2229, "kline_count": 100, "current_price": 1.4408}
+2026-01-27 08:19:26,754 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2236, "score": 35, "direction_score": -1.5, "current_price": 1.4408}
+2026-01-27 08:19:27,204 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.1111728738187882, "has_sl": true}
+2026-01-27 08:19:38,593 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a negative PnL and a weak directional score (-1.5), but the trend isn't conclusively invalid yet. The current stop loss is set, but the take profit could be optimized to better manage risk. Adding a partial take profit will help secure some gains if the price moves favorably before hitting the full TP.", "new_stop_loss": 1.445, "new_take_profit": 1.42, "partial_tp_price": 1.43}}
+2026-01-27 08:19:42,758 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:21:42,759 - INFO - --- 周期开始 2026-01-27 08:21:42 ---
+2026-01-27 08:21:43,210 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:21:43,653 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:21:43,654 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:21:43,655 - INFO - 持仓量: -13.8, 未实现盈亏: -0.00414000 USDT
+2026-01-27 08:21:45,879 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2222, "kline_count": 100, "current_price": 1.4395}
+2026-01-27 08:21:45,885 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2229, "score": 35, "direction_score": -1.5, "current_price": 1.4394}
+2026-01-27 08:21:46,329 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.020844913841022786, "has_sl": true}
+2026-01-27 08:21:58,162 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "CLOSE", "reasoning": "The PnL is slightly negative (-0.02%), but the Direction Score is -1.5, indicating a weak or invalid trend. Given the low Score (35) and negative Direction Score, the trade setup is not favorable. Protecting capital is prioritized over holding a weak position.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 08:21:58,163 - INFO - LLM 建议平仓 SUIUSDT: The PnL is slightly negative (-0.02%), but the Direction Score is -1.5, indicating a weak or invalid trend. Given the low Score (35) and negative Direction Score, the trade setup is not favorable. Protecting capital is prioritized over holding a weak position.
+2026-01-27 08:21:59,499 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:23:59,500 - INFO - --- 周期开始 2026-01-27 08:23:59 ---
+2026-01-27 08:23:59,947 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 08:24:00,391 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 08:24:00,392 - INFO - 检测到 SUIUSDT 持仓已结束，正在清理剩余挂单...
+2026-01-27 08:24:00,856 - WARNING - Double Check 持仓失败 ('NoneType' object has no attribute 'get')，跳过清理挂单，以策安全
+2026-01-27 08:24:00,856 - ERROR - 清理挂单失败或跳过: 'NoneType' object has no attribute 'get'
+2026-01-27 08:24:00,856 - INFO - 无持仓且无观察对象，开始全市场选币...
+2026-01-27 08:24:41,617 - INFO - 锁定候选标的: NOMUSDT，进入入场监控阶段
+2026-01-27 08:24:41,617 - INFO - 正在监控入场机会: NOMUSDT (已观察 0 分钟)
+2026-01-27 08:24:44,293 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2231, "kline_count": 100, "current_price": 0.010856}
+2026-01-27 08:24:44,296 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2234, "score": 70, "direction_score": -2.5, "current_price": 0.010857}
+2026-01-27 08:24:44,742 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "NOMUSDT", "analysis_score": 70, "current_price": 0.010857}
+2026-01-27 08:24:50,737 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "NOMUSDT", "data": {"action": "OPEN", "direction": "SHORT", "confidence": 0.75, "reasoning": "The Direction Score is -2.5 indicating bearish sentiment, supported by technical signals such as 1H均线空头排列 (bearish MA alignment), 卖盘压制 (selling pressure imbalance), and 放量上涨 (volume surge with price rise). Despite the risk factor of 量价背离 (divergence), the bearish signals outweigh, suggesting an optimal entry for a short position.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.0112, "take_profit": 0.0102, "partial_tp_price": 0.0105, "partial_tp_percent": 0.5}}
+2026-01-27 08:24:50,739 - INFO - [DECISION] entry action=SELL direction=SHORT conf=0.75 symbol=NOMUSDT
+2026-01-27 08:24:50,740 - INFO - AI 决定入场: SELL NOMUSDT (信心: 0.75)
+2026-01-27 08:24:51,192 - INFO - LLM_EVENT: {"event": "trade_execution_start", "symbol": "NOMUSDT", "side": "SELL", "usdt": 20.0}
+2026-01-27 08:24:56,439 - INFO - 设置止损 NOMUSDT: 0.0112 (ID: 2000000284687178)
+2026-01-27 08:24:57,433 - INFO - 设置止盈 NOMUSDT: 0.0102 (ID: 282561405)
+2026-01-27 08:24:58,350 - INFO - 开仓成功: NOMUSDT
+2026-01-27 08:24:58,351 - INFO - 周期结束，等待 60 秒...
+2026-01-27 08:25:58,351 - INFO - --- 周期开始 2026-01-27 08:25:58 ---
+2026-01-27 08:25:58,800 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 08:25:59,242 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 08:25:59,243 - INFO - 监控持仓: NOMUSDT
+2026-01-27 08:25:59,243 - INFO - 持仓量: -1842.0, 未实现盈亏: -0.09289206 USDT
+2026-01-27 08:26:01,477 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2231, "kline_count": 100, "current_price": 0.010908}
+2026-01-27 08:26:01,481 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2236, "score": 70, "direction_score": -0.5, "current_price": 0.010904}
+2026-01-27 08:26:01,930 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": -0.4646213377556661, "has_sl": false}
+2026-01-27 08:26:06,533 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a negative PnL (-0.46%) and lacks a stop loss, which exposes the position to unnecessary risk. The Direction Score is slightly negative (-0.5), indicating weak bearish momentum, but the overall score is acceptable (70). Setting a stop loss and take profit will help manage risk while allowing the trade to potentially recover and reach the target. Since 'Partial TP' is needed, a partial take profit level will be set to lock in some gains if the price moves favorably.", "new_stop_loss": 0.011, "new_take_profit": 0.0102, "partial_tp_price": 0.0105}}
+2026-01-27 08:26:14,135 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:28:14,136 - INFO - --- 周期开始 2026-01-27 08:28:14 ---
+2026-01-27 08:28:14,579 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 08:28:15,023 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 08:28:15,024 - INFO - 监控持仓: NOMUSDT
+2026-01-27 08:28:15,025 - INFO - 持仓量: -1842.0, 未实现盈亏: -0.24736218 USDT
+2026-01-27 08:28:17,689 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2662, "kline_count": 100, "current_price": 0.010984}
+2026-01-27 08:28:17,694 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2667, "score": 50, "direction_score": -0.5, "current_price": 0.010984}
+2026-01-27 08:28:18,138 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": -1.2372397272894784, "has_sl": false}
+2026-01-27 08:28:24,252 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade currently lacks stop-loss and take-profit levels, which are essential for risk management. Although the PnL is negative (-1.24%) and the direction score is slightly bearish (-0.5), the overall score is neutral (50), suggesting the trade is not yet invalid. Setting SL and TP levels will help manage risk and lock in potential profits.", "new_stop_loss": 0.011, "new_take_profit": 0.0105, "partial_tp_price": 0.0107}}
+2026-01-27 08:28:30,935 - ERROR - 设置部分止盈失败: APIError(code=-2022): ReduceOnly Order is rejected.
+2026-01-27 08:28:30,935 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:30:30,936 - INFO - --- 周期开始 2026-01-27 08:30:30 ---
+2026-01-27 08:30:31,379 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 08:30:31,824 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 08:30:31,835 - INFO - [DECISION] orphan_cleanup symbols=['NOMUSDT']
+2026-01-27 08:30:31,835 - INFO - 检测到 NOMUSDT 无持仓但有挂单，正在执行清理...
+2026-01-27 08:30:32,276 - INFO - 检测到 NOMUSDT 持仓已结束，正在清理剩余挂单...
+2026-01-27 08:30:32,721 - WARNING - Double Check 持仓失败 ('NoneType' object has no attribute 'get')，跳过清理挂单，以策安全
+2026-01-27 08:30:32,722 - ERROR - 清理挂单失败或跳过: 'NoneType' object has no attribute 'get'
+2026-01-27 08:30:32,722 - INFO - 无持仓且无观察对象，开始全市场选币...
+2026-01-27 08:31:14,955 - INFO - 锁定候选标的: SUIUSDT，进入入场监控阶段
+2026-01-27 08:31:14,955 - INFO - 正在监控入场机会: SUIUSDT (已观察 0 分钟)
+2026-01-27 08:31:17,641 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2242, "kline_count": 100, "current_price": 1.4405}
+2026-01-27 08:31:17,646 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2248, "score": 45, "direction_score": -1.5, "current_price": 1.4404}
+2026-01-27 08:31:18,092 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "SUIUSDT", "analysis_score": 45, "current_price": 1.4404}
+2026-01-27 08:31:26,892 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "SUIUSDT", "data": {"action": "OPEN", "direction": "SHORT", "confidence": 0.75, "reasoning": "The Direction Score is -1.5, indicating a bearish bias. The 1H均线空头排列 (bearish moving average alignment) supports this direction. RSI at 52.7 is neutral but leaning towards bearish given the overall context. The orderbook imbalance is negligible (0.023), not strong enough to counter the bearish signals. Volume ratio is low (0.395), but liquidity is good, allowing for efficient execution. The price is currently at 1.4404, and with ATR at 1.16%, the stop loss and take profit can be set effectively.", "leverage": 10, "allocation_usdt": 20.0, "stop_loss": 1.457, "take_profit": 1.41, "partial_tp_price": 1.425, "partial_tp_percent": 0.5}}
+2026-01-27 08:31:26,896 - INFO - [DECISION] entry action=SELL direction=SHORT conf=0.75 symbol=SUIUSDT
+2026-01-27 08:31:26,896 - INFO - AI 决定入场: SELL SUIUSDT (信心: 0.75)
+2026-01-27 08:31:27,348 - INFO - LLM_EVENT: {"event": "trade_execution_start", "symbol": "SUIUSDT", "side": "SELL", "usdt": 20.0}
+2026-01-27 08:31:32,590 - INFO - 设置止损 SUIUSDT: 1.457 (ID: 2000000284713884)
+2026-01-27 08:31:33,507 - INFO - 设置止盈 SUIUSDT: 1.41 (ID: 36930545812)
+2026-01-27 08:31:34,417 - INFO - 开仓成功: SUIUSDT
+2026-01-27 08:31:34,418 - INFO - 周期结束，等待 60 秒...
+2026-01-27 08:32:34,418 - INFO - --- 周期开始 2026-01-27 08:32:34 ---
+2026-01-27 08:32:34,868 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:32:35,314 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 08:32:35,314 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:32:35,314 - INFO - 持仓量: -13.8, 未实现盈亏: -0.00512739 USDT
+2026-01-27 08:32:37,552 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2235, "kline_count": 100, "current_price": 1.4403}
+2026-01-27 08:32:37,559 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2243, "score": 45, "direction_score": -1.5, "current_price": 1.4403}
+2026-01-27 08:32:38,009 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.02580029164641344, "has_sl": false}
+2026-01-27 08:32:42,816 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade currently lacks a stop loss (SL), which is critical for risk management. Although the PnL is slightly negative (-0.03%), the Direction Score (-1.5) suggests weak bearish momentum but not a clear invalidation of the trend. Setting a stop loss will protect against unexpected upward moves while maintaining the existing take profit (TP) at 1.41 aligns with the initial bearish outlook. A partial take profit is also recommended to lock in some gains if the price moves favorably.", "new_stop_loss": 1.4501, "new_take_profit": 1.41, "partial_tp_price": 1.425}}
+2026-01-27 08:32:50,184 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:34:50,185 - INFO - --- 周期开始 2026-01-27 08:34:50 ---
+2026-01-27 08:34:50,634 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:34:51,078 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 08:34:51,078 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:34:51,079 - INFO - 持仓量: -13.8, 未实现盈亏: -0.00414000 USDT
+2026-01-27 08:34:53,315 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2235, "kline_count": 100, "current_price": 1.4404}
+2026-01-27 08:34:53,318 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2238, "score": 65, "direction_score": -2.5, "current_price": 1.4404}
+2026-01-27 08:34:53,764 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.02083188667453649, "has_sl": true}
+2026-01-27 08:35:01,393 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade currently has a stop loss but no take profit. Given the Direction Score of -2.5, indicating slight bearish momentum, it's prudent to set a take profit to secure potential gains. Additionally, since 'Need Partial TP' is True, a partial take profit should be set to lock in some profits early.", "new_stop_loss": 1.4501, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 08:35:07,664 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:37:07,665 - INFO - --- 周期开始 2026-01-27 08:37:07 ---
+2026-01-27 08:37:08,113 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:37:08,556 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:37:08,556 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:37:08,556 - INFO - 持仓量: -13.8, 未实现盈亏: 0.01518000 USDT
+2026-01-27 08:37:10,793 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2235, "kline_count": 100, "current_price": 1.4387}
+2026-01-27 08:37:10,799 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2242, "score": 45, "direction_score": -1.5, "current_price": 1.4391}
+2026-01-27 08:37:11,245 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": 0.07638358447330046, "has_sl": true}
+2026-01-27 08:37:23,097 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is minimal (0.08%) and the Direction Score is negative (-1.5), indicating weak momentum in the short direction. However, the trade is not yet invalid. Since Partial TP is needed and no TP/SL adjustments have been made yet, it's prudent to secure partial profits and adjust risk parameters.", "new_stop_loss": 1.4501, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 08:37:27,264 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:39:27,265 - INFO - --- 周期开始 2026-01-27 08:39:27 ---
+2026-01-27 08:39:27,710 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:39:28,158 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:39:28,159 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:39:28,159 - INFO - 持仓量: -13.8, 未实现盈亏: 0.01380000 USDT
+2026-01-27 08:39:30,397 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2235, "kline_count": 100, "current_price": 1.439}
+2026-01-27 08:39:30,403 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2242, "score": 45, "direction_score": -1.5, "current_price": 1.4393}
+2026-01-27 08:39:30,844 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": 0.06943962224845497, "has_sl": true}
+2026-01-27 08:39:36,116 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a small positive PnL (0.07%) but lacks a partial take profit despite the 'Need Partial TP' flag being True. The Direction Score is slightly negative (-1.5), indicating weak bearish momentum, but not enough to warrant closing immediately. Adjusting TP/SL and adding a partial TP will help secure some profit while managing risk.", "new_stop_loss": 1.4501, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 08:39:41,354 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:41:41,355 - INFO - --- 周期开始 2026-01-27 08:41:41 ---
+2026-01-27 08:41:41,802 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:41:42,244 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:41:42,245 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:41:42,245 - INFO - 持仓量: -13.8, 未实现盈亏: -0.00276000 USDT
+2026-01-27 08:41:44,459 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2212, "kline_count": 100, "current_price": 1.4403}
+2026-01-27 08:41:44,464 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2217, "score": 45, "direction_score": -1.5, "current_price": 1.4403}
+2026-01-27 08:41:44,907 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.013887924449690992, "has_sl": true}
+2026-01-27 08:41:55,039 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is minimal (-0.01%) and the Direction Score is slightly negative (-1.5), indicating weak bearish momentum. However, the trade is not yet invalid. Since Partial TP is needed, we will adjust TP/SL to secure partial profits early while maintaining downside potential.", "new_stop_loss": 1.4501, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 08:42:00,169 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:44:00,170 - INFO - --- 周期开始 2026-01-27 08:44:00 ---
+2026-01-27 08:44:00,613 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:44:01,056 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:44:01,057 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:44:01,057 - INFO - 持仓量: -13.8, 未实现盈亏: -0.00351361 USDT
+2026-01-27 08:44:03,286 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2228, "kline_count": 100, "current_price": 1.4403}
+2026-01-27 08:44:03,290 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2231, "score": 45, "direction_score": -1.5, "current_price": 1.4403}
+2026-01-27 08:44:03,737 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.017679981965825643, "has_sl": true}
+2026-01-27 08:44:20,584 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is slightly negative (-0.02%), and the Direction Score is -1.5, indicating a weak bearish trend. However, the trade is not yet invalidated. Since Partial TP is needed, we will adjust the TP/SL levels and set a partial TP to secure some profit early.", "new_stop_loss": 1.4501, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 08:44:35,239 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:44:49,435 - WARNING - 设置止损失败，准备重试 (2/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:45:11,712 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:45:14,533 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:47:14,533 - INFO - --- 周期开始 2026-01-27 08:47:14 ---
+2026-01-27 08:47:14,976 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:47:15,422 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:47:15,423 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:47:15,424 - INFO - 持仓量: -13.8, 未实现盈亏: 0.00828000 USDT
+2026-01-27 08:47:17,651 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2226, "kline_count": 100, "current_price": 1.4395}
+2026-01-27 08:47:17,656 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2231, "score": 45, "direction_score": -1.5, "current_price": 1.4395}
+2026-01-27 08:47:18,094 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": 0.04166377334907298, "has_sl": true}
+2026-01-27 08:47:32,594 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade currently has a small PnL (0.04%) and a negative Direction Score (-1.5), indicating weak momentum in the short direction. However, the trade is not yet in a bad state, so adjusting the stop-loss and take-profit levels is preferred over closing. Since 'Partial TP' is needed, a partial take-profit level will be set to secure some profit early.", "new_stop_loss": 1.4451, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 08:47:38,848 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:49:38,849 - INFO - --- 周期开始 2026-01-27 08:49:38 ---
+2026-01-27 08:49:39,295 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:49:39,737 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:49:39,737 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:49:39,737 - INFO - 持仓量: -13.8, 未实现盈亏: -0.00029476 USDT
+2026-01-27 08:49:41,959 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2220, "kline_count": 100, "current_price": 1.4401}
+2026-01-27 08:49:41,965 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2227, "score": 30, "direction_score": -1.5, "current_price": 1.4401}
+2026-01-27 08:49:42,410 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.0014831900763735207, "has_sl": true}
+2026-01-27 08:49:57,671 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current position has a neutral PnL (-0.00%) and the Direction Score is slightly negative (-1.5), indicating weak bearish momentum. However, the trade is not yet invalid. Since Partial TP is needed, we will adjust the TP/SL levels and set a partial TP to secure some profit early.", "new_stop_loss": 1.4451, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 08:50:12,374 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:50:26,642 - WARNING - 设置止损失败，准备重试 (2/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:50:41,806 - ERROR - 设置新止损失败 1.4451 (重试3次后): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:50:43,634 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:52:43,635 - INFO - --- 周期开始 2026-01-27 08:52:43 ---
+2026-01-27 08:52:44,086 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:52:44,535 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 08:52:44,535 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:52:44,536 - INFO - 持仓量: -13.8, 未实现盈亏: -0.02331648 USDT
+2026-01-27 08:52:46,760 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2222, "kline_count": 100, "current_price": 1.4417}
+2026-01-27 08:52:46,764 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2227, "score": 30, "direction_score": -1.5, "current_price": 1.4418}
+2026-01-27 08:52:47,205 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.1173251857509895, "has_sl": false}
+2026-01-27 08:52:52,856 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade currently lacks a stop loss, which is essential for risk management. Although the PnL is slightly negative (-0.12%), the Direction Score (-1.5) suggests weak bearish momentum, but not necessarily invalid. Setting a stop loss and take profit will help manage risk while allowing the trade room to develop. A partial take profit is also needed to secure some profits early.", "new_stop_loss": 1.4501, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 08:52:57,866 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:54:57,867 - INFO - --- 周期开始 2026-01-27 08:54:57 ---
+2026-01-27 08:54:58,312 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:54:58,752 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 08:54:58,753 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:54:58,753 - INFO - 持仓量: -13.8, 未实现盈亏: -0.04116098 USDT
+2026-01-27 08:55:01,107 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2352, "kline_count": 100, "current_price": 1.443}
+2026-01-27 08:55:01,111 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2356, "score": 15, "direction_score": 0.5, "current_price": 1.443}
+2026-01-27 08:55:01,551 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.2071161523605949, "has_sl": true}
+2026-01-27 08:55:16,340 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is slightly negative (-0.21%), but the Direction Score is neutral (0.5), indicating no strong trend reversal yet. The trade is still within acceptable risk parameters, and the SL/TP levels are set but could be optimized. Since 'Partial TP' is needed, we'll adjust the TP/SL and introduce a partial TP to secure some profit early.", "new_stop_loss": 1.4501, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 08:55:30,949 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:55:45,152 - WARNING - 设置止损失败，准备重试 (2/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:56:06,363 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:56:25,656 - WARNING - 设置止盈失败，准备重试 (2/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:56:45,964 - ERROR - 设置新止盈失败 1.4201 (重试3次后): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:56:46,883 - INFO - 周期结束，等待 120 秒...
+2026-01-27 08:58:46,884 - INFO - --- 周期开始 2026-01-27 08:58:46 ---
+2026-01-27 08:58:47,329 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 08:58:47,775 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 08:58:47,776 - INFO - 监控持仓: SUIUSDT
+2026-01-27 08:58:47,777 - INFO - 持仓量: -13.8, 未实现盈亏: -0.03174000 USDT
+2026-01-27 08:58:50,015 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2237, "kline_count": 100, "current_price": 1.4424}
+2026-01-27 08:58:50,018 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2240, "score": 30, "direction_score": -1.5, "current_price": 1.4424}
+2026-01-27 08:58:50,461 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.15971113117144642, "has_sl": true}
+2026-01-27 08:58:57,201 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is slightly negative (-0.16%), and the Direction Score is -1.5, indicating a weak bearish trend. However, the trade lacks a Take Profit level, which is essential for risk management. Setting a TP and adjusting the SL will help define the risk-reward ratio. Since 'Need Partial TP' is True, a partial TP will be set to secure some profit early.", "new_stop_loss": 1.4501, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 08:59:11,916 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:59:32,941 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 08:59:52,226 - WARNING - 设置止盈失败，准备重试 (2/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:00:13,507 - ERROR - 设置新止盈失败 1.4201 (重试3次后): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:00:14,424 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:02:14,427 - INFO - --- 周期开始 2026-01-27 09:02:14 ---
+2026-01-27 09:02:14,870 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 09:02:15,314 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 09:02:15,315 - INFO - 监控持仓: SUIUSDT
+2026-01-27 09:02:15,315 - INFO - 持仓量: -13.8, 未实现盈亏: 0.01794000 USDT
+2026-01-27 09:02:17,539 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2223, "kline_count": 100, "current_price": 1.4389}
+2026-01-27 09:02:17,547 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2230, "score": 45, "direction_score": -1.5, "current_price": 1.4389}
+2026-01-27 09:02:18,001 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": 0.09027150892299146, "has_sl": true}
+2026-01-27 09:02:23,323 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current position has a small PnL (0.09%) and lacks a take profit level. The Direction Score is negative (-1.5), indicating weak bearish momentum, but not invalidating the trend entirely. To protect capital and secure potential profits, setting a stop loss and take profit is necessary. A partial take profit is also needed as per the requirement.", "new_stop_loss": 1.4501, "new_take_profit": 1.4301, "partial_tp_price": 1.4351}}
+2026-01-27 09:02:28,356 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:04:28,357 - INFO - --- 周期开始 2026-01-27 09:04:28 ---
+2026-01-27 09:04:28,805 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 09:04:29,684 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 09:04:29,685 - INFO - 监控持仓: SUIUSDT
+2026-01-27 09:04:29,685 - INFO - 持仓量: -13.8, 未实现盈亏: 0.01168791 USDT
+2026-01-27 09:04:33,219 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 3532, "kline_count": 100, "current_price": 1.4392}
+2026-01-27 09:04:33,224 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 3538, "score": 45, "direction_score": -1.5, "current_price": 1.4392}
+2026-01-27 09:04:34,104 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": 0.058811888063328925, "has_sl": true}
+2026-01-27 09:04:47,764 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is minimal (0.06%) and the Direction Score is negative (-1.5), indicating weak bearish momentum. However, the trade is not yet invalid, so adjusting the stop-loss and take-profit levels is prudent to manage risk and secure potential profits. Since 'Partial TP: Need True', setting a partial take-profit level will help lock in some gains if the price moves favorably.", "new_stop_loss": 1.4451, "new_take_profit": 1.4251, "partial_tp_price": 1.4351}}
+2026-01-27 09:05:05,282 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:05:19,543 - WARNING - 设置止损失败，准备重试 (2/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:05:34,721 - ERROR - 设置新止损失败 1.4451 (重试3次后): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:05:36,545 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:07:36,546 - INFO - --- 周期开始 2026-01-27 09:07:36 ---
+2026-01-27 09:07:36,990 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 09:07:37,434 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 09:07:37,434 - INFO - 监控持仓: SUIUSDT
+2026-01-27 09:07:37,434 - INFO - 持仓量: -13.8, 未实现盈亏: 0.01700670 USDT
+2026-01-27 09:07:39,646 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2210, "kline_count": 100, "current_price": 1.4389}
+2026-01-27 09:07:39,651 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2215, "score": 45, "direction_score": -1.5, "current_price": 1.4389}
+2026-01-27 09:07:40,097 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": 0.08557527707918833, "has_sl": false}
+2026-01-27 09:07:51,993 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current position lacks a stop loss (SL), which is critical for risk management. The Direction Score is slightly negative (-1.5), indicating weak bearish momentum, but not strong enough to warrant closing immediately. Setting a stop loss and take profit will help protect capital and lock in profits if the trend continues.", "new_stop_loss": 1.4501, "new_take_profit": 1.4251, "partial_tp_price": 1.4326}}
+2026-01-27 09:08:06,643 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:08:12,615 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:10:12,616 - INFO - --- 周期开始 2026-01-27 09:10:12 ---
+2026-01-27 09:10:13,066 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 09:10:14,138 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 09:10:14,138 - INFO - 监控持仓: SUIUSDT
+2026-01-27 09:10:14,139 - INFO - 持仓量: -13.8, 未实现盈亏: -0.00859657 USDT
+2026-01-27 09:10:16,360 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2219, "kline_count": 100, "current_price": 1.4399}
+2026-01-27 09:10:16,366 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2225, "score": 65, "direction_score": -2.5, "current_price": 1.4406}
+2026-01-27 09:10:16,807 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": -0.04325670821973916, "has_sl": true}
+2026-01-27 09:10:24,305 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a negative PnL and the direction score is slightly negative (-2.5), but the overall score is neutral (65). Adjusting the stop loss and take profit levels will help manage risk while giving the trade room to develop. Since 'Partial TP' is needed, setting a partial take profit level will secure some profits if the price moves favorably.", "new_stop_loss": 1.4451, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 09:10:47,562 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:10:51,226 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:12:51,227 - INFO - --- 周期开始 2026-01-27 09:12:51 ---
+2026-01-27 09:12:51,672 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 09:12:52,127 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 09:12:52,127 - INFO - 监控持仓: SUIUSDT
+2026-01-27 09:12:52,128 - INFO - 持仓量: -13.8, 未实现盈亏: 0.00966000 USDT
+2026-01-27 09:12:54,361 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2232, "kline_count": 100, "current_price": 1.4392}
+2026-01-27 09:12:54,367 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2238, "score": 65, "direction_score": -2.5, "current_price": 1.4394}
+2026-01-27 09:12:54,810 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": 0.048607735573918474, "has_sl": true}
+2026-01-27 09:13:09,715 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current PnL is minimal (0.05%) and the Direction Score is slightly negative (-2.5), indicating weak bearish momentum. However, the trade is not yet invalid. Since the position lacks a partial TP and the profit is not significant enough to move SL to break-even, we should adjust the TP/SL to secure potential gains and limit risk. A partial TP is needed to lock in some profit early.", "new_stop_loss": 1.4451, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 09:13:25,208 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:13:45,771 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:13:50,663 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:15:50,664 - INFO - --- 周期开始 2026-01-27 09:15:50 ---
+2026-01-27 09:15:51,107 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 09:15:51,559 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 09:15:51,560 - INFO - 监控持仓: SUIUSDT
+2026-01-27 09:15:51,560 - INFO - 持仓量: -13.8, 未实现盈亏: 0.00475023 USDT
+2026-01-27 09:15:54,476 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2913, "kline_count": 100, "current_price": 1.4396}
+2026-01-27 09:15:54,480 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2919, "score": 45, "direction_score": -1.5, "current_price": 1.4399}
+2026-01-27 09:15:54,922 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": 0.02390247657922306, "has_sl": true}
+2026-01-27 09:16:09,932 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a negative direction score (-1.5) and a low overall score (45), indicating weak momentum favoring the short position. However, the PnL is neutral (0.02%), and the SL/TP levels are already set but could be optimized. Since 'Partial TP' is needed, we'll adjust TP/SL and add a partial TP to secure some profit early.", "new_stop_loss": 1.4451, "new_take_profit": 1.4201, "partial_tp_price": 1.4301}}
+2026-01-27 09:16:24,579 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:16:45,920 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:17:06,086 - WARNING - 设置止盈失败，准备重试 (2/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:17:26,448 - ERROR - 设置新止盈失败 1.4201 (重试3次后): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:17:27,359 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:19:27,361 - INFO - --- 周期开始 2026-01-27 09:19:27 ---
+2026-01-27 09:19:27,806 - INFO - [DATA] active_positions_count=1 symbols=['SUIUSDT']
+2026-01-27 09:19:28,252 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 09:19:28,252 - INFO - 监控持仓: SUIUSDT
+2026-01-27 09:19:28,252 - INFO - 持仓量: -13.8, 未实现盈亏: 0.01250845 USDT
+2026-01-27 09:19:30,473 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "SUIUSDT", "duration_ms": 2219, "kline_count": 100, "current_price": 1.4391}
+2026-01-27 09:19:30,478 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "SUIUSDT", "duration_ms": 2225, "score": 45, "direction_score": -1.5, "current_price": 1.4391}
+2026-01-27 09:19:30,924 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "SUIUSDT", "pnl_pct": 0.0629407277473686, "has_sl": true}
+2026-01-27 09:19:36,966 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "SUIUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The current position has a minimal PnL (0.06%) and lacks a take profit level, which is essential for risk management. The Direction Score of -1.5 suggests slight bearish momentum, but the overall Score of 45 indicates weak confidence. Setting a TP and adjusting the SL will help protect capital and lock in profits if the trend continues favorably.", "new_stop_loss": 1.4451, "new_take_profit": 1.4301, "partial_tp_price": 1.4351}}
+2026-01-27 09:19:43,719 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:21:43,720 - INFO - --- 周期开始 2026-01-27 09:21:43 ---
+2026-01-27 09:21:44,163 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 09:21:44,608 - INFO - [DATA] all_open_orders_count=1
+2026-01-27 09:21:44,608 - INFO - [DECISION] orphan_cleanup symbols=['SUIUSDT']
+2026-01-27 09:21:44,609 - INFO - 检测到 SUIUSDT 无持仓但有挂单，正在执行清理...
+2026-01-27 09:21:45,051 - INFO - 检测到 SUIUSDT 持仓已结束，正在清理剩余挂单...
+2026-01-27 09:21:45,495 - WARNING - Double Check 持仓失败 ('NoneType' object has no attribute 'get')，跳过清理挂单，以策安全
+2026-01-27 09:21:45,496 - ERROR - 清理挂单失败或跳过: 'NoneType' object has no attribute 'get'
+2026-01-27 09:21:45,496 - INFO - 无持仓且无观察对象，开始全市场选币...
+2026-01-27 09:22:28,282 - INFO - 锁定候选标的: NOMUSDT，进入入场监控阶段
+2026-01-27 09:22:28,283 - INFO - 正在监控入场机会: NOMUSDT (已观察 0 分钟)
+2026-01-27 09:22:31,161 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2219, "kline_count": 100, "current_price": 0.010312}
+2026-01-27 09:22:31,165 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2224, "score": 50, "direction_score": -2.5, "current_price": 0.010319}
+2026-01-27 09:22:31,620 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "NOMUSDT", "analysis_score": 50, "current_price": 0.010319}
+2026-01-27 09:22:40,441 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "NOMUSDT", "data": {"action": "WAIT", "direction": "SHORT", "confidence": 0.7, "reasoning": "The Direction Score is -2.5, indicating a bearish bias. However, the orderbook imbalance is only slightly positive (0.056), not strongly bearish (<-0.15). The price may need to rally slightly to provide a better risk-reward entry for a short position. Waiting for a temporary counter-move (rally) to open the short.", "leverage": 10, "allocation_usdt": 20.0, "stop_loss": 0.0108, "take_profit": 0.0095, "partial_tp_price": 0.0098, "partial_tp_percent": 0.5}}
+2026-01-27 09:22:40,442 - INFO - [DECISION] entry action=HOLD direction=NONE conf=0.7 symbol=NOMUSDT
+2026-01-27 09:22:40,443 - INFO - AI 建议继续等待: NOMUSDT (信号尚未确认)
+2026-01-27 09:22:40,443 - INFO - 周期结束，等待 60 秒...
+2026-01-27 09:23:40,444 - INFO - --- 周期开始 2026-01-27 09:23:40 ---
+2026-01-27 09:23:40,887 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 09:23:41,331 - INFO - [DATA] all_open_orders_count=0
+2026-01-27 09:23:41,332 - INFO - 正在监控入场机会: NOMUSDT (已观察 1 分钟)
+2026-01-27 09:23:44,871 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 3095, "kline_count": 100, "current_price": 0.01037}
+2026-01-27 09:23:44,876 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 3100, "score": 70, "direction_score": -3.5, "current_price": 0.010368}
+2026-01-27 09:23:45,316 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "NOMUSDT", "analysis_score": 70, "current_price": 0.010368}
+2026-01-27 09:23:53,749 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "NOMUSDT", "data": {"action": "OPEN", "direction": "SHORT", "confidence": 0.85, "reasoning": "The Direction Score is -3.5, indicating a bearish trend. Technical signals such as 1H均线空头排列 (1H moving average bearish alignment), 卖盘压制 (selling pressure imbalance of -33%), and orderbook imbalance (-0.33) further support a short position. The price is currently at 0.010368 with an ATR of 4.88%, suggesting good volatility for entry. Momentum supports the bearish direction, making it optimal to open a short position now.", "leverage": 5, "allocation_usdt": 20.0, "stop_loss": 0.010874, "take_profit": 0.009552, "partial_tp_price": 0.00996, "partial_tp_percent": 0.5}}
+2026-01-27 09:23:53,751 - INFO - [DECISION] entry action=SELL direction=SHORT conf=0.85 symbol=NOMUSDT
+2026-01-27 09:23:53,752 - INFO - AI 决定入场: SELL NOMUSDT (信心: 0.85)
+2026-01-27 09:23:54,197 - INFO - LLM_EVENT: {"event": "trade_execution_start", "symbol": "NOMUSDT", "side": "SELL", "usdt": 20.0}
+2026-01-27 09:23:59,428 - INFO - 设置止损 NOMUSDT: 0.010874 (ID: 2000000284920705)
+2026-01-27 09:24:02,869 - INFO - 设置止盈 NOMUSDT: 0.009552 (ID: 2000000284921016)
+2026-01-27 09:24:03,792 - INFO - 开仓成功: NOMUSDT
+2026-01-27 09:24:03,794 - INFO - 周期结束，等待 60 秒...
+2026-01-27 09:25:03,795 - INFO - --- 周期开始 2026-01-27 09:25:03 ---
+2026-01-27 09:25:04,242 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 09:25:04,685 - INFO - [DATA] all_open_orders_count=1
+2026-01-27 09:25:04,686 - INFO - 监控持仓: NOMUSDT
+2026-01-27 09:25:04,686 - INFO - 持仓量: -1926.0, 未实现盈亏: -0.01669842 USDT
+2026-01-27 09:25:06,912 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2223, "kline_count": 100, "current_price": 0.010377}
+2026-01-27 09:25:06,918 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2230, "score": 70, "direction_score": -3.5, "current_price": 0.010384}
+2026-01-27 09:25:07,360 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": -0.08350187806992197, "has_sl": false}
+2026-01-27 09:25:24,242 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a negative PnL (-0.08%) and lacks both stop loss and take profit levels, which exposes the position to unnecessary risk. The Direction Score of -3.5 suggests weak bearish momentum, but the overall Score of 70 indicates the trade still has some validity. Setting proper risk management parameters is critical.", "new_stop_loss": 0.01048, "new_take_profit": 0.01028, "partial_tp_price": 0.01034}}
+2026-01-27 09:25:47,811 - WARNING - 设置止盈失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:25:52,726 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:27:52,727 - INFO - --- 周期开始 2026-01-27 09:27:52 ---
+2026-01-27 09:27:53,171 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 09:27:53,614 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 09:27:53,615 - INFO - 监控持仓: NOMUSDT
+2026-01-27 09:27:53,615 - INFO - 持仓量: -1926.0, 未实现盈亏: -0.13096800 USDT
+2026-01-27 09:27:55,840 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2222, "kline_count": 100, "current_price": 0.010435}
+2026-01-27 09:27:55,846 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2230, "score": 70, "direction_score": -3.5, "current_price": 0.010447}
+2026-01-27 09:27:56,296 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": -0.6549166907444862, "has_sl": true}
+2026-01-27 09:28:16,503 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a negative PnL (-0.65%) and the Direction Score is negative (-3.5), indicating weak bearish momentum. However, the overall score is still acceptable (70), so instead of closing, we will adjust the stop-loss and take-profit levels to better manage risk. Since 'Partial TP' is needed, we will set a partial take-profit level.", "new_stop_loss": 0.01045, "new_take_profit": 0.01025, "partial_tp_price": 0.01033}}
+2026-01-27 09:28:31,612 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:28:37,429 - ERROR - 设置部分止盈失败: APIError(code=-2022): ReduceOnly Order is rejected.
+2026-01-27 09:28:37,430 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:30:37,431 - INFO - --- 周期开始 2026-01-27 09:30:37 ---
+2026-01-27 09:30:37,876 - INFO - [DATA] active_positions_count=0 symbols=[]
+2026-01-27 09:30:38,322 - INFO - [DATA] all_open_orders_count=1
+2026-01-27 09:30:38,323 - INFO - [DECISION] orphan_cleanup symbols=['NOMUSDT']
+2026-01-27 09:30:38,323 - INFO - 检测到 NOMUSDT 无持仓但有挂单，正在执行清理...
+2026-01-27 09:30:38,765 - INFO - 检测到 NOMUSDT 持仓已结束，正在清理剩余挂单...
+2026-01-27 09:30:39,220 - WARNING - Double Check 持仓失败 ('NoneType' object has no attribute 'get')，跳过清理挂单，以策安全
+2026-01-27 09:30:39,221 - ERROR - 清理挂单失败或跳过: 'NoneType' object has no attribute 'get'
+2026-01-27 09:30:39,221 - INFO - 无持仓且无观察对象，开始全市场选币...
+2026-01-27 09:31:20,710 - INFO - 锁定候选标的: NOMUSDT，进入入场监控阶段
+2026-01-27 09:31:20,710 - INFO - 正在监控入场机会: NOMUSDT (已观察 0 分钟)
+2026-01-27 09:31:23,609 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2456, "kline_count": 100, "current_price": 0.010388}
+2026-01-27 09:31:23,612 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2459, "score": 85, "direction_score": -4.5, "current_price": 0.010401}
+2026-01-27 09:31:24,058 - INFO - LLM_EVENT: {"event": "llm_entry_request", "symbol": "NOMUSDT", "analysis_score": 85, "current_price": 0.010401}
+2026-01-27 09:31:34,427 - INFO - LLM_EVENT: {"event": "llm_response_parsed", "symbol": "NOMUSDT", "data": {"action": "OPEN", "direction": "SHORT", "confidence": 0.85, "reasoning": "The Direction Score is -4.5, indicating a bearish trend. Technical signals such as 1H均线空头排列, 放量下跌(2.0x), and 卖盘压制(失衡-31%) further support the bearish momentum. The price is currently favorable for entry, and the orderbook imbalance (-0.309) confirms strong selling pressure. Given the high quantitative score (85) and the current momentum, opening a short position now is optimal.", "leverage": 10, "allocation_usdt": 29.78, "stop_loss": 0.010907, "take_profit": 0.009895, "partial_tp_price": 0.010148, "partial_tp_percent": 0.5}}
+2026-01-27 09:31:34,430 - INFO - [DECISION] entry action=SELL direction=SHORT conf=0.85 symbol=NOMUSDT
+2026-01-27 09:31:34,430 - INFO - AI 决定入场: SELL NOMUSDT (信心: 0.85)
+2026-01-27 09:31:34,877 - INFO - LLM_EVENT: {"event": "trade_execution_start", "symbol": "NOMUSDT", "side": "SELL", "usdt": 29.78}
+2026-01-27 09:31:40,096 - INFO - 设置止损 NOMUSDT: 0.010907 (ID: 2000000284952549)
+2026-01-27 09:31:41,846 - INFO - 设置止盈 NOMUSDT: 0.009895 (ID: 283571725)
+2026-01-27 09:31:42,763 - INFO - 开仓成功: NOMUSDT
+2026-01-27 09:31:42,763 - INFO - 周期结束，等待 60 秒...
+2026-01-27 09:32:42,764 - INFO - --- 周期开始 2026-01-27 09:32:42 ---
+2026-01-27 09:32:43,211 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 09:32:43,656 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 09:32:43,656 - INFO - 监控持仓: NOMUSDT
+2026-01-27 09:32:43,657 - INFO - 持仓量: -2862.0, 未实现盈亏: 0.05045706 USDT
+2026-01-27 09:32:45,894 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2235, "kline_count": 100, "current_price": 0.010381}
+2026-01-27 09:32:45,901 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2243, "score": 65, "direction_score": -3.5, "current_price": 0.010381}
+2026-01-27 09:32:46,344 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": 0.16947876399068398, "has_sl": false}
+2026-01-27 09:32:59,585 - ERROR - NOMUSDT LLM Monitor 失败: Expecting ',' delimiter: line 4 column 26 (char 441)
+2026-01-27 09:32:59,588 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:34:59,589 - INFO - --- 周期开始 2026-01-27 09:34:59 ---
+2026-01-27 09:35:00,083 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 09:35:00,527 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 09:35:00,528 - INFO - 监控持仓: NOMUSDT
+2026-01-27 09:35:00,528 - INFO - 持仓量: -2862.0, 未实现盈亏: -0.07303824 USDT
+2026-01-27 09:35:03,639 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 3109, "kline_count": 100, "current_price": 0.010425}
+2026-01-27 09:35:03,644 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 3114, "score": 70, "direction_score": -2.5, "current_price": 0.010425}
+2026-01-27 09:35:04,540 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": -0.24532603840285055, "has_sl": false}
+2026-01-27 09:35:12,555 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a negative PnL (-0.25%) and lacks a stop loss, which is risky. The Direction Score of -2.5 suggests weak bearish momentum, but the overall score of 70 indicates the trade still has potential. Setting a stop loss and take profit will help manage risk while allowing the trade to develop.", "new_stop_loss": 0.0105, "new_take_profit": 0.009895, "partial_tp_price": 0.0101}}
+2026-01-27 09:35:27,240 - WARNING - 设置止损失败，准备重试 (1/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:35:41,421 - WARNING - 设置止损失败，准备重试 (2/3): APIError(code=-1022): Signature for this request is not valid.
+2026-01-27 09:35:47,877 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:37:47,878 - INFO - --- 周期开始 2026-01-27 09:37:47 ---
+2026-01-27 09:37:48,321 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 09:37:48,764 - INFO - [DATA] all_open_orders_count=3
+2026-01-27 09:37:48,765 - INFO - 监控持仓: NOMUSDT
+2026-01-27 09:37:48,765 - INFO - 持仓量: -2862.0, 未实现盈亏: -0.02438424 USDT
+2026-01-27 09:37:50,986 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2218, "kline_count": 100, "current_price": 0.010397}
+2026-01-27 09:37:50,992 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2225, "score": 85, "direction_score": -4.5, "current_price": 0.010405}
+2026-01-27 09:37:51,441 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": -0.08190352065800496, "has_sl": true}
+2026-01-27 09:37:57,748 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a negative PnL (-0.08%) and the direction score is slightly negative (-4.5), but the overall score is high (85), indicating the trade still has potential. The stop loss and take profit are set, but the partial TP is needed to secure some profit early. Adjusting the TP/SL to lock in partial profits and manage risk.", "new_stop_loss": 0.0105, "new_take_profit": 0.009895, "partial_tp_price": 0.0101}}
+2026-01-27 09:38:06,555 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:40:06,556 - INFO - --- 周期开始 2026-01-27 09:40:06 ---
+2026-01-27 09:40:07,002 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 09:40:07,447 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 09:40:07,448 - INFO - 监控持仓: NOMUSDT
+2026-01-27 09:40:07,448 - INFO - 持仓量: -2862.0, 未实现盈亏: -0.14172624 USDT
+2026-01-27 09:40:09,778 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2327, "kline_count": 100, "current_price": 0.010436}
+2026-01-27 09:40:09,782 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2332, "score": 70, "direction_score": -2.5, "current_price": 0.010452}
+2026-01-27 09:40:10,232 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": -0.47604018110145613, "has_sl": true}
+2026-01-27 09:40:15,732 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "ADJUST_TP_SL", "reasoning": "The trade has a negative PnL (-0.48%) and the Direction Score is slightly negative (-2.5), indicating weak bearish momentum. However, the overall score is 70, suggesting the trade still has some merit. Since there is no TP set and partial TP is needed, we will adjust the SL and set a TP to manage risk and secure potential profits.", "new_stop_loss": 0.0105, "new_take_profit": 0.0103, "partial_tp_price": 0.01035}}
+2026-01-27 09:40:20,747 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:42:20,747 - INFO - --- 周期开始 2026-01-27 09:42:20 ---
+2026-01-27 09:42:21,199 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 09:42:21,641 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 09:42:21,642 - INFO - 监控持仓: NOMUSDT
+2026-01-27 09:42:21,642 - INFO - 持仓量: -1431.0, 未实现盈亏: 0.03916647 USDT
+2026-01-27 09:42:23,885 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2242, "kline_count": 100, "current_price": 0.010374}
+2026-01-27 09:42:23,888 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2245, "score": 65, "direction_score": -3.5, "current_price": 0.010374}
+2026-01-27 09:42:24,334 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": 0.2631102535692014, "has_sl": true}
+2026-01-27 09:42:37,485 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "HOLD", "reasoning": "The current PnL is positive at 0.26%, and the profit is locked, indicating some level of protection. The Direction Score is slightly negative (-3.5), but not strongly invalidating the trend. The existing SL and TP are appropriately set relative to the entry price. Since the PnL is not yet above 1.5%, moving SL to break-even is premature. No immediate adjustment is needed unless the trend weakens further or PnL improves significantly.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 09:42:37,488 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:44:37,489 - INFO - --- 周期开始 2026-01-27 09:44:37 ---
+2026-01-27 09:44:37,936 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 09:44:38,380 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 09:44:38,381 - INFO - 监控持仓: NOMUSDT
+2026-01-27 09:44:38,381 - INFO - 持仓量: -1431.0, 未实现盈亏: -0.00646812 USDT
+2026-01-27 09:44:40,603 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2220, "kline_count": 100, "current_price": 0.010413}
+2026-01-27 09:44:40,606 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2224, "score": 85, "direction_score": -2.5, "current_price": 0.01041}
+2026-01-27 09:44:41,049 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": -0.043451163541570706, "has_sl": true}
+2026-01-27 09:44:47,687 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "HOLD", "reasoning": "The PnL is only slightly negative (-0.04%), and the direction score (-2.5) does not strongly indicate an invalid trend. The current stop loss (0.0105) and take profit (0.0103) are appropriately set, and there is no need for partial take profit at this stage. Since the trade is still within acceptable risk parameters and the trend has not been invalidated, holding the position is the best course of action.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 09:44:47,689 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:46:47,689 - INFO - --- 周期开始 2026-01-27 09:46:47 ---
+2026-01-27 09:46:48,131 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 09:46:48,575 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 09:46:48,576 - INFO - 监控持仓: NOMUSDT
+2026-01-27 09:46:48,577 - INFO - 持仓量: -1431.0, 未实现盈亏: -0.02364012 USDT
+2026-01-27 09:46:50,797 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2218, "kline_count": 100, "current_price": 0.010411}
+2026-01-27 09:46:50,803 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2225, "score": 55, "direction_score": -3.5, "current_price": 0.010424}
+2026-01-27 09:46:51,251 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": -0.15880823489087348, "has_sl": true}
+2026-01-27 09:46:56,554 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "HOLD", "reasoning": "The PnL is only slightly negative (-0.16%) and the Direction Score is not strongly against the position (-3.5). The current SL and TP are appropriately set, and there is no immediate need to adjust them. Since the profit is not locked and the trend is not invalid, holding the position is the best course of action for now.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 09:46:56,557 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:48:56,557 - INFO - --- 周期开始 2026-01-27 09:48:56 ---
+2026-01-27 09:48:57,000 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 09:48:57,442 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 09:48:57,443 - INFO - 监控持仓: NOMUSDT
+2026-01-27 09:48:57,443 - INFO - 持仓量: -1431.0, 未实现盈亏: -0.05579469 USDT
+2026-01-27 09:48:59,668 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2224, "kline_count": 100, "current_price": 0.010433}
+2026-01-27 09:48:59,671 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2226, "score": 55, "direction_score": -1.5, "current_price": 0.010434}
+2026-01-27 09:49:00,116 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": -0.3748143509924429, "has_sl": true}
+2026-01-27 09:49:06,252 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "HOLD", "reasoning": "The PnL is currently at -0.37%, which is not significantly bad, and the Direction Score of -1.5 suggests a weak but not invalid trend. Since the Profit Locked is True and there's no immediate need for Partial TP, holding the position is prudent to see if the trend develops further.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 09:49:06,254 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:51:06,254 - INFO - --- 周期开始 2026-01-27 09:51:06 ---
+2026-01-27 09:51:06,699 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 09:51:07,143 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 09:51:07,143 - INFO - 监控持仓: NOMUSDT
+2026-01-27 09:51:07,144 - INFO - 持仓量: -1431.0, 未实现盈亏: 0.05453541 USDT
+2026-01-27 09:51:09,370 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2224, "kline_count": 100, "current_price": 0.010355}
+2026-01-27 09:51:09,377 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2232, "score": 70, "direction_score": -1.5, "current_price": 0.010349}
+2026-01-27 09:51:09,821 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": 0.36635483242682737, "has_sl": true}
+2026-01-27 09:51:34,105 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "HOLD", "reasoning": "The PnL is currently positive at 0.37%, but not yet at the threshold (>1.5%) to consider moving SL to break-even. The Direction Score is slightly negative (-1.5), indicating weak bearish momentum, but not strong enough to invalidate the trend. The existing SL (0.0105) and TP (0.0103) are appropriately set relative to the entry (0.0104024832285). Since the trade is still within acceptable risk parameters and the trend isn't clearly invalidated, holding is the optimal action.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 09:51:34,107 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:53:34,108 - INFO - --- 周期开始 2026-01-27 09:53:34 ---
+2026-01-27 09:53:34,553 - INFO - [DATA] active_positions_count=1 symbols=['NOMUSDT']
+2026-01-27 09:53:34,996 - INFO - [DATA] all_open_orders_count=2
+2026-01-27 09:53:34,997 - INFO - 监控持仓: NOMUSDT
+2026-01-27 09:53:34,997 - INFO - 持仓量: -1431.0, 未实现盈亏: -0.01362312 USDT
+2026-01-27 09:53:37,224 - INFO - LLM_EVENT: {"event": "market_data_fetched", "symbol": "NOMUSDT", "duration_ms": 2224, "kline_count": 100, "current_price": 0.010414}
+2026-01-27 09:53:37,229 - INFO - LLM_EVENT: {"event": "analysis_generated", "symbol": "NOMUSDT", "duration_ms": 2230, "score": 70, "direction_score": -3.5, "current_price": 0.010397}
+2026-01-27 09:53:37,673 - INFO - LLM_EVENT: {"event": "llm_monitor_request", "symbol": "NOMUSDT", "pnl_pct": -0.09151660993711354, "has_sl": true}
+2026-01-27 09:53:42,272 - INFO - LLM_EVENT: {"event": "llm_monitor_response", "symbol": "NOMUSDT", "data": {"action": "HOLD", "reasoning": "The PnL is only slightly negative (-0.09%), and the Direction Score (-3.5) does not strongly indicate an invalid trend. The current SL (0.0105) and TP (0.0103) are appropriately set, and there is no need for partial TP. Since the trade is still within acceptable risk parameters and the trend has not been invalidated, holding the position is the best course of action.", "new_stop_loss": null, "new_take_profit": null, "partial_tp_price": null}}
+2026-01-27 09:53:42,275 - INFO - 周期结束，等待 120 秒...
+2026-01-27 09:54:10,814 - INFO - 用户停止程序
