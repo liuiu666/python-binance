@@ -1,8 +1,0 @@
-{"event": "market_data_fetched", "symbol": "SOMIUSDT", "duration_ms": 3467, "keys": ["funding_rate", "klines_15m", "klines_1h", "klines_1m", "oi_hist", "orderbook", "premium_index", "symbol"]}
-{"event": "analysis_generated", "symbol": "SOMIUSDT", "duration_ms": 4, "score": 55, "direction_score": -2.0, "current_price": 0.2425}
-{"event": "llm_entry_request", "symbol": "SOMIUSDT", "analysis": {"score": 55, "direction_score": -2.0, "current_price": 0.2425}}
-{"event": "llm_entry_raw", "symbol": "SOMIUSDT", "raw": {"action": "OPEN", "direction": "SHORT", "confidence": 0.7, "reasoning": "The Direction Score is -2.0 indicating bearish sentiment, supported by 1H均线空头排列 (1H moving averages in bearish alignment) and negative funding rate. The ATR of 5.19% suggests sufficient volatility for a short trade. Current price is acceptable with no immediate signs of overextension or counter-move. Orderbook imbalance is slightly negative but not strongly bearish, hence moderate confidence.", "leverage": 10, "allocation_usdt": 30, "stop_loss": "0.2550", "take_profit": "0.2200", "partial_tp_price": 0.23, "partial_tp_percent": 0.5}}
-{"event": "execute_trade_request", "symbol": "SOMIUSDT", "action": "SELL", "direction": "SHORT", "confidence": 0.7, "params": {"leverage": 10, "usdt_amount": 30.0, "stop_loss": 0.255, "take_profit": 0.22, "partial_tp_price": 0.23, "partial_tp_percent": 0.5}}
-{"event": "leverage_set_requested", "symbol": "SOMIUSDT", "leverage": 10}
-{"event": "leverage_set_result", "symbol": "SOMIUSDT", "resp": {"symbol": "SOMIUSDT", "leverage": 10, "maxNotionalValue": "125000"}}
-{"event": "order_place_requested", "symbol": "SOMIUSDT", "kind": "entry", "type": "MARKET", "side": "SELL", "usdt_amount": "30.0"}

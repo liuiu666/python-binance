@@ -1,7 +1,0 @@
-{
-    "llm": {
-        "api_key": "sk-vhicsohwekmfzwqfarwyppzcuvdnhfvjdlasokizhlulajvf",
-        "base_url": "https://api.siliconflow.cn/v1",
-        "model": "deepseek-ai/DeepSeek-V3"
-    }
-}

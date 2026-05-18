@@ -1,2 +1,0 @@
-{"event": "market_data_fetched", "symbol": "WETUSDT", "duration_ms": 2690, "keys": ["funding_rate", "klines_15m", "klines_1h", "klines_1m", "oi_hist", "orderbook", "premium_index", "symbol"]}
-{"event": "analysis_generated", "symbol": "WETUSDT", "duration_ms": 3, "score": 15, "direction_score": 0.5, "current_price": 0.10936}
