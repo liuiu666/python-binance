@@ -41,21 +41,25 @@ SYMBOL = "BTCUSDT"
 INTERVAL = "1m"
 KLINES_PER_REQ = 1500          # Binance fapi maximum
 
-# Strategy parameters (must mirror MeanReversion10mStrategy)
-EMA_SPAN = 120
+# Strategy parameters — A4: 多期 EMA 共振 + 信号分级（高质 / 普通）
+EMA_SPANS = [30, 60, 120, 240]   # 4 个时间尺度
 ATR_WIN = 120
 VOL_Z_WIN = 40
 RV_WIN = 60
 RV_BASELINE_WIN = 60 * 24
-EMA_DEV_QUANTILE_WIN = 60 * 24 * 14   # 14 days
-EMA_DEV_LOW_Q = 0.10
-EMA_DEV_HIGH_Q = 0.90
+EMA_DEV_QUANTILE_WIN = 60 * 24 * 14   # 14 days rolling rank window
+# 高质量阈值：CALL q≤0.05 + 4 EMA 全合 / PUT q≥0.95 + ≥2 EMA
+HQ_CALL_QLO = 0.05; HQ_CALL_K = 4
+HQ_PUT_QHI  = 0.95; HQ_PUT_K  = 2
+# 普通阈值：CALL q≤0.10 + 4 EMA / PUT q≥0.90 + ≥3 EMA
+NORM_CALL_QLO = 0.10; NORM_CALL_K = 4
+NORM_PUT_QHI  = 0.90; NORM_PUT_K  = 3
 VOL_Z_THRESHOLD = 1.0
 RV_Z_BAND = 1.0
 EXPIRY_MINUTES = 10
 
 # History needed at startup (max of all rolling/EWMA spans + headroom)
-WARMUP_BARS = max(EMA_DEV_QUANTILE_WIN, RV_BASELINE_WIN + RV_WIN, EMA_SPAN * 5) + 200
+WARMUP_BARS = max(EMA_DEV_QUANTILE_WIN, RV_BASELINE_WIN + RV_WIN, max(EMA_SPANS) * 5) + 200
 
 # Binary-option payout for stats display
 PAYOUT_WIN = 4.0
@@ -136,27 +140,38 @@ def send_dingtalk(title: str, content: str):
         print(f"[WARN] DingTalk send failed: {e}")
 
 
-def notify_entry(direction: str, ema_dev: float, vol_z: float, rv_z: float,
+def notify_entry(direction: str, tier: str, dev_dict: dict, q_dict: dict,
+                 vol_z: float, rv_z: float,
                  entry_price: float, entry_time: pd.Timestamp):
     cn_entry = entry_time + pd.Timedelta(hours=8)
     cn_expiry = cn_entry + pd.Timedelta(minutes=EXPIRY_MINUTES)
     dir_label = "看涨 (Call)" if direction == 'CALL' else "看跌 (Put)"
+    tier_label = "[高质]" if tier == 'HQ' else "[普通]"
+    suggested = "建议加大仓位（如 10U）" if tier == 'HQ' else "建议常规仓位（如 5U）"
+    if tier == 'HQ':
+        ref = ("参考: 高质 1y 回测 WR≈59% / Wilson LB≈57.3%" if direction == 'CALL'
+               else "参考: 高质 1y 回测 WR≈58.3% / Wilson LB≈57.1%")
+    else:
+        ref = ("参考: 普通 1y 回测 WR≈58.0% / Wilson LB≈56.8%" if direction == 'CALL'
+               else "参考: 普通 1y 回测 WR≈57.3% / Wilson LB≈56.3%")
+    dev_str = "  ".join(f"ema{s}={dev_dict[s]:+.2f}(q={q_dict[s]:.3f})" for s in EMA_SPANS)
     content = (
-        f"类型: 下单通知 (A3 均值回归)\n"
+        f"类型: 下单通知 (A4 多期共振) {tier_label}\n"
         f"方向: {dir_label}\n"
         f"下单价格: {entry_price:.2f} USDT\n"
-        f"ema120_dev: {ema_dev:+.2f}  (距 EMA120 / ATR120)\n"
-        f"vol_z40   : {vol_z:+.2f}    (>1: 异常放量)\n"
-        f"rv_z      : {rv_z:+.2f}     (在 -1~+1 内)\n"
+        f"4 期偏离: {dev_str}\n"
+        f"vol_z40 : {vol_z:+.2f}    (>1: 异常放量, 已通过)\n"
+        f"rv_z    : {rv_z:+.2f}     (在 -1~+1 内, 已通过)\n"
         f"下单时间: {cn_entry.strftime('%Y-%m-%d %H:%M:%S')} (北京时间)\n"
         f"预计结算: {cn_expiry.strftime('%Y-%m-%d %H:%M:%S')} (北京时间)\n"
-        f"参考: 1y OOS 胜率 57.97% / Wilson LB 56.66%"
+        f"仓位建议: {suggested}\n"
+        f"{ref}"
     )
     print("\n" + "=" * 60)
-    print(f"[SIGNAL] A3 {direction} 触发")
+    print(f"[SIGNAL] A4 {tier} {direction} 触发")
     print(content)
     print("=" * 60)
-    send_dingtalk("二元期权-下单 (A3)", content)
+    send_dingtalk(f"二元期权-下单 (A4 {tier})", content)
 
 
 def notify_settlement(trade: dict, settle_price: float):
@@ -238,9 +253,19 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     rng = out['high'] - out['low']
     atr120 = rng.rolling(ATR_WIN).mean()
+    out['atr'] = atr120
 
-    ema120 = out['close'].ewm(span=EMA_SPAN, adjust=False).mean()
-    out['ema120_dev'] = (out['close'] - ema120) / atr120
+    # 4 个 EMA 偏离 + 14 天滚动分位（rank pct）
+    min_q = 2 * 60 * 24   # 至少 2 天
+    for s in EMA_SPANS:
+        ema_s = out['close'].ewm(span=s, adjust=False).mean()
+        out[f'd{s}'] = (out['close'] - ema_s) / atr120
+        out[f'q{s}'] = (out[f'd{s}']
+                        .rolling(EMA_DEV_QUANTILE_WIN, min_periods=min_q)
+                        .rank(pct=True))
+
+    # 兼容 console 输出：把 ema120_dev 暴露成 'ema120_dev'
+    out['ema120_dev'] = out['d120']
 
     vmed40 = out['volume'].rolling(VOL_Z_WIN).median()
     vstd40 = out['volume'].rolling(VOL_Z_WIN).std()
@@ -251,19 +276,30 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
     out['rv_z'] = ((rv60 - rv60.rolling(RV_BASELINE_WIN).mean())
                    / rv60.rolling(RV_BASELINE_WIN).std())
 
-    ev = out['ema120_dev']
-    out['ev_q_lo'] = ev.rolling(EMA_DEV_QUANTILE_WIN, min_periods=2 * 60 * 24)\
-                       .quantile(EMA_DEV_LOW_Q)
-    out['ev_q_hi'] = ev.rolling(EMA_DEV_QUANTILE_WIN, min_periods=2 * 60 * 24)\
-                       .quantile(EMA_DEV_HIGH_Q)
-
     base = ((out['vol_z40'] > VOL_Z_THRESHOLD)
             & (out['rv_z'] > -RV_Z_BAND)
             & (out['rv_z'] < RV_Z_BAND)
-            & out['ev_q_lo'].notna()
-            & out['ev_q_hi'].notna())
-    out['signal_call'] = base & (out['ema120_dev'] <= out['ev_q_lo'])
-    out['signal_put'] = base & (out['ema120_dev'] >= out['ev_q_hi'])
+            & out[f'q{EMA_SPANS[0]}'].notna())
+
+    # 计数：当前每个 EMA 是否落在低/高极端
+    hq_lo_count = sum((out[f'q{s}'] <= HQ_CALL_QLO).astype('Int64').fillna(0)
+                       for s in EMA_SPANS)
+    norm_lo_count = sum((out[f'q{s}'] <= NORM_CALL_QLO).astype('Int64').fillna(0)
+                         for s in EMA_SPANS)
+    hq_hi_count = sum((out[f'q{s}'] >= HQ_PUT_QHI).astype('Int64').fillna(0)
+                       for s in EMA_SPANS)
+    norm_hi_count = sum((out[f'q{s}'] >= NORM_PUT_QHI).astype('Int64').fillna(0)
+                         for s in EMA_SPANS)
+    out['hq_lo_count'] = hq_lo_count
+    out['norm_lo_count'] = norm_lo_count
+    out['hq_hi_count'] = hq_hi_count
+    out['norm_hi_count'] = norm_hi_count
+
+    out['hq_call'] = base & (hq_lo_count >= HQ_CALL_K)
+    out['hq_put'] = base & (hq_hi_count >= HQ_PUT_K)
+    # 普通信号：满足 NORM 阈值，但未达 HQ
+    out['norm_call'] = base & (norm_lo_count >= NORM_CALL_K) & ~out['hq_call']
+    out['norm_put'] = base & (norm_hi_count >= NORM_PUT_K) & ~out['hq_put']
     return out
 
 
@@ -272,7 +308,7 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
 def main():
     enforce_single_instance()
     print("=" * 60)
-    print("BTC 10-min binary option signal runner (A3 mean-reversion)")
+    print("BTC 10-min binary option signal runner (A4 多期共振, 分级)")
     print(f"DingTalk webhook: {DINGTALK_WEBHOOK[:60]}...")
     print(f"Keyword: {KEYWORD}")
     print(f"Proxy:   {PROXIES['https']}")
@@ -338,31 +374,110 @@ def main():
             elif bar_time > last_processed:
                 last_processed = bar_time
                 cn = (bar_time + pd.Timedelta(hours=8)).strftime('%Y-%m-%d %H:%M')
-                ev = closed['ema120_dev']; vz = closed['vol_z40']; rz = closed['rv_z']
-                qlo = closed['ev_q_lo']; qhi = closed['ev_q_hi']
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] bar {cn} CN  "
-                      f"ema_dev={ev:+.2f} (q_lo={qlo:+.2f},q_hi={qhi:+.2f})  "
-                      f"vol_z={vz:+.2f}  rv_z={rz:+.2f}")
+                price = float(closed['close'])
+                atr_val = float(closed['atr']) if pd.notna(closed['atr']) else 0.0
+                vz = float(closed['vol_z40']); rz = float(closed['rv_z'])
+                # 收集 4 期偏离值与分位
+                dev_dict = {s: float(closed[f'd{s}']) for s in EMA_SPANS}
+                q_dict = {s: float(closed[f'q{s}']) if pd.notna(closed[f'q{s}']) else float('nan')
+                          for s in EMA_SPANS}
 
-                direction = None
-                if bool(closed['signal_call']):
-                    direction = 'CALL'
-                elif bool(closed['signal_put']):
-                    direction = 'PUT'
+                # 计算"距触发还要再跌/涨多少 %"：用最近 14 天的 d{s} 分布找阈值
+                hist_tail = sig_df.tail(EMA_DEV_QUANTILE_WIN)
+
+                def _need_pct(side: str, qcut: float, k_required: int) -> float:
+                    """返回价格还需朝该方向移动的百分比（>0 表示还没触发）。
+                    side='CALL' → 要价格下跌到使至少 k_required 个 EMA 的 d ≤ q-quantile
+                    side='PUT'  → 要价格上涨到使至少 k_required 个 EMA 的 d ≥ q-quantile
+                    取第 k_required 个最容易达到的 EMA 作为绑定约束。"""
+                    margins = []
+                    for s in EMA_SPANS:
+                        d_now = dev_dict[s]
+                        thresh = hist_tail[f'd{s}'].quantile(qcut)
+                        if side == 'CALL':
+                            # need d_now ≤ thresh（thresh 是低值），margin = d_now - thresh
+                            margin = max(0.0, d_now - thresh)
+                        else:
+                            # need d_now ≥ thresh（thresh 是高值），margin = thresh - d_now
+                            margin = max(0.0, thresh - d_now)
+                        margins.append(margin)
+                    margins.sort()
+                    binding = margins[k_required - 1]   # 第 k 易达成的 EMA 决定门槛
+                    if atr_val <= 0 or price <= 0:
+                        return float('nan')
+                    return binding * atr_val / price * 100.0
+
+                pct_hq_call   = _need_pct('CALL', HQ_CALL_QLO,   HQ_CALL_K)
+                pct_norm_call = _need_pct('CALL', NORM_CALL_QLO, NORM_CALL_K)
+                pct_hq_put    = _need_pct('PUT',  HQ_PUT_QHI,    HQ_PUT_K)
+                pct_norm_put  = _need_pct('PUT',  NORM_PUT_QHI,  NORM_PUT_K)
+
+                vol_gap = VOL_Z_THRESHOLD - vz
+                vol_ok = vz > VOL_Z_THRESHOLD
+                rv_ok = abs(rz) < RV_Z_BAND
+                vol_str = "放量已就位" if vol_ok else f"待放量(成交量z还差{vol_gap:+.2f})"
+                rv_str = "波动正常" if rv_ok else f"波动异常(rv_z={rz:+.2f})"
+
+                def _state(pct_hq: float, pct_norm: float, side_label: str, click_label: str) -> str:
+                    """生成一边（做多/做空）的人话状态。"""
+                    base_pass = vol_ok and rv_ok
+                    if pct_norm <= 0.001:   # 普通条件已满足
+                        if pct_hq <= 0.001:
+                            base = f"【高质 + 普通 都已就位】"
+                        else:
+                            base = f"【普通已就位】(再朝{side_label}方向 {pct_hq:.2f}% 升级高质)"
+                        if base_pass:
+                            return f"{base} → 立即推送 {click_label}"
+                        else:
+                            problems = []
+                            if not vol_ok: problems.append(f"等放量(还差{vol_gap:.2f})")
+                            if not rv_ok: problems.append("波动异常")
+                            return f"{base} → 但 {', '.join(problems)}，暂不下单"
+                    else:
+                        return (f"还远 — 价格再{side_label} {pct_norm:.2f}% 触发普通 / "
+                                f"{pct_hq:.2f}% 触发高质")
+
+                call_state = _state(pct_hq_call, pct_norm_call, "下跌", "看涨(CALL)")
+                put_state  = _state(pct_hq_put,  pct_norm_put,  "上涨", "看跌(PUT)")
+
+                # 简短偏离 (调试用，可删)
+                dev_str = " ".join(f"e{s}={dev_dict[s]:+.1f}/q{q_dict[s]:.2f}" for s in EMA_SPANS)
+
+                print(
+                    f"\n[{datetime.now().strftime('%H:%M:%S')}] {cn} 北京  BTC={price:.1f}  "
+                    f"过滤: {vol_str} | {rv_str}\n"
+                    f"  ↑做多 CALL: {call_state}\n"
+                    f"  ↓做空 PUT : {put_state}\n"
+                    f"  (调试: {dev_str})"
+                )
+
+                # tier-aware signal dispatch
+                tier = direction = None
+                if bool(closed['hq_call']):
+                    tier, direction = 'HQ', 'CALL'
+                elif bool(closed['hq_put']):
+                    tier, direction = 'HQ', 'PUT'
+                elif bool(closed['norm_call']):
+                    tier, direction = 'NORM', 'CALL'
+                elif bool(closed['norm_put']):
+                    tier, direction = 'NORM', 'PUT'
 
                 if direction:
-                    entry_price = float(closed['close'])
-                    notify_entry(direction, float(ev), float(vz), float(rz),
+                    entry_price = price
+                    notify_entry(direction, tier, dev_dict, q_dict, vz, rz,
                                  entry_price, bar_time)
                     expiry_time = bar_time + pd.Timedelta(minutes=EXPIRY_MINUTES)
                     active_trades.append({
                         'entry_time': bar_time,
                         'entry_price': entry_price,
                         'direction': direction,
+                        'tier': tier,
                         'expiry_time': expiry_time,
-                        'ema120_dev': float(ev),
-                        'vol_z40': float(vz),
-                        'rv_z': float(rz),
+                        'd30': dev_dict[30], 'd60': dev_dict[60],
+                        'd120': dev_dict[120], 'd240': dev_dict[240],
+                        'q30': q_dict[30], 'q60': q_dict[60],
+                        'q120': q_dict[120], 'q240': q_dict[240],
+                        'vol_z40': vz, 'rv_z': rz,
                     })
                     save_active_trades(active_trades)
 
