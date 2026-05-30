@@ -1,0 +1,148 @@
+# ============================================================
+# 币安合约量化交易系统 — Docker Compose 一键部署
+# 使用: docker-compose up -d
+# ============================================================
+
+version: "3.9"
+
+services:
+  # ======================== 基础设施 ========================
+
+  redis:
+    image: redis:7-alpine
+    container_name: bxm40-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.1-alpine
+    container_name: bxm40-clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    environment:
+      CLICKHOUSE_DB: bxm40
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: bxm40-postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: bxm40
+      POSTGRES_USER: bxm40
+      POSTGRES_PASSWORD: bxm40_secret
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bxm40"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ======================== 应用服务 ========================
+
+  collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bxm40-collector
+    command: python -m collector.main
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  strategy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bxm40-strategy
+    command: python -m strategy.main
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  executor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bxm40-executor
+    command: python -m executor.main
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bxm40-api
+    command: python -m api.main
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bxm40-ai
+    command: python -m ai.scheduler
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+    driver: local
+  clickhouse_data:
+    driver: local
+  postgres_data:
+    driver: local
