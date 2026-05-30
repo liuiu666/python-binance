@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import signal
 import sys
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
@@ -17,11 +18,38 @@ from common.config import settings
 from common.logger import get_logger
 from common.redis_client import redis_client
 from common.db import db
+from collector.rest_client import rest_client
 
 from api.routes import account, trades, control
 from api.ws_handler import router as ws_router
 
 logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    FastAPI 生命周期管理 (替代已废弃的 on_event)
+    startup: 初始化所有连接
+    shutdown: 优雅关闭
+    """
+    # ---- startup ----
+    await redis_client.connect()
+    await db.connect()
+    await db.ensure_tables()
+    # 初始化 REST 客户端 (control.py 全平/紧急下单需要)
+    await rest_client.connect()
+    # 启动 Redis → WebSocket 实时数据转发器 (后台任务)
+    from api.ws_handler import start_redis_forwarder
+    forwarder_task = asyncio.create_task(start_redis_forwarder())
+    logger.info("api.started")
+    yield
+    # ---- shutdown ----
+    forwarder_task.cancel()
+    await rest_client.close()
+    await db.close()
+    await redis_client.close()
+    logger.info("api.stopped")
 
 
 def create_app() -> FastAPI:
@@ -35,6 +63,7 @@ def create_app() -> FastAPI:
         title="BXM40 量化交易系统",
         description="币安合约量化交易系统 API",
         version="2.0.0",
+        lifespan=lifespan,
     )
 
     # CORS 中间件 (允许前端跨域)
@@ -51,20 +80,6 @@ def create_app() -> FastAPI:
     app.include_router(trades.router, prefix="/api", tags=["交易"])
     app.include_router(control.router, prefix="/api", tags=["控制"])
     app.include_router(ws_router)
-
-    # 生命周期事件
-    @app.on_event("startup")
-    async def startup():
-        await redis_client.connect()
-        await db.connect()
-        await db.ensure_tables()
-        logger.info("api.started")
-
-    @app.on_event("shutdown")
-    async def shutdown():
-        await db.close()
-        await redis_client.close()
-        logger.info("api.stopped")
 
     return app
 

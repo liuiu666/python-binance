@@ -90,6 +90,12 @@ class StrategyEngine:
             name="ai-param-watcher",
         )
 
+        # ---- 启动控制指令监听 (暂停/恢复) ----
+        control_task = asyncio.create_task(
+            self._watch_control_commands(),
+            name="control-watcher",
+        )
+
         # ---- 主循环: 消费行情 ----
         consume_task = asyncio.create_task(
             self._consume_market_data(),
@@ -107,7 +113,7 @@ class StrategyEngine:
         except asyncio.CancelledError:
             pass
         finally:
-            for task in [ai_task, consume_task]:
+            for task in [ai_task, control_task, consume_task]:
                 if not task.done():
                     task.cancel()
             await redis_client.close()
@@ -298,6 +304,46 @@ class StrategyEngine:
                 logger.exception("strategy.ai_params_error")
 
             await asyncio.sleep(60)
+
+    # ============================================================
+    # 控制指令监听 (暂停/恢复)
+    # ============================================================
+
+    async def _watch_control_commands(self) -> None:
+        """
+        订阅 Redis Pub/Sub 频道 control:strategy
+        接收暂停/恢复指令, 批量切换所有策略的启用状态
+        """
+        import asyncio as _asyncio
+        pubsub = redis_client.client.pubsub()
+        await pubsub.subscribe("control:strategy")
+        logger.info("strategy.control_subscribed")
+
+        try:
+            while self._running:
+                message = await pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=1.0
+                )
+                if message and message.get("type") == "message":
+                    # redis_client 已设 decode_responses=True, data 直接是 str
+                    action = str(message.get("data", ""))
+
+                    if action == "PAUSE":
+                        for s in self._strategies:
+                            s.disable()
+                        logger.warning("strategy.paused_by_control")
+                    elif action == "RESUME":
+                        for s in self._strategies:
+                            s.enable()
+                        logger.warning("strategy.resumed_by_control")
+                await _asyncio.sleep(0.1)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("strategy.control_error")
+        finally:
+            await pubsub.unsubscribe("control:strategy")
+            await pubsub.close()
 
 
 async def main() -> None:

@@ -76,14 +76,15 @@ class RiskManager:
 
     def update_state(
         self,
-        balance: float = 0.0,
-        equity: float = 0.0,
-        open_positions: int = 0,
-        daily_loss: float = 0.0,
+        balance: Optional[float] = None,
+        equity: Optional[float] = None,
+        open_positions: Optional[int] = None,
+        daily_loss: Optional[float] = None,
         position_sides: Optional[Dict[str, str]] = None,
     ) -> None:
         """
         更新风控状态 (由执行器定期从交易所同步)
+        只更新显式传入的字段, 未传入的保持原值, 避免零值覆盖
 
         Args:
             balance: 账户余额
@@ -92,16 +93,18 @@ class RiskManager:
             daily_loss: 今日已实现亏损
             position_sides: 当前持仓方向
         """
-        self._state.account_balance = balance
-        self._state.account_equity = equity
-        self._state.open_positions = open_positions
-        self._state.daily_realized_loss = daily_loss
+        if balance is not None:
+            self._state.account_balance = balance
+        if equity is not None:
+            self._state.account_equity = equity
+        if open_positions is not None:
+            self._state.open_positions = open_positions
+        if daily_loss is not None:
+            self._state.daily_realized_loss = daily_loss
+            if daily_loss >= settings.max_daily_loss:
+                self._state.is_readonly = True
         if position_sides is not None:
             self._state.position_sides = position_sides
-
-        # 检查是否应该进入只读模式
-        if daily_loss >= settings.max_daily_loss:
-            self._state.is_readonly = True
 
     def set_readonly(self, readonly: bool) -> None:
         """手动设置只读模式"""

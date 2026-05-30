@@ -50,15 +50,15 @@ class RateLimiter:
             weight: 请求权重
         """
         while True:
+            wait = 0.0
+
             async with self._lock:
                 now = time.monotonic()
 
-                # 冷却期内直接等待
+                # 冷却期内: 计算等待时间, 但不在锁内 sleep
                 if now < self._cool_until:
                     wait = self._cool_until - now
                     logger.warning("ratelimiter.cooling", wait_seconds=f"{wait:.1f}")
-                    await asyncio.sleep(wait)
-                    continue
 
                 # 补充令牌
                 elapsed = now - self._last_refill
@@ -68,12 +68,15 @@ class RateLimiter:
                 )
                 self._last_refill = now
 
-                if self._tokens >= weight:
+                if wait == 0.0 and self._tokens >= weight:
                     self._tokens -= weight
                     return
 
-            # 令牌不足, 等待一个补充周期
-            wait = (weight - self._tokens) * self._window / self._max_weight
+                # 令牌不足: 计算等待时间, 但不在锁内 sleep
+                if wait == 0.0:
+                    wait = (weight - self._tokens) * self._window / self._max_weight
+
+            # 在锁外等待, 允许其他协程获取锁
             await asyncio.sleep(max(wait, 0.1))
 
     def trigger_cooldown(self, cooldown_seconds: float = 60.0) -> None:
@@ -349,6 +352,13 @@ class DataCompensator:
         if symbol not in self._kline_cache:
             self._kline_cache[symbol] = {}
         self._kline_cache[symbol][kline["open_time"]] = kline
+
+        # 清理旧条目, 只保留最近 50 根 K 线的缓存, 防止内存无限增长
+        cache = self._kline_cache[symbol]
+        if len(cache) > 50:
+            sorted_keys = sorted(cache.keys())
+            for old_key in sorted_keys[:-50]:
+                del cache[old_key]
 
     async def start(self) -> None:
         """启动校准循环"""

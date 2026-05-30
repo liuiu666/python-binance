@@ -40,15 +40,17 @@ class TokenBucketRateLimiter:
             weight: 请求权重
         """
         while True:
+            wait = 0.0
+
             async with self._lock:
                 now = time.monotonic()
 
+                # 冷却期内: 计算等待时间, 但不在锁内 sleep
                 if now < self._cool_until:
                     wait = self._cool_until - now
                     logger.warning("executor_ratelimiter.cooling", wait=f"{wait:.1f}s")
-                    await asyncio.sleep(wait)
-                    continue
 
+                # 补充令牌
                 elapsed = now - self._last_refill
                 self._tokens = min(
                     self._max_weight,
@@ -56,7 +58,7 @@ class TokenBucketRateLimiter:
                 )
                 self._last_refill = now
 
-                if self._tokens >= weight:
+                if wait == 0.0 and self._tokens >= weight:
                     self._tokens -= weight
                     logger.debug(
                         "executor_ratelimiter.acquired",
@@ -65,7 +67,11 @@ class TokenBucketRateLimiter:
                     )
                     return
 
-            wait = (weight - self._tokens) * self._window / self._max_weight
+                # 令牌不足: 计算等待时间, 但不在锁内 sleep
+                if wait == 0.0:
+                    wait = (weight - self._tokens) * self._window / self._max_weight
+
+            # 在锁外等待, 允许其他协程获取锁
             await asyncio.sleep(max(wait, 0.1))
 
     def trigger_cooldown(self, seconds: float = 60.0) -> None:

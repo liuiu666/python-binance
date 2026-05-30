@@ -59,6 +59,8 @@ class TrackedOrder:
     filled_price: Optional[float] = None
     filled_qty: float = 0.0
     fee: float = 0.0
+    # 平仓后的盈亏 (由 _handle_close_fill 写入)
+    pnl: Optional[float] = None
 
     # 限价单超时时间 (秒)
     timeout_seconds: float = 60.0
@@ -327,8 +329,35 @@ class OrderManager:
     # ============================================================
 
     async def _handle_fill(self, order: TrackedOrder) -> None:
-        """订单完全成交后的处理"""
-        # 写入 PostgreSQL
+        """
+        订单完全成交后的处理
+        - 开仓 (action=OPEN): 写入 trades 表, 状态 OPENED
+        - 平仓 (action=CLOSE): 更新 trades 表, 计算 PnL, 更新 daily_pnl
+        """
+        if order.action == "CLOSE":
+            await self._handle_close_fill(order)
+        else:
+            await self._handle_open_fill(order)
+
+        # 发送成交通知
+        pnl = order.pnl if order.action == "CLOSE" else None
+        await notifier.notify_trade(
+            action=order.action,
+            symbol=order.symbol,
+            side=order.side,
+            quantity=order.filled_qty,
+            price=order.filled_price or 0,
+            pnl=pnl,
+            reason=order.reason,
+        )
+
+        # 从活跃列表移除
+        if order.order_id:
+            self._active_orders.pop(order.order_id, None)
+            self._signal_order_map.pop(order.signal_id, None)
+
+    async def _handle_open_fill(self, order: TrackedOrder) -> None:
+        """开仓成交处理"""
         try:
             async with db.pool.acquire() as conn:
                 await conn.execute(
@@ -349,20 +378,95 @@ class OrderManager:
         except Exception:
             logger.exception("order_manager.db_write_error")
 
-        # 发送成交通知
-        await notifier.notify_trade(
-            action=order.action,
-            symbol=order.symbol,
-            side=order.side,
-            quantity=order.filled_qty,
-            price=order.filled_price or 0,
-            reason=order.reason,
-        )
+    async def _handle_close_fill(self, order: TrackedOrder) -> None:
+        """
+        平仓成交处理
+        查找对应的未平仓交易, 计算盈亏, 更新 trades 和 daily_pnl
+        """
+        exit_price = order.filled_price or 0
+        quantity = order.filled_qty
 
-        # 从活跃列表移除
-        if order.order_id:
-            self._active_orders.pop(order.order_id, None)
-            self._signal_order_map.pop(order.signal_id, None)
+        try:
+            async with db.pool.acquire() as conn:
+                # 查找同 symbol 的未平仓交易
+                opening_trade = await conn.fetchrow(
+                    """
+                    SELECT id, signal_id, entry_price, side, strategy
+                    FROM trades
+                    WHERE symbol = $1 AND status = 'OPENED'
+                    ORDER BY opened_at DESC
+                    LIMIT 1
+                    """,
+                    order.symbol,
+                )
+
+                pnl = 0.0
+                entry_price = 0.0
+
+                if opening_trade:
+                    entry_price = float(opening_trade["entry_price"])
+                    side = opening_trade["side"]
+
+                    # 计算盈亏: 做多 PnL = (exit - entry) * qty; 做空 PnL = (entry - exit) * qty
+                    if side == "BUY":
+                        pnl = (exit_price - entry_price) * quantity
+                    else:
+                        pnl = (entry_price - exit_price) * quantity
+
+                    # 扣除手续费
+                    pnl -= order.fee
+
+                    # 更新原交易记录
+                    await conn.execute(
+                        """
+                        UPDATE trades SET
+                            status = 'CLOSED',
+                            exit_price = $1,
+                            pnl = $2,
+                            fee = fee + $3,
+                            closed_at = NOW()
+                        WHERE id = $4
+                        """,
+                        exit_price, pnl, order.fee, opening_trade["id"],
+                    )
+
+                    logger.info(
+                        "order_manager.close_pnl",
+                        symbol=order.symbol,
+                        entry=entry_price,
+                        exit=exit_price,
+                        pnl=f"{pnl:+.2f}",
+                    )
+                else:
+                    logger.warning(
+                        "order_manager.no_opening_trade",
+                        symbol=order.symbol,
+                    )
+
+                # 更新 daily_pnl 表
+                today = "CURRENT_DATE"
+                is_win = 1 if pnl > 0 else 0
+                is_loss = 1 if pnl < 0 else 0
+
+                await conn.execute(
+                    """
+                    INSERT INTO daily_pnl (trade_date, total_pnl, total_fee, trade_count, win_count, loss_count)
+                    VALUES (CURRENT_DATE, $1, $2, 1, $3, $4)
+                    ON CONFLICT (trade_date) DO UPDATE SET
+                        total_pnl = daily_pnl.total_pnl + EXCLUDED.total_pnl,
+                        total_fee = daily_pnl.total_fee + EXCLUDED.total_fee,
+                        trade_count = daily_pnl.trade_count + 1,
+                        win_count = daily_pnl.win_count + EXCLUDED.win_count,
+                        loss_count = daily_pnl.loss_count + EXCLUDED.loss_count
+                    """,
+                    pnl, order.fee, is_win, is_loss,
+                )
+
+                # 将 PnL 附加到 order 上供通知使用
+                order.pnl = pnl
+
+        except Exception:
+            logger.exception("order_manager.close_db_error")
 
     async def _handle_cancel(self, order: TrackedOrder) -> None:
         """订单取消后的处理"""
