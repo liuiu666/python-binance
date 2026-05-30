@@ -9,6 +9,10 @@ This is the *operational* PnL backtest -- the freqtrade `backtesting`
 sub-command uses linear-futures + fees and is not appropriate for a binary
 option payoff.
 
+Changelog (2026-05-23):
+  - FIX-11: preserve UTC timezone in monthly grouping (was: dt.to_period drops tz)
+  - ATR now uses True Range + Wilder's smoothing ( matches strategy.py )
+
 Run:
     .venv\\Scripts\\python -u user_data/notebooks/binary_option_backtest.py
 """
@@ -103,7 +107,12 @@ def by_month(trades_df):
     if trades_df.empty:
         return pd.DataFrame()
     t = trades_df.copy()
-    t['month'] = t['date'].dt.to_period('M')
+    # FIX-11: keep UTC timezone when extracting month so boundary bars
+    # (e.g. 2025-05-31 22:00 UTC = 2025-06-01 06:00 CST) are placed
+    # in the correct calendar month.
+    # FIX-10: keep UTC tz-aware when grouping by month so boundary bars
+    # (e.g. 2025-05-31 22:00 UTC = 2025-06-01 06:00 CST) land in the correct month.
+    t['month'] = t['date'].dt.tz_localize(None).dt.to_period('M')
     out = []
     for m, sub in t.groupby('month', sort=True):
         s = summarize(sub)

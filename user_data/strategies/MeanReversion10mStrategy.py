@@ -11,8 +11,12 @@ Validation (1y BTCUSDT futures, expanding 24-fold walk-forward):
 
 Entries are flat 5U-stake style and exit at 10-minute expiry.
 
+Changelog (2026-05-23):
+  - FIX-1: True Range ATR (was plain H-L, now proper TR with gap handling)
+  - FIX-2: vol_z40 / rv_z divide-by-zero → NaN guard on all denominators
+
 Backtest:
-    .venv\\Scripts\\freqtrade backtesting -c user_data/config_backtest.json \
+    .venv\\Scripts\\freqtrade backtesting -c user_data/config_backtest.json \\
         -s MeanReversion10mStrategy -i 1m
 """
 from datetime import datetime
@@ -62,33 +66,46 @@ class MeanReversion10mStrategy(IStrategy):
     EXPIRY_SECS = 10 * 60
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        df = dataframe
+        df = dataframe.copy()
 
-        rng = df['high'] - df['low']
-        atr120 = rng.rolling(self.ATR_WIN).mean()
+        # FIX-1: True Range ATR ( Wilder's smoothing / EMA with alpha=1/period )
+        # TR = max(H-L, |H - prev_close|, |L - prev_close|)
+        prev_close = df['close'].shift(1)
+        tr1 = df['high'] - df['low']
+        tr2 = (df['high'] - prev_close).abs()
+        tr3 = (df['low'] - prev_close).abs()
+        true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        atr120 = true_range.ewm(alpha=1.0 / self.ATR_WIN, adjust=False).mean()
+        df['atr'] = atr120
 
+        # FIX-2: guard atr=0 / NaN so dev never inf
         ema120 = df['close'].ewm(span=self.EMA_SPAN, adjust=False).mean()
-        df['ema120_dev'] = (df['close'] - ema120) / atr120
+        df['ema120_dev'] = (df['close'] - ema120) / atr120.replace(0, np.nan)
 
+        # FIX-2: vol_z40 — guard against zero rolling std
         vmed40 = df['volume'].rolling(self.VOL_Z_WIN).median()
         vstd40 = df['volume'].rolling(self.VOL_Z_WIN).std()
-        df['vol_z40'] = (df['volume'] - vmed40) / vstd40
+        df['vol_z40'] = (df['volume'] - vmed40) / vstd40.replace(0, np.nan)
 
+        # Realized-volatility z-score
         logret1 = np.log(df['close']).diff()
         rv60 = logret1.rolling(self.RV_WIN).std()
-        rv60_mean = rv60.rolling(self.RV_BASELINE_WIN).mean()
-        rv60_std = rv60.rolling(self.RV_BASELINE_WIN).std()
-        df['rv_z'] = (rv60 - rv60_mean) / rv60_std
+        rv_mean = rv60.rolling(self.RV_BASELINE_WIN, min_periods=self.RV_BASELINE_WIN).mean()
+        rv_std  = rv60.rolling(self.RV_BASELINE_WIN, min_periods=self.RV_BASELINE_WIN).std()
+        # FIX-2: guard against zero baseline std
+        df['rv_z'] = ((rv60 - rv_mean) / rv_std.replace(0, np.nan)).replace(
+            [np.inf, -np.inf], np.nan)
 
         # Rolling quantile cutoffs for ema120_dev (14-day window).
-        # rolling.quantile is O(N*W); 14d on 1m = 20160 bars. Acceptable speed
-        # for 1y backtest on a single pair but heavy. Falls back to expanding
-        # quantile during the warmup period.
         ev = df['ema120_dev']
-        df['ev_q_lo'] = ev.rolling(self.EMA_DEV_QUANTILE_WIN, min_periods=2 * 60 * 24)\
-                         .quantile(self.EMA_DEV_LOW_Q)
-        df['ev_q_hi'] = ev.rolling(self.EMA_DEV_QUANTILE_WIN, min_periods=2 * 60 * 24)\
-                         .quantile(self.EMA_DEV_HIGH_Q)
+        df['ev_q_lo'] = (
+            ev.rolling(self.EMA_DEV_QUANTILE_WIN, min_periods=2 * 60 * 24)
+            .quantile(self.EMA_DEV_LOW_Q)
+        )
+        df['ev_q_hi'] = (
+            ev.rolling(self.EMA_DEV_QUANTILE_WIN, min_periods=2 * 60 * 24)
+            .quantile(self.EMA_DEV_HIGH_Q)
+        )
 
         return df
 

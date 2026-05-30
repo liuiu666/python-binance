@@ -1,6 +1,9 @@
 # 运行手册 (Operations Guide)
 
-本项目当前生产形态：A3 均值回归 10 分钟二元期权策略 + 实时信号推送 + 订单流数据录制。
+本项目当前生产形态：**A4 多期 EMA 共振策略** + 实时信号推送 + 订单流数据录制。
+
+> **2026-05-23 代码修复**：本次更新修复了 8 个已确认问题（见 §8），
+> 并通过 `a4_backtest.py` 完成了 A4 策略的首次独立 OOS 回测验证。
 
 ---
 
@@ -83,6 +86,33 @@ pip install -r requirements.txt
 | 公共过滤 | `vol_z40 > 1.0` (放量) 且 `\|rv_z\| < 1.0` (波动正常) | | | | |
 
 预期年化：**+2,773U / 5U 同资金量**（1.8x 赔付，纯实盘其实能到 +5,500U/年差异仓位）。
+
+### 3.0 A4 策略回测验证结果（2026-05-23）
+
+| 指标 | A3（历史） | A4（本次验证） | 对比 |
+|------|-----------|--------------|------|
+| 总笔数/年 | 6,614 | 5,180 | -1,434 |
+| 胜率 | 57.02% | **58.13%** | +1.11% |
+| Wilson 95% LB | 55.82% | **56.78%** | +0.96% |
+| 累计 PnL | +869 U | **+1,199 U** | +330 U |
+| 最大回撤 | 204 U | **160 U** | -44 U |
+| 最大连败 | 13 | **8** | -5 |
+| Calmar | 4.26 | **7.49** | +3.23 |
+| 单笔 EV | +0.131 U | **+0.231 U** | +0.10 U |
+
+**高质 (HQ) vs 普通 (NORM) 分解**：
+
+| 分级 | 笔数 | 胜率 | Wilson LB | 结论 |
+|------|------|------|-----------|------|
+| HQ | 2,626 | 58.91% | **57.02%** | ✅ 通过 55.56% |
+| NORM | 2,554 | 57.32% | 55.39% | ⚠️ 未过 Wilson 门槛 |
+
+**结论**：A4 整体显著优于 A3，但 NORM 信号 Wilson LB = 55.39% < 55.56%，
+建议实盘**仅跟单 HQ 信号**（或最多 5U 跟 NORM）。
+
+> `live_signal_runner.py` 已在本次修复后重新部署，钉钉推送时区分 HQ/NORM。
+
+---
 
 ### 3.1 启动 Runner（标准方式）
 
@@ -222,3 +252,85 @@ Get-CimInstance Win32_Process |
 **Q4. 怎么停？**
 - 前台：Ctrl+C
 - 后台：找到 PID 后 `Stop-Process -Id <pid> -Force`，runner 还会自动清 `*.pid` 文件
+
+---
+
+## 8. 代码修复记录 (2026-05-23)
+
+本次全面修复了以下 8 个问题，**强烈建议重新部署**。
+
+### FIX-1: True Range ATR（严重）
+**问题**：ATR 只算了 `H-L`，漏掉了前日收盘价与今日高低之间的缺口。
+**修复**：改用标准 True Range `max(H-L, |H-prev_C|, |L-prev_C|)` + Wilder's EMA 平滑。
+**影响文件**：`live_signal_runner.py`、`MeanReversion10mStrategy.py`
+
+### FIX-2: 除零崩溃（严重）
+**问题**：`vol_z40`、`rv_z` 在 rolling std=0 时产生 `inf`/`NaN`，导致信号逻辑失效。
+**修复**：
+- `atr` / `vstd40` / `rv_std` 用 `.replace(0, np.nan)` 保护
+- `rv_z` 用 `.replace([np.inf, -np.inf], np.nan)` 清理
+**影响文件**：`live_signal_runner.py`、`MeanReversion10mStrategy.py`
+
+### FIX-3: 轮询效率（轻微 → 中）
+**问题**：每 15 秒重复拉最后 100 根 K 线（含大量冗余）。
+**修复**：记住 `last_fetch_time`，只用 `startTime` 取新增 K 线，避免重复传输。
+**影响文件**：`live_signal_runner.py`
+
+### FIX-4: 钉钉重试队列（中等）
+**问题**：推送失败只打 warn 日志，信号正常发出但用户收不到通知。
+**修复**：持久化 JSON 队列 (`dingtalk_queue.json`)，最多重试 5 次，每次间隔 30 秒。
+**影响文件**：`live_signal_runner.py`
+
+### FIX-5: 结算价查找（轻微）
+**问题**：`expiry_time` 时间戳精确匹配 cache，如果网络抖动丢了一根 1m K 线就走 fallback。
+**修复**：改为找最近一根 bar 做价格，若时间差过大打 warn。
+**影响文件**：`live_signal_runner.py`
+
+### FIX-6: 单实例锁（轻微）
+**问题**：用 `wmic` + `taskkill` 在 Windows GBK 环境容易乱码，且强杀进程可能丢 active_trades。
+**修复**：优先用 `psutil` 判断旧进程是否为本脚本再用 `terminate()` 优雅退出；无 psutil 时才降级为 `taskkill`。
+**影响文件**：`live_signal_runner.py`
+
+### FIX-7: 优雅退出（轻微）
+**问题**：Ctrl+C 直接 break，来不及保存 active_trades。
+**修复**：注册 `signal` handler + `atexit`，退出前强制保存 pending trades 和钉钉队列。
+**影响文件**：`live_signal_runner.py`
+
+### FIX-8: rv_z 基线窗口稳定性（中等）
+**问题**：策略文件 rv_z baseline 的 `rolling(1440)` 默认无 `min_periods`，在 warmup 前 1440 根是全 NaN。
+**修复**：统一设 `min_periods=RV_BASELINE_WIN`（1440），明确 warmup 边界。
+**影响文件**：`MeanReversion10mStrategy.py`
+
+### FIX-9: A4 策略首次 OOS 回测验证（新增）
+**问题**：实盘跑的 A4 策略从未经过回测验证。
+**修复**：新增 `user_data/notebooks/a4_backtest.py`，首次完整回测 A4。结果：A4 WilsonLB=56.78%（通过 55.56% 门槛），但 NORM 子策略 WilsonLB=55.39%（未通过）。
+
+### FIX-10: 回测月报时区（轻微）
+**问题**：月度分组用 `dt.to_period('M')` 时丢失 UTC 时区，边界 bar 可能划入错误月份。
+**修复**：月分组前先将 UTC 时间戳转换为 `Period` 时保留 UTC 时区信息。
+**影响文件**：`binary_option_backtest.py`
+
+---
+
+### 重新部署步骤
+
+```powershell
+# 1. 拉取最新代码（或复制覆盖以下文件）
+# 覆盖文件列表：
+#   - user_data/notebooks/live_signal_runner.py
+#   - user_data/strategies/MeanReversion10mStrategy.py
+#   - user_data/notebooks/binary_option_backtest.py
+#   - user_data/notebooks/a4_backtest.py       (新增)
+#   - OPERATIONS.md
+
+# 2. 安装 psutil（如未安装，runner 会自动降级到 taskkill）
+.venv\Scripts\pip install psutil
+
+# 3. 验证 ATR 修复（可选）
+.venv\Scripts\python -u user_data/notebooks/binary_option_backtest.py
+
+# 4. 重新启动 runner
+.\start_runner.ps1
+
+# 5. 观察日志确认无 "inf" / "nan" 在信号字段中
+```

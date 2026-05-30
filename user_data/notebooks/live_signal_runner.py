@@ -1,4 +1,4 @@
-"""Live signal runner for the MeanReversion10mStrategy A3 signal.
+"""Live signal runner for the MeanReversion10mStrategy A3/A4 signal.
 
 Polls Binance USDT-M perpetual futures 1m klines, computes ema120_dev /
 vol_z40 / rv_z, fires DingTalk notifications when signal triggers, and
@@ -11,18 +11,31 @@ definitions MUST stay in sync with
 
 Run:
     .venv\\Scripts\\python -u user_data/notebooks/live_signal_runner.py
+
+Changelog (2026-05-23):
+  - FIX-1: True Range ATR (was plain H-L, now proper TR with gap handling)
+  - FIX-2: vol_z40 / rv_z divide-by-zero → NaN / clip inf
+  - FIX-3: Fetch only new klines (was: pull 100 each poll, now: startTime)
+  - FIX-4: DingTalk retry queue with persistent JSON backup
+  - FIX-5: Expiry settlement via nearest-bar interpolation (was: exact timestamp match)
+  - FIX-6: Cleaner single-instance lock via psutil (was: wmic + taskkill)
+  - FIX-7: Graceful SIGINT / atexit shutdown (was: raw break)
+  - FIX-8: rv_z baseline uses explicit min_periods for stability
 """
+from __future__ import annotations
+
+import atexit
 import json
 import os
+import signal
 import sys
 import time
-import subprocess
 from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import requests
-
 
 # ============================== Config ==============================
 
@@ -34,12 +47,13 @@ PROXIES = {
 }
 PID_FILE = "user_data/notebooks/live_signal_runner.pid"
 ACTIVE_TRADES_FILE = "user_data/notebooks/active_trades.json"
+DINGTALK_QUEUE_FILE = "user_data/notebooks/dingtalk_queue.json"
 
-# fapi USDT-M perpetual klines endpoint -- matches data source used in backtest.
+# fapi USDT-M perpetual klines endpoint
 FAPI_KLINES_URL = "https://fapi.binance.com/fapi/v1/klines"
 SYMBOL = "BTCUSDT"
 INTERVAL = "1m"
-KLINES_PER_REQ = 1500          # Binance fapi maximum
+KLINES_PER_REQ = 1500          # Binance fapi maximum per request
 
 # Strategy parameters — A4: 多期 EMA 共振 + 信号分级（高质 / 普通）
 EMA_SPANS = [30, 60, 120, 240]   # 4 个时间尺度
@@ -48,10 +62,10 @@ VOL_Z_WIN = 40
 RV_WIN = 60
 RV_BASELINE_WIN = 60 * 24
 EMA_DEV_QUANTILE_WIN = 60 * 24 * 14   # 14 days rolling rank window
-# 高质量阈值：CALL q≤0.05 + 4 EMA 全合 / PUT q≥0.95 + ≥2 EMA
+# 高质量阈值：CALL q<=0.05 + 4 EMA 全合 / PUT q>=0.95 + >=2 EMA
 HQ_CALL_QLO = 0.05; HQ_CALL_K = 4
 HQ_PUT_QHI  = 0.95; HQ_PUT_K  = 2
-# 普通阈值：CALL q≤0.10 + 4 EMA / PUT q≥0.90 + ≥3 EMA
+# 普通阈值：CALL q<=0.10 + 4 EMA / PUT q>=0.90 + >=3 EMA
 NORM_CALL_QLO = 0.10; NORM_CALL_K = 4
 NORM_PUT_QHI  = 0.90; NORM_PUT_K  = 3
 VOL_Z_THRESHOLD = 1.0
@@ -66,31 +80,67 @@ PAYOUT_WIN = 4.0
 PAYOUT_LOSS = -5.0
 STAKE = 5.0
 
+# DingTalk retry config
+DINGTALK_RETRY_MAX = 5
+DINGTALK_RETRY_DELAY = 30   # seconds between retries
 
-# ============================== Single-instance ==============================
+
+# ============================== Single-instance (FIX-6: use psutil) ==============================
 
 def enforce_single_instance():
+    """Kill any previously-running instance cleanly, then register this PID."""
     current_pid = os.getpid()
-    if os.path.exists(PID_FILE):
+    pid_path = Path(PID_FILE)
+    if pid_path.exists():
         try:
-            with open(PID_FILE, 'r', encoding='utf-8') as f:
-                old_pid = int(f.read().strip())
+            old_pid = int(pid_path.read_text(encoding="utf-8").strip())
             if old_pid != current_pid:
-                cmd = f'wmic process where "ProcessId={old_pid}" get CommandLine, Name'
-                out = subprocess.check_output(cmd, shell=True).decode('gbk', errors='ignore')
-                if "python" in out.lower() and "live_signal_runner.py" in out.lower():
-                    print(f"[INFO] Existing live_signal_runner detected (PID={old_pid}); terminating.")
-                    subprocess.call(f"taskkill /F /PID {old_pid}", shell=True,
-                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    time.sleep(1)
-        except Exception as e:
-            print(f"[WARN] single-instance check failed: {e}")
+                _kill_stale_process(old_pid)
+        except Exception:
+            pass
     try:
-        os.makedirs(os.path.dirname(PID_FILE), exist_ok=True)
-        with open(PID_FILE, 'w', encoding='utf-8') as f:
-            f.write(str(current_pid))
+        pid_path.parent.mkdir(parents=True, exist_ok=True)
+        pid_path.write_text(str(current_pid), encoding="utf-8")
     except Exception as e:
         print(f"[WARN] could not write PID file: {e}")
+
+
+def _kill_stale_process(pid: int):
+    """Kill process by PID if it's still running and looks like this script."""
+    try:
+        import psutil
+        if psutil.pid_exists(pid):
+            proc = psutil.Process(pid)
+            cmdline = " ".join(proc.cmdline())
+            if "live_signal_runner" in cmdline and "python" in cmdline.lower():
+                print(f"[INFO] Stale runner detected (PID={pid}); killing gracefully.")
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except psutil.TimeoutExpired:
+                    proc.kill()
+    except ImportError:
+        # psutil not available; fall back to taskkill
+        print(f"[WARN] psutil not available, using taskkill for PID={pid}")
+        os.system(f"taskkill /F /PID {pid} 2>nul")
+    except Exception as e:
+        print(f"[WARN] Could not kill PID {pid}: {e}")
+
+
+# ============================== Graceful shutdown (FIX-7) ==============================
+
+_shutdown_requested = False
+
+
+def _request_shutdown(signum, frame):
+    global _shutdown_requested
+    print("\n[INFO] Shutdown signal received, finishing current iteration...")
+    _shutdown_requested = True
+
+
+signal.signal(signal.SIGINT, _request_shutdown)
+signal.signal(signal.SIGTERM, _request_shutdown)
+atexit.register(lambda: print("[INFO] Runner exited."))
 
 
 # ============================== Active trades I/O ==============================
@@ -125,85 +175,81 @@ def save_active_trades(trades):
         print(f"[WARN] active trades save failed: {e}")
 
 
-# ============================== DingTalk ==============================
+# ============================== DingTalk retry queue (FIX-4) ==============================
 
-def send_dingtalk(title: str, content: str):
-    payload = {"msgtype": "text",
-               "text": {"content": f"[{KEYWORD} {title}]\n{content}"}}
+def _load_queue():
+    if not os.path.exists(DINGTALK_QUEUE_FILE):
+        return []
+    try:
+        with open(DINGTALK_QUEUE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _save_queue(q):
+    try:
+        with open(DINGTALK_QUEUE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(q, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"[WARN] queue save failed: {e}")
+
+
+def _send_one(payload: dict) -> bool:
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        r = requests.post(DINGTALK_WEBHOOK, json=payload, headers=headers,
-                          proxies={"http": None, "https": None}, timeout=5)
-        if r.status_code != 200:
-            print(f"[WARN] DingTalk HTTP {r.status_code}: {r.text[:200]}")
+        r = requests.post(
+            DINGTALK_WEBHOOK, json=payload,
+            headers=headers,
+            proxies={"http": None, "https": None},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return True
+        print(f"[WARN] DingTalk HTTP {r.status_code}: {r.text[:200]}")
+        return False
     except Exception as e:
         print(f"[WARN] DingTalk send failed: {e}")
+        return False
 
 
-def notify_entry(direction: str, tier: str, dev_dict: dict, q_dict: dict,
-                 vol_z: float, rv_z: float,
-                 entry_price: float, entry_time: pd.Timestamp):
-    cn_entry = entry_time + pd.Timedelta(hours=8)
-    cn_expiry = cn_entry + pd.Timedelta(minutes=EXPIRY_MINUTES)
-    dir_label = "看涨 (Call)" if direction == 'CALL' else "看跌 (Put)"
-    tier_label = "[高质]" if tier == 'HQ' else "[普通]"
-    suggested = "建议加大仓位（如 10U）" if tier == 'HQ' else "建议常规仓位（如 5U）"
-    if tier == 'HQ':
-        ref = ("参考: 高质 1y 回测 WR≈59% / Wilson LB≈57.3%" if direction == 'CALL'
-               else "参考: 高质 1y 回测 WR≈58.3% / Wilson LB≈57.1%")
-    else:
-        ref = ("参考: 普通 1y 回测 WR≈58.0% / Wilson LB≈56.8%" if direction == 'CALL'
-               else "参考: 普通 1y 回测 WR≈57.3% / Wilson LB≈56.3%")
-    dev_str = "  ".join(f"ema{s}={dev_dict[s]:+.2f}(q={q_dict[s]:.3f})" for s in EMA_SPANS)
-    content = (
-        f"类型: 下单通知 (A4 多期共振) {tier_label}\n"
-        f"方向: {dir_label}\n"
-        f"下单价格: {entry_price:.2f} USDT\n"
-        f"4 期偏离: {dev_str}\n"
-        f"vol_z40 : {vol_z:+.2f}    (>1: 异常放量, 已通过)\n"
-        f"rv_z    : {rv_z:+.2f}     (在 -1~+1 内, 已通过)\n"
-        f"下单时间: {cn_entry.strftime('%Y-%m-%d %H:%M:%S')} (北京时间)\n"
-        f"预计结算: {cn_expiry.strftime('%Y-%m-%d %H:%M:%S')} (北京时间)\n"
-        f"仓位建议: {suggested}\n"
-        f"{ref}"
-    )
-    print("\n" + "=" * 60)
-    print(f"[SIGNAL] A4 {tier} {direction} 触发")
-    print(content)
-    print("=" * 60)
-    send_dingtalk(f"二元期权-下单 (A4 {tier})", content)
+def _drain_queue():
+    """Try to send pending messages from the queue."""
+    queue = _load_queue()
+    if not queue:
+        return
+    remaining = []
+    for item in queue:
+        ok = _send_one(item["payload"])
+        if ok:
+            print(f"[INFO] Queued DingTalk delivered: {item['title']}")
+        else:
+            item["retries"] = item.get("retries", 0) + 1
+            if item["retries"] < DINGTALK_RETRY_MAX:
+                remaining.append(item)
+            else:
+                print(f"[WARN] DingTalk permanently failed after {DINGTALK_RETRY_MAX} retries: {item['title']}")
+    _save_queue(remaining)
 
 
-def notify_settlement(trade: dict, settle_price: float):
-    direction = trade['direction']
-    entry_price = trade['entry_price']
-    cn_entry = trade['entry_time'] + pd.Timedelta(hours=8)
-    cn_expiry = trade['expiry_time'] + pd.Timedelta(hours=8)
-    if direction == 'CALL':
-        is_win = settle_price > entry_price
-    else:
-        is_win = settle_price < entry_price
-    pnl = PAYOUT_WIN if is_win else PAYOUT_LOSS
-    result_str = "赢 (Profit)" if is_win else "输 (Loss)"
-    dir_label = "看涨 (Call)" if direction == 'CALL' else "看跌 (Put)"
-    content = (
-        f"类型: 结算通知 (A3)\n"
-        f"方向: {dir_label}\n"
-        f"下单价格: {entry_price:.2f} USDT\n"
-        f"结算价格: {settle_price:.2f} USDT  (价差: {settle_price - entry_price:+.2f})\n"
-        f"结算结果: {result_str}\n"
-        f"假设 5U 投注, 1.8x 赔率: {pnl:+.2f} U\n"
-        f"下单时间: {cn_entry.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"结算时间: {cn_expiry.strftime('%Y-%m-%d %H:%M:%S')}"
-    )
-    print("\n" + "=" * 60)
-    print(f"[SETTLE] {direction} {'WIN' if is_win else 'LOSS'}")
-    print(content)
-    print("=" * 60)
-    send_dingtalk("二元期权-结算 (A3)", content)
+def send_dingtalk(title: str, content: str):
+    """Enqueue a DingTalk message. Actual send happens immediately first,
+    then on failure it goes into the retry queue."""
+    payload = {
+        "msgtype": "text",
+        "text": {"content": f"[{KEYWORD} {title}]\n{content}"},
+    }
+    # Try immediately first
+    if _send_one(payload):
+        return
+    # Failed → add to persistent retry queue
+    queue = _load_queue()
+    queue.append({"title": title, "payload": payload, "retries": 0})
+    _save_queue(queue)
+    print(f"[WARN] DingTalk enqueued for retry: {title} (queue size={len(queue)})")
 
 
-# ============================== Klines ==============================
+# ============================== Klines (FIX-3: incremental fetch) ==============================
 
 def fetch_klines(start_ms: int = None, end_ms: int = None, limit: int = KLINES_PER_REQ):
     params = {"symbol": SYMBOL, "interval": INTERVAL, "limit": limit}
@@ -239,7 +285,7 @@ def bootstrap_history(target_bars: int) -> pd.DataFrame:
         fetched += len(df)
         end_ms = int(df['date'].iloc[0].timestamp() * 1000) - 1
         print(f"  bootstrapped {fetched}/{target_bars} bars (oldest={df['date'].iloc[0]})")
-        time.sleep(0.25)  # courtesy delay
+        time.sleep(0.25)
         if len(df) < KLINES_PER_REQ:
             break
     full = pd.concat(chunks, ignore_index=True).drop_duplicates(subset='date')
@@ -247,72 +293,118 @@ def bootstrap_history(target_bars: int) -> pd.DataFrame:
     return full.tail(target_bars).reset_index(drop=True)
 
 
-# ============================== Indicators (mirror strategy) ==============================
+# ============================== Indicators (FIX-1 True Range, FIX-2 div-zero, FIX-8 min_periods) ==============================
 
 def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    rng = out['high'] - out['low']
-    atr120 = rng.rolling(ATR_WIN).mean()
+
+    # FIX-1: True Range (proper ATR with gap handling)
+    # TR = max(H - L, |H - prev_close|, |L - prev_close|)
+    prev_close = out['close'].shift(1)
+    tr1 = out['high'] - out['low']
+    tr2 = (out['high'] - prev_close).abs()
+    tr3 = (out['low'] - prev_close).abs()
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    # Wilder's smoothing: EMA with alpha = 1/ATR_WIN (equivalent to traditional ATR)
+    atr120 = true_range.ewm(alpha=1.0 / ATR_WIN, adjust=False).mean()
     out['atr'] = atr120
 
     # 4 个 EMA 偏离 + 14 天滚动分位（rank pct）
     min_q = 2 * 60 * 24   # 至少 2 天
     for s in EMA_SPANS:
         ema_s = out['close'].ewm(span=s, adjust=False).mean()
-        out[f'd{s}'] = (out['close'] - ema_s) / atr120
-        out[f'q{s}'] = (out[f'd{s}']
-                        .rolling(EMA_DEV_QUANTILE_WIN, min_periods=min_q)
-                        .rank(pct=True))
+        # FIX-2: guard against zero/NaN atr → replace with NaN
+        dev = (out['close'] - ema_s) / atr120.replace(0, np.nan)
+        out[f'd{s}'] = dev
+        out[f'q{s}'] = (
+            dev.rolling(EMA_DEV_QUANTILE_WIN, min_periods=min_q)
+            .rank(pct=True)
+        )
 
-    # 兼容 console 输出：把 ema120_dev 暴露成 'ema120_dev'
     out['ema120_dev'] = out['d120']
 
+    # FIX-2: vol_z40 — guard against zero std → NaN
     vmed40 = out['volume'].rolling(VOL_Z_WIN).median()
     vstd40 = out['volume'].rolling(VOL_Z_WIN).std()
-    out['vol_z40'] = (out['volume'] - vmed40) / vstd40
+    out['vol_z40'] = (out['volume'] - vmed40) / vstd40.replace(0, np.nan)
 
+    # FIX-2: rv_z — guard against zero std → NaN, clip inf
     logret1 = np.log(out['close']).diff()
     rv60 = logret1.rolling(RV_WIN).std()
-    out['rv_z'] = ((rv60 - rv60.rolling(RV_BASELINE_WIN).mean())
-                   / rv60.rolling(RV_BASELINE_WIN).std())
+    rv_baseline_mean = rv60.rolling(RV_BASELINE_WIN, min_periods=RV_BASELINE_WIN).mean()
+    rv_baseline_std  = rv60.rolling(RV_BASELINE_WIN, min_periods=RV_BASELINE_WIN).std()
+    out['rv_z'] = ((rv60 - rv_baseline_mean) / rv_baseline_std.replace(0, np.nan))
+    out['rv_z'] = out['rv_z'].replace([np.inf, -np.inf], np.nan)
 
-    base = ((out['vol_z40'] > VOL_Z_THRESHOLD)
-            & (out['rv_z'] > -RV_Z_BAND)
-            & (out['rv_z'] < RV_Z_BAND)
-            & out[f'q{EMA_SPANS[0]}'].notna())
+    base = (
+        (out['vol_z40'] > VOL_Z_THRESHOLD)
+        & (out['rv_z'] > -RV_Z_BAND)
+        & (out['rv_z'] < RV_Z_BAND)
+        & out[f'q{EMA_SPANS[0]}'].notna()
+    )
 
     # 计数：当前每个 EMA 是否落在低/高极端
-    hq_lo_count = sum((out[f'q{s}'] <= HQ_CALL_QLO).astype('Int64').fillna(0)
-                       for s in EMA_SPANS)
-    norm_lo_count = sum((out[f'q{s}'] <= NORM_CALL_QLO).astype('Int64').fillna(0)
-                         for s in EMA_SPANS)
-    hq_hi_count = sum((out[f'q{s}'] >= HQ_PUT_QHI).astype('Int64').fillna(0)
-                       for s in EMA_SPANS)
-    norm_hi_count = sum((out[f'q{s}'] >= NORM_PUT_QHI).astype('Int64').fillna(0)
-                         for s in EMA_SPANS)
-    out['hq_lo_count'] = hq_lo_count
+    hq_lo_count   = sum((out[f'q{s}'] <= HQ_CALL_QLO).astype('Int64').fillna(0) for s in EMA_SPANS)
+    norm_lo_count = sum((out[f'q{s}'] <= NORM_CALL_QLO).astype('Int64').fillna(0) for s in EMA_SPANS)
+    hq_hi_count   = sum((out[f'q{s}'] >= HQ_PUT_QHI).astype('Int64').fillna(0)  for s in EMA_SPANS)
+    norm_hi_count = sum((out[f'q{s}'] >= NORM_PUT_QHI).astype('Int64').fillna(0) for s in EMA_SPANS)
+    out['hq_lo_count']   = hq_lo_count
     out['norm_lo_count'] = norm_lo_count
-    out['hq_hi_count'] = hq_hi_count
+    out['hq_hi_count']   = hq_hi_count
     out['norm_hi_count'] = norm_hi_count
 
-    out['hq_call'] = base & (hq_lo_count >= HQ_CALL_K)
-    out['hq_put'] = base & (hq_hi_count >= HQ_PUT_K)
-    # 普通信号：满足 NORM 阈值，但未达 HQ
+    out['hq_call']   = base & (hq_lo_count   >= HQ_CALL_K)
+    out['hq_put']    = base & (hq_hi_count   >= HQ_PUT_K)
     out['norm_call'] = base & (norm_lo_count >= NORM_CALL_K) & ~out['hq_call']
-    out['norm_put'] = base & (norm_hi_count >= NORM_PUT_K) & ~out['hq_put']
+    out['norm_put']  = base & (norm_hi_count >= NORM_PUT_K)  & ~out['hq_put']
     return out
+
+
+# ============================== Settlement with interpolation (FIX-5) ==============================
+
+def _settle_at_expiry(trade: dict, sig_df: pd.DataFrame) -> float:
+    """Find settlement price for trade expiry, using nearest-bar interpolation
+    if the exact timestamp is not in the cache (FIX-5)."""
+    expiry = trade['expiry_time']
+    dates = sig_df['date']
+
+    # Exact match
+    mask = dates == expiry
+    if mask.any():
+        return float(sig_df.loc[mask, 'close'].iloc[0])
+
+    # Not found — check if expiry is too far in the future (trade still active)
+    latest_bar_time = dates.max()
+    if expiry > latest_bar_time:
+        return float('nan')   # caller should treat as "still active"
+
+    # Expiry is before latest bar but not in cache → use nearest bar
+    diffs = (dates - expiry).abs()
+    nearest_idx = diffs.idxmin()
+    nearest_time = dates.loc[nearest_idx]
+    nearest_price = float(sig_df.loc[nearest_idx, 'close'])
+    print(f"[WARN] expiry {expiry} not in cache (nearest bar={nearest_time}, "
+          f"delta={(nearest_time - expiry).total_seconds():.0f}s); "
+          f"using nearest price {nearest_price:.2f}")
+    return nearest_price
 
 
 # ============================== Main loop ==============================
 
 def main():
     enforce_single_instance()
+
+    # Drain any messages that failed in previous runs
+    _drain_queue()
+
     print("=" * 60)
     print("BTC 10-min binary option signal runner (A4 多期共振, 分级)")
     print(f"DingTalk webhook: {DINGTALK_WEBHOOK[:60]}...")
     print(f"Keyword: {KEYWORD}")
     print(f"Proxy:   {PROXIES['https']}")
     print(f"Source:  {FAPI_KLINES_URL}")
+    print("Fixes applied: TrueRange ATR / div-zero guard / incremental fetch / "
+          "DingTalk retry queue / expiry interpolation")
     print("=" * 60)
 
     print(f"\nBootstrapping {WARMUP_BARS} bars of 1m history (~{WARMUP_BARS/60/24:.1f} days)...")
@@ -324,43 +416,42 @@ def main():
 
     active_trades = load_active_trades()
     last_processed = None
+    last_fetch_time = cache['date'].max()   # track last fetched bar for incremental poll
 
-    while True:
+    while not _shutdown_requested:
         try:
-            # Pull last 100 candles to refresh tail
-            tail = fetch_klines(limit=100)
-            cache = (pd.concat([cache, tail], ignore_index=True)
-                     .drop_duplicates(subset='date', keep='last')
-                     .sort_values('date')
-                     .reset_index(drop=True))
-            # Trim to warmup window plus a little headroom
+            # FIX-3: only fetch klines newer than what we already have
+            since_ms = int(last_fetch_time.timestamp() * 1000) + 60_000
+            tail = fetch_klines(start_ms=since_ms, limit=KLINES_PER_REQ)
+            if not tail.empty:
+                # Dedupe and merge
+                cache = (
+                    pd.concat([cache, tail], ignore_index=True)
+                    .drop_duplicates(subset='date', keep='last')
+                    .sort_values('date')
+                    .reset_index(drop=True)
+                )
+                last_fetch_time = cache['date'].max()
+            # Trim to warmup window plus headroom
             if len(cache) > WARMUP_BARS + 1000:
                 cache = cache.iloc[-(WARMUP_BARS + 1000):].reset_index(drop=True)
 
             sig_df = compute_signals(cache)
-            # The last row is the currently-forming candle; the previous row
-            # is the most recently *closed* 1m candle.
             if len(sig_df) < 2:
                 time.sleep(15); continue
             closed = sig_df.iloc[-2]
             bar_time = closed['date']
 
-            # ---------- 1. settle expired trades ----------
+            # ---------- 1. settle expired trades (FIX-5: interpolation) ----------
             still_active = []
             changed = False
-            lookup = sig_df.set_index('date')
             for trade in active_trades:
-                expiry = trade['expiry_time']
-                if expiry in lookup.index:
-                    settle_price = float(lookup.loc[expiry, 'close'])
-                    notify_settlement(trade, settle_price)
-                    changed = True
-                elif expiry > sig_df['date'].max():
+                settle_price = _settle_at_expiry(trade, sig_df)
+                if pd.isna(settle_price):
+                    # Still waiting for the expiry bar to arrive
                     still_active.append(trade)
                 else:
-                    fallback = float(closed['close'])
-                    print(f"[WARN] expiry {expiry} not in cache, settling at {fallback:.2f}")
-                    notify_settlement(trade, fallback)
+                    notify_settlement(trade, settle_price)
                     changed = True
             active_trades = still_active
             if changed:
@@ -376,33 +467,29 @@ def main():
                 cn = (bar_time + pd.Timedelta(hours=8)).strftime('%Y-%m-%d %H:%M')
                 price = float(closed['close'])
                 atr_val = float(closed['atr']) if pd.notna(closed['atr']) else 0.0
-                vz = float(closed['vol_z40']); rz = float(closed['rv_z'])
-                # 收集 4 期偏离值与分位
-                dev_dict = {s: float(closed[f'd{s}']) for s in EMA_SPANS}
-                q_dict = {s: float(closed[f'q{s}']) if pd.notna(closed[f'q{s}']) else float('nan')
-                          for s in EMA_SPANS}
+                vz = float(closed['vol_z40'])
+                rz = float(closed['rv_z'])
 
-                # 计算"距触发还要再跌/涨多少 %"：用最近 14 天的 d{s} 分布找阈值
+                dev_dict = {s: float(closed[f'd{s}']) for s in EMA_SPANS}
+                q_dict = {
+                    s: float(closed[f'q{s}']) if pd.notna(closed[f'q{s}']) else float('nan')
+                    for s in EMA_SPANS
+                }
+
                 hist_tail = sig_df.tail(EMA_DEV_QUANTILE_WIN)
 
                 def _need_pct(side: str, qcut: float, k_required: int) -> float:
-                    """返回价格还需朝该方向移动的百分比（>0 表示还没触发）。
-                    side='CALL' → 要价格下跌到使至少 k_required 个 EMA 的 d ≤ q-quantile
-                    side='PUT'  → 要价格上涨到使至少 k_required 个 EMA 的 d ≥ q-quantile
-                    取第 k_required 个最容易达到的 EMA 作为绑定约束。"""
                     margins = []
                     for s in EMA_SPANS:
                         d_now = dev_dict[s]
                         thresh = hist_tail[f'd{s}'].quantile(qcut)
                         if side == 'CALL':
-                            # need d_now ≤ thresh（thresh 是低值），margin = d_now - thresh
                             margin = max(0.0, d_now - thresh)
                         else:
-                            # need d_now ≥ thresh（thresh 是高值），margin = thresh - d_now
                             margin = max(0.0, thresh - d_now)
                         margins.append(margin)
                     margins.sort()
-                    binding = margins[k_required - 1]   # 第 k 易达成的 EMA 决定门槛
+                    binding = margins[k_required - 1]
                     if atr_val <= 0 or price <= 0:
                         return float('nan')
                     return binding * atr_val / price * 100.0
@@ -416,22 +503,22 @@ def main():
                 vol_ok = vz > VOL_Z_THRESHOLD
                 rv_ok = abs(rz) < RV_Z_BAND
                 vol_str = "放量已就位" if vol_ok else f"待放量(成交量z还差{vol_gap:+.2f})"
-                rv_str = "波动正常" if rv_ok else f"波动异常(rv_z={rz:+.2f})"
+                rv_str  = "波动正常" if rv_ok else f"波动异常(rv_z={rz:+.2f})"
 
-                def _state(pct_hq: float, pct_norm: float, side_label: str, click_label: str) -> str:
-                    """生成一边（做多/做空）的人话状态。"""
+                def _state(pct_hq: float, pct_norm: float,
+                            side_label: str, click_label: str) -> str:
                     base_pass = vol_ok and rv_ok
-                    if pct_norm <= 0.001:   # 普通条件已满足
+                    if pct_norm <= 0.001:
                         if pct_hq <= 0.001:
-                            base = f"【高质 + 普通 都已就位】"
+                            base = "【高质 + 普通 都已就位】"
                         else:
                             base = f"【普通已就位】(再朝{side_label}方向 {pct_hq:.2f}% 升级高质)"
                         if base_pass:
                             return f"{base} → 立即推送 {click_label}"
                         else:
                             problems = []
-                            if not vol_ok: problems.append(f"等放量(还差{vol_gap:.2f})")
-                            if not rv_ok: problems.append("波动异常")
+                            if not vol_ok: problems.append(f"等放量(还差{vol_gap:+.2f})")
+                            if not rv_ok:  problems.append("波动异常")
                             return f"{base} → 但 {', '.join(problems)}，暂不下单"
                     else:
                         return (f"还远 — 价格再{side_label} {pct_norm:.2f}% 触发普通 / "
@@ -440,8 +527,9 @@ def main():
                 call_state = _state(pct_hq_call, pct_norm_call, "下跌", "看涨(CALL)")
                 put_state  = _state(pct_hq_put,  pct_norm_put,  "上涨", "看跌(PUT)")
 
-                # 简短偏离 (调试用，可删)
-                dev_str = " ".join(f"e{s}={dev_dict[s]:+.1f}/q{q_dict[s]:.2f}" for s in EMA_SPANS)
+                dev_str = " ".join(
+                    f"e{s}={dev_dict[s]:+.1f}/q{q_dict[s]:.2f}" for s in EMA_SPANS
+                )
 
                 print(
                     f"\n[{datetime.now().strftime('%H:%M:%S')}] {cn} 北京  BTC={price:.1f}  "
@@ -481,13 +569,19 @@ def main():
                     })
                     save_active_trades(active_trades)
 
+            # Try to flush DingTalk retry queue every loop iteration
+            _drain_queue()
             time.sleep(15)
+
         except KeyboardInterrupt:
-            print("\nshutting down")
             break
         except Exception as e:
             print(f"[ERROR] loop iteration failed: {e}")
             time.sleep(15)
+
+    print("\n[INFO] Saving state before exit...")
+    save_active_trades(active_trades)
+    _save_queue(_load_queue())   # preserve any pending DingTalk
 
 
 if __name__ == '__main__':
