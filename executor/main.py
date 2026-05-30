@@ -189,8 +189,8 @@ class ExecutorService:
 
         流程: 解析 → 风控检查 → 下单 → 确认消息
         """
+        signal_id = ""
         try:
-            # 解析信号 (可能包含 JSON 序列化的字段)
             signal: Dict[str, Any] = {}
             for k, v in fields.items():
                 try:
@@ -198,7 +198,7 @@ class ExecutorService:
                 except (json.JSONDecodeError, TypeError):
                     signal[k] = v
 
-            signal_id = signal.get("signal_id", "")
+            signal_id = signal.get("signal_id", "") or ""
             symbol = signal.get("symbol", "")
             action = signal.get("action", "")
             side = signal.get("side", "")
@@ -226,11 +226,17 @@ class ExecutorService:
             # ---- 执行下单 ----
             result = await self._order_mgr.place_order(signal)
 
+            # ---- 释放 pending_signal (无论下单成功或失败) ----
+            self._risk_mgr.remove_pending_signal(signal_id)
+
             # ---- 确认消息 ----
             await redis_client.xack(STREAM_SIGNAL, GROUP_EXECUTOR, msg_id)
 
         except Exception:
             logger.exception("executor.signal_process_error", msg_id=msg_id)
+            # 异常时也尝试释放 pending_signal, 防止信号永远卡住
+            if signal_id:
+                self._risk_mgr.remove_pending_signal(signal_id)
 
     # ============================================================
     # 账户事件消费
@@ -266,15 +272,27 @@ class ExecutorService:
     async def _process_account_event(
         self, msg_id: str, fields: Dict[str, str]
     ) -> None:
-        """处理账户事件"""
-        event_type = fields.get("e", "")
+        """
+        处理账户事件
+        Redis Streams 中嵌套字段 (如 ORDER_TRADE_UPDATE 的 'o') 会被序列化为 JSON 字符串,
+        需要反序列化后才能正常访问
+        """
+        # 反序列化所有 JSON 字符串字段 (和 _process_signal 保持一致)
+        event: Dict[str, Any] = {}
+        for k, v in fields.items():
+            try:
+                event[k] = json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                event[k] = v
+
+        event_type = event.get("e", "")
 
         if event_type == "ORDER_TRADE_UPDATE":
-            await self._order_mgr.handle_order_update(fields)
+            await self._order_mgr.handle_order_update(event)
 
         elif event_type == "BALANCE_UPDATE":
-            asset = fields.get("a", "")
-            delta = fields.get("d", "")
+            asset = event.get("a", "")
+            delta = event.get("d", "")
             logger.info(
                 "executor.balance_update",
                 asset=asset,

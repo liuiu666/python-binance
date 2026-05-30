@@ -143,6 +143,11 @@ class OrderManager:
             params["price"] = price
             params["timeInForce"] = "GTC"
 
+        # 下单前确保杠杆设置正确
+        leverage = int(signal.get("leverage", 1))
+        if leverage > 0:
+            await self._ensure_leverage(symbol, leverage)
+
         # 获取限流令牌
         await self._rate_limiter.acquire(weight=1)
 
@@ -287,7 +292,8 @@ class OrderManager:
         order_id = order_data.get("i")
         status = order_data.get("X", "")
         executed_qty = float(order_data.get("z", 0))
-        avg_price = float(order_data.get("L", 0))
+        # 优先使用 ap (平均成交价), 回退到 L (最新成交价)
+        avg_price = float(order_data.get("ap", 0) or order_data.get("L", 0))
         commission = float(order_data.get("n", 0))
 
         tracked = self._active_orders.get(order_id)
@@ -378,6 +384,10 @@ class OrderManager:
         except Exception:
             logger.exception("order_manager.db_write_error")
 
+        # 开仓成交后, 挂 reduce-only 止损止盈单
+        if order.stop_loss or order.take_profit:
+            await self._place_sl_tp(order)
+
     async def _handle_close_fill(self, order: TrackedOrder) -> None:
         """
         平仓成交处理
@@ -467,6 +477,81 @@ class OrderManager:
 
         except Exception:
             logger.exception("order_manager.close_db_error")
+
+    async def _ensure_leverage(self, symbol: str, leverage: int) -> None:
+        """
+        下单前设置交易所杠杆
+        使用 POST /fapi/v1/leverage 接口
+        """
+        try:
+            await self._rate_limiter.acquire(weight=1)
+            result = await rest_client._request(
+                "POST", "/fapi/v1/leverage",
+                params={"symbol": symbol, "leverage": leverage},
+                signed=True, weight=1,
+            )
+            if result:
+                logger.info("order_manager.leverage_set", symbol=symbol, leverage=leverage)
+        except Exception:
+            logger.exception("order_manager.leverage_error", symbol=symbol)
+
+    async def _place_sl_tp(self, order: TrackedOrder) -> None:
+        """
+        开仓成交后, 挂 reduce-only 止损止盈单
+        止损: STOP_MARKET, 止盈: TAKE_PROFIT_MARKET
+        """
+        symbol = order.symbol
+        quantity = order.filled_qty
+        # 做多时止损用 SELL, 做空时止损用 BUY
+        close_side = "SELL" if order.side == "BUY" else "BUY"
+
+        # 挂止损单
+        if order.stop_loss and order.stop_loss > 0:
+            try:
+                await self._rate_limiter.acquire(weight=1)
+                result = await rest_client.place_order({
+                    "symbol": symbol,
+                    "side": close_side,
+                    "type": "STOP_MARKET",
+                    "stopPrice": str(order.stop_loss),
+                    "closePosition": "true",
+                    "reduceOnly": "true",
+                })
+                if result:
+                    logger.info(
+                        "order_manager.sl_placed",
+                        symbol=symbol,
+                        stop_price=order.stop_loss,
+                        order_id=result.get("orderId"),
+                    )
+                else:
+                    logger.warning("order_manager.sl_failed", symbol=symbol)
+            except Exception:
+                logger.exception("order_manager.sl_error", symbol=symbol)
+
+        # 挂止盈单
+        if order.take_profit and order.take_profit > 0:
+            try:
+                await self._rate_limiter.acquire(weight=1)
+                result = await rest_client.place_order({
+                    "symbol": symbol,
+                    "side": close_side,
+                    "type": "TAKE_PROFIT_MARKET",
+                    "stopPrice": str(order.take_profit),
+                    "closePosition": "true",
+                    "reduceOnly": "true",
+                })
+                if result:
+                    logger.info(
+                        "order_manager.tp_placed",
+                        symbol=symbol,
+                        take_profit=order.take_profit,
+                        order_id=result.get("orderId"),
+                    )
+                else:
+                    logger.warning("order_manager.tp_failed", symbol=symbol)
+            except Exception:
+                logger.exception("order_manager.tp_error", symbol=symbol)
 
     async def _handle_cancel(self, order: TrackedOrder) -> None:
         """订单取消后的处理"""

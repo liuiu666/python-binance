@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, HTTPException
 from typing import Any, Dict, List, Optional
 
 from common.db import db
@@ -21,7 +21,7 @@ async def get_account() -> Dict[str, Any]:
     """
     account = await rest_client.get_account()
     if not account:
-        return {"error": "无法获取账户信息"}
+        raise HTTPException(status_code=502, detail="无法获取账户信息")
 
     return {
         "total_wallet_balance": float(account.get("totalWalletBalance", 0)),

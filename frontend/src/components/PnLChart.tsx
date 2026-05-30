@@ -2,7 +2,7 @@
  * 盈亏曲线图 — 使用 Recharts 绘制每日盈亏柱状图
  */
 import { useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Cell } from 'recharts';
 import { useStore } from '../store';
 
 export default function PnLChart() {
@@ -13,7 +13,7 @@ export default function PnLChart() {
   }, [loadDailyPnl]);
 
   const data = dailyPnl.map((d) => ({
-    date: d.trade_date.slice(5), // MM-DD
+    date: d.trade_date.slice(5),
     pnl: parseFloat(d.total_pnl.toFixed(2)),
     trades: d.trade_count,
   })).reverse();
@@ -34,15 +34,11 @@ export default function PnLChart() {
               labelStyle={{ color: '#8b949e' }}
             />
             <ReferenceLine y={0} stroke="#30363d" />
-            <Bar
-              dataKey="pnl"
-              fill="#58a6ff"
-              radius={[4, 4, 0, 0]}
-              // 正负值不同颜色
-              cell={({ value }) => ({
-                fill: value >= 0 ? '#00c853' : '#ff1744',
-              })}
-            />
+            <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
+              {data.map((entry, index) => (
+                <Cell key={index} fill={entry.pnl >= 0 ? '#00c853' : '#ff1744'} />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       )}

@@ -79,6 +79,9 @@ class StrategyEngine:
         # ---- 初始化连接 ----
         await redis_client.connect()
 
+        # ---- 历史 warmup: 从 REST 拉取最近 K 线填充 RingBuffer ----
+        await self._warmup_history()
+
         # ---- 创建消费者组 ----
         for symbol in settings.symbols:
             stream = STREAM_MARKET.format(symbol=symbol.lower())
@@ -262,6 +265,43 @@ class StrategyEngine:
             side=signal.side,
             strategy=signal.strategy,
         )
+
+    # ============================================================
+    # 历史 Warmup
+    # ============================================================
+
+    async def _warmup_history(self) -> None:
+        """
+        启动时从币安 REST API 拉取最近 500 根 1m K 线,
+        填充 RingBuffer, 使策略立即具备计算指标的能力
+        """
+        from collector.rest_client import rest_client
+        await rest_client.connect()
+
+        total_filled = 0
+        for symbol in settings.symbols:
+            try:
+                klines = await rest_client.get_klines(symbol, interval="1m", limit=500)
+                if not klines:
+                    logger.warning("strategy.warmup_empty", symbol=symbol)
+                    continue
+
+                buf = self._buffer_mgr.get_buffer(symbol)
+                for kline in klines:
+                    kline["is_closed"] = True
+                    buf.update(kline)
+
+                total_filled += len(klines)
+                logger.info(
+                    "strategy.warmup_done",
+                    symbol=symbol,
+                    bars=len(klines),
+                )
+            except Exception:
+                logger.exception("strategy.warmup_error", symbol=symbol)
+
+        await rest_client.close()
+        logger.info("strategy.warmup_total", total_bars=total_filled)
 
     # ============================================================
     # AI 参数监听

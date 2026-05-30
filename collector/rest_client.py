@@ -414,14 +414,21 @@ class DataCompensator:
                         rest_close=kline["close_price"],
                     )
 
-        # 补写缺失/不一致的 K 线到 Redis Streams
+        # 补写缺失/不一致的 K 线到 Redis Streams 和 ClickHouse
         if to_compensate:
             from common.redis_client import redis_client, STREAM_MARKET
             stream_name = STREAM_MARKET.format(symbol=symbol.lower())
             for kline in to_compensate:
                 kline["is_closed"] = True
                 kline["source"] = "compensator"
+                # 写入 Redis Streams (供策略消费)
                 await redis_client.xadd(stream_name, kline, maxlen=10000)
+            # 同步写入 ClickHouse (供 AI 调参和历史分析)
+            try:
+                from common.clickhouse import clickhouse_client
+                clickhouse_client.batch_insert("klines_1m", to_compensate)
+            except Exception:
+                logger.exception("compensator.clickhouse_error", symbol=symbol)
             logger.info(
                 "compensator.compensated",
                 symbol=symbol,

@@ -46,6 +46,25 @@ class BreakoutStrategy(BaseStrategy):
         self._quantity = quantity
         self._leverage = leverage
 
+    def _apply_ai_params(self) -> None:
+        """应用 AI 调参建议 (仅覆盖白名单中的参数)"""
+        params = self.get_ai_params()
+        if not params:
+            return
+        param_map = {
+            "lookback": ("_lookback", int),
+            "volume_ratio": ("_volume_ratio", float),
+            "atr_multiplier": ("_atr_multiplier", float),
+            "quantity": ("_quantity", float),
+            "leverage": ("_leverage", int),
+        }
+        for key, (attr, cast) in param_map.items():
+            if key in params:
+                try:
+                    setattr(self, attr, cast(params[key]))
+                except (ValueError, TypeError):
+                    pass
+
     async def on_kline(
         self, symbol: str, df: pd.DataFrame
     ) -> Optional[Signal]:
@@ -58,6 +77,9 @@ class BreakoutStrategy(BaseStrategy):
         """
         if not self._enabled:
             return None
+
+        # 应用 AI 参数建议 (如果有)
+        self._apply_ai_params()
 
         # 至少需要 lookback + 1 根 K 线
         if len(df) < self._lookback + 1:

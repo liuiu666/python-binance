@@ -16,11 +16,16 @@ export default function StatusBar() {
     }
   };
 
-  const { connected } = useWebSocket({ onMessage: handleWsMessage });
+  const { connected, subscribe } = useWebSocket({ onMessage: handleWsMessage });
 
   useEffect(() => {
     setWsConnected(connected);
-  }, [connected, setWsConnected]);
+    // 连接成功后订阅行情频道
+    if (connected) {
+      subscribe('market:btcusdt');
+      subscribe('market:ethusdt');
+    }
+  }, [connected, setWsConnected, subscribe]);
 
   useEffect(() => {
     loadAccount();

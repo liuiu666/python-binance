@@ -11,8 +11,9 @@ import sys
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from common.config import settings
 from common.logger import get_logger
@@ -74,6 +75,25 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # 管理接口鉴权中间件 (保护 /api/close-all, /api/emergency-order, /api/pause)
+    class AdminAuthMiddleware(BaseHTTPMiddleware):
+        """对控制接口进行 API Key 鉴权"""
+        async def dispatch(self, request: Request, call_next):
+            # 只保护控制类接口
+            protected_prefixes = ("/api/close-all", "/api/emergency-order", "/api/pause")
+            if not request.url.path.startswith(protected_prefixes):
+                return await call_next(request)
+            # 未配置密钥则跳过鉴权
+            if not settings.admin_api_key:
+                return await call_next(request)
+            # 检查 Header 中的 X-Admin-Key
+            key = request.headers.get("X-Admin-Key", "")
+            if key != settings.admin_api_key:
+                raise HTTPException(status_code=403, detail="Invalid admin API key")
+            return await call_next(request)
+
+    app.add_middleware(AdminAuthMiddleware)
 
     # 注册路由
     app.include_router(account.router, prefix="/api", tags=["账户"])

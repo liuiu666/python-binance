@@ -62,6 +62,10 @@ class AIScheduler:
         await redis_client.connect()
         await db.connect()
         await db.ensure_tables()
+        # AI 调参模块需要读取 ClickHouse 历史数据
+        from common.clickhouse import clickhouse_client
+        clickhouse_client.connect()
+        await clickhouse_client.ensure_tables()
 
         # 注册定时任务
         self._scheduler.add_job(
@@ -103,6 +107,8 @@ class AIScheduler:
             pass
         finally:
             self._scheduler.shutdown(wait=False)
+            from common.clickhouse import clickhouse_client
+            clickhouse_client.close()
             await db.close()
             await redis_client.close()
             logger.info("ai_scheduler.stopped")

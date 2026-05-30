@@ -52,6 +52,28 @@ class EMACrossStrategy(BaseStrategy):
         self._quantity = quantity
         self._leverage = leverage
 
+    def _apply_ai_params(self) -> None:
+        """应用 AI 调参建议 (仅覆盖白名单中的参数)"""
+        params = self.get_ai_params()
+        if not params:
+            return
+        # 参数白名单: 只允许 AI 调整这些参数
+        param_map = {
+            "ema_fast": ("_ema_fast", int),
+            "ema_slow": ("_ema_slow", int),
+            "atr_multiplier": ("_atr_multiplier", float),
+            "rsi_overbought": ("_rsi_overbought", float),
+            "rsi_oversold": ("_rsi_oversold", float),
+            "quantity": ("_quantity", float),
+            "leverage": ("_leverage", int),
+        }
+        for key, (attr, cast) in param_map.items():
+            if key in params:
+                try:
+                    setattr(self, attr, cast(params[key]))
+                except (ValueError, TypeError):
+                    pass
+
     async def on_kline(
         self, symbol: str, df: pd.DataFrame
     ) -> Optional[Signal]:
@@ -64,6 +86,15 @@ class EMACrossStrategy(BaseStrategy):
         """
         if not self._enabled:
             return None
+
+        # 应用 AI 参数建议 (如果有)
+        self._apply_ai_params()
+
+        # 情绪过滤: 极度恐慌时不开多, 极度贪婪时不开空
+        sentiment = self.get_sentiment()
+        if sentiment < -0.7:
+            # 不在此返回, 但记录日志; 情绪仅作为辅助参考
+            logger.debug("ema_cross.negative_sentiment", score=sentiment)
 
         fast_col = f"ema_{self._ema_fast}"
         slow_col = f"ema_{self._ema_slow}"

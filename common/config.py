@@ -6,9 +6,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 项目根目录 (bxm40/)
@@ -54,6 +54,24 @@ class Settings(BaseSettings):
     max_daily_loss: float = 500.0     # 日最大亏损 USDT
     max_leverage: int = 10            # 最大杠杆倍数
 
+    @field_validator("symbols", mode="before")
+    @classmethod
+    def parse_symbols(cls, v: Any) -> List[str]:
+        """
+        兼容两种格式:
+        - JSON 列表: ["BTCUSDT","ETHUSDT"]
+        - 逗号分隔: BTCUSDT,ETHUSDT
+        """
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                import json
+                return json.loads(v)
+            return [s.strip().upper() for s in v.split(",") if s.strip()]
+        if isinstance(v, list):
+            return [s.strip().upper() if isinstance(s, str) else s for s in v]
+        return v
+
     # ---- WebSocket 参数 ----
     ws_ping_interval: int = 20        # 心跳间隔 (秒)
     ws_ping_timeout: int = 10         # 心跳超时 (秒)
@@ -69,6 +87,9 @@ class Settings(BaseSettings):
     dingtalk_secret: str = ""
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+
+    # ---- 管理接口鉴权 ----
+    admin_api_key: str = ""  # 管理接口密钥, 空字符串表示不鉴权
 
     # ---- AI (Phase 5) ----
     gemini_api_key: str = ""

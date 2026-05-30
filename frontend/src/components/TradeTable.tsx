@@ -3,7 +3,7 @@
  */
 import { useEffect, useState } from 'react';
 import { fetchTrades } from '../lib/api';
-import type { TradeRecord, TradeListResponse } from '../lib/api';
+import type { TradeListResponse } from '../lib/api';
 
 export default function TradeTable() {
   const [data, setData] = useState<TradeListResponse>({ total: 0, page: 1, size: 20, data: [] });
