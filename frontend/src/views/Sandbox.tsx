@@ -10,6 +10,24 @@ import { fetchKlines } from '../lib/api';
 import { useWebSocket } from '../hooks/useWebSocket';
 import type { CandlestickData, Time } from 'lightweight-charts';
 
+const INTERVALS = ['1m', '5m', '15m', '1h', '4h'];
+
+const intervalSecondsMap: Record<string, number> = {
+  '1m': 60,
+  '5m': 300,
+  '15m': 900,
+  '1h': 3600,
+  '4h': 14400,
+};
+
+const intervalLimitMap: Record<string, number> = {
+  '1m': 12000,
+  '5m': 3000,
+  '15m': 1500,
+  '1h': 1000,
+  '4h': 1000,
+};
+
 interface OrderBookLevel {
   price: number;
   amount: number;
@@ -24,6 +42,7 @@ export default function Sandbox() {
 
   // 虚拟下单表单
   const [symbol, setSymbol] = useState('BTCUSDT');
+  const [availableSymbols, setAvailableSymbols] = useState<string[]>(['BTCUSDT', 'ETHUSDT']);
   const [side, setSide] = useState<'BUY' | 'SELL'>('BUY');
   const [quantity, setQuantity] = useState(0.01);
   const [orderType, setOrderType] = useState('MARKET');
@@ -31,21 +50,35 @@ export default function Sandbox() {
   const [placing, setPlacing] = useState(false);
 
   const [initializedSymbol, setInitializedSymbol] = useState('');
+  const [chartInterval, setChartInterval] = useState('1m');
 
-  // 初始化行情数据
+  // 加载系统配置中的监控币种
   useEffect(() => {
-    // 切换币对时重置初始化状态
-    setInitializedSymbol('');
-  }, [symbol]);
+    fetch('/api/symbols')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.symbols && data.symbols.length > 0) {
+          setAvailableSymbols(data.symbols);
+          // 若当前选择不在列表中，默认使用第一个
+          if (!data.symbols.includes(symbol)) {
+            setSymbol(data.symbols[0]);
+          }
+        }
+      })
+      .catch((err) => console.error("Failed to load symbols:", err));
+  }, []);
 
+  // 切换币对或周期时重置初始化状态
+  useEffect(() => {
+    setInitializedSymbol('');
+  }, [symbol, chartInterval]);
+
+  // 从数据库初始化行情数据 (解耦 prices WebSocket 推送，直接获取已有回填数据)
   useEffect(() => {
     if (initializedSymbol === symbol) return;
 
-    // 当收到 WebSocket 推送的第一个真实价格后，查询数据库 K 线
-    const firstPrice = prices[symbol];
-    if (!firstPrice) return;
-
-    fetchKlines(symbol, '1m', 100)
+    const limit = intervalLimitMap[chartInterval] || 1000;
+    fetchKlines(symbol, chartInterval, limit)
       .then((history) => {
         if (history && history.length > 0) {
           // 对齐东八区时间戳并做时间戳唯一性去重，防止 Lightweight Charts 出现相同时间戳导致断言失败
@@ -78,20 +111,21 @@ export default function Sandbox() {
         setChartData([]);
         setInitializedSymbol(symbol);
       });
-  }, [prices, symbol, initializedSymbol]);
+  }, [symbol, chartInterval, initializedSymbol]);
 
   // 订阅最新 WS 价格并追加到 K 线中
   const currentPrice = prices[symbol] || 0;
 
   useEffect(() => {
     if (currentPrice === 0) return;
-    const nowMinute = Math.floor(Date.now() / 60000) * 60 + 8 * 3600;
+    const intervalSecs = intervalSecondsMap[chartInterval] || 60;
+    const nowIntervalTime = Math.floor(Date.now() / (intervalSecs * 1000)) * intervalSecs + 8 * 3600;
 
     setChartData((prevData) => {
       // 数据库中无历史行情时，以当前推送的第一个实盘价格作为第一根 K 线的起点
       if (prevData.length === 0) {
         return [{
-          time: nowMinute as Time,
+          time: nowIntervalTime as Time,
           open: currentPrice,
           high: currentPrice,
           low: currentPrice,
@@ -101,8 +135,8 @@ export default function Sandbox() {
 
       const lastBar = prevData[prevData.length - 1];
 
-      if (nowMinute === Number(lastBar.time)) {
-        // 在同一分钟内，更新当前 K 线收盘价
+      if (nowIntervalTime === Number(lastBar.time)) {
+        // 在同一周期内，更新当前 K 线收盘价
         const updated = {
           ...lastBar,
           close: currentPrice,
@@ -110,25 +144,25 @@ export default function Sandbox() {
           low: Math.min(lastBar.low, currentPrice)
         };
         return [...prevData.slice(0, -1), updated];
-      } else if (nowMinute > Number(lastBar.time)) {
-        // 新的一分钟，追加一根新 K 线
+      } else if (nowIntervalTime > Number(lastBar.time)) {
+        // 新的一周期，追加一根新 K 线
         const newBar: CandlestickData<Time> = {
-          time: nowMinute as Time,
+          time: nowIntervalTime as Time,
           open: lastBar.close,
           high: currentPrice,
           low: currentPrice,
           close: currentPrice
         };
         const nextData = [...prevData, newBar];
-        // 限制最大长度 100 根
-        if (nextData.length > 100) {
+        // 限制最大长度 1000 根
+        if (nextData.length > 1000) {
           return nextData.slice(1);
         }
         return nextData;
       }
       return prevData;
     });
-  }, [currentPrice]);
+  }, [currentPrice, chartInterval]);
 
   const handleWsMessage = useCallback((channel: string, data: any) => {
     if (channel.startsWith('depth:') && data.type === 'depth') {
@@ -219,9 +253,17 @@ export default function Sandbox() {
                 </span>
               </div>
               <div style={styles.chartActions}>
+                {/* 币种选择 */}
                 <select value={symbol} onChange={(e) => setSymbol(e.target.value)} style={styles.selectSmall}>
-                  <option value="BTCUSDT">BTCUSDT</option>
-                  <option value="ETHUSDT">ETHUSDT</option>
+                  {availableSymbols.map((sym) => (
+                    <option key={sym} value={sym}>{sym}</option>
+                  ))}
+                </select>
+                {/* 周期选择 */}
+                <select value={chartInterval} onChange={(e) => setChartInterval(e.target.value)} style={styles.selectSmall}>
+                  {INTERVALS.map((iv) => (
+                    <option key={iv} value={iv}>{iv}</option>
+                  ))}
                 </select>
                 <button onClick={handleTogglePause} style={{ ...styles.pauseBtn, background: strategyPaused ? 'var(--color-warn)' : 'var(--color-accent)' }}>
                   {strategyPaused ? '▶ 启动模拟策略' : '⏸ 暂停模拟策略'}
@@ -233,7 +275,7 @@ export default function Sandbox() {
                 <Chart data={chartData} height={320} />
               ) : (
                 <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                  ⚡ 等待 WebSocket 行情建立连接并推送首笔报价中...
+                  ⚡ 数据库无历史数据，且等待 WebSocket 推送首笔报价中...
                 </div>
               )}
             </div>

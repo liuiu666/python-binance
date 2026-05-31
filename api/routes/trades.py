@@ -157,7 +157,7 @@ async def get_stats() -> Dict[str, Any]:
 async def get_klines(
     symbol: str = Query(..., description="交易对"),
     interval: str = Query("1m", description="K线周期"),
-    limit: int = Query(100, ge=1, le=1000, description="K线数量"),
+    limit: int = Query(100, ge=1, le=20000, description="K线数量"),
 ) -> List[Dict[str, Any]]:
     """
     从 ClickHouse 获取历史 K 线数据

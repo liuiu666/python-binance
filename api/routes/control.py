@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Header, Depends, BackgroundTasks, Request
+from fastapi import APIRouter, HTTPException, Header, Depends, BackgroundTasks, Request, Query
 from pydantic import BaseModel, Field
 
 from common.redis_client import redis_client
@@ -157,6 +157,18 @@ async def _do_backfill(
     from common.clickhouse import clickhouse_client
     import time
 
+    redis_key = f"backfill:status:{symbol}:{interval}"
+    await redis_client.client.hset(
+        redis_key,
+        mapping={
+            "status": "running",
+            "progress": "0",
+            "total_inserted": "0",
+            "error_message": "",
+            "last_update": str(int(time.time()))
+        }
+    )
+
     total_inserted = 0
     current_start = start_time
     batch_size = 1500
@@ -165,9 +177,9 @@ async def _do_backfill(
     interval_ms_map = {"1m": 60_000, "5m": 300_000, "15m": 900_000, "1h": 3_600_000}
     step_ms = batch_size * interval_ms_map.get(interval, 60_000)
 
-    while current_start < end_time:
-        batch_end = min(current_start + step_ms, end_time)
-        try:
+    try:
+        while current_start < end_time:
+            batch_end = min(current_start + step_ms, end_time)
             klines = await rest_client.get_klines(
                 symbol,
                 interval=interval,
@@ -176,6 +188,7 @@ async def _do_backfill(
                 end_time=batch_end,
             )
             if not klines:
+                # 如果没有更多数据，但已经有写入，或者已经遍历完了
                 break
 
             for k in klines:
@@ -204,6 +217,20 @@ async def _do_backfill(
                 total=total_inserted,
             )
 
+            # 计算百分比进度
+            range_total = max(1, end_time - start_time)
+            progress_pct = int(((current_start - start_time) / range_total) * 100)
+            progress_pct = min(100, max(0, progress_pct))
+
+            await redis_client.client.hset(
+                redis_key,
+                mapping={
+                    "progress": str(progress_pct),
+                    "total_inserted": str(total_inserted),
+                    "last_update": str(int(time.time()))
+                }
+            )
+
             # 移动到下一批的起始时间
             last_close = klines[-1]["close_time"]
             current_start = last_close + 1
@@ -211,13 +238,32 @@ async def _do_backfill(
             # 限流: 避免请求过快
             await asyncio.sleep(0.2)
 
-        except Exception:
-            logger.exception("control.backfill_error", symbol=symbol)
-            break
+        # 强制刷入缓冲区
+        await clickhouse_client._flush_all()
 
-    # 强制刷入缓冲区
-    await clickhouse_client._flush_all()
+        await redis_client.client.hset(
+            redis_key,
+            mapping={
+                "status": "completed",
+                "progress": "100",
+                "total_inserted": str(total_inserted),
+                "last_update": str(int(time.time()))
+            }
+        )
+
+    except Exception as e:
+        logger.exception("control.backfill_error", symbol=symbol)
+        await redis_client.client.hset(
+            redis_key,
+            mapping={
+                "status": "failed",
+                "error_message": str(e),
+                "last_update": str(int(time.time()))
+            }
+        )
+
     return {"symbol": symbol, "inserted": total_inserted}
+
 
 
 @router.post("/compensate")
@@ -254,6 +300,24 @@ async def compensate(
         "interval": req.interval,
         "duration_hours": round(duration_hours, 1),
         "message": f"回填任务已启动, 预计拉取 {round(duration_hours * 60):.0f} 批 K 线"
+    }
+
+
+@router.get("/backfill-status")
+async def get_backfill_status(symbol: str, interval: str = "1m") -> Dict[str, Any]:
+    """
+    获取指定币种和周期的历史数据回填任务状态
+    """
+    redis_key = f"backfill:status:{symbol}:{interval}"
+    data = await redis_client.client.hgetall(redis_key)
+    if not data:
+        return {"status": "idle", "progress": 0, "total_inserted": 0, "error_message": ""}
+    return {
+        "status": data.get("status", "idle"),
+        "progress": int(data.get("progress", "0")),
+        "total_inserted": int(data.get("total_inserted", "0")),
+        "error_message": data.get("error_message", ""),
+        "last_update": int(data.get("last_update", "0"))
     }
 
 
@@ -346,4 +410,132 @@ async def update_symbols(req: SymbolsUpdateRequest) -> Dict[str, Any]:
         "note": "采集器已收到热重载信号，无需重启。" if (added_live or removed_live)
                 else "币种列表无变化。",
     }
+
+
+@router.get("/db-ranges")
+async def get_db_ranges() -> Dict[str, Any]:
+    """
+    获取 ClickHouse 中各币种的时序数据存储区间及总条数
+    """
+    from common.clickhouse import clickhouse_client
+
+    # 1. 查询 K 线范围
+    kline_sql = """
+        SELECT 
+            symbol,
+            interval,
+            toUnixTimestamp(min(open_time)) * 1000 as min_ts,
+            toUnixTimestamp(max(open_time)) * 1000 as max_ts,
+            count() as cnt
+        FROM klines
+        GROUP BY symbol, interval
+    """
+
+    # 2. 查询明细成交范围
+    trade_sql = """
+        SELECT 
+            symbol,
+            toUnixTimestamp(min(timestamp)) * 1000 as min_ts,
+            toUnixTimestamp(max(timestamp)) * 1000 as max_ts,
+            count() as cnt
+        FROM agg_trades
+        GROUP BY symbol
+    """
+
+    klines_stats = {}
+    trades_stats = {}
+
+    try:
+        k_res = await clickhouse_client.query(kline_sql)
+        if k_res and k_res.result_rows:
+            for row in k_res.result_rows:
+                key = f"{row[0]}:{row[1]}"
+                klines_stats[key] = {
+                    "symbol": row[0],
+                    "interval": row[1],
+                    "min_time": int(row[2]) if row[2] else 0,
+                    "max_time": int(row[3]) if row[3] else 0,
+                    "count": int(row[4])
+                }
+    except Exception as e:
+        logger.warning("clickhouse.kline_stats_error", error=str(e))
+
+    try:
+        t_res = await clickhouse_client.query(trade_sql)
+        if t_res and t_res.result_rows:
+            for row in t_res.result_rows:
+                trades_stats[row[0]] = {
+                    "min_time": int(row[1]) if row[1] else 0,
+                    "max_time": int(row[2]) if row[2] else 0,
+                    "count": int(row[3])
+                }
+    except Exception as e:
+        logger.warning("clickhouse.trade_stats_error", error=str(e))
+
+    return {
+        "klines": klines_stats,
+        "trades": trades_stats
+    }
+
+
+@router.get("/check-gaps")
+async def check_gaps(
+    symbol: str = Query(..., description="交易对"),
+    interval: str = Query("1m", description="周期"),
+):
+    """
+    检查指定币种和周期在 ClickHouse 中的 K 线断流/缺失区间
+    """
+    from common.clickhouse import clickhouse_client
+    
+    interval_minutes_map = {
+        "1m": 1,
+        "5m": 5,
+        "15m": 15,
+        "1h": 60,
+        "4h": 240,
+    }
+    threshold = interval_minutes_map.get(interval, 1)
+    
+    sql = """
+        SELECT 
+            toUnixTimestamp(prev_time) * 1000 as start_ts,
+            toUnixTimestamp(open_time) * 1000 as end_ts,
+            dateDiff('minute', prev_time, open_time) as gap_minutes
+        FROM (
+            SELECT 
+                open_time,
+                lagInFrame(open_time, 1) OVER (ORDER BY open_time ASC) as prev_time
+            FROM klines
+            WHERE symbol = %(symbol)s AND interval = %(interval)s
+        )
+        WHERE prev_time > toDateTime('1970-01-02 00:00:00') 
+          AND gap_minutes > %(threshold)s
+        ORDER BY gap_minutes DESC
+        LIMIT 30
+    """
+    
+    try:
+        res = await clickhouse_client.query(
+            sql, 
+            {"symbol": symbol, "interval": interval, "threshold": threshold}
+        )
+        gaps = []
+        if res and res.result_rows:
+            for row in res.result_rows:
+                gaps.append({
+                    "start_time": int(row[0]),
+                    "end_time": int(row[1]),
+                    "gap_minutes": int(row[2])
+                })
+        return {
+            "status": "success",
+            "symbol": symbol,
+            "interval": interval,
+            "gaps": gaps,
+            "has_gaps": len(gaps) > 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"数据库查询失败: {str(e)}")
+
 

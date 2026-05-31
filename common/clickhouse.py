@@ -97,8 +97,8 @@ class ClickHouseClient:
         # 批量缓冲区: {table_name: [row_dict, ...]}
         self._buffers: Dict[str, List[Dict[str, Any]]] = {}
         self._flush_task: Optional[asyncio.Task] = None
-        # 写入锁: 防止多个 asyncio.to_thread 并发使用同一个 ClickHouse client
-        self._write_lock = asyncio.Lock()
+        # 全局锁: ClickHouse sync client 不支持同连接并发操作 (含查询)
+        self._lock = asyncio.Lock()
 
     def connect(self) -> None:
         """建立 ClickHouse 连接"""
@@ -199,7 +199,7 @@ class ClickHouseClient:
                     new_row[col] = val
                 converted.append([new_row.get(col) for col in columns])
             # 加锁: ClickHouse sync client 不支持同连接并发写入
-            async with self._write_lock:
+            async with self._lock:
                 await asyncio.to_thread(
                     self._client.insert, table, converted, column_names=columns
                 )
@@ -217,7 +217,8 @@ class ClickHouseClient:
         """执行查询并返回结果"""
         if self._client is None:
             raise RuntimeError("ClickHouse 未连接")
-        return await asyncio.to_thread(self._client.query, sql, parameters=params)
+        async with self._lock:
+            return await asyncio.to_thread(self._client.query, sql, parameters=params)
 
 
 # 全局单例

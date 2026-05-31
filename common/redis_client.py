@@ -46,6 +46,10 @@ class RedisClient:
             settings.redis_url,
             decode_responses=True,
             max_connections=20,
+            # socket_timeout 必须 > xreadgroup 的 block 时间 (5s),
+            # 否则 block 等待期间客户端会超时断开; redis-py 8.0 默认 5s 太短
+            socket_timeout=10,
+            socket_connect_timeout=5,
         )
         logger.info("redis.connected", url=settings.redis_url)
 

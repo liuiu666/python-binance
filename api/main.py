@@ -90,7 +90,7 @@ def create_app() -> FastAPI:
     # 注册路由
     app.include_router(account.router, prefix="/api", tags=["账户"])
     app.include_router(trades.router, prefix="/api", tags=["交易"])
-    app.include_router(control.router, prefix="/api", tags=["控制"])
+    app.include_router(control.router, prefix="/api/control", tags=["控制"])
     app.include_router(config_routes.router, prefix="/api", tags=["配置"])
     app.include_router(paper.router, prefix="/api", tags=["模拟交易"])
     app.include_router(ws_router)
