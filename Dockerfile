@@ -1,33 +1,25 @@
 # ============================================================
-# 币安合约量化交易系统 — Python 运行时镜像
-# 所有服务共用此基础镜像, 通过 command 区分
+# 币安合约量化交易系统 — Collector 专用镜像
+# 仅运行数据采集服务, 纯 Python 依赖, 无需编译工具链
 # ============================================================
-
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安装系统依赖 (TA-Lib 需要)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    wget \
-    && wget -q http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz \
-    && tar -xzf ta-lib-0.4.0-src.tar.gz \
-    && cd ta-lib \
-    && ./configure --prefix=/usr \
-    && make \
-    && make install \
-    && cd .. \
-    && rm -rf ta-lib ta-lib-0.4.0-src.tar.gz \
-    && apt-get purge -y --auto-remove build-essential wget \
-    && rm -rf /var/lib/apt/lists/*
+# 配置 pip 国内镜像源加速 (清华大学)
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    && pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
 
-# 安装 Python 依赖
+# 先复制依赖文件, 利用 Docker 缓存层加速重建
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 复制项目代码
-COPY . .
+# 只复制 Collector 和公共模块代码 (不含 api/strategy/executor/frontend)
+COPY common/ ./common/
+COPY collector/ ./collector/
 
-# 默认入口 (由 docker-compose.command 覆盖)
+# 创建日志目录
+RUN mkdir -p /app/logs
+
+# 默认入口: 数据采集服务
 CMD ["python", "-m", "collector.main"]

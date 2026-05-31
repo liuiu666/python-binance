@@ -54,7 +54,7 @@ export default function Sandbox() {
 
   // 加载系统配置中的监控币种
   useEffect(() => {
-    fetch('/api/symbols')
+    fetch('/api/control/symbols')
       .then((res) => res.json())
       .then((data) => {
         if (data.symbols && data.symbols.length > 0) {
