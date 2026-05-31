@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional
 
+import numpy as np
 import pandas as pd
 import pandas_ta_classic as ta
 
@@ -50,6 +51,9 @@ def compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
         # Bollinger Bands (20, 2.0)
         df = compute_bollinger(df, period=20, std=2.0)
+
+        # 泊松成交强度指标
+        df = compute_trade_intensity(df)
 
     except Exception:
         logger.exception("indicators.compute_error")
@@ -207,6 +211,7 @@ def get_latest_indicators(df: pd.DataFrame) -> Dict:
         "ema_9", "ema_21", "rsi", "atr",
         "macd", "macd_signal", "macd_histogram",
         "bb_upper", "bb_middle", "bb_lower",
+        "intensity_lambda", "intensity_zscore", "intensity_anomaly",
     ]
 
     for col in indicator_cols:
@@ -216,3 +221,43 @@ def get_latest_indicators(df: pd.DataFrame) -> Dict:
                 result[col] = float(val)
 
     return result
+
+
+def compute_trade_intensity(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    计算成交强度指标 (基于泊松模型)
+
+    新增列:
+    - intensity_lambda: 滚动 λ 估计
+    - intensity_zscore: 标准化异常分数
+    - intensity_anomaly: 异常等级 (0=正常, 1=关注, 2=异常, 3=极端, -1=异常低量)
+    """
+    if "trades_count" not in df.columns:
+        return df
+
+    # 处理空数据或较短的 DataFrame
+    if df.empty or len(df) < 5:
+        df["intensity_lambda"] = df["trades_count"]
+        df["intensity_zscore"] = 0.0
+        df["intensity_anomaly"] = 0
+        return df
+
+    window = min(60, len(df))
+
+    # 滚动均值 (λ 估计)
+    df["intensity_lambda"] = df["trades_count"].rolling(window, min_periods=1).mean()
+
+    # Z-score: (x - lambda) / sqrt(lambda)
+    df["intensity_zscore"] = (
+        (df["trades_count"] - df["intensity_lambda"])
+        / np.sqrt(df["intensity_lambda"].clip(lower=1.0))
+    )
+
+    # 异常等级 (基于 z-score 快速近似)
+    df["intensity_anomaly"] = 0  # 正常
+    df.loc[df["intensity_zscore"] > 2.0, "intensity_anomaly"] = 1   # 关注
+    df.loc[df["intensity_zscore"] > 3.0, "intensity_anomaly"] = 2   # 异常
+    df.loc[df["intensity_zscore"] > 4.0, "intensity_anomaly"] = 3   # 极端
+    df.loc[df["intensity_zscore"] < -2.0, "intensity_anomaly"] = -1 # 异常低量
+
+    return df

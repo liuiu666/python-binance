@@ -148,6 +148,7 @@ class RingBuffer:
             "low_price": "min",
             "close_price": "last",
             "volume": "sum",
+            "trades_count": "sum",
         }).reset_index(drop=True)
 
         return agg
@@ -163,6 +164,7 @@ class RingBuffer:
             "low_price": float(kline.get("low_price", 0)),
             "close_price": float(kline.get("close_price", 0)),
             "volume": float(kline.get("volume", 0)),
+            "trades_count": int(kline.get("trades_count", 0)),
             "is_closed": kline.get("is_closed", False),
         }
 

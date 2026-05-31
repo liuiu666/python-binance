@@ -26,6 +26,7 @@ from strategy.indicators import compute_all_indicators, get_latest_indicators
 from strategy.base_strategy import BaseStrategy, Signal
 from strategy.strategies.ema_cross import EMACrossStrategy
 from strategy.strategies.breakout import BreakoutStrategy
+from strategy.strategies.volume_anomaly import VolumeAnomalyStrategy
 
 logger = get_logger(__name__)
 
@@ -71,6 +72,11 @@ class StrategyEngine:
                 leverage=1,
             ))
             self.register_strategy(BreakoutStrategy(
+                symbols=settings.symbols,
+                quantity=0.001,
+                leverage=1,
+            ))
+            self.register_strategy(VolumeAnomalyStrategy(
                 symbols=settings.symbols,
                 quantity=0.001,
                 leverage=1,
@@ -206,6 +212,7 @@ class StrategyEngine:
             "low_price": float(fields.get("low_price", 0)),
             "close_price": float(fields.get("close_price", 0)),
             "volume": float(fields.get("volume", 0)),
+            "trades_count": int(fields.get("trades_count", 0)),
             "is_closed": fields.get("is_closed", "False") == "True",
         }
 

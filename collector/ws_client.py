@@ -39,7 +39,7 @@ class BinanceWSClient:
     """
 
     def __init__(self, symbols: Optional[List[str]] = None) -> None:
-        self._symbols = symbols or settings.symbols
+        self._symbols: List[str] = list(symbols or settings.symbols)
 
         # WebSocket 连接实例
         self._ws: Optional[ClientConnection] = None
@@ -58,6 +58,9 @@ class BinanceWSClient:
 
         # 最后一条消息时间 (用于心跳检测)
         self._last_message_ts: float = 0.0
+
+        # WS 请求 ID 计数器 (SUBSCRIBE/UNSUBSCRIBE 需要)
+        self._req_id: int = 0
 
     # ============================================================
     # 公共 API
@@ -113,9 +116,96 @@ class BinanceWSClient:
             return float("inf")
         return time.monotonic() - self._last_message_ts
 
+    @property
+    def symbols(self) -> List[str]:
+        """当前监控的交易对列表"""
+        return list(self._symbols)
+
+    async def add_symbol(self, symbol: str) -> bool:
+        """
+        动态添加交易对 — 无需重连, 通过 Binance WS SUBSCRIBE 指令实现热添加
+
+        Args:
+            symbol: 大写交易对, 如 "ETHUSDT"
+
+        Returns:
+            True 表示成功发送订阅请求, False 表示当前无连接 (将在下次重连时生效)
+        """
+        symbol = symbol.upper()
+        if symbol in self._symbols:
+            logger.info("ws.symbol_already_subscribed", symbol=symbol)
+            return True
+
+        self._symbols.append(symbol)
+        streams = self._symbol_streams(symbol)
+
+        if self._ws is None:
+            logger.warning("ws.add_symbol_no_connection", symbol=symbol,
+                           note="将在下次重连时自动订阅")
+            return False
+
+        self._req_id += 1
+        payload = json.dumps({
+            "method": "SUBSCRIBE",
+            "params": streams,
+            "id": self._req_id,
+        })
+        try:
+            await self._ws.send(payload)
+            logger.info("ws.symbol_subscribed", symbol=symbol, streams=streams)
+            return True
+        except Exception:
+            logger.exception("ws.subscribe_error", symbol=symbol)
+            return False
+
+    async def remove_symbol(self, symbol: str) -> bool:
+        """
+        动态移除交易对 — 通过 Binance WS UNSUBSCRIBE 指令热移除
+
+        Args:
+            symbol: 大写交易对, 如 "ETHUSDT"
+
+        Returns:
+            True 表示成功发送取消订阅请求
+        """
+        symbol = symbol.upper()
+        if symbol not in self._symbols:
+            return True
+
+        self._symbols.remove(symbol)
+        streams = self._symbol_streams(symbol)
+
+        if self._ws is None:
+            return False
+
+        self._req_id += 1
+        payload = json.dumps({
+            "method": "UNSUBSCRIBE",
+            "params": streams,
+            "id": self._req_id,
+        })
+        try:
+            await self._ws.send(payload)
+            logger.info("ws.symbol_unsubscribed", symbol=symbol)
+            return True
+        except Exception:
+            logger.exception("ws.unsubscribe_error", symbol=symbol)
+            return False
+
     # ============================================================
     # 内部实现
     # ============================================================
+
+    def _symbol_streams(self, symbol: str) -> List[str]:
+        """返回某个交易对需要订阅的所有流名称"""
+        s = symbol.lower()
+        return [
+            f"{s}@aggTrade",
+            f"{s}@kline_1m",
+            f"{s}@depth20@500ms",
+            f"{s}@bookTicker",
+            f"{s}@markPrice@3s",
+        ]
 
     def _build_url(self) -> str:
         """
@@ -130,16 +220,9 @@ class BinanceWSClient:
         - markPrice@3s   标记价格 (强平/资金费率, 每 3 秒)
         多周期 K 线 (5m/15m) 通过 REST API 补偿器获取, 不走 WS
         """
-        streams = []
+        streams: List[str] = []
         for symbol in self._symbols:
-            s = symbol.lower()
-            streams.extend([
-                f"{s}@aggTrade",
-                f"{s}@kline_1m",
-                f"{s}@depth20@500ms",
-                f"{s}@bookTicker",
-                f"{s}@markPrice@3s",
-            ])
+            streams.extend(self._symbol_streams(symbol))
         stream_str = "/".join(streams)
         return f"{settings.binance_ws_base_url.replace('/ws', '')}/stream?streams={stream_str}"
 
@@ -185,11 +268,24 @@ class BinanceWSClient:
             "stream": "btcusdt@kline_1m",
             "data": { ... }
         }
+
+        SUBSCRIBE/UNSUBSCRIBE 响应 (静默忽略):
+        {"result": null, "id": 1}
         """
         try:
             msg = json.loads(raw_message)
         except json.JSONDecodeError:
             logger.warning("ws.invalid_json", raw=raw_message[:200])
+            return
+
+        # 币安 SUBSCRIBE / UNSUBSCRIBE 指令的响应包含 "result" 字段, 直接忽略
+        if "result" in msg:
+            req_id = msg.get("id")
+            err = msg.get("error")
+            if err:
+                logger.warning("ws.subscribe_response_error", id=req_id, error=err)
+            else:
+                logger.debug("ws.subscribe_response_ok", id=req_id)
             return
 
         stream_name = msg.get("stream", "")

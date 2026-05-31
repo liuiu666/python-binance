@@ -144,7 +144,8 @@ class RedisClient:
             id: 起始 ID, "$" 表示只消费新消息, "0" 表示从头开始
         """
         try:
-            await self.client.xgroup_create(stream, group, id)
+            # MKSTREAM: 如果 stream 不存在则自动创建, 避免 NOGROUP 错误
+            await self.client.xgroup_create(stream, group, id, mkstream=True)
             logger.info("redis.group_created", stream=stream, group=group)
         except aioredis.ResponseError as e:
             # 消费者组已存在是正常情况

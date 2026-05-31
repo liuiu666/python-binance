@@ -96,6 +96,12 @@ class CollectorService:
             name="ws-client",
         ))
 
+        # 币种热重载监听器 (通过 Redis Pub/Sub 动态增删币种)
+        tasks.append(asyncio.create_task(
+            self._watch_symbol_changes(),
+            name="symbol-hot-reload",
+        ))
+
         logger.info("collector.all_started")
 
         # ---- 等待停止信号 ----
@@ -138,6 +144,73 @@ class CollectorService:
                 task.cancel()
 
         logger.info("collector.stopped")
+
+    # ============================================================
+    # 币种热重载 (动态增删不重启)
+    # ============================================================
+
+    async def _watch_symbol_changes(self) -> None:
+        """
+        监听 Redis Pub/Sub 频道 control:symbols
+        收到币种变更命令后动态调用 ws_client.add_symbol / remove_symbol,
+        实现无重启热切换。
+
+        消息格式:
+            ADD:ETHUSDT     — 添加 ETHUSDT 币种
+            REMOVE:ETHUSDT  — 移除 ETHUSDT 币种
+        """
+        pubsub = redis_client.client.pubsub()
+        await pubsub.subscribe("control:symbols")
+        logger.info("collector.symbol_watcher_started")
+
+        try:
+            while self._running:
+                message = await pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=1.0
+                )
+                if message and message.get("type") == "message":
+                    raw = str(message.get("data", ""))
+                    if ":" not in raw:
+                        continue
+
+                    action, _, symbol = raw.partition(":")
+                    symbol = symbol.upper().strip()
+                    action = action.upper().strip()
+
+                    if not symbol:
+                        continue
+
+                    if action == "ADD":
+                        ok = await self._ws_client.add_symbol(symbol)
+                        logger.info(
+                            "collector.symbol_added",
+                            symbol=symbol,
+                            live_subscribe=ok,
+                        )
+                        # 小延迟后更新 settings, 下次重连时也包含新币种
+                        if symbol not in settings.symbols:
+                            settings.symbols = settings.symbols + [symbol]
+
+                    elif action == "REMOVE":
+                        await self._ws_client.remove_symbol(symbol)
+                        logger.info("collector.symbol_removed", symbol=symbol)
+                        if symbol in settings.symbols:
+                            settings.symbols = [
+                                s for s in settings.symbols if s != symbol
+                            ]
+
+                    else:
+                        logger.warning("collector.unknown_symbol_action", raw=raw)
+
+                await asyncio.sleep(0.05)
+
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("collector.symbol_watcher_error")
+        finally:
+            await pubsub.unsubscribe("control:symbols")
+            await pubsub.close()
 
     # ============================================================
     # 消息处理链路注册
