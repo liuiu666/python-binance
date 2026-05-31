@@ -15,7 +15,7 @@ asyncpg>=0.29.0
 # === 数据处理 ===
 pandas>=2.1.0
 numpy>=1.26.0
-pandas-ta>=0.3.14b1
+pandas-ta-classic>=0.6.0  # pandas-ta 社区维护版, 兼容 Python 3.10+
 
 # === 配置管理 ===
 pydantic>=2.5.0

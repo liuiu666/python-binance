@@ -21,7 +21,7 @@ from common.redis_client import redis_client
 from common.db import db
 from collector.rest_client import rest_client
 
-from api.routes import account, trades, control
+from api.routes import account, trades, control, config as config_routes
 from api.ws_handler import router as ws_router
 
 logger = get_logger(__name__)
@@ -38,6 +38,9 @@ async def lifespan(app: FastAPI):
     await redis_client.connect()
     await db.connect()
     await db.ensure_tables()
+    # 从 DB 加载交易参数配置
+    from common.db import config_store
+    await config_store.load()
     # 初始化 REST 客户端 (control.py 全平/紧急下单需要)
     await rest_client.connect()
     # 启动 Redis → WebSocket 实时数据转发器 (后台任务)
@@ -99,6 +102,7 @@ def create_app() -> FastAPI:
     app.include_router(account.router, prefix="/api", tags=["账户"])
     app.include_router(trades.router, prefix="/api", tags=["交易"])
     app.include_router(control.router, prefix="/api", tags=["控制"])
+    app.include_router(config_routes.router, prefix="/api", tags=["配置"])
     app.include_router(ws_router)
 
     return app

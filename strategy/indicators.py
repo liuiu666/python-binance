@@ -6,7 +6,7 @@
 - ATR
 - MACD
 - Bollinger Bands
-- 使用 pandas-ta 库实现
+- 使用 pandas-ta-classic 库实现
 - 增量计算: 新 K 线到来时只更新最后一行, 不全量重算
 """
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Dict, Optional
 
 import pandas as pd
-import pandas_ta as ta
+import pandas_ta_classic as ta
 
 from common.logger import get_logger
 

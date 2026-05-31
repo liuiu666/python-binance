@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS klines (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(open_time)
 ORDER BY (symbol, interval, open_time)
-TTL open_time + INTERVAL 90 DAY
+TTL toDateTime(open_time) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 """
 
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS agg_trades (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (symbol, timestamp)
-TTL timestamp + INTERVAL 90 DAY
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 """
 
@@ -79,6 +79,8 @@ class ClickHouseClient:
         # 批量缓冲区: {table_name: [row_dict, ...]}
         self._buffers: Dict[str, List[Dict[str, Any]]] = {}
         self._flush_task: Optional[asyncio.Task] = None
+        # 写入锁: 防止多个 asyncio.to_thread 并发使用同一个 ClickHouse client
+        self._write_lock = asyncio.Lock()
 
     def connect(self) -> None:
         """建立 ClickHouse 连接"""
@@ -163,11 +165,26 @@ class ClickHouseClient:
             return
 
         try:
+            from datetime import datetime, timezone
+            # ClickHouse DateTime64 列需要 datetime 对象, 不能传 float 时间戳
+            # 找出所有时间戳列 (以 _time / _ts 结尾或叫 timestamp 的字段)
+            ts_cols = {c for c in rows[0] if c.endswith("_time") or c.endswith("_ts") or c == "timestamp"}
             columns = list(rows[0].keys())
-            data = [[row.get(col) for col in columns] for row in rows]
-            await asyncio.to_thread(
-                self._client.insert, table, data, column_names=columns
-            )
+            converted = []
+            for row in rows:
+                new_row = {}
+                for col in columns:
+                    val = row.get(col)
+                    # 毫秒级 float → datetime
+                    if col in ts_cols and isinstance(val, (int, float)):
+                        val = datetime.fromtimestamp(val / 1000, tz=timezone.utc)
+                    new_row[col] = val
+                converted.append([new_row.get(col) for col in columns])
+            # 加锁: ClickHouse sync client 不支持同连接并发写入
+            async with self._write_lock:
+                await asyncio.to_thread(
+                    self._client.insert, table, converted, column_names=columns
+                )
             logger.debug("clickhouse.flushed", table=table, count=len(rows))
         except Exception:
             logger.exception("clickhouse.flush_error", table=table)

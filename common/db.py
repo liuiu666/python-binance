@@ -76,6 +76,16 @@ CREATE TABLE IF NOT EXISTS daily_pnl (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_pnl_date ON daily_pnl(trade_date);
 """
 
+# 系统配置表 — 交易参数存数据库, 运行时可动态修改
+_SYSTEM_CONFIG_TABLE_DDL = """
+CREATE TABLE IF NOT EXISTS system_config (
+    key             VARCHAR(64) PRIMARY KEY,
+    value           JSONB NOT NULL,
+    description     TEXT,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+"""
+
 
 class Database:
     """
@@ -101,7 +111,7 @@ class Database:
         if self._pool is None:
             raise RuntimeError("PostgreSQL 未连接")
         async with self._pool.acquire() as conn:
-            for ddl in (_TRADES_TABLE_DDL, _POSITIONS_TABLE_DDL, _DAILY_PNL_TABLE_DDL):
+            for ddl in (_TRADES_TABLE_DDL, _POSITIONS_TABLE_DDL, _DAILY_PNL_TABLE_DDL, _SYSTEM_CONFIG_TABLE_DDL):
                 await conn.execute(ddl)
         logger.info("postgres.tables_ready")
 
@@ -121,3 +131,104 @@ class Database:
 
 # 全局单例
 db = Database()
+
+
+# ============================================================
+# 配置存储 — 交易参数从 PostgreSQL 读写
+# ============================================================
+
+import json as _json
+from typing import Any, Dict, Optional as _Optional
+
+# 默认交易参数 (首次启动时写入 DB)
+_DEFAULT_CONFIG: Dict[str, Dict[str, Any]] = {
+    "symbols": {
+        "value": ["BTCUSDT", "ETHUSDT"],
+        "description": "监控的交易对列表",
+    },
+    "max_order_pct": {
+        "value": 5.0,
+        "description": "单笔最大金额占账户净值百分比",
+    },
+    "max_positions": {
+        "value": 3,
+        "description": "最大同时持仓数",
+    },
+    "max_daily_loss": {
+        "value": 500.0,
+        "description": "日最大亏损 USDT",
+    },
+    "max_leverage": {
+        "value": 10,
+        "description": "最大杠杆倍数",
+    },
+}
+
+
+class ConfigStore:
+    """
+    配置存储器 — 从 PostgreSQL system_config 表读写交易参数
+
+    用法:
+        store = ConfigStore()
+        await store.load()          # 启动时从 DB 加载
+        symbols = store.get("symbols")
+        await store.set("max_leverage", 5)  # 运行时修改
+    """
+
+    def __init__(self) -> None:
+        self._cache: Dict[str, Any] = {}
+
+    async def load(self) -> None:
+        """
+        从 DB 加载配置, 如果 DB 中没有则写入默认值
+        """
+        # 先确保默认值存在
+        async with db.pool.acquire() as conn:
+            for key, item in _DEFAULT_CONFIG.items():
+                existing = await conn.fetchval(
+                    "SELECT value FROM system_config WHERE key = $1", key
+                )
+                if existing is None:
+                    await conn.execute(
+                        "INSERT INTO system_config (key, value, description) VALUES ($1, $2, $3)",
+                        key,
+                        _json.dumps(item["value"]),
+                        item["description"],
+                    )
+
+            # 加载所有配置
+            rows = await conn.fetch("SELECT key, value FROM system_config")
+            for row in rows:
+                self._cache[row["key"]] = _json.loads(row["value"])
+
+        logger.info("config_store.loaded", keys=list(self._cache.keys()))
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """获取配置值"""
+        return self._cache.get(key, default)
+
+    def get_all(self) -> Dict[str, Any]:
+        """获取所有配置"""
+        return dict(self._cache)
+
+    async def set(self, key: str, value: Any) -> None:
+        """
+        设置配置值, 同步写入 DB 并更新内存缓存
+        """
+        async with db.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO system_config (key, value, updated_at)
+                VALUES ($1, $2, NOW())
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+                """,
+                key,
+                _json.dumps(value),
+            )
+        self._cache[key] = value
+        logger.info("config_store.updated", key=key, value=value)
+
+
+# 全局单例
+config_store = ConfigStore()

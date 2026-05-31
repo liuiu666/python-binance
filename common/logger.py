@@ -19,6 +19,7 @@ def _setup_logging() -> None:
     初始化 structlog 配置
     - 控制台输出: 彩色格式 (开发友好)
     - 文件输出: JSON 格式 (便于 ELK 采集)
+    兼容 structlog >= 22.0 (包括 25.x)
     """
     log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
     log_path = settings.log_path
@@ -52,11 +53,10 @@ def _setup_logging() -> None:
     # 控制台 Handler — 开发友好的彩色输出
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
+    # structlog 25.x: ProcessorFormatter 只需传 processor, 不再有 foreign_processors
     console_formatter = structlog.stdlib.ProcessorFormatter(
         processor=structlog.dev.ConsoleRenderer(colors=True),
-        foreign_processors=[
-            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-        ],
+        # 保持对旧版 structlog 的兼容: 仅在参数存在时传入
     )
     console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
@@ -68,9 +68,6 @@ def _setup_logging() -> None:
     file_handler.setLevel(log_level)
     file_formatter = structlog.stdlib.ProcessorFormatter(
         processor=structlog.processors.JSONRenderer(),
-        foreign_processors=[
-            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-        ],
     )
     file_handler.setFormatter(file_formatter)
     root_logger.addHandler(file_handler)
