@@ -23,43 +23,29 @@ export default function Analysis() {
   const [timeframe, setTimeframe] = useState('1m');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<AnalysisResults | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const runAnalysis = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
-      // Mock / API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      // 生成高度拟真的泊松分布和超额离散拟合数据
-      const lambda = symbol === 'BTCUSDT' ? 180.5 : 120.2;
-      const overdispersion = symbol === 'BTCUSDT' ? 1.08 : 1.15;
-      const variance = lambda * overdispersion;
-      
-      const histogram: HistogramItem[] = [];
-      const step = symbol === 'BTCUSDT' ? 10 : 8;
-      const start = Math.floor(lambda - 4 * Math.sqrt(variance));
-      const end = Math.floor(lambda + 4 * Math.sqrt(variance));
-      
-      // 简化的泊松/负二项密度生成
-      for (let v = Math.max(start, 10); v <= end; v += step) {
-        const z = (v - lambda) / Math.sqrt(variance);
-        const density = Math.exp(-0.5 * z * z) / (Math.sqrt(2 * Math.PI * variance));
-        histogram.push({
-          volume_bucket: `${v}`,
-          observed: Math.round(density * 10000 + (Math.random() - 0.5) * 80),
-          poisson_fit: Math.round(density * 10000)
-        });
+      const res = await fetch(`/api/control/fit-poisson?symbol=${symbol}&interval=${timeframe}&limit=5000`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'error') {
+          setErrorMsg(data.message);
+          setResults(null);
+        } else {
+          setResults(data);
+        }
+      } else {
+        const data = await res.json();
+        setErrorMsg(data.detail || '获取拟合数据失败');
+        setResults(null);
       }
-
-      setResults({
-        lambda,
-        variance,
-        overdispersion,
-        anomaly_ratio: 0.0125, // 1.25%
-        histogram
-      });
-    } catch (e) {
-      console.error(e);
+    } catch {
+      setErrorMsg('网络连接错误，请检查后端服务是否正常启动。');
+      setResults(null);
     } finally {
       setLoading(false);
     }
@@ -97,6 +83,21 @@ export default function Analysis() {
           </button>
         </div>
       </div>
+
+      {errorMsg && (
+        <div style={{
+          color: '#ff453a',
+          background: 'rgba(255, 69, 58, 0.08)',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          border: '1px solid rgba(255, 69, 58, 0.2)',
+          marginBottom: '20px',
+          fontSize: '13px',
+          fontWeight: 600
+        }}>
+          ⚠️ {errorMsg}
+        </div>
+      )}
 
       <div style={styles.grid}>
         {/* 左栏：直方图与分布 */}

@@ -539,3 +539,107 @@ async def check_gaps(
         raise HTTPException(status_code=500, detail=f"数据库查询失败: {str(e)}")
 
 
+@router.get("/fit-poisson")
+async def fit_poisson(
+    symbol: str = Query("BTCUSDT", description="交易对"),
+    interval: str = Query("1m", description="K线周期"),
+    limit: int = Query(5000, ge=100, le=20000, description="样本数量"),
+):
+    """
+    拟合泊松分布和超额离散参数，分析成交量分布
+    """
+    from common.clickhouse import clickhouse_client
+    import numpy as np
+    try:
+        from scipy.stats import poisson as scipy_poisson
+        HAS_SCIPY = True
+    except ImportError:
+        HAS_SCIPY = False
+
+    sql = """
+        SELECT trades_count
+        FROM klines
+        WHERE symbol = %(symbol)s AND interval = %(interval)s
+        ORDER BY open_time DESC
+        LIMIT %(limit)s
+    """
+    
+    try:
+        res = await clickhouse_client.query(
+            sql, 
+            {"symbol": symbol, "interval": interval, "limit": limit}
+        )
+        if not res or not res.result_rows:
+            return {
+                "status": "error",
+                "message": f"ClickHouse 中没有 {symbol} ({interval}) 的数据，请先回填数据。",
+                "lambda": 0,
+                "variance": 0,
+                "overdispersion": 1.0,
+                "anomaly_ratio": 0.0,
+                "histogram": []
+            }
+        
+        counts = [int(row[0]) for row in res.result_rows]
+        counts_arr = np.array(counts)
+        
+        lambda_val = float(np.mean(counts_arr))
+        variance_val = float(np.var(counts_arr, ddof=1)) if len(counts_arr) > 1 else 0.0
+        overdispersion = variance_val / lambda_val if lambda_val > 0 else 1.0
+        
+        # 异常数据判定比例 (z-score > 3)
+        std_val = np.sqrt(variance_val) if variance_val > 0 else 1.0
+        anomalies = np.sum(np.abs(counts_arr - lambda_val) / std_val > 3.0)
+        anomaly_ratio = float(anomalies) / len(counts_arr)
+        
+        # 进行直方图统计
+        q01 = float(np.percentile(counts_arr, 1))
+        q99 = float(np.percentile(counts_arr, 99))
+        
+        # 产生 15 个 bin
+        bin_edges = np.linspace(q01, q99, 16)
+        hist, _ = np.histogram(counts_arr, bins=bin_edges)
+        
+        histogram = []
+        total_samples = len(counts_arr)
+        
+        for i in range(15):
+            left = int(bin_edges[i])
+            right = int(bin_edges[i+1])
+            observed = int(hist[i])
+            
+            # 计算该区间内的泊松拟合期望值
+            # 期望频数 = 样本总数 * P(left <= X <= right)
+            if HAS_SCIPY:
+                p_left = scipy_poisson.cdf(left - 1, lambda_val) if left > 0 else 0.0
+                p_right = scipy_poisson.cdf(right, lambda_val)
+                prob = max(p_right - p_left, 0.0)
+            else:
+                from strategy.poisson_detector import _pure_poisson_cdf
+                p_left = _pure_poisson_cdf(left - 1, lambda_val) if left > 0 else 0.0
+                p_right = _pure_poisson_cdf(right, lambda_val)
+                prob = max(p_right - p_left, 0.0)
+                
+            poisson_fit = int(round(prob * total_samples))
+            
+            histogram.append({
+                "volume_bucket": f"{int((left+right)/2)}",
+                "observed": observed,
+                "poisson_fit": poisson_fit
+            })
+            
+        return {
+            "status": "success",
+            "symbol": symbol,
+            "interval": interval,
+            "lambda": round(lambda_val, 2),
+            "variance": round(variance_val, 2),
+            "overdispersion": round(overdispersion, 3),
+            "anomaly_ratio": round(anomaly_ratio, 4),
+            "histogram": histogram
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"拟合计算失败: {str(e)}")
+
+

@@ -4,7 +4,7 @@
  * - 历史数据回填 (时间段 + 周期可配置)
  * - 币种管理 (添加 / 移除, 写入 PostgreSQL)
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore } from '../store';
 
 interface RedisStatus {
@@ -43,6 +43,8 @@ export default function Collection() {
   const [currentSymbols, setCurrentSymbols] = useState<string[]>(['BTCUSDT']);
   const [redisStreams, setRedisStreams] = useState<RedisStatus[]>([]);
   const [loadingSymbols, setLoadingSymbols] = useState(false);
+  // 标记 dbRanges 是否已首次加载, 用于自动填充回填时间 (只触发一次)
+  const dbRangesLoadedRef = useRef(false);
   const [savingSymbols, setSavingSymbols] = useState(false);
   const [symbolInput, setSymbolInput] = useState('');
   const [symbolSaveMsg, setSymbolSaveMsg] = useState('');
@@ -173,19 +175,19 @@ export default function Collection() {
     return () => clearInterval(t);
   }, [loadDbRanges]);
 
-  // 当切换币种、周期，或者获取到数据库区间时，自动将回填的“结束时间”对齐已有数据的开始时间
+  // 首次加载 dbRanges 或切换币种/周期时自动填充时间; 后续 dbRanges 刷新不再覆盖用户手动设定
   useEffect(() => {
     if (!dbRanges?.klines) return;
+    if (dbRangesLoadedRef.current) return;
+    dbRangesLoadedRef.current = true;
     const key = `${bfSymbol}:${bfInterval}`;
     const klineInfo = dbRanges.klines[key];
     if (klineInfo && klineInfo.min_time > 0) {
       const date = new Date(klineInfo.min_time);
       setBfEndDate(getLocalISOString(date));
-      // 同时也把开始时间对齐到结束时间的前 7 天，方便操作
       const startDate = new Date(klineInfo.min_time - 7 * 86400000);
       setBfStartDate(getLocalISOString(startDate));
     } else {
-      // 若该周期在 ClickHouse 中尚无任何数据，则结束时间默认对齐当前系统时间（现在），开始时间为 7 天前
       const now = new Date();
       setBfEndDate(getLocalISOString(now));
       const startDate = new Date(now.getTime() - 7 * 86400000);
