@@ -1,11 +1,19 @@
 /**
  * 顶部状态栏 — 显示账户权益、今日盈亏、胜率、连接状态
  */
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useStore } from '../store';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 export default function StatusBar() {
+  // 监听hash路由变化，判断是否在首页
+  const [isHome, setIsHome] = useState(() => window.location.hash === '#/' || window.location.hash === '');
+  useEffect(() => {
+    const handler = () => setIsHome(window.location.hash === '#/' || window.location.hash === '');
+    window.addEventListener('hashchange', handler);
+    return () => window.removeEventListener('hashchange', handler);
+  }, []);
+
   const { account, stats, wsConnected, strategyPaused, loadAccount, loadStats, updatePrice, setWsConnected } = useStore();
 
   const handleWsMessage = useCallback((channel: string, data: any) => {
@@ -42,15 +50,27 @@ export default function StatusBar() {
     }
   }, [connected, setWsConnected, subscribe]);
 
+  // 只在首页（Sandbox）轮询账户余额，避免Analysis页面频繁调币安API
   useEffect(() => {
-    loadAccount();
-    loadStats();
+    if (!isHome) return;
+    let failed = false;
+    const poll = async () => {
+      try {
+        await Promise.all([loadAccount(), loadStats()]);
+        failed = false;
+      } catch {
+        failed = true;
+      }
+    };
+    poll();
     const timer = setInterval(() => {
-      loadAccount();
-      loadStats();
+      if (!failed) poll();
     }, 10000);
-    return () => clearInterval(timer);
-  }, [loadAccount, loadStats]);
+    const retryTimer = setInterval(() => {
+      if (failed) poll();
+    }, 60000);
+    return () => { clearInterval(timer); clearInterval(retryTimer); };
+  }, [isHome, loadAccount, loadStats]);
 
   const balance = account?.total_wallet_balance ?? 0;
   const unrealized = account?.total_unrealized_profit ?? 0;

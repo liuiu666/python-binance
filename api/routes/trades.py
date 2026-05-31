@@ -158,31 +158,45 @@ async def get_klines(
     symbol: str = Query(..., description="交易对"),
     interval: str = Query("1m", description="K线周期"),
     limit: int = Query(100, ge=1, le=20000, description="K线数量"),
+    end_time: Optional[int] = Query(None, description="结束时间戳(秒)，用于向前翻页加载更早数据"),
 ) -> List[Dict[str, Any]]:
     """
     从 ClickHouse 获取历史 K 线数据
+    支持end_time参数实现滑动加载历史数据
     """
     from common.clickhouse import clickhouse_client
     from common.logger import get_logger
     
     local_logger = get_logger("api.routes.trades")
     
-    sql = """
+    # 根据是否有end_time构建不同的WHERE条件
+    if end_time is not None:
+        time_condition = "AND open_time < fromUnixTimestamp(%(end_time)s)"
+    else:
+        time_condition = ""
+    
+    sql = f"""
         SELECT 
             toUnixTimestamp(open_time) as time,
             argMax(open_price, local_recv_ts) as open,
             argMax(high_price, local_recv_ts) as high,
             argMax(low_price, local_recv_ts) as low,
             argMax(close_price, local_recv_ts) as close,
-            argMax(volume, local_recv_ts) as volume
+            argMax(volume, local_recv_ts) as volume,
+            argMax(trades_count, local_recv_ts) as trades_count
         FROM klines
-        WHERE symbol = %(symbol)s AND interval = %(interval)s
+        WHERE symbol = %(symbol)s AND interval = %(interval)s {time_condition}
         GROUP BY open_time
         ORDER BY open_time DESC
         LIMIT %(limit)s
     """
+    
+    params = {"symbol": symbol, "interval": interval, "limit": limit}
+    if end_time is not None:
+        params["end_time"] = end_time
+    
     try:
-        result = await clickhouse_client.query(sql, {"symbol": symbol, "interval": interval, "limit": limit})
+        result = await clickhouse_client.query(sql, params)
         
         rows = []
         if result and result.result_rows:
@@ -193,9 +207,125 @@ async def get_klines(
                     "high": float(row[2]),
                     "low": float(row[3]),
                     "close": float(row[4]),
-                    "volume": float(row[5])
+                    "volume": float(row[5]),
+                    "trades_count": int(row[6]) if row[6] is not None else 0
                 })
         return rows
     except Exception as e:
         local_logger.error(f"Failed to query klines from ClickHouse: {e}")
         return []
+
+
+@router.get("/klines-with-anomalies")
+async def get_klines_with_anomalies(
+    symbol: str = Query("BTCUSDT", description="交易对"),
+    interval: str = Query("1m", description="K线周期"),
+    limit: int = Query(200, ge=60, le=5000, description="K线数量"),
+    window_size: int = Query(60, ge=20, le=500, description="泊松检测滚动窗口大小"),
+    end_time: Optional[int] = Query(None, description="结束时间戳(秒)，用于向前翻页加载更早数据"),
+) -> Dict[str, Any]:
+    """
+    获取K线数据并计算泊松异常检测结果
+    返回完整的K线数据 + 成交量异常标记
+    支持end_time参数实现滑动加载历史数据
+    """
+    from common.clickhouse import clickhouse_client
+    from strategy.poisson_detector import PoissonDetector, AnomalyLevel
+    from common.logger import get_logger
+    
+    local_logger = get_logger("api.routes.trades")
+    
+    # 根据是否有end_time构建不同的WHERE条件
+    if end_time is not None:
+        time_condition = "AND open_time < fromUnixTimestamp(%(end_time)s)"
+    else:
+        time_condition = ""
+    
+    sql = f"""
+        SELECT 
+            toUnixTimestamp(open_time) as time,
+            argMax(open_price, local_recv_ts) as open,
+            argMax(high_price, local_recv_ts) as high,
+            argMax(low_price, local_recv_ts) as low,
+            argMax(close_price, local_recv_ts) as close,
+            argMax(volume, local_recv_ts) as volume,
+            argMax(trades_count, local_recv_ts) as trades_count
+        FROM klines
+        WHERE symbol = %(symbol)s AND interval = %(interval)s {time_condition}
+        GROUP BY open_time
+        ORDER BY open_time DESC
+        LIMIT %(limit)s
+    """
+    
+    params = {"symbol": symbol, "interval": interval, "limit": limit}
+    if end_time is not None:
+        params["end_time"] = end_time
+    
+    try:
+        result = await clickhouse_client.query(sql, params)
+        
+        if not result or not result.result_rows:
+            return {"candles": [], "anomalies": [], "lambda_estimate": 0}
+        
+        rows = []
+        for row in reversed(result.result_rows):
+            rows.append({
+                "time": int(row[0]),
+                "open": float(row[1]),
+                "high": float(row[2]),
+                "low": float(row[3]),
+                "close": float(row[4]),
+                "volume": float(row[5]),
+                "trades_count": int(row[6]) if row[6] is not None else 0
+            })
+        
+        detector = PoissonDetector(window_size=window_size, ema_alpha=0.05, overdispersion_factor=1.2)
+        
+        anomalies = []
+        processed_candles = []
+        
+        for i, candle in enumerate(rows):
+            trade_count = candle.get("trades_count", 0)
+            
+            if trade_count > 0:
+                result_det = detector.update(trade_count)
+                candle["lambda"] = result_det.lambda_estimate
+                candle["p_value"] = result_det.p_value
+                candle["anomaly_level"] = result_det.anomaly_level.value
+                candle["z_score"] = result_det.z_score
+                candle["direction"] = result_det.direction
+            else:
+                candle["lambda"] = 0
+                candle["p_value"] = 1.0
+                candle["anomaly_level"] = AnomalyLevel.NORMAL.value
+                candle["z_score"] = 0.0
+                candle["direction"] = "NORMAL"
+            
+            processed_candles.append(candle)
+            
+            if result_det.anomaly_level in (AnomalyLevel.ANOMALY, AnomalyLevel.EXTREME):
+                prev_close = processed_candles[i-1]["close"] if i > 0 else candle["open"]
+                price_change = (candle["close"] - prev_close) / prev_close * 100 if prev_close > 0 else 0
+                
+                anomalies.append({
+                    "time": candle["time"],
+                    "anomaly_level": result_det.anomaly_level.value,
+                    "trades_count": trade_count,
+                    "lambda": result_det.lambda_estimate,
+                    "p_value": result_det.p_value,
+                    "z_score": result_det.z_score,
+                    "price_change_pct": round(price_change, 3),
+                    "direction": result_det.direction,
+                    "candle_index": i
+                })
+        
+        return {
+            "candles": processed_candles,
+            "anomalies": anomalies,
+            "lambda_estimate": detector.get_lambda(),
+            "window_size": window_size
+        }
+        
+    except Exception as e:
+        local_logger.error(f"Failed to query klines with anomalies: {e}")
+        return {"candles": [], "anomalies": [], "lambda_estimate": 0, "error": str(e)}

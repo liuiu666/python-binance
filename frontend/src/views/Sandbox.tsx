@@ -1,12 +1,12 @@
 /**
  * 模拟交易沙盒控制台 (Sandbox Dashboard)
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useStore } from '../store';
 import Chart from '../components/Chart';
 import PositionCards from '../components/PositionCard';
 import TradeTable from '../components/TradeTable';
-import { fetchKlines } from '../lib/api';
+import { fetchKlines, fetchKlinesMore } from '../lib/api';
 import { useWebSocket } from '../hooks/useWebSocket';
 import type { CandlestickData, Time } from 'lightweight-charts';
 
@@ -52,6 +52,12 @@ export default function Sandbox() {
   const [initializedSymbol, setInitializedSymbol] = useState('');
   const [chartInterval, setChartInterval] = useState('1m');
 
+  // 滑动加载更多历史数据
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
+  const hasMoreDataRef = useRef(true);
+  const chartDataRef = useRef<CandlestickData<Time>[]>([]);
+
   // 加载系统配置中的监控币种
   useEffect(() => {
     fetch('/api/control/symbols')
@@ -71,6 +77,7 @@ export default function Sandbox() {
   // 切换币对或周期时重置初始化状态
   useEffect(() => {
     setInitializedSymbol('');
+    hasMoreDataRef.current = true;
   }, [symbol, chartInterval]);
 
   // 从数据库初始化行情数据 (解耦 prices WebSocket 推送，直接获取已有回填数据)
@@ -100,9 +107,12 @@ export default function Sandbox() {
             }
           }
           setChartData(uniqueData);
+          chartDataRef.current = uniqueData;
+          if (uniqueData.length < limit) hasMoreDataRef.current = false;
         } else {
           // 数据库中无数据，则重置为空
           setChartData([]);
+          chartDataRef.current = [];
         }
         setInitializedSymbol(symbol);
       })
@@ -162,7 +172,67 @@ export default function Sandbox() {
       }
       return prevData;
     });
+    // 同步ref（setChartData回调中无法直接同步，用setTimeout延迟更新）
+    setTimeout(() => {
+      setChartData(prev => { chartDataRef.current = prev; return prev; });
+    }, 0);
   }, [currentPrice, chartInterval]);
+
+  // 滑动到左侧时加载更多历史数据
+  const loadMoreHistory = async () => {
+    if (loadingMoreRef.current || !hasMoreDataRef.current) return;
+    const currentData = chartDataRef.current;
+    if (!currentData.length) return;
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      // 最早K线时间需要减去8小时时区偏移
+      const earliestTime = Number(currentData[0].time) - 8 * 3600;
+      const history = await fetchKlinesMore(symbol, chartInterval, 500, earliestTime);
+      if (history && history.length > 0) {
+        const adjusted = history.map((b) => ({
+          time: (b.time + 8 * 3600) as Time,
+          open: b.open,
+          high: b.high,
+          low: b.low,
+          close: b.close,
+        }));
+
+        // 去重
+        const existingTimes = new Set(currentData.map(c => Number(c.time)));
+        const newCandles = adjusted.filter(c => !existingTimes.has(Number(c.time)));
+
+        if (newCandles.length === 0) {
+          hasMoreDataRef.current = false;
+        } else {
+          setChartData(prev => {
+            // 合并后按时间排序去重
+            const all = [...newCandles, ...prev];
+            const seen = new Set<number>();
+            const unique = all.filter(c => {
+              const t = Number(c.time);
+              if (seen.has(t)) return false;
+              seen.add(t);
+              return true;
+            }).sort((a, b) => Number(a.time) - Number(b.time));
+            chartDataRef.current = unique;
+            return unique;
+          });
+          if (newCandles.length < 500) {
+            hasMoreDataRef.current = false;
+          }
+        }
+      } else {
+        hasMoreDataRef.current = false;
+      }
+    } catch (err) {
+      console.error('加载更多历史数据失败:', err);
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  };
 
   const handleWsMessage = useCallback((channel: string, data: any) => {
     if (channel.startsWith('depth:') && data.type === 'depth') {
@@ -272,7 +342,7 @@ export default function Sandbox() {
             </div>
             <div style={styles.chartWrapper}>
               {chartData.length > 0 ? (
-                <Chart data={chartData} height={320} />
+                <Chart data={chartData} height={320} onLoadMore={loadMoreHistory} loadingMore={loadingMore} />
               ) : (
                 <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
                   ⚡ 数据库无历史数据，且等待 WebSocket 推送首笔报价中...

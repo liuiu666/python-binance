@@ -120,3 +120,7 @@ export interface KLineData {
 
 export const fetchKlines = (symbol: string, interval = '1m', limit = 100) =>
   request<KLineData[]>(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+
+/** 加载更早的历史K线数据（end_time之前的） */
+export const fetchKlinesMore = (symbol: string, interval = '1m', limit = 500, endTime: number) =>
+  request<KLineData[]>(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&end_time=${endTime}`);
