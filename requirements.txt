@@ -1,9 +1,9 @@
 # === 异步框架 ===
 websockets>=12.0
-aiohttp>=3.9.0       # 币安 REST API 客户端 (支持流式/细粒度超时)
+aiohttp>=3.9.0       # 健康检查 HTTP 端点 (aiohttp.web)
 
 # === HTTP 客户端 ===
-httpx>=0.27.0        # 通知推送 (钉钉/Telegram) 等简单 HTTP 请求
+httpx>=0.27.0        # 统一 HTTP 客户端 (REST API / 通知推送)
 
 # === Redis ===
 redis[hiredis]>=5.0.0

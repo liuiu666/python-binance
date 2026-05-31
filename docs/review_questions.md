@@ -343,3 +343,181 @@ npm.cmd run build
 3. 补止损止盈 / CLOSE 机制，否则自动交易风险过高。
 4. 修前端 build 和 WebSocket 订阅，恢复界面可用性。
 5. 给控制接口加鉴权，再考虑生产环境暴露。
+
+---
+
+# 新版复查 v3
+
+更新时间: 2026-05-31
+
+本轮根据最新改动复查了配置、Docker Compose、AI 调度、策略 warmup、AI 参数应用、执行器止损止盈、前端构建和 WebSocket。
+
+## 已修复 / 有进展
+
+- `executor/main.py` 继续保持订单事件 JSON 反序列化，`pending_signals` 也会在下单后和异常路径释放。
+- `docker-compose.yml` 已为应用容器覆盖 `REDIS_URL` / `PG_DSN` / `CLICKHOUSE_HOST`，容器网络问题基本修复。
+- `ai/scheduler.py` 已连接 ClickHouse，`docker-compose.yml` 也给 `ai` 增加了 ClickHouse 依赖。
+- `strategy/main.py` 已增加 REST warmup，重启后不必等 30 根新 K 线。
+- `ema_cross.py` / `breakout.py` 已开始应用 AI 参数白名单。
+- `executor/order_manager.py` 已优先用 `ap` 作为成交均价，降低分批成交 PnL 偏差。
+- `StatusBar.tsx` 已订阅 `market:btcusdt` 和 `market:ethusdt`。
+- `PnLChart.tsx` 和 `TradeTable.tsx` 的构建错误已修复。
+- `api/routes/account.py` 账户 API 失败时已改为 502。
+
+验证:
+
+```powershell
+python -m compileall -q ai api collector common executor strategy
+```
+
+结果: 通过。
+
+## P0: `SYMBOLS=BTCUSDT,ETHUSDT` 仍然会导致启动失败
+
+位置:
+- `.env.example:28`
+- `common/config.py:51`
+- `common/config.py:57`
+
+现状:
+- 这一版加了 `@field_validator("symbols", mode="before")`。
+- 但 pydantic-settings 在进入 validator 前仍会先把复杂类型按 JSON decode。
+- 所以逗号分隔字符串仍然会在 settings source 阶段报错。
+
+验证:
+
+```powershell
+$env:SYMBOLS='BTCUSDT,ETHUSDT'
+python -c "from common.config import Settings; print(Settings().symbols)"
+```
+
+结果: 仍然抛 `SettingsError: error parsing value for field "symbols"`。
+
+建议:
+- 最快修复: `.env.example` 改为 `SYMBOLS=["BTCUSDT","ETHUSDT"]`。
+- 若必须兼容逗号格式: 使用 pydantic-settings 的 `NoDecode` 注解或自定义 settings source，让 validator 接收到原始字符串。
+
+## P0: 数据补偿写 ClickHouse 的新代码不可用
+
+位置:
+- `collector/rest_client.py:428-429`
+- `common/clickhouse.py:131`
+
+问题:
+- `collector/rest_client.py` 调用了 `clickhouse_client.batch_insert("klines_1m", to_compensate)`。
+- `ClickHouseClient` 没有 `batch_insert()` 方法。
+- 当前实际表名是 `klines`，不是 `klines_1m`。
+
+结果:
+- compensator 发现缺失后仍只能补 Redis。
+- ClickHouse 历史缺口仍然存在，AI 调参和历史分析仍会受影响。
+
+建议:
+- 改成循环 `await clickhouse_client.insert("klines", cleaned_kline)`，字段要去掉 `is_closed` / `source`。
+- 或在 `ClickHouseClient` 增加真正的 async `batch_insert(table, rows)`，并使用正确表名 `klines`。
+
+## P0: 止损止盈保护单可能被交易所拒绝，开仓后仍可能裸奔
+
+位置:
+- `executor/order_manager.py:512-519`
+- `executor/order_manager.py:536-543`
+
+问题:
+- 当前保护单同时传了 `closePosition="true"` 和 `reduceOnly="true"`。
+- Binance USD-M Futures 的 Close-All 条件单通常不能和 `reduceOnly` 一起传。
+- `closePosition=true` 也不需要 `quantity`，但当前逻辑虽然没有传 quantity，`reduceOnly` 仍可能导致接口拒绝。
+
+影响:
+- 开仓成交后 `_place_sl_tp()` 可能两张保护单都失败。
+- 代码只打 warning，不会回滚开仓或触发紧急处理。
+
+建议:
+- 使用二选一方案:
+  - Close-All 方案: `STOP_MARKET/TAKE_PROFIT_MARKET + closePosition=true`，不要传 `reduceOnly` 和 `quantity`。
+  - 固定数量方案: 传 `quantity=filled_qty + reduceOnly=true`，不要传 `closePosition=true`。
+- 如果止损单失败，应至少发送高优先级告警，必要时市价平仓。
+
+## P1: 杠杆设置失败后仍继续下单
+
+位置:
+- `executor/order_manager.py:149`
+- `executor/order_manager.py:481-496`
+
+问题:
+- `_ensure_leverage()` 调用失败只记录异常。
+- `place_order()` 不检查设置结果，仍继续下单。
+- 另外它直接调用 `rest_client._request()` 私有方法，接口边界不清晰。
+
+影响:
+- 实际交易杠杆可能和信号不一致。
+
+建议:
+- 在 `BinanceRESTClient` 增加公开方法 `set_leverage(symbol, leverage) -> bool`。
+- `_ensure_leverage()` 返回 bool；失败时拒单并释放 pending signal。
+
+## P1: 前端构建仍失败，但范围缩小到 Chart.tsx
+
+验证命令:
+
+```powershell
+cd frontend
+npm.cmd run build
+```
+
+当前错误:
+- `frontend/src/components/Chart.tsx:6` 类型需要 `import type`。
+- `frontend/src/components/Chart.tsx:52` `addCandlestickSeries()` 不兼容 lightweight-charts v5。
+- `frontend/src/components/Chart.tsx:88` `setMarkers()` 不兼容当前类型/API。
+
+结果:
+- `PnLChart.tsx` 和 `TradeTable.tsx` 的错误已消失。
+- 前端仍不能生产构建。
+
+## P1: WebSocket Hook 卸载后仍会自动重连
+
+位置:
+- `frontend/src/hooks/useWebSocket.ts:28-31`
+- `frontend/src/hooks/useWebSocket.ts:46-50`
+
+问题:
+- cleanup 里调用 `ws.close()`。
+- `onclose` 总是 `setTimeout(connect, 3000)`。
+- 组件卸载或 React 严格模式重复挂载时，可能产生后台重连和多连接。
+
+建议:
+- 增加 `shouldReconnectRef`。
+- cleanup 时设为 false，并 clear pending reconnect timer。
+
+## P1: 管理接口鉴权默认仍是关闭状态
+
+位置:
+- `common/config.py:91`
+- `api/main.py:84-92`
+
+现状:
+- 新增了 `admin_api_key` 和中间件，这是进展。
+- 但默认空字符串时直接跳过鉴权。
+- `.env.example` 里也还没有 `ADMIN_API_KEY` 示例。
+
+建议:
+- `.env.example` 增加 `ADMIN_API_KEY=change_me`。
+- 生产环境如果为空，应启动失败或至少 warning。
+
+## P2: StatusBar 行情订阅仍然写死 BTC/ETH
+
+位置:
+- `frontend/src/components/StatusBar.tsx:25-26`
+
+影响:
+- 如果 `settings.symbols` 改了，前端实时价格不会跟随。
+
+建议:
+- 提供 `/api/config` 或 `/api/symbols`。
+- 前端按后端 symbol 列表订阅。
+
+## 当前验证结论
+
+- 后端 Python 编译: 通过。
+- 前端构建: 失败，剩 `Chart.tsx`。
+- `SYMBOLS` 逗号格式: 失败。
+- 这版修复了不少主链路问题，但仍建议先处理 P0 三项: `SYMBOLS` 配置、ClickHouse 补偿写入、止损止盈保护单参数。

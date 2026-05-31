@@ -15,7 +15,7 @@ import hmac
 import time
 from typing import Any, Dict, List, Optional
 
-import aiohttp
+import httpx
 
 from common.config import settings
 from common.logger import get_logger
@@ -95,22 +95,22 @@ class BinanceRESTClient:
         self._base_url = settings.binance_rest_base_url
         self._api_key = settings.binance_api_key
         self._api_secret = settings.binance_api_secret
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: Optional[httpx.AsyncClient] = None
         self._rate_limiter = RateLimiter()
 
     async def connect(self) -> None:
         """创建 HTTP 连接会话"""
-        self._session = aiohttp.ClientSession(
+        self._session = httpx.AsyncClient(
             base_url=self._base_url,
             headers={"X-MBX-APIKEY": self._api_key},
-            timeout=aiohttp.ClientTimeout(total=10),
+            timeout=httpx.Timeout(10.0),
         )
         logger.info("rest.connected", base_url=self._base_url)
 
     async def close(self) -> None:
         """关闭连接会话"""
         if self._session:
-            await self._session.close()
+            await self._session.aclose()
             logger.info("rest.closed")
 
     # ============================================================
@@ -169,24 +169,24 @@ class BinanceRESTClient:
             params = self._sign(params)
 
         try:
-            async with self._session.request(method, path, params=params) as resp:
-                if resp.status == 429:
-                    self._rate_limiter.trigger_cooldown()
-                    logger.error("rest.rate_limited", path=path)
-                    return None
+            resp = await self._session.request(method, path, params=params)
 
-                if resp.status != 200:
-                    text = await resp.text()
-                    logger.error(
-                        "rest.error",
-                        status=resp.status,
-                        path=path,
-                        body=text[:200],
-                    )
-                    return None
+            if resp.status_code == 429:
+                self._rate_limiter.trigger_cooldown()
+                logger.error("rest.rate_limited", path=path)
+                return None
 
-                return await resp.json()
-        except asyncio.TimeoutError:
+            if resp.status_code != 200:
+                logger.error(
+                    "rest.error",
+                    status=resp.status_code,
+                    path=path,
+                    body=resp.text[:200],
+                )
+                return None
+
+            return resp.json()
+        except httpx.TimeoutException:
             logger.warning("rest.timeout", path=path)
             return None
         except Exception:
@@ -285,6 +285,25 @@ class BinanceRESTClient:
         return await self._request(
             "GET", "/fapi/v2/positionRisk", signed=True, weight=5
         )
+
+    async def set_leverage(self, symbol: str, leverage: int) -> bool:
+        """
+        设置合约杠杆倍数
+        Returns: True 设置成功, False 失败
+        """
+        try:
+            result = await self._request(
+                "POST", "/fapi/v1/leverage",
+                params={"symbol": symbol, "leverage": leverage},
+                signed=True, weight=1,
+            )
+            if result:
+                logger.info("rest_client.leverage_set", symbol=symbol, leverage=leverage)
+                return True
+            return False
+        except Exception:
+            logger.exception("rest_client.leverage_error", symbol=symbol)
+            return False
 
     async def place_order(self, params: Dict) -> Optional[Dict]:
         """下单"""
@@ -426,7 +445,18 @@ class DataCompensator:
             # 同步写入 ClickHouse (供 AI 调参和历史分析)
             try:
                 from common.clickhouse import clickhouse_client
-                clickhouse_client.batch_insert("klines_1m", to_compensate)
+                # 过滤掉 ClickHouse 表中不存在的字段
+                ch_fields = {
+                    "symbol", "open_time", "close_time", "interval",
+                    "open_price", "high_price", "low_price", "close_price",
+                    "volume", "quote_volume", "trades_count", "taker_buy_volume",
+                    "local_recv_ts",
+                }
+                for kline in to_compensate:
+                    clean = {k: v for k, v in kline.items() if k in ch_fields}
+                    await clickhouse_client.insert("klines", clean)
+                # 立即刷新缓冲区
+                await clickhouse_client._flush_table("klines")
             except Exception:
                 logger.exception("compensator.clickhouse_error", symbol=symbol)
             logger.info(

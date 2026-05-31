@@ -5,14 +5,62 @@
 
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
-from typing import Any, List
+from typing import Any, Dict, List, Tuple, Type
 
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 # 项目根目录 (bxm40/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+class CommaListSettingsSource(PydanticBaseSettingsSource):
+    """
+    自定义 Settings Source: 在 pydantic 解析前预处理环境变量
+    将逗号分隔的字符串 (如 SYMBOLS=BTCUSDT,ETHUSDT) 转为 JSON 数组,
+    避免 pydantic-settings 对 List[str] 字段默认做 json.loads() 时报错
+    """
+
+    # 需要预处理的字段名 (小写)
+    COMMA_FIELDS = {"symbols"}
+
+    def get_field_value(
+        self, field: Any, field_name: str
+    ) -> Tuple[Any, str, bool]:
+        # 直接从 os.environ 读取原始值
+        val = os.environ.get(field_name.upper()) or os.environ.get(field_name.lower())
+        if val is not None:
+            return val, field_name, False
+        # 尝试从 .env 文件读取
+        env_file = PROJECT_ROOT / ".env"
+        if env_file.exists():
+            for line in env_file.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                if key.strip().lower() == field_name.lower():
+                    return value.strip(), field_name, False
+        return None, field_name, False
+
+    def __call__(self) -> Dict[str, Any]:
+        result: Dict[str, Any] = {}
+        for field_name in self.settings_cls.model_fields:
+            if field_name.lower() not in self.COMMA_FIELDS:
+                continue
+            val, _, _ = self.get_field_value(None, field_name)
+            if val is None:
+                continue
+            if isinstance(val, str):
+                val = val.strip()
+                if not val.startswith("["):
+                    # 逗号分隔 → JSON 数组
+                    val = json.dumps([s.strip() for s in val.split(",") if s.strip()])
+            result[field_name] = val
+        return result
 
 
 class Settings(BaseSettings):
@@ -48,29 +96,12 @@ class Settings(BaseSettings):
     pg_dsn: str = "postgresql://bxm40:bxm40_secret@localhost:5432/bxm40"
 
     # ---- 交易参数 ----
+    # 支持 JSON 数组 ["BTCUSDT","ETHUSDT"] 或逗号分隔 BTCUSDT,ETHUSDT
     symbols: List[str] = Field(default=["BTCUSDT", "ETHUSDT"])
     max_order_pct: float = 5.0        # 单笔最大金额占账户净值百分比
     max_positions: int = 3            # 最大同时持仓数
     max_daily_loss: float = 500.0     # 日最大亏损 USDT
     max_leverage: int = 10            # 最大杠杆倍数
-
-    @field_validator("symbols", mode="before")
-    @classmethod
-    def parse_symbols(cls, v: Any) -> List[str]:
-        """
-        兼容两种格式:
-        - JSON 列表: ["BTCUSDT","ETHUSDT"]
-        - 逗号分隔: BTCUSDT,ETHUSDT
-        """
-        if isinstance(v, str):
-            v = v.strip()
-            if v.startswith("["):
-                import json
-                return json.loads(v)
-            return [s.strip().upper() for s in v.split(",") if s.strip()]
-        if isinstance(v, list):
-            return [s.strip().upper() if isinstance(s, str) else s for s in v]
-        return v
 
     # ---- WebSocket 参数 ----
     ws_ping_interval: int = 20        # 心跳间隔 (秒)
@@ -126,6 +157,28 @@ class Settings(BaseSettings):
     def log_path(self) -> Path:
         """日志目录的完整路径"""
         return PROJECT_ROOT / self.log_dir
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        """
+        自定义 settings sources 优先级
+        CommaListSettingsSource 在 env_settings 之前运行,
+        将逗号分隔的 SYMBOLS 转为 JSON 数组后, 后续的 json.loads() 就能正常工作
+        """
+        return (
+            init_settings,
+            CommaListSettingsSource(settings_cls),
+            env_settings,
+            dotenv_settings,
+            file_secret_settings,
+        )
 
 
 # 全局单例

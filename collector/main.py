@@ -247,11 +247,12 @@ class CollectorService:
         await clickhouse_client.insert("agg_trades", trade)
 
     async def _handle_depth(self, data: Dict[str, Any]) -> None:
-        """处理深度数据"""
+        """处理深度数据 — 写入独立 depth stream, 不混入 market stream"""
         symbol = data.get("s", "")
         self._health.record_message(symbol)
 
-        stream_name = STREAM_MARKET.format(symbol=symbol.lower())
+        from common.redis_client import STREAM_DEPTH
+        stream_name = STREAM_DEPTH.format(symbol=symbol.lower())
         await redis_client.xadd(
             stream_name,
             {"type": "depth", "data": data},
@@ -259,9 +260,17 @@ class CollectorService:
         )
 
     async def _handle_book_ticker(self, data: Dict[str, Any]) -> None:
-        """处理最优挂单数据"""
+        """处理最优挂单数据 — 写入独立 ticker stream"""
         symbol = data.get("s", "")
         self._health.record_message(symbol)
+
+        from common.redis_client import STREAM_TICKER
+        stream_name = STREAM_TICKER.format(symbol=symbol.lower())
+        await redis_client.xadd(
+            stream_name,
+            {"type": "bookTicker", "data": data},
+            maxlen=1000,
+        )
 
     async def _handle_order_update(self, data: Dict[str, Any]) -> None:
         """处理订单状态更新"""

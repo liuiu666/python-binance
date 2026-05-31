@@ -26,6 +26,9 @@ logger = get_logger(__name__)
 # 心跳检测阈值 (秒)
 HEARTBEAT_TIMEOUT = 15.0
 
+# 告警最小间隔 (秒) — 同一 symbol 最多每 60 秒告警一次, 避免告警风暴
+ALERT_MIN_INTERVAL = 60.0
+
 # 状态打印间隔 (秒)
 STATUS_PRINT_INTERVAL = 60.0
 
@@ -38,6 +41,7 @@ class SymbolHealth:
     total_messages: int = 0
     last_kline_close: float = 0.0
     last_kline_time: int = 0
+    last_alert_ts: float = 0.0  # 上次发送告警的时间, 用于频率限制
 
 
 class HealthMonitor:
@@ -134,10 +138,13 @@ class HealthMonitor:
                         symbol=symbol,
                         age_seconds=f"{age:.1f}",
                     )
-                    await notifier.notify_alert(
-                        "WARN",
-                        f"{symbol} 超过 {HEARTBEAT_TIMEOUT:.0f}s 未收到数据 (已 {age:.0f}s)",
-                    )
+                    # 同一 symbol 最多每 ALERT_MIN_INTERVAL 秒告警一次
+                    if now - h.last_alert_ts >= ALERT_MIN_INTERVAL:
+                        h.last_alert_ts = now
+                        await notifier.notify_alert(
+                            "WARN",
+                            f"{symbol} 超过 {HEARTBEAT_TIMEOUT:.0f}s 未收到数据 (已 {age:.0f}s)",
+                        )
 
     async def _status_loop(self) -> None:
         """定期打印运行状态"""

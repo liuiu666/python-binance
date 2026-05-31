@@ -171,9 +171,11 @@ class UserDataStream:
         event_type = msg.get("e", "")
         event_time = msg.get("E", 0)
 
-        # listenKey 过期 → 需要重新获取
+        # listenKey 过期 → 主动关闭 WS 触发外层重连 (重新获取 listenKey)
         if event_type == "listenKeyExpired":
             logger.warning("user_stream.listen_key_expired")
+            if self._ws:
+                await self._ws.close()
             return
 
         # 附加本地接收时间

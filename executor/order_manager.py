@@ -143,10 +143,13 @@ class OrderManager:
             params["price"] = price
             params["timeInForce"] = "GTC"
 
-        # 下单前确保杠杆设置正确
+        # 下单前确保杠杆设置正确, 失败则拒单
         leverage = int(signal.get("leverage", 1))
         if leverage > 0:
-            await self._ensure_leverage(symbol, leverage)
+            ok = await self._ensure_leverage(symbol, leverage)
+            if not ok:
+                logger.error("order_manager.leverage_rejected", symbol=symbol, leverage=leverage)
+                return None
 
         # 获取限流令牌
         await self._rate_limiter.acquire(weight=1)
@@ -482,18 +485,13 @@ class OrderManager:
         """
         下单前设置交易所杠杆
         使用 POST /fapi/v1/leverage 接口
+        Returns: True 设置成功, False 失败
         """
         try:
-            await self._rate_limiter.acquire(weight=1)
-            result = await rest_client._request(
-                "POST", "/fapi/v1/leverage",
-                params={"symbol": symbol, "leverage": leverage},
-                signed=True, weight=1,
-            )
-            if result:
-                logger.info("order_manager.leverage_set", symbol=symbol, leverage=leverage)
+            return await rest_client.set_leverage(symbol, leverage)
         except Exception:
             logger.exception("order_manager.leverage_error", symbol=symbol)
+            return False
 
     async def _place_sl_tp(self, order: TrackedOrder) -> None:
         """
@@ -509,13 +507,13 @@ class OrderManager:
         if order.stop_loss and order.stop_loss > 0:
             try:
                 await self._rate_limiter.acquire(weight=1)
+                # closePosition=true 会平掉该 symbol 全部仓位, 不需要 reduceOnly
                 result = await rest_client.place_order({
                     "symbol": symbol,
                     "side": close_side,
                     "type": "STOP_MARKET",
                     "stopPrice": str(order.stop_loss),
                     "closePosition": "true",
-                    "reduceOnly": "true",
                 })
                 if result:
                     logger.info(
@@ -527,7 +525,15 @@ class OrderManager:
                 else:
                     logger.warning("order_manager.sl_failed", symbol=symbol)
             except Exception:
+                # 止损单失败是高风险事件, 需要告警
                 logger.exception("order_manager.sl_error", symbol=symbol)
+                try:
+                    from common.notify import notifier
+                    await notifier.send_message(
+                        f"⚠️ 止损单挂单失败! {symbol} SL={order.stop_loss}, 请手动处理!"
+                    )
+                except Exception:
+                    pass
 
         # 挂止盈单
         if order.take_profit and order.take_profit > 0:
@@ -539,7 +545,6 @@ class OrderManager:
                     "type": "TAKE_PROFIT_MARKET",
                     "stopPrice": str(order.take_profit),
                     "closePosition": "true",
-                    "reduceOnly": "true",
                 })
                 if result:
                     logger.info(
