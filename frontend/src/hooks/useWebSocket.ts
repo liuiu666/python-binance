@@ -18,6 +18,12 @@ export function useWebSocket({ onMessage }: UseWebSocketOptions = {}) {
   // 保存重连定时器, 卸载时清除
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 用 Ref 保存回调，防止因回调函数引用变化导致 WebSocket 重连
+  const onMessageRef = useRef(onMessage);
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
+
   const connect = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
@@ -41,14 +47,14 @@ export function useWebSocket({ onMessage }: UseWebSocketOptions = {}) {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.channel && msg.data && onMessage) {
-          onMessage(msg.channel, msg.data);
+        if (msg.channel && msg.data && onMessageRef.current) {
+          onMessageRef.current(msg.channel, msg.data);
         }
       } catch {}
     };
 
     wsRef.current = ws;
-  }, [onMessage]);
+  }, []); // 依赖为空，连接函数永远不会被重新创建，从而彻底避免无限重连！
 
   useEffect(() => {
     shouldReconnectRef.current = true;

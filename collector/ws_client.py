@@ -121,6 +121,14 @@ class BinanceWSClient:
         """
         构建多流复用 WebSocket URL
         格式: wss://fstream.binance.com/stream?streams=stream1/stream2/...
+
+        每个交易对订阅:
+        - aggTrade       归集成交流 (量价分析)
+        - kline_1m       1 分钟 K 线 (主策略周期)
+        - depth20@500ms  20 档盘口深度 (支撑阻力)
+        - bookTicker     最优买卖价 (滑点估算)
+        - markPrice@3s   标记价格 (强平/资金费率, 每 3 秒)
+        多周期 K 线 (5m/15m) 通过 REST API 补偿器获取, 不走 WS
         """
         streams = []
         for symbol in self._symbols:
@@ -130,6 +138,7 @@ class BinanceWSClient:
                 f"{s}@kline_1m",
                 f"{s}@depth20@500ms",
                 f"{s}@bookTicker",
+                f"{s}@markPrice@3s",
             ])
         stream_str = "/".join(streams)
         return f"{settings.binance_ws_base_url.replace('/ws', '')}/stream?streams={stream_str}"
@@ -189,13 +198,21 @@ class BinanceWSClient:
         if not stream_name or not data:
             return
 
-        # 提取事件类型: "btcusdt@kline_1m" → "kline"
-        # 或 "btcusdt@aggTrade" → "aggTrade"
+        # 提取事件类型:
+        # - "btcusdt@kline_1m" -> "kline"
+        # - "btcusdt@depth20@500ms" -> "depth"
+        # - "btcusdt@markPrice@3s" -> "markPrice"
         parts = stream_name.split("@")
         if len(parts) < 2:
             return
 
-        event_type = parts[1].split("_")[0] if "_" in parts[1] else parts[1]
+        # 取得事件第一部分，如 "kline_1m" -> "kline", "depth20" -> "depth20", "markPrice" -> "markPrice"
+        raw_event = parts[1].split("_")[0]
+        # 兼容处理带数字的深度流名称，如 "depth20" -> "depth"
+        if raw_event.startswith("depth"):
+            event_type = "depth"
+        else:
+            event_type = raw_event
 
         # 附加本地接收时间戳
         data["local_recv_ts"] = time.time() * 1000

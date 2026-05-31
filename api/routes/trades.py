@@ -151,3 +151,51 @@ async def get_stats() -> Dict[str, Any]:
             }
     except Exception:
         return {"total_trades": 0}
+
+
+@router.get("/klines")
+async def get_klines(
+    symbol: str = Query(..., description="交易对"),
+    interval: str = Query("1m", description="K线周期"),
+    limit: int = Query(100, ge=1, le=1000, description="K线数量"),
+) -> List[Dict[str, Any]]:
+    """
+    从 ClickHouse 获取历史 K 线数据
+    """
+    from common.clickhouse import clickhouse_client
+    from common.logger import get_logger
+    
+    local_logger = get_logger("api.routes.trades")
+    
+    sql = """
+        SELECT 
+            toUnixTimestamp(open_time) as time,
+            argMax(open_price, local_recv_ts) as open,
+            argMax(high_price, local_recv_ts) as high,
+            argMax(low_price, local_recv_ts) as low,
+            argMax(close_price, local_recv_ts) as close,
+            argMax(volume, local_recv_ts) as volume
+        FROM klines
+        WHERE symbol = %(symbol)s AND interval = %(interval)s
+        GROUP BY open_time
+        ORDER BY open_time DESC
+        LIMIT %(limit)s
+    """
+    try:
+        result = await clickhouse_client.query(sql, {"symbol": symbol, "interval": interval, "limit": limit})
+        
+        rows = []
+        if result and result.result_rows:
+            for row in reversed(result.result_rows):
+                rows.append({
+                    "time": int(row[0]),
+                    "open": float(row[1]),
+                    "high": float(row[2]),
+                    "low": float(row[3]),
+                    "close": float(row[4]),
+                    "volume": float(row[5])
+                })
+        return rows
+    except Exception as e:
+        local_logger.error(f"Failed to query klines from ClickHouse: {e}")
+        return []

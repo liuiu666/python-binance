@@ -1,29 +1,44 @@
 /**
  * 顶部状态栏 — 显示账户权益、今日盈亏、胜率、连接状态
  */
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useStore } from '../store';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 export default function StatusBar() {
   const { account, stats, wsConnected, strategyPaused, loadAccount, loadStats, updatePrice, setWsConnected } = useStore();
 
-  const handleWsMessage = (channel: string, data: any) => {
-    // 更新实时价格
+  const handleWsMessage = useCallback((channel: string, data: any) => {
+    // 1. 从 K 线行情流更新价格 (每 2 秒更新一次)
     if (channel.startsWith('market:') && data.close_price) {
       const symbol = data.symbol || channel.split(':')[1]?.toUpperCase();
       if (symbol) updatePrice(symbol, parseFloat(data.close_price));
     }
-  };
+    // 2. 从盘口报价流更新超低延迟价格 (买一/卖一均价)
+    else if (channel.startsWith('ticker:') && data.type === 'bookTicker') {
+      try {
+        const ticker = JSON.parse(data.data);
+        const symbol = ticker.s;
+        const bid = parseFloat(ticker.b);
+        const ask = parseFloat(ticker.a);
+        if (symbol && !isNaN(bid) && !isNaN(ask)) {
+          const midPrice = (bid + ask) / 2;
+          updatePrice(symbol, midPrice);
+        }
+      } catch {}
+    }
+  }, [updatePrice]);
 
   const { connected, subscribe } = useWebSocket({ onMessage: handleWsMessage });
 
   useEffect(() => {
     setWsConnected(connected);
-    // 连接成功后订阅行情频道
+    // 连接成功后同时订阅 K 线行情流与高频盘口报价流
     if (connected) {
       subscribe('market:btcusdt');
       subscribe('market:ethusdt');
+      subscribe('ticker:btcusdt');
+      subscribe('ticker:ethusdt');
     }
   }, [connected, setWsConnected, subscribe]);
 

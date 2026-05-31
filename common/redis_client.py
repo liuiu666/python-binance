@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 STREAM_MARKET = "market:{symbol}"       # 行情数据流 (K 线)
 STREAM_DEPTH = "depth:{symbol}"         # 深度数据流
 STREAM_TICKER = "ticker:{symbol}"       # 最优挂价数据流
+STREAM_MARK = "mark:{symbol}"           # 标记价格数据流
 STREAM_SIGNAL = "signal:trade"           # 交易信号流
 STREAM_ORDER = "order:update"            # 订单状态更新流
 STREAM_ACCOUNT = "account:updates"       # 账户事件流

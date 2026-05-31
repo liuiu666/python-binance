@@ -122,7 +122,7 @@ async def start_redis_forwarder() -> None:
     """
     import asyncio
     from common.config import settings as s
-    from common.redis_client import STREAM_ORDER, STREAM_SIGNAL, STREAM_ACCOUNT, STREAM_MARKET
+    from common.redis_client import STREAM_ORDER, STREAM_SIGNAL, STREAM_ACCOUNT, STREAM_MARKET, STREAM_TICKER, STREAM_DEPTH
 
     logger.info("ws_handler.forwarder_starting")
 
@@ -153,9 +153,20 @@ async def start_redis_forwarder() -> None:
         asyncio.create_task(forward_stream(STREAM_SIGNAL, "api-ws-group", "ws-1")),
     ]
     for symbol in s.symbols:
-        stream = STREAM_MARKET.format(symbol=symbol.lower())
+        # K 线行情流 (1m 级别价格)
+        stream_market = STREAM_MARKET.format(symbol=symbol.lower())
         tasks.append(
-            asyncio.create_task(forward_stream(stream, "api-ws-group", "ws-1"))
+            asyncio.create_task(forward_stream(stream_market, "api-ws-group", "ws-1"))
+        )
+        # 高频盘口报价流 (最优买卖价 tick-by-tick)
+        stream_ticker = STREAM_TICKER.format(symbol=symbol.lower())
+        tasks.append(
+            asyncio.create_task(forward_stream(stream_ticker, "api-ws-group", "ws-1"))
+        )
+        # 盘口深度流 (L2 Order Book)
+        stream_depth = STREAM_DEPTH.format(symbol=symbol.lower())
+        tasks.append(
+            asyncio.create_task(forward_stream(stream_depth, "api-ws-group", "ws-1"))
         )
 
     await asyncio.gather(*tasks)

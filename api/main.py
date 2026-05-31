@@ -21,7 +21,7 @@ from common.redis_client import redis_client
 from common.db import db
 from collector.rest_client import rest_client
 
-from api.routes import account, trades, control, config as config_routes
+from api.routes import account, trades, control, config as config_routes, paper
 from api.ws_handler import router as ws_router
 
 logger = get_logger(__name__)
@@ -38,6 +38,10 @@ async def lifespan(app: FastAPI):
     await redis_client.connect()
     await db.connect()
     await db.ensure_tables()
+    # 连接 ClickHouse
+    from common.clickhouse import clickhouse_client
+    clickhouse_client.connect()
+    await clickhouse_client.ensure_tables()
     # 从 DB 加载交易参数配置
     from common.db import config_store
     await config_store.load()
@@ -53,6 +57,8 @@ async def lifespan(app: FastAPI):
     await rest_client.close()
     await db.close()
     await redis_client.close()
+    from common.clickhouse import clickhouse_client
+    clickhouse_client.close()
     logger.info("api.stopped")
 
 
@@ -79,30 +85,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # 管理接口鉴权中间件 (保护 /api/close-all, /api/emergency-order, /api/pause)
-    class AdminAuthMiddleware(BaseHTTPMiddleware):
-        """对控制接口进行 API Key 鉴权"""
-        async def dispatch(self, request: Request, call_next):
-            # 只保护控制类接口
-            protected_prefixes = ("/api/close-all", "/api/emergency-order", "/api/pause")
-            if not request.url.path.startswith(protected_prefixes):
-                return await call_next(request)
-            # 未配置密钥则跳过鉴权
-            if not settings.admin_api_key:
-                return await call_next(request)
-            # 检查 Header 中的 X-Admin-Key
-            key = request.headers.get("X-Admin-Key", "")
-            if key != settings.admin_api_key:
-                raise HTTPException(status_code=403, detail="Invalid admin API key")
-            return await call_next(request)
 
-    app.add_middleware(AdminAuthMiddleware)
 
     # 注册路由
     app.include_router(account.router, prefix="/api", tags=["账户"])
     app.include_router(trades.router, prefix="/api", tags=["交易"])
     app.include_router(control.router, prefix="/api", tags=["控制"])
     app.include_router(config_routes.router, prefix="/api", tags=["配置"])
+    app.include_router(paper.router, prefix="/api", tags=["模拟交易"])
     app.include_router(ws_router)
 
     return app

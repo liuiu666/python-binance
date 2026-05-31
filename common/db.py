@@ -143,7 +143,7 @@ from typing import Any, Dict, Optional as _Optional
 # 默认交易参数 (首次启动时写入 DB)
 _DEFAULT_CONFIG: Dict[str, Dict[str, Any]] = {
     "symbols": {
-        "value": ["BTCUSDT", "ETHUSDT"],
+        "value": ["BTCUSDT"],
         "description": "监控的交易对列表",
     },
     "max_order_pct": {

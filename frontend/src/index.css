@@ -1,4 +1,19 @@
-/* BXM40 全局样式 — 深色主题 */
+/* BXM40 全局样式 — 专业交易终端深色主题 */
+:root {
+  --bg-main: #090d16;
+  --bg-card: #101625;
+  --border-color: #1c253b;
+  --text-primary: #eaecef;
+  --text-secondary: #848e9c;
+  --text-muted: #474f5a;
+  
+  --color-up: #0ecb81;
+  --color-down: #f6465d;
+  --color-warn: #f59e0b;
+  --color-anomaly: #b168fa;
+  --color-accent: #3b82f6;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -6,23 +21,59 @@
 }
 
 body {
-  background: #0d1117;
-  color: #c9d1d9;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-main);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* 数字等宽字体类 */
+.font-mono {
+  font-family: "Roboto Mono", "Courier New", Courier, monospace;
+}
+
+/* 闪烁动画 */
+@keyframes flash-up {
+  0% { background-color: rgba(14, 203, 129, 0.25); }
+  100% { background-color: transparent; }
+}
+
+@keyframes flash-down {
+  0% { background-color: rgba(246, 70, 93, 0.25); }
+  100% { background-color: transparent; }
+}
+
+.flash-green {
+  animation: flash-up 0.8s ease-out;
+}
+
+.flash-red {
+  animation: flash-down 0.8s ease-out;
+}
+
+/* 专业滚动条 */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0d1117;
+  background: var(--bg-main);
 }
 ::-webkit-scrollbar-thumb {
-  background: #30363d;
-  border-radius: 4px;
+  background: #1c253b;
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  background: #3b82f6;
 }
+
+/* 通用网格卡片容器 */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+}
+

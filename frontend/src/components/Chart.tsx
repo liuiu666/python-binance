@@ -3,7 +3,8 @@
  * 支持叠加买卖标记和均线
  */
 import { useEffect, useRef } from 'react';
-import { createChart, IChartApi, ISeriesApi, CandlestickData, Time } from 'lightweight-charts';
+import { createChart, CandlestickSeries } from 'lightweight-charts';
+import type { CandlestickData, Time } from 'lightweight-charts';
 
 interface ChartProps {
   data: CandlestickData<Time>[];
@@ -19,8 +20,8 @@ interface ChartProps {
 
 export default function Chart({ data, markers, height = 400 }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const chartRef = useRef<any>(null);
+  const seriesRef = useRef<any>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -49,7 +50,7 @@ export default function Chart({ data, markers, height = 400 }: ChartProps) {
       },
     });
 
-    const series = chart.addCandlestickSeries({
+    const series = chart.addSeries(CandlestickSeries, {
       upColor: '#00c853',
       downColor: '#ff1744',
       borderUpColor: '#00c853',

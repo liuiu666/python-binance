@@ -359,6 +359,10 @@ class DataCompensator:
         self._running = False
         # 内存中最近的 K 线缓存: {symbol: {open_time: kline_dict}}
         self._kline_cache: Dict[str, Dict[int, Dict]] = {}
+        # 轮次计数器: 低频任务 (多周期/标记价格) 每 N 轮执行一次
+        self._tick = 0
+        # 多周期和标记价格的执行间隔 (每 N 轮执行一次, 默认 3 = 90 秒)
+        self._slow_tick_interval = 3
 
     def update_kline_cache(self, symbol: str, kline: Dict) -> None:
         """
@@ -386,6 +390,7 @@ class DataCompensator:
 
         while self._running:
             await asyncio.sleep(self._interval)
+            self._tick += 1
             for symbol in self._symbols:
                 await self._compensate(symbol)
 
@@ -443,6 +448,9 @@ class DataCompensator:
                 # 写入 Redis Streams (供策略消费)
                 await redis_client.xadd(stream_name, kline, maxlen=10000)
             # 同步写入 ClickHouse (供 AI 调参和历史分析)
+            # 更新内存缓存, 避免下一轮重复补偿
+            for kline in to_compensate:
+                self.update_kline_cache(symbol, kline)
             try:
                 from common.clickhouse import clickhouse_client
                 # 过滤掉 ClickHouse 表中不存在的字段
@@ -474,6 +482,69 @@ class DataCompensator:
                 mismatch=mismatch_count,
                 compensated=len(to_compensate),
             )
+
+        # 多周期 K 线补偿 (5m/15m) — 从 REST API 拉取, 写入 ClickHouse
+        # 低频任务: 每 3 轮 (90 秒) 执行一次, 减少 API 压力
+        if self._tick % self._slow_tick_interval == 0:
+            for interval in ("5m", "15m"):
+                await self._compensate_multi_tf(symbol, interval)
+
+            # 标记价格补偿 — 从 REST API 拉取, 写入 Redis + ClickHouse
+            await self._compensate_mark_price(symbol)
+
+    async def _compensate_multi_tf(self, symbol: str, interval: str) -> None:
+        """
+        多周期 K 线补偿: 从 REST API 拉取 5m/15m K 线写入 ClickHouse
+        这些数据用于策略的多周期分析和趋势判断
+        """
+        klines = await self._rest.get_klines(symbol, interval=interval, limit=5)
+        if not klines:
+            return
+
+        try:
+            from common.clickhouse import clickhouse_client
+            ch_fields = {
+                "symbol", "open_time", "close_time", "interval",
+                "open_price", "high_price", "low_price", "close_price",
+                "volume", "quote_volume", "trades_count", "taker_buy_volume",
+                "local_recv_ts",
+            }
+            for kline in klines:
+                clean = {k: v for k, v in kline.items() if k in ch_fields}
+                await clickhouse_client.insert("klines", clean)
+            await clickhouse_client._flush_table("klines")
+        except Exception:
+            logger.exception("compensator.multi_tf_error", symbol=symbol, interval=interval)
+
+    async def _compensate_mark_price(self, symbol: str) -> None:
+        """
+        从 REST API 拉取标记价格, 写入 Redis + ClickHouse
+        包含标记价格、指数价格、资金费率等关键数据
+        """
+        import time as _time
+        data = await self._rest.get_mark_price(symbol)
+        if not data:
+            return
+
+        mark = {
+            "symbol": symbol,
+            "mark_price": float(data.get("markPrice", 0)),
+            "index_price": float(data.get("indexPrice", 0)),
+            "funding_rate": float(data.get("lastFundingRate", 0)),
+            "next_funding_ts": int(data.get("nextFundingTime", 0)),
+            "timestamp": int(data.get("time", 0)),
+            "local_recv_ts": _time.time() * 1000,
+        }
+
+        try:
+            from common.redis_client import redis_client, STREAM_MARK
+            stream_name = STREAM_MARK.format(symbol=symbol.lower())
+            await redis_client.xadd(stream_name, mark, maxlen=5000)
+
+            from common.clickhouse import clickhouse_client
+            await clickhouse_client.insert("mark_price", mark)
+        except Exception:
+            logger.exception("compensator.mark_price_error", symbol=symbol)
 
     @staticmethod
     def _klines_match(a: Dict, b: Dict, tolerance: float = 0.01) -> bool:

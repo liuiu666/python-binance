@@ -108,3 +108,15 @@ export const emergencyOrder = (symbol: string, side: string, quantity: number) =
     method: 'POST',
     body: JSON.stringify({ symbol, side, quantity }),
   });
+
+export interface KLineData {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export const fetchKlines = (symbol: string, interval = '1m', limit = 100) =>
+  request<KLineData[]>(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);

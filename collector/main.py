@@ -20,7 +20,7 @@ from typing import Any, Dict
 
 from common.config import settings
 from common.logger import get_logger
-from common.redis_client import redis_client, STREAM_MARKET
+from common.redis_client import redis_client, STREAM_MARKET, STREAM_MARK
 from common.clickhouse import clickhouse_client
 from common.notify import notifier
 
@@ -158,6 +158,9 @@ class CollectorService:
         # 最优挂单 → Redis
         self._ws_client.on("bookTicker", self._handle_book_ticker)
 
+        # 标记价格 → Redis + ClickHouse
+        self._ws_client.on("markPrice", self._handle_mark_price)
+
         # 账户事件 → 日志
         self._user_stream.on("ORDER_TRADE_UPDATE", self._handle_order_update)
         self._user_stream.on("BALANCE_UPDATE", self._handle_balance_update)
@@ -262,7 +265,12 @@ class CollectorService:
     async def _handle_book_ticker(self, data: Dict[str, Any]) -> None:
         """处理最优挂单数据 — 写入独立 ticker stream"""
         symbol = data.get("s", "")
-        self._health.record_message(symbol)
+        # 用买一价作为最新价更新健康监控 (WS kline 不可用时兜底)
+        bid_price = data.get("b")
+        self._health.record_message(
+            symbol,
+            close_price=float(bid_price) if bid_price else None,
+        )
 
         from common.redis_client import STREAM_TICKER
         stream_name = STREAM_TICKER.format(symbol=symbol.lower())
@@ -271,6 +279,41 @@ class CollectorService:
             {"type": "bookTicker", "data": data},
             maxlen=1000,
         )
+
+    async def _handle_mark_price(self, data: Dict[str, Any]) -> None:
+        """
+        处理标记价格数据 — 写入 Redis + ClickHouse
+
+        币安 markPrice 数据格式:
+        {
+            "e": "markPriceUpdate",
+            "s": "BTCUSDT",
+            "p": "68000.00",        // 标记价格
+            "i": "67950.00",        // 指数价格
+            "r": "0.00010000",      // 资金费率
+            "T": 1717000000000,     // 下次结算时间
+            "E": 1717000000000      // 事件时间
+        }
+        """
+        symbol = data.get("s", "")
+        mark = {
+            "symbol": symbol,
+            "mark_price": float(data.get("p", 0)),
+            "index_price": float(data.get("i", 0)),
+            "funding_rate": float(data.get("r", 0)),
+            "next_funding_ts": data.get("T", 0),
+            "timestamp": data.get("E", 0),
+            "local_recv_ts": data.get("local_recv_ts", time.time() * 1000),
+        }
+
+        self._health.record_message(symbol)
+
+        # 写入 Redis
+        stream_name = STREAM_MARK.format(symbol=symbol.lower())
+        await redis_client.xadd(stream_name, mark, maxlen=5000)
+
+        # 写入 ClickHouse (批量攒写)
+        await clickhouse_client.insert("mark_price", mark)
 
     async def _handle_order_update(self, data: Dict[str, Any]) -> None:
         """处理订单状态更新"""

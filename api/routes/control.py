@@ -6,17 +6,24 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header, Depends
 from pydantic import BaseModel, Field
 
 from common.redis_client import redis_client
 from common.db import db
 from common.logger import get_logger
+from common.config import settings
 from collector.rest_client import rest_client
 
 logger = get_logger(__name__)
 
-router = APIRouter()
+
+async def verify_admin_key(x_admin_key: str = Header(None)):
+    if settings.admin_api_key and x_admin_key != settings.admin_api_key:
+        raise HTTPException(status_code=403, detail="Invalid admin API key")
+
+
+router = APIRouter(dependencies=[Depends(verify_admin_key)])
 
 
 class EmergencyOrderRequest(BaseModel):

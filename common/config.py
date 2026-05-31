@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     # ---- 交易参数 (从 DB 加载, .env 中也可以设默认值) ----
     # Annotated + BeforeValidator 在 pydantic-settings JSON 解析前拦截
     symbols: Annotated[List[str], BeforeValidator(_parse_symbols)] = Field(
-        default=["BTCUSDT", "ETHUSDT"]
+        default=["BTCUSDT"]
     )
     max_order_pct: float = 5.0
     max_positions: int = 3

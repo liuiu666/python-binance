@@ -60,6 +60,24 @@ TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 """
 
+# 标记价格表建表语句
+_MARK_PRICE_TABLE_DDL = """
+CREATE TABLE IF NOT EXISTS mark_price (
+    symbol          String,
+    mark_price      Float64,
+    index_price     Float64,
+    funding_rate    Float64,
+    next_funding_ts DateTime64(3, 'UTC'),
+    timestamp       DateTime64(3, 'UTC'),
+    local_recv_ts   DateTime64(3, 'UTC')
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (symbol, timestamp)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+"""
+
 
 class ClickHouseClient:
     """
@@ -102,7 +120,7 @@ class ClickHouseClient:
         """创建所需的数据表"""
         if self._client is None:
             raise RuntimeError("ClickHouse 未连接")
-        for ddl in (_KLINES_TABLE_DDL, _AGGTRADES_TABLE_DDL):
+        for ddl in (_KLINES_TABLE_DDL, _AGGTRADES_TABLE_DDL, _MARK_PRICE_TABLE_DDL):
             await asyncio.to_thread(self._client.command, ddl)
         logger.info("clickhouse.tables_ready")
 
