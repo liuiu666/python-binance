@@ -200,7 +200,20 @@ class ConfigStore:
             # 加载所有配置
             rows = await conn.fetch("SELECT key, value FROM system_config")
             for row in rows:
-                self._cache[row["key"]] = _json.loads(row["value"])
+                val = _json.loads(row["value"])
+                self._cache[row["key"]] = val
+                if hasattr(settings, row["key"]):
+                    setattr(settings, row["key"], val)
+
+            # 额外将 symbols 同步到 Redis config:symbols 缓存，方便 collector 重启时同步
+            symbols = self._cache.get("symbols")
+            if symbols:
+                try:
+                    from common.redis_client import redis_client
+                    if redis_client._pool is not None:
+                        await redis_client.set("config:symbols", _json.dumps(symbols))
+                except Exception:
+                    pass
 
         logger.info("config_store.loaded", keys=list(self._cache.keys()))
 

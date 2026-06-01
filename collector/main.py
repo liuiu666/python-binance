@@ -54,6 +54,21 @@ class CollectorService:
         await redis_client.connect()
         await rest_client.connect()
 
+        # 从 Redis 获取并同步最新的 symbols 列表 (同步 API 配置)
+        try:
+            cached_symbols_json = await redis_client.get("config:symbols")
+            if cached_symbols_json:
+                import json
+                cached_symbols = json.loads(cached_symbols_json)
+                if isinstance(cached_symbols, list) and cached_symbols:
+                    settings.symbols = cached_symbols
+                    self._ws_client._symbols = list(cached_symbols)
+                    self._compensator._symbols = list(cached_symbols)
+                    self._health._symbols = list(cached_symbols)
+                    logger.info("collector.loaded_symbols_from_redis", symbols=settings.symbols)
+        except Exception:
+            logger.exception("collector.load_symbols_from_redis_failed")
+
         # ClickHouse 连接 + 建表 (非阻塞, 失败不阻塞主流程)
         try:
             clickhouse_client.connect()
@@ -190,6 +205,10 @@ class CollectorService:
                         # 小延迟后更新 settings, 下次重连时也包含新币种
                         if symbol not in settings.symbols:
                             settings.symbols = settings.symbols + [symbol]
+                        if symbol not in self._compensator._symbols:
+                            self._compensator._symbols.append(symbol)
+                        if symbol not in self._health._symbols:
+                            self._health._symbols.append(symbol)
 
                     elif action == "REMOVE":
                         await self._ws_client.remove_symbol(symbol)
@@ -198,6 +217,12 @@ class CollectorService:
                             settings.symbols = [
                                 s for s in settings.symbols if s != symbol
                             ]
+                        self._compensator._symbols = [
+                            s for s in self._compensator._symbols if s != symbol
+                        ]
+                        self._health._symbols = [
+                            s for s in self._health._symbols if s != symbol
+                        ]
 
                     else:
                         logger.warning("collector.unknown_symbol_action", raw=raw)

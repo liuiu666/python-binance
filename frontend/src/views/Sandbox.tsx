@@ -35,7 +35,7 @@ interface OrderBookLevel {
 }
 
 export default function Sandbox() {
-  const { prices, strategyPaused, setStrategyPaused } = useStore();
+  const { prices, strategyPaused, setStrategyPaused, updatePrice } = useStore();
   const [chartData, setChartData] = useState<CandlestickData<Time>[]>([]);
   const [activeTab, setActiveTab] = useState<'positions' | 'trades' | 'orderbook'>('positions');
   const [depth, setDepth] = useState<{ bids: OrderBookLevel[]; asks: OrderBookLevel[] }>({ bids: [], asks: [] });
@@ -260,15 +260,38 @@ export default function Sandbox() {
         setDepth({ bids, asks });
       } catch {}
     }
-  }, []);
+    // 处理ticker消息，更新实时价格
+    if (channel.startsWith('ticker:') && data.type === 'bookTicker') {
+      try {
+        const ticker = JSON.parse(data.data);
+        const bid = parseFloat(ticker.b);
+        const ask = parseFloat(ticker.a);
+        if (!isNaN(bid) && !isNaN(ask)) {
+          updatePrice(ticker.s, (bid + ask) / 2);
+        }
+      } catch {}
+    }
+  }, [updatePrice]);
 
-  const { connected, subscribe } = useWebSocket({ onMessage: handleWsMessage });
+  const { connected, subscribe, unsubscribe } = useWebSocket({ onMessage: handleWsMessage });
+
+  // 用ref追踪上一个币种，切换时取消旧订阅
+  const prevSymbolRef = useRef(symbol);
 
   useEffect(() => {
     if (connected && symbol) {
+      const prev = prevSymbolRef.current;
+      // 取消旧币种的订阅
+      if (prev && prev !== symbol) {
+        unsubscribe(`depth:${prev.toLowerCase()}`);
+        unsubscribe(`ticker:${prev.toLowerCase()}`);
+      }
+      prevSymbolRef.current = symbol;
+      // 订阅当前币种的depth和ticker
       subscribe(`depth:${symbol.toLowerCase()}`);
+      subscribe(`ticker:${symbol.toLowerCase()}`);
     }
-  }, [connected, symbol, subscribe]);
+  }, [connected, symbol, subscribe, unsubscribe]);
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();

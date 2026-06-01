@@ -71,6 +71,7 @@ interface KlinesWithAnomalies {
 export default function Analysis() {
   const { prices } = useStore();
   const [symbol, setSymbol] = useState('BTCUSDT');
+  const [availableSymbols, setAvailableSymbols] = useState<string[]>(['BTCUSDT', 'ETHUSDT']);
   const [timeframe, setTimeframe] = useState('1m');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<AnalysisResults | null>(null);
@@ -78,7 +79,6 @@ export default function Analysis() {
   const [klinesData, setKlinesData] = useState<KlinesWithAnomalies | null>(null);
   const [klinesLoading, setKlinesLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMoreData, setHasMoreData] = useState(true);
   // 用ref保存最新状态，避免闭包问题
   const klinesDataRef = useRef<KlinesWithAnomalies | null>(null);
   const loadingMoreRef = useRef(false);
@@ -116,7 +116,6 @@ export default function Analysis() {
     if (!isRefresh) setKlinesLoading(true);
     if (!isRefresh) {
       hasMoreDataRef.current = true;
-      setHasMoreData(true);
     }
     try {
       const res = await fetch(`/api/klines-with-anomalies?symbol=${symbol}&interval=${timeframe}&limit=500&window_size=60`);
@@ -127,7 +126,6 @@ export default function Analysis() {
           setKlinesData(data);
           if (!isRefresh && data.candles.length < 500) {
             hasMoreDataRef.current = false;
-            setHasMoreData(false);
           }
         }
       }
@@ -158,7 +156,6 @@ export default function Analysis() {
           
           if (newCandles.length === 0) {
             hasMoreDataRef.current = false;
-            setHasMoreData(false);
           } else {
             setKlinesData(prev => {
               if (!prev) return data;
@@ -192,12 +189,10 @@ export default function Analysis() {
             });
             if (newCandles.length < 500) {
               hasMoreDataRef.current = false;
-              setHasMoreData(false);
             }
           }
         } else {
           hasMoreDataRef.current = false;
-          setHasMoreData(false);
         }
       }
     } catch (err) {
@@ -211,6 +206,24 @@ export default function Analysis() {
   useEffect(() => {
     runAnalysis();
   }, [symbol, timeframe]);
+
+  // 加载系统配置中的所有可用币种
+  useEffect(() => {
+    const fetchSymbols = async () => {
+      try {
+        const res = await fetch('/api/control/symbols');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.symbols && data.symbols.length > 0) {
+            setAvailableSymbols(data.symbols);
+          }
+        }
+      } catch (err) {
+        console.error('获取可用币种列表失败:', err);
+      }
+    };
+    fetchSymbols();
+  }, []);
 
   useEffect(() => {
     fetchKlinesWithAnomalies();
@@ -290,8 +303,9 @@ export default function Analysis() {
           <div style={styles.field}>
             <label style={styles.labelInline}>分析标的</label>
             <select value={symbol} onChange={(e) => setSymbol(e.target.value)} style={styles.select}>
-              <option value="BTCUSDT">BTCUSDT (币安合约)</option>
-              <option value="ETHUSDT">ETHUSDT (币安合约)</option>
+              {availableSymbols.map(sym => (
+                <option key={sym} value={sym}>{sym} (币安合约)</option>
+              ))}
             </select>
           </div>
           <div style={styles.field}>

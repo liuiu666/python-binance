@@ -12,11 +12,6 @@ interface RedisStatus {
   length: number;
 }
 
-interface SymbolStatus {
-  symbol: string;
-  active: boolean;
-}
-
 type BackfillStatus = 'idle' | 'running' | 'done' | 'error';
 
 const COMMON_SYMBOLS = [
@@ -43,8 +38,6 @@ export default function Collection() {
   const [currentSymbols, setCurrentSymbols] = useState<string[]>(['BTCUSDT']);
   const [redisStreams, setRedisStreams] = useState<RedisStatus[]>([]);
   const [loadingSymbols, setLoadingSymbols] = useState(false);
-  // 标记 dbRanges 是否已首次加载, 用于自动填充回填时间 (只触发一次)
-  const dbRangesLoadedRef = useRef(false);
   const [savingSymbols, setSavingSymbols] = useState(false);
   const [symbolInput, setSymbolInput] = useState('');
   const [symbolSaveMsg, setSymbolSaveMsg] = useState('');
@@ -176,22 +169,27 @@ export default function Collection() {
   }, [loadDbRanges]);
 
   // 首次加载 dbRanges 或切换币种/周期时自动填充时间; 后续 dbRanges 刷新不再覆盖用户手动设定
+  const prevBfKeyRef = useRef('');
+
   useEffect(() => {
     if (!dbRanges?.klines) return;
-    if (dbRangesLoadedRef.current) return;
-    dbRangesLoadedRef.current = true;
     const key = `${bfSymbol}:${bfInterval}`;
-    const klineInfo = dbRanges.klines[key];
-    if (klineInfo && klineInfo.min_time > 0) {
-      const date = new Date(klineInfo.min_time);
-      setBfEndDate(getLocalISOString(date));
-      const startDate = new Date(klineInfo.min_time - 7 * 86400000);
-      setBfStartDate(getLocalISOString(startDate));
-    } else {
-      const now = new Date();
-      setBfEndDate(getLocalISOString(now));
-      const startDate = new Date(now.getTime() - 7 * 86400000);
-      setBfStartDate(getLocalISOString(startDate));
+    
+    // 只有当币种或周期发生改变时，才自动重新填入推荐时间
+    if (prevBfKeyRef.current !== key) {
+      prevBfKeyRef.current = key;
+      const klineInfo = dbRanges.klines[key];
+      if (klineInfo && klineInfo.min_time > 0) {
+        const date = new Date(klineInfo.min_time);
+        setBfEndDate(getLocalISOString(date));
+        const startDate = new Date(klineInfo.min_time - 7 * 86400000);
+        setBfStartDate(getLocalISOString(startDate));
+      } else {
+        const now = new Date();
+        setBfEndDate(getLocalISOString(now));
+        const startDate = new Date(now.getTime() - 7 * 86400000);
+        setBfStartDate(getLocalISOString(startDate));
+      }
     }
   }, [bfSymbol, bfInterval, dbRanges]);
 
@@ -444,11 +442,21 @@ export default function Collection() {
                           ) : (
                             Object.keys(item.klines).map(iv => {
                               const kInfo = item.klines[iv] || { min_time: 0, max_time: 0, count: 0 };
+                              const isSelected = item.symbol === bfSymbol && iv === bfInterval;
                               return (
-                                <div key={iv} style={{ marginBottom: '6px' }}>
-                                  <div style={{ color: 'var(--color-accent)', fontWeight: 600 }}>📈 K线 ({iv})</div>
-                                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
-                                    {formatDate(kInfo.min_time)}<br/>至 {formatDate(kInfo.max_time)}
+                                <div key={iv} style={{ 
+                                  marginBottom: '8px',
+                                  padding: isSelected ? '6px' : '0',
+                                  borderRadius: isSelected ? '4px' : '0',
+                                  border: isSelected ? '1px solid rgba(88, 166, 255, 0.4)' : 'none',
+                                  background: isSelected ? 'rgba(88, 166, 255, 0.05)' : 'none',
+                                }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ color: 'var(--color-accent)', fontWeight: 600 }}>📈 K线 ({iv})</div>
+                                    {isSelected && <span style={{ fontSize: '9px', background: 'var(--color-accent)', color: '#fff', padding: '1px 4px', borderRadius: '3px', fontWeight: 'bold' }}>当前选中</span>}
+                                  </div>
+                                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                    {formatDate(kInfo.min_time)} 至 {formatDate(kInfo.max_time)}
                                   </div>
                                   <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>
                                     共 <strong>{kInfo.count.toLocaleString()}</strong> 条
@@ -634,6 +642,97 @@ export default function Collection() {
                   </select>
                 </div>
               </div>
+
+              {/* 当前选中币种和周期的已有数据概况 */}
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                padding: '12px',
+                fontSize: '11px',
+                marginTop: '4px',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>📊 ClickHouse 存储现状 ({bfSymbol} : {bfInterval})</span>
+                  <span style={{ color: 'var(--color-accent)', fontWeight: 'bold' }}>
+                    {(() => {
+                      const info = dbRanges?.klines?.[`${bfSymbol}:${bfInterval}`];
+                      return info ? `已存 ${info.count.toLocaleString()} 条` : '无数据';
+                    })()}
+                  </span>
+                </div>
+                <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: '12px', marginBottom: '8px' }}>
+                  {(() => {
+                    const info = dbRanges?.klines?.[`${bfSymbol}:${bfInterval}`];
+                    if (info && info.min_time > 0) {
+                      return `${formatDate(info.min_time)}   至   ${formatDate(info.max_time)}`;
+                    }
+                    return '暂无历史数据';
+                  })()}
+                </div>
+                {/* 快捷对齐与时间填入按钮 */}
+                {(() => {
+                  const info = dbRanges?.klines?.[`${bfSymbol}:${bfInterval}`];
+                  if (info && info.min_time > 0) {
+                    return (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const end = new Date(info.min_time);
+                            const start = new Date(info.min_time - 7 * 86400000);
+                            setBfEndDate(getLocalISOString(end));
+                            setBfStartDate(getLocalISOString(start));
+                          }}
+                          style={{
+                            background: 'rgba(88, 166, 255, 0.1)', border: '1px solid rgba(88, 166, 255, 0.2)',
+                            color: 'var(--color-accent)', borderRadius: '4px', padding: '3px 8px',
+                            cursor: 'pointer', fontSize: '10px', fontWeight: 'bold'
+                          }}
+                        >
+                          填入起点前 7 天 (向前拼合)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const now = new Date();
+                            const start = new Date(info.max_time);
+                            setBfEndDate(getLocalISOString(now));
+                            setBfStartDate(getLocalISOString(start));
+                          }}
+                          style={{
+                            background: 'rgba(48, 209, 88, 0.1)', border: '1px solid rgba(48, 209, 88, 0.2)',
+                            color: 'var(--color-up)', borderRadius: '4px', padding: '3px 8px',
+                            cursor: 'pointer', fontSize: '10px', fontWeight: 'bold'
+                          }}
+                        >
+                          填入终点至当前 (向后补全)
+                        </button>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          const start = new Date(now.getTime() - 7 * 86400000);
+                          setBfEndDate(getLocalISOString(now));
+                          setBfStartDate(getLocalISOString(start));
+                        }}
+                        style={{
+                          background: 'rgba(88, 166, 255, 0.1)', border: '1px solid rgba(88, 166, 255, 0.2)',
+                          color: 'var(--color-accent)', borderRadius: '4px', padding: '3px 8px',
+                          cursor: 'pointer', fontSize: '10px', fontWeight: 'bold'
+                        }}
+                      >
+                        默认填入最近 7 天
+                      </button>
+                    );
+                  }
+                })()}
+              </div>
+
               <div style={s.formRow}>
                 <div style={s.formGroup}>
                   <label style={s.label}>开始时间</label>
@@ -656,10 +755,10 @@ export default function Collection() {
               </div>
 
               {/* 自动对齐提示 */}
-              {dbRanges?.klines?.[bfSymbol]?.min_time > 0 && (
+              {dbRanges?.klines?.[`${bfSymbol}:${bfInterval}`]?.min_time > 0 && (
                 <div style={{ fontSize: '11px', color: 'var(--color-accent)', background: 'rgba(88, 166, 255, 0.05)', padding: '6px 10px', borderRadius: '4px', border: '1px solid rgba(88, 166, 255, 0.1)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <span>💡</span>
-                  <span><strong>结束时间</strong>已自动对齐 ClickHouse 中 <strong>{bfSymbol}</strong> 已有数据的起点（{formatDate(dbRanges.klines[bfSymbol].min_time)}），确保无缝衔接。</span>
+                  <span><strong>结束时间</strong>已自动对齐 ClickHouse 中 <strong>{bfSymbol}:{bfInterval}</strong> 已有数据的起点（{formatDate(dbRanges.klines[`${bfSymbol}:${bfInterval}`].min_time)}），确保无缝衔接。</span>
                 </div>
               )}
 

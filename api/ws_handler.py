@@ -119,12 +119,16 @@ async def start_redis_forwarder() -> None:
     """
     启动 Redis → WebSocket 转发器
     从 Redis Streams 读取实时数据, 通过 ConnectionManager 推送到前端
+    支持动态添加新币种的转发任务
     """
     import asyncio
     from common.config import settings as s
     from common.redis_client import STREAM_ORDER, STREAM_SIGNAL, STREAM_ACCOUNT, STREAM_MARKET, STREAM_TICKER, STREAM_DEPTH
 
     logger.info("ws_handler.forwarder_starting")
+
+    # 记录已启动转发的币种，避免重复
+    forwarded_symbols: set[str] = set()
 
     async def forward_stream(stream: str, group: str, consumer: str):
         """转发单个 Stream"""
@@ -147,26 +151,47 @@ async def start_redis_forwarder() -> None:
                 logger.exception("ws_handler.forward_error", stream=stream)
                 await asyncio.sleep(1)
 
-    # 并发转发多个 Stream
+    async def forward_symbol(sym: str):
+        """为单个币种启动所有Stream转发"""
+        sym_lower = sym.lower()
+        await asyncio.gather(
+            forward_stream(STREAM_MARKET.format(symbol=sym_lower), "api-ws-group", "ws-1"),
+            forward_stream(STREAM_TICKER.format(symbol=sym_lower), "api-ws-group", "ws-1"),
+            forward_stream(STREAM_DEPTH.format(symbol=sym_lower), "api-ws-group", "ws-1"),
+        )
+
+    # 监听币种变更，动态启动新转发任务
+    async def watch_symbol_changes():
+        pubsub = redis_client.client.pubsub()
+        await pubsub.subscribe("control:symbols")
+        try:
+            while True:
+                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                if message and message.get("type") == "message":
+                    raw = str(message.get("data", ""))
+                    if ":" not in raw:
+                        continue
+                    action, _, sym = raw.partition(":")
+                    sym = sym.upper().strip()
+                    if action == "ADD" and sym and sym not in forwarded_symbols:
+                        forwarded_symbols.add(sym)
+                        asyncio.create_task(forward_symbol(sym))
+                        logger.info("ws_handler.symbol_forward_added", symbol=sym)
+                await asyncio.sleep(0.05)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await pubsub.unsubscribe("control:symbols")
+            await pubsub.close()
+
+    # 启动初始币种的转发
     tasks = [
         asyncio.create_task(forward_stream(STREAM_ORDER, "api-ws-group", "ws-1")),
         asyncio.create_task(forward_stream(STREAM_SIGNAL, "api-ws-group", "ws-1")),
+        asyncio.create_task(watch_symbol_changes()),
     ]
     for symbol in s.symbols:
-        # K 线行情流 (1m 级别价格)
-        stream_market = STREAM_MARKET.format(symbol=symbol.lower())
-        tasks.append(
-            asyncio.create_task(forward_stream(stream_market, "api-ws-group", "ws-1"))
-        )
-        # 高频盘口报价流 (最优买卖价 tick-by-tick)
-        stream_ticker = STREAM_TICKER.format(symbol=symbol.lower())
-        tasks.append(
-            asyncio.create_task(forward_stream(stream_ticker, "api-ws-group", "ws-1"))
-        )
-        # 盘口深度流 (L2 Order Book)
-        stream_depth = STREAM_DEPTH.format(symbol=symbol.lower())
-        tasks.append(
-            asyncio.create_task(forward_stream(stream_depth, "api-ws-group", "ws-1"))
-        )
+        forwarded_symbols.add(symbol)
+        tasks.append(asyncio.create_task(forward_symbol(symbol)))
 
     await asyncio.gather(*tasks)
