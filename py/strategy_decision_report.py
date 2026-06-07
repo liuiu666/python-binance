@@ -288,12 +288,40 @@ def summarize_10min_regime_filter_search(report):
         ),
         reverse=True,
     )
+    stable = [
+        r for r in rows
+        if float(((r.get("time_block_summary") or {}).get("min_block_wr")) or 0) >= 58
+        and float(r.get("trade_retention_pct") or 0) >= 50
+        and int(((r.get("overall") or {}).get("trades")) or 0) >= 250
+    ]
+    stable.sort(
+        key=lambda r: (
+            float(r.get("wr_delta_pp") or 0),
+            float(((r.get("time_block_summary") or {}).get("min_block_wr")) or 0),
+            float(r.get("trade_retention_pct") or 0),
+        ),
+        reverse=True,
+    )
+    live_drift = [
+        r for r in rows
+        if (((r.get("live_replay") or {}).get("overall") or {}).get("trades") or 0)
+        and float(((r.get("live_replay") or {}).get("wr_delta_pp")) or 0) > 0
+    ]
+    live_drift.sort(
+        key=lambda r: (
+            float(((r.get("live_replay") or {}).get("wr_delta_pp")) or 0),
+            float(r.get("trade_retention_pct") or 0),
+        ),
+        reverse=True,
+    )
     return {
         "status": "ready",
         "method": report.get("method"),
         "baseline": report.get("baseline"),
         "shadow_candidates": rows,
         "top_shadow_candidates": top[:5],
+        "top_stable_shadow_candidates": stable[:5],
+        "top_live_drift_replay_candidates": live_drift[:5],
         "scan_top": report.get("scan_top") or [],
     }
 
@@ -1025,7 +1053,7 @@ def main():
         )
 
     regime_search = report.get("ten_min_regime_filter_search") or {}
-    regime_candidates = regime_search.get("top_shadow_candidates") or []
+    regime_candidates = regime_search.get("top_stable_shadow_candidates") or regime_search.get("top_shadow_candidates") or []
     if regime_candidates:
         best = regime_candidates[0]
         overall = best.get("overall") or {}
@@ -1035,6 +1063,17 @@ def main():
             f"over {overall.get('trades')} trades, delta {best.get('wr_delta_pp')}pp, "
             f"retention {best.get('trade_retention_pct')}%, min block WR {block.get('min_block_wr')}%. "
             "Run as live shadow only."
+        )
+    live_drift_candidates = regime_search.get("top_live_drift_replay_candidates") or []
+    if live_drift_candidates:
+        best_live = live_drift_candidates[0]
+        live_replay = best_live.get("live_replay") or {}
+        live_overall = live_replay.get("overall") or {}
+        report["recommendation"].append(
+            f"BTC_10min live-drift diagnostic: {best_live.get('id')} replays the current small live sample at "
+            f"{live_overall.get('wr')}% over {live_overall.get('trades')} trades "
+            f"(delta {live_replay.get('wr_delta_pp')}pp, retention {live_replay.get('trade_retention_pct')}%). "
+            "This is not promotion evidence; collect direct shadow samples first."
         )
 
     with open(REPORT_FILE, "w", encoding="utf-8") as f:

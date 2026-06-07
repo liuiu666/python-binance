@@ -12,7 +12,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, "E:/codex/py")
-from backtest_enhanced import load_symbol  # noqa: E402
+from analyze_live_backtest_gap import live_signal_trades  # noqa: E402
+from backtest_enhanced import build_features, load_symbol  # noqa: E402
 from research_strategy_lab import build_oos_frame, candidate_signals, metric  # noqa: E402
 from validate_strategy_candidates import PAYOUT, STAKE  # noqa: E402
 
@@ -36,6 +37,18 @@ HAND_PICKED_SHADOWS = [
         "note": "High-retention BBP cap; better fit for high trade count.",
     },
     {
+        "id": "SHADOW_10m_bbp120_rsi76_th55_rsi30_70_majority",
+        "name": "bbp_1.20_rsi_cap_76",
+        "filter": {"bbp_cap": 1.20, "rsi_cap": 76},
+        "note": "Balanced overextension filter; lowers offline max loss while keeping moderate trade count.",
+    },
+    {
+        "id": "SHADOW_10m_bbp105_rsi74_th55_rsi30_70_majority",
+        "name": "bbp_1.05_rsi_cap_74",
+        "filter": {"bbp_cap": 1.05, "rsi_cap": 74},
+        "note": "Win-rate-first overextension filter; lower retention, shadow only.",
+    },
+    {
         "id": "SHADOW_10m_rsi_cap74_th55_rsi30_70_majority",
         "name": "rsi_extreme_cap_74",
         "filter": {"rsi_cap": 74},
@@ -46,6 +59,12 @@ HAND_PICKED_SHADOWS = [
         "name": "skip_hour_12",
         "filter": {"skip_hours_utc": [12]},
         "note": "Simple time-of-day filter with high retention in offline scan.",
+    },
+    {
+        "id": "SHADOW_10m_skip_hours1_8_th55_rsi30_70_majority",
+        "name": "skip_hours_1_8",
+        "filter": {"skip_hours_utc": [1, 8]},
+        "note": "Live-drift diagnostic filter; skips the UTC hours where the latest 10m loss clusters appeared.",
     },
     {
         "id": "SHADOW_10m_conf_lt40_th55_rsi30_70_majority",
@@ -75,6 +94,8 @@ def chronological_blocks(trades, blocks=10):
     rows = []
     for i, idx in enumerate(np.array_split(np.arange(len(trades)), blocks), start=1):
         part = trades.iloc[idx]
+        if part.empty:
+            continue
         m = metric(part["win"].to_numpy())
         rows.append({
             "slice": f"block_{i:02d}",
@@ -126,6 +147,44 @@ def build_current_trades(df5, cfg):
     return trades
 
 
+def build_live_replay_trades(df5, cfg):
+    rows = [r for r in live_signal_trades() if r.get("strategy") == "BTC_10min"]
+    if not rows:
+        return pd.DataFrame()
+    features = build_features(df5, int(cfg["horizon"]))
+    features = features[features["target"] != 0].copy()
+    features["time_key"] = pd.to_datetime(features["time"], utc=True)
+    feature_cols = [
+        "time_key", "bbp", "hlp20", "hlp50", "trend6", "trend12",
+        "trend30", "pre50", "ema_stack", "rsi14",
+    ]
+    available = [c for c in feature_cols if c in features.columns]
+    by_time = features[available].set_index("time_key")
+    live_rows = []
+    for row in rows:
+        signal_time = pd.to_datetime(row.get("time"), utc=True).floor("5min")
+        item = {
+            "time": signal_time,
+            "direction_num": 1 if row.get("direction") == "UP" else 0,
+            "direction": row.get("direction"),
+            "win": bool(row.get("win")),
+            "confidence": float(row.get("confidence") or 0),
+            "rsi14": float(row.get("rsi_value") or 50),
+            "hour_utc": int(signal_time.hour),
+            "trend_score": int(row.get("trend_score") or 0),
+        }
+        for col in feature_cols:
+            if col != "time_key":
+                item[col] = np.nan
+        if signal_time in by_time.index:
+            feat = by_time.loc[signal_time]
+            for col in available:
+                if col != "time_key":
+                    item[col] = float(feat[col])
+        live_rows.append(item)
+    return pd.DataFrame(live_rows)
+
+
 def filter_mask(trades, params):
     mask = np.ones(len(trades), dtype=bool)
     direction = trades["direction_num"].to_numpy()
@@ -164,6 +223,39 @@ def summarize_candidate(trades, base_metrics, row):
     }
 
 
+def live_replay_summary(live_trades, base_live_metrics, row):
+    if live_trades is None or live_trades.empty:
+        return {
+            "sample": "none",
+            "overall": None,
+            "wr_delta_pp": None,
+            "trade_retention_pct": None,
+            "note": "No settled live signal sample is available for replay.",
+        }
+    required = []
+    if "bbp_cap" in row["filter"]:
+        required.append("bbp")
+    for col in required:
+        if col not in live_trades.columns or live_trades[col].isna().all():
+            return {
+                "sample": "missing_features",
+                "overall": None,
+                "wr_delta_pp": None,
+                "trade_retention_pct": None,
+                "note": f"Live replay cannot evaluate {col}; wait for direct shadow samples with current signal fields.",
+            }
+    selected = live_trades.loc[filter_mask(live_trades, row["filter"])].copy().reset_index(drop=True)
+    overall = metric(selected["win"].to_numpy())
+    return {
+        "sample": "diagnostic_small_sample" if int(base_live_metrics.get("trades") or 0) < 50 else "readable",
+        "overall": overall,
+        "wr_delta_pp": round(float(overall.get("wr") or 0) - float(base_live_metrics.get("wr") or 0), 2)
+            if int(overall.get("trades") or 0) else None,
+        "trade_retention_pct": round(int(overall.get("trades") or 0) / max(1, int(base_live_metrics.get("trades") or 0)) * 100, 2),
+        "note": "Live replay is diagnostic only; direct live shadow samples are required for promotion.",
+    }
+
+
 def generate_scan_rows(trades, base_metrics):
     rows = []
     candidates = []
@@ -195,6 +287,21 @@ def generate_scan_rows(trades, base_metrics):
             "filter": {"skip_hours_utc": [hour]},
             "note": "Generated hour skip scan.",
         })
+    for hours in ([1, 8], [1, 8, 9], [8, 9]):
+        candidates.append({
+            "id": "SCAN_10m_skip_hours_" + "_".join(str(h) for h in hours),
+            "name": "skip_hours_" + "_".join(str(h) for h in hours),
+            "filter": {"skip_hours_utc": list(hours)},
+            "note": "Generated multi-hour live-drift scan.",
+        })
+    for bbp_cap in [1.05, 1.10, 1.20]:
+        for rsi_cap in [74, 76]:
+            candidates.append({
+                "id": f"SCAN_10m_bbp{int(bbp_cap * 100)}_rsi{rsi_cap}",
+                "name": f"bbp_{bbp_cap:.2f}_rsi_cap_{rsi_cap}",
+                "filter": {"bbp_cap": bbp_cap, "rsi_cap": rsi_cap},
+                "note": "Generated BBP plus RSI overextension scan.",
+            })
     for row in candidates:
         rows.append(summarize_candidate(trades, base_metrics, row))
     rows.sort(
@@ -215,9 +322,13 @@ def main():
     if df5 is None:
         raise SystemExit("No BTC data found")
     trades = build_current_trades(df5, cfg)
+    live_trades = build_live_replay_trades(df5, cfg)
     base_overall = metric(trades["win"].to_numpy())
+    base_live_overall = metric(live_trades["win"].to_numpy()) if not live_trades.empty else None
     base_blocks, base_block_summary = chronological_blocks(trades)
     shadows = [summarize_candidate(trades, base_overall, row) for row in HAND_PICKED_SHADOWS]
+    for row, source in zip(shadows, HAND_PICKED_SHADOWS):
+        row["live_replay"] = live_replay_summary(live_trades, base_live_overall or {}, source)
     scan_rows = generate_scan_rows(trades, base_overall)
     report = {
         "method": {
@@ -230,6 +341,7 @@ def main():
         "baseline": {
             "id": "BTC_10min",
             "overall": base_overall,
+            "live_replay_overall": base_live_overall,
             "time_block_summary": base_block_summary,
             "blocks": base_blocks,
         },
