@@ -50,9 +50,14 @@ async def lifespan(app: FastAPI):
     # 启动 Redis → WebSocket 实时数据转发器 (后台任务)
     from api.ws_handler import start_redis_forwarder
     forwarder_task = asyncio.create_task(start_redis_forwarder())
+    # 启动沙盒高频实时交易模拟引擎
+    from api.sandbox_engine import sandbox_engine
+    await sandbox_engine.start()
+    
     logger.info("api.started")
     yield
     # ---- shutdown ----
+    await sandbox_engine.stop()
     forwarder_task.cancel()
     await rest_client.close()
     await db.close()

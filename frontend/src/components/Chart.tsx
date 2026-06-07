@@ -118,6 +118,9 @@ export default function Chart({
       wickDownColor: '#ff1744',
     });
 
+    // 初始化买卖点标记插件
+    markersRef.current = createSeriesMarkers(candleSeries);
+
     let volumeSeries: any = null;
     if (showVolume) {
       volumeSeries = chart.addSeries(HistogramSeries, {
@@ -159,23 +162,19 @@ export default function Chart({
 
   // 数据更新：K线 + 成交量 + 标记统一处理
   useEffect(() => {
-    if (!candleSeriesRef.current || data.length === 0) return;
+    if (!candleSeriesRef.current) return;
 
-    // 先设置K线数据
+    // 先设置K线数据 (如果为空，传递空数组以清空 K 线)
     candleSeriesRef.current.setData(data);
 
     // 再设置成交量数据
-    if (volumeSeriesRef.current && volumeData && volumeData.length > 0) {
-      volumeSeriesRef.current.setData(volumeData);
+    if (volumeSeriesRef.current) {
+      volumeSeriesRef.current.setData(volumeData || []);
     }
 
-    // 最后设置异常标记（必须在setData之后）
-    if (anomalyMarkers && anomalyMarkers.length > 0) {
-      if (markersRef.current) {
-        markersRef.current.setMarkers(anomalyMarkers);
-      } else {
-        markersRef.current = createSeriesMarkers(candleSeriesRef.current, anomalyMarkers);
-      }
+    // 最后设置买卖点/异常标记（必须在setData之后）
+    if (markersRef.current) {
+      markersRef.current.setMarkers(anomalyMarkers || []);
     }
   }, [data, volumeData, anomalyMarkers]);
 

@@ -8,6 +8,7 @@ import Backtest from './views/Backtest';
 import Analysis from './views/Analysis';
 import Editor from './views/Editor';
 import Collection from './views/Collection';
+import HFSandbox from './views/HFSandbox';
 
 export default function App() {
   const [route, setRoute] = useState(window.location.hash || '#/');
@@ -30,6 +31,8 @@ export default function App() {
         return <Editor />;
       case '#/collection':
         return <Collection />;
+      case '#/hft':
+        return <HFSandbox />;
       case '#/':
       default:
         return <Sandbox />;
@@ -52,6 +55,16 @@ export default function App() {
             }}
           >
             💼 模拟交易沙盒
+          </a>
+          <a
+            href="#/hft"
+            style={{
+              ...styles.navItem,
+              background: route === '#/hft' ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+              color: route === '#/hft' ? 'var(--color-accent)' : 'var(--text-secondary)'
+            }}
+          >
+            ⚡ 高频订单薄模拟
           </a>
 
           <div style={{ ...styles.navSectionTitle, marginTop: '20px' }}>🧠 研究回测</div>

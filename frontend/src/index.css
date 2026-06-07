@@ -77,3 +77,9 @@ body {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
 }
 
+/* 修复 Windows 浏览器下下拉框选项继承前景色导致白底白字无法看清的问题 */
+select option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+}
+

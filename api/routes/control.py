@@ -643,3 +643,274 @@ async def fit_poisson(
         raise HTTPException(status_code=500, detail=f"拟合计算失败: {str(e)}")
 
 
+class BacktestRequest(BaseModel):
+    """历史回测请求参数"""
+    strategy: str = Field("poisson_anomaly", description="策略类型")
+    symbol: str = Field("BTCUSDT", description="交易对")
+    interval: str = Field("1m", description="K线周期")
+    initial_capital: float = Field(10000.0, description="初始资金")
+    commission: float = Field(0.05, description="佣金率 (%)")
+    start_date: str = Field(..., description="开始日期 (YYYY-MM-DD)")
+    end_date: str = Field(..., description="结束日期 (YYYY-MM-DD)")
+
+
+@router.post("/backtest")
+async def run_backtest_api(req: BacktestRequest) -> Dict[str, Any]:
+    """
+    策略历史数据回测引擎 API
+    运行真实的 ClickHouse 历史 K 线仿真回测，计算夏普比率、最大回撤、交易记录和资产曲线。
+    """
+    from common.clickhouse import clickhouse_client
+    from strategy.poisson_detector import PoissonDetector, AnomalyLevel
+    from datetime import datetime, timedelta
+    import numpy as np
+
+    symbol = req.symbol
+    interval = req.interval
+    initial_capital = req.initial_capital
+    commission_rate = req.commission / 100.0  # 0.05% -> 0.0005
+    
+    # 转换日期为 ClickHouse 查询格式
+    start_dt = f"{req.start_date} 00:00:00"
+    end_dt = f"{req.end_date} 23:59:59"
+    
+    # 1. 从 ClickHouse 查询历史 K 线数据
+    sql = """
+        SELECT 
+            toUnixTimestamp(open_time) * 1000 as open_time_ms,
+            open_price,
+            high_price,
+            low_price,
+            close_price,
+            volume,
+            trades_count
+        FROM klines
+        WHERE symbol = %(symbol)s AND interval = %(interval)s
+          AND open_time >= toDateTime(%(start_time)s)
+          AND open_time <= toDateTime(%(end_time)s)
+        ORDER BY open_time ASC
+    """
+    
+    try:
+        res = await clickhouse_client.query(
+            sql, 
+            {"symbol": symbol, "interval": interval, "start_time": start_dt, "end_time": end_dt}
+        )
+    except Exception as e:
+        logger.exception("backtest.clickhouse_query_failed")
+        raise HTTPException(status_code=500, detail=f"数据库查询失败: {str(e)}")
+        
+    if not res or not res.result_rows:
+        raise HTTPException(
+            status_code=400,
+            detail=f"ClickHouse 中没有 {symbol} ({interval}) 从 {req.start_date} 到 {req.end_date} 的历史数据，请先执行数据回填。"
+        )
+        
+    klines = []
+    for row in res.result_rows:
+        klines.append({
+            "open_time": int(row[0]),
+            "open_price": float(row[1]),
+            "high_price": float(row[2]),
+            "low_price": float(row[3]),
+            "close_price": float(row[4]),
+            "volume": float(row[5]),
+            "trades_count": int(row[6]),
+        })
+
+    # 2. 运行策略模拟
+    detector = PoissonDetector(window_size=60)
+    
+    active_trades = [] # 存储未平仓交易: { "qty", "entry_price", "side", "entry_idx", "exit_idx" }
+    completed_trades = [] # 存储所有交易动作
+    
+    balance = initial_capital
+    
+    # 我们按天来统计每日收盘资金，方便画资产曲线
+    daily_balances = {} # { "YYYY-MM-DD": balance }
+    
+    # 模拟逐根 K 线运行
+    for idx, k in enumerate(klines):
+        k_time = datetime.fromtimestamp(k["open_time"] / 1000.0)
+        date_str = k_time.strftime("%Y-%m-%d")
+        
+        # A. 检查并结算到期的未平仓头寸
+        closed_any = False
+        remaining_trades = []
+        for t in active_trades:
+            if idx >= t["exit_idx"]:
+                # 到期平仓
+                exit_price = k["close_price"]
+                qty = t["qty"]
+                side = t["side"]
+                
+                # 计算 PnL
+                if side == "BUY":
+                    pnl = qty * (exit_price - t["entry_price"])
+                else:
+                    pnl = qty * (t["entry_price"] - exit_price)
+                
+                # 手续费
+                fee = qty * (t["entry_price"] + exit_price) * commission_rate
+                net_pnl = pnl - fee
+                balance += net_pnl
+                
+                # 记录平仓动作
+                completed_trades.append({
+                    "trade_id": len(completed_trades) + 1,
+                    "symbol": symbol,
+                    "side": side,
+                    "action": "CLOSE",
+                    "price": round(exit_price, 2),
+                    "quantity": round(qty, 4),
+                    "pnl": round(net_pnl, 2),
+                    "timestamp": k_time.strftime("%Y-%m-%d %H:%M:%S")
+                })
+                closed_any = True
+            else:
+                remaining_trades.append(t)
+        active_trades = remaining_trades
+        
+        # B. 喂入数据给检测器，判断是否触发信号
+        res_detector = detector.update(k["trades_count"])
+        
+        # 只在有窗口覆盖且异常发生时触发
+        if idx >= 60 and res_detector.anomaly_level in (AnomalyLevel.ANOMALY, AnomalyLevel.EXTREME) and res_detector.direction == "HIGH":
+            # 简单多空方向：K 线收阳则做多，收阴则做空
+            side = "BUY" if k["close_price"] > k["open_price"] else "SELL"
+            
+            # 使用 10% 资金开仓
+            position_value = balance * 0.1
+            qty = position_value / k["close_price"]
+            
+            # 记录开仓动作
+            completed_trades.append({
+                "trade_id": len(completed_trades) + 1,
+                "symbol": symbol,
+                "side": side,
+                "action": "OPEN",
+                "price": round(k["close_price"], 2),
+                "quantity": round(qty, 4),
+                "pnl": 0.0,
+                "timestamp": k_time.strftime("%Y-%m-%d %H:%M:%S")
+            })
+            
+            active_trades.append({
+                "qty": qty,
+                "entry_price": k["close_price"],
+                "side": side,
+                "entry_idx": idx,
+                "exit_idx": idx + 10 # 默认持有 10 根 K 线
+            })
+            
+        # C. 记录当天的收盘余额 (每天的最后一个 K 线覆盖)
+        daily_balances[date_str] = balance
+
+    # 平仓所有残留的持仓
+    for t in active_trades:
+        exit_price = klines[-1]["close_price"]
+        qty = t["qty"]
+        side = t["side"]
+        if side == "BUY":
+            pnl = qty * (exit_price - t["entry_price"])
+        else:
+            pnl = qty * (t["entry_price"] - exit_price)
+        fee = qty * (t["entry_price"] + exit_price) * commission_rate
+        net_pnl = pnl - fee
+        balance += net_pnl
+        completed_trades.append({
+            "trade_id": len(completed_trades) + 1,
+            "symbol": symbol,
+            "side": side,
+            "action": "CLOSE",
+            "price": round(exit_price, 2),
+            "quantity": round(qty, 4),
+            "pnl": round(net_pnl, 2),
+            "timestamp": datetime.fromtimestamp(klines[-1]["open_time"] / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
+        })
+    active_trades.clear()
+
+    # 3. 统计各种回测指标
+    total_trades = sum(1 for t in completed_trades if t["action"] == "OPEN")
+    if total_trades > 0:
+        # 只统计 CLOSE 动作的盈亏
+        trade_pnls = [t["pnl"] for t in completed_trades if t["action"] == "CLOSE"]
+        wins = sum(1 for p in trade_pnls if p > 0)
+        win_rate = wins / len(trade_pnls) if trade_pnls else 0.0
+        
+        gross_profits = sum(p for p in trade_pnls if p > 0)
+        gross_losses = sum(p for p in trade_pnls if p < 0)
+        profit_factor = gross_profits / abs(gross_losses) if gross_losses != 0 else (gross_profits if gross_profits > 0 else 1.0)
+    else:
+        win_rate = 0.0
+        profit_factor = 1.0
+        trade_pnls = []
+
+    # 构造每日资产曲线和最大回撤
+    equity_curve = []
+    current_peak = initial_capital
+    max_dd = 0.0
+    
+    # 填充没有交易的日期的 balance
+    start_date_obj = datetime.strptime(req.start_date, "%Y-%m-%d")
+    end_date_obj = datetime.strptime(req.end_date, "%Y-%m-%d")
+    days_count = (end_date_obj - start_date_obj).days + 1
+    
+    last_known_balance = initial_capital
+    for d_idx in range(days_count):
+        curr_date = start_date_obj + timedelta(days=d_idx)
+        curr_date_str = curr_date.strftime("%Y-%m-%d")
+        
+        day_balance = daily_balances.get(curr_date_str, last_known_balance)
+        last_known_balance = day_balance
+        
+        if day_balance > current_peak:
+            current_peak = day_balance
+        
+        dd = ((current_peak - day_balance) / current_peak) * 100 if current_peak > 0 else 0.0
+        if dd > max_dd:
+            max_dd = dd
+            
+        equity_curve.append({
+            "time": curr_date_str,
+            "balance": round(day_balance, 2),
+            "drawdown": -round(dd, 2)
+        })
+
+    total_return = ((balance - initial_capital) / initial_capital) * 100
+    
+    # 粗暴年化率
+    days = max(days_count, 1)
+    if balance > 0:
+        cagr = ((balance / initial_capital) ** (365.0 / days) - 1.0) * 100
+    else:
+        cagr = -100.0
+
+    # 夏普比率 (基于每日收益率)
+    daily_returns = []
+    for i in range(1, len(equity_curve)):
+        prev_b = equity_curve[i-1]["balance"]
+        curr_b = equity_curve[i]["balance"]
+        if prev_b > 0:
+            daily_returns.append((curr_b - prev_b) / prev_b)
+        else:
+            daily_returns.append(0.0)
+            
+    if daily_returns and np.std(daily_returns) > 0:
+        sharpe_ratio = (np.mean(daily_returns) / np.std(daily_returns)) * np.sqrt(365)
+    else:
+        sharpe_ratio = 0.0
+
+    return {
+        "total_return": round(total_return, 2),
+        "cagr": round(cagr, 2),
+        "max_drawdown": round(max_dd, 2),
+        "sharpe_ratio": round(sharpe_ratio, 2),
+        "win_rate": round(win_rate, 3),
+        "profit_factor": round(profit_factor, 2),
+        "total_trades": total_trades,
+        "equity_curve": equity_curve,
+        "trades": completed_trades[::-1] # 最新成交排在最前面
+    }
+
+

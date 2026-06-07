@@ -1,7 +1,7 @@
 /**
  * 策略历史回测中心 (Backtest Studio)
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface TradeResult {
@@ -30,6 +30,7 @@ interface BacktestResults {
 export default function Backtest() {
   const [strategy, setStrategy] = useState('poisson_anomaly');
   const [symbol, setSymbol] = useState('BTCUSDT');
+  const [availableSymbols, setAvailableSymbols] = useState<string[]>(['BTCUSDT', 'ETHUSDT']);
   const [timeframe, setTimeframe] = useState('1m');
   const [initialCapital, setInitialCapital] = useState(10000);
   const [commission, setCommission] = useState(0.05); // 0.05%
@@ -44,99 +45,65 @@ export default function Backtest() {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<BacktestResults | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // 加载系统配置中的所有可用币种
+  useEffect(() => {
+    const fetchSymbols = async () => {
+      try {
+        const res = await fetch('/api/control/symbols');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.symbols && data.symbols.length > 0) {
+            setAvailableSymbols(data.symbols);
+          }
+        }
+      } catch (err) {
+        console.error('获取可用币种列表失败:', err);
+      }
+    };
+    fetchSymbols();
+  }, []);
 
   const startBacktest = async (e: React.FormEvent) => {
     e.preventDefault();
     setRunning(true);
-    setProgress(10);
+    setProgress(20);
     setResults(null);
+    setErrorMsg(null);
 
-    // 模拟运行进度
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setRunning(false);
-          // 生成 Mock 回测数据
-          generateMockResults();
-          return 100;
-        }
-        return prev + 15;
+    try {
+      const response = await fetch('/api/control/backtest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          strategy,
+          symbol,
+          interval: timeframe,
+          initial_capital: initialCapital,
+          commission,
+          start_date: startDate,
+          end_date: endDate,
+        }),
       });
-    }, 300);
-  };
 
-  const generateMockResults = () => {
-    const startBalance = initialCapital;
-    const isPoisson = strategy === 'poisson_anomaly';
-    
-    // 构造模拟资产曲线与最大回撤
-    const equity_curve = [];
-    let currentBalance = startBalance;
-    let maxBalance = startBalance;
-    let maxDdown = 0;
+      setProgress(60);
 
-    const baseDate = new Date(startDate);
-    const dayDiff = Math.ceil((new Date(endDate).getTime() - baseDate.getTime()) / (24 * 3600 * 1000));
-
-    for (let i = 0; i <= dayDiff; i++) {
-      const currentDate = new Date(baseDate);
-      currentDate.setDate(baseDate.getDate() + i);
-      const dateStr = currentDate.toISOString().slice(0, 10);
-
-      // 根据策略特征生成正期望或负期望曲线
-      const dailyChangePercent = isPoisson 
-        ? (Math.random() - 0.42) * 0.045 // 略微正期望
-        : (Math.random() - 0.48) * 0.038;
-
-      currentBalance = currentBalance * (1 + dailyChangePercent);
-      if (currentBalance > maxBalance) {
-        maxBalance = currentBalance;
+      if (response.ok) {
+        const data = await response.json();
+        setResults(data);
+      } else {
+        const errData = await response.json();
+        setErrorMsg(errData.detail || '回测执行失败。');
       }
-      const dd = ((maxBalance - currentBalance) / maxBalance) * 100;
-      if (dd > maxDdown) {
-        maxDdown = dd;
-      }
-
-      equity_curve.push({
-        time: dateStr,
-        balance: Math.round(currentBalance),
-        drawdown: -Math.round(dd * 10) / 10
-      });
+    } catch (err) {
+      setErrorMsg('网络连接错误，请确认后端 API 服务已启动。');
+    } finally {
+      setProgress(100);
+      setRunning(false);
     }
-
-    const total_return = ((currentBalance - startBalance) / startBalance) * 100;
-
-    // 模拟交易账本
-    const trades: TradeResult[] = [];
-    const numTrades = Math.floor(20 + Math.random() * 30);
-    const priceBase = symbol === 'BTCUSDT' ? 68000 : 3500;
-
-    for (let t = 1; t <= numTrades; t++) {
-      const pnlVal = (Math.random() - 0.4) * (startBalance * 0.012);
-      trades.push({
-        trade_id: t,
-        symbol,
-        side: Math.random() > 0.5 ? 'BUY' : 'SELL',
-        action: t % 2 === 1 ? 'OPEN' : 'CLOSE',
-        price: Math.round(priceBase + (Math.random() - 0.5) * (priceBase * 0.05)),
-        quantity: symbol === 'BTCUSDT' ? 0.05 : 1.2,
-        pnl: Math.round(pnlVal * 100) / 100,
-        timestamp: new Date(Date.now() - (numTrades - t) * 3600 * 1000 * 12).toLocaleString()
-      });
-    }
-
-    setResults({
-      total_return,
-      cagr: total_return * 1.8, // 粗暴拟合年化
-      max_drawdown: maxDdown,
-      sharpe_ratio: isPoisson ? 2.14 : 1.45,
-      win_rate: isPoisson ? 0.565 : 0.495,
-      profit_factor: isPoisson ? 1.54 : 1.18,
-      total_trades: numTrades,
-      equity_curve,
-      trades: trades.reverse()
-    });
   };
 
   return (
@@ -161,8 +128,9 @@ export default function Backtest() {
             <div style={styles.formGroup}>
               <label style={styles.label}>回测交易对</label>
               <select value={symbol} onChange={(e) => setSymbol(e.target.value)} style={styles.select}>
-                <option value="BTCUSDT">BTCUSDT</option>
-                <option value="ETHUSDT">ETHUSDT</option>
+                {availableSymbols.map(sym => (
+                  <option key={sym} value={sym}>{sym}</option>
+                ))}
               </select>
             </div>
 
@@ -214,6 +182,24 @@ export default function Backtest() {
 
         {/* 右栏：结果展现区 */}
         <div style={styles.resultsArea}>
+          {errorMsg && (
+            <div style={{
+              color: '#ff453a',
+              background: 'rgba(255, 69, 58, 0.08)',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 69, 58, 0.2)',
+              fontSize: '13px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <span>⚠️</span>
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
           {running && (
             <div className="card" style={styles.progressCard}>
               <h4 style={styles.progressTitle}>时序数据加载中...</h4>

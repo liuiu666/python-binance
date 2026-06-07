@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 
 from common.db import db
 from common.logger import get_logger
+from api.sandbox_engine import sandbox_engine
+
 
 logger = get_logger(__name__)
 
@@ -156,3 +158,97 @@ async def place_paper_order(req: PaperOrderRequest) -> Dict[str, Any]:
     except Exception as e:
         logger.exception("paper.order_error")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class SandboxStateRequest(BaseModel):
+    state: Dict[str, Any] = Field(..., description="沙盒模拟交易的配置状态")
+
+
+class SandboxOrderRequest(BaseModel):
+    symbol: str = Field(..., description="交易对，如 BTCUSDT")
+    side: str = Field(..., description="BUY or SELL")
+    type: str = Field(..., description="MARKET or LIMIT")
+    qty: float = Field(..., gt=0, description="下单数量")
+    price: float = Field(default=0.0, description="限价价格，市价单可不填")
+
+
+class SandboxCancelRequest(BaseModel):
+    id: str = Field(..., description="待取消的挂单ID")
+
+
+@router.get("/paper/sandbox/state")
+async def get_sandbox_state() -> Dict[str, Any]:
+    """
+    获取当前运行中的高频模拟交易沙盒状态（从内存缓存获取，具备极高响应速度）
+    """
+    return {"status": "success", "state": sandbox_engine.state}
+
+
+@router.post("/paper/sandbox/state")
+async def save_sandbox_state(req: SandboxStateRequest) -> Dict[str, Any]:
+    """
+    更新模拟交易沙盒的控制与策略参数（仅更新可调配置，防止前端状态覆盖成交数据）
+    """
+    try:
+        await sandbox_engine.update_config(req.state)
+        return {"status": "success"}
+    except Exception as e:
+        logger.exception("sandbox.update_config_error")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/paper/sandbox/order")
+async def place_sandbox_order(req: SandboxOrderRequest) -> Dict[str, Any]:
+    """
+    手动下单模拟接口 (市价/限价)
+    """
+    try:
+        res = await sandbox_engine.place_manual_order(req.model_dump())
+        if res.get("status") == "success":
+            return res
+        raise HTTPException(status_code=400, detail=res.get("message", "下单失败"))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("sandbox.place_order_error")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/paper/sandbox/cancel")
+async def cancel_sandbox_order(req: SandboxCancelRequest) -> Dict[str, Any]:
+    """
+    取消沙盒高频限价挂单
+    """
+    try:
+        await sandbox_engine.cancel_limit_order(req.id)
+        return {"status": "success"}
+    except Exception as e:
+        logger.exception("sandbox.cancel_order_error")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/paper/sandbox/close")
+async def close_sandbox_position() -> Dict[str, Any]:
+    """
+    一键市价平仓当前沙盒仓位
+    """
+    try:
+        await sandbox_engine.execute_market_close()
+        return {"status": "success"}
+    except Exception as e:
+        logger.exception("sandbox.close_position_error")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/paper/sandbox/reset")
+async def reset_sandbox_account() -> Dict[str, Any]:
+    """
+    重置沙盒模拟账户余额、清空挂单、仓位与成交记录
+    """
+    try:
+        await sandbox_engine.reset_account()
+        return {"status": "success"}
+    except Exception as e:
+        logger.exception("sandbox.reset_account_error")
+        raise HTTPException(status_code=500, detail=str(e))
+
