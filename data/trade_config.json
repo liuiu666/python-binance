@@ -1,7 +1,7 @@
 {
   "amount": "5",
   "duration": "30",
-  "autoTrade": false,
+  "autoTrade": true,
   "minConfidence": 35,
   "tiersEnabled": true,
   "tiers": [

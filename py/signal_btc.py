@@ -3,6 +3,7 @@
 Outputs independent BTC_10min and BTC_30min signals for the tablet executor.
 """
 import json
+import math
 import msvcrt
 import os
 import pickle
@@ -311,6 +312,15 @@ STATEFUL_SHADOW_CANDIDATES = [
         "note": "10m stateful overlay: BBP+RSI+confidence guard plus one open shadow position at a time.",
     },
 ]
+META_GATE_SHADOW_CANDIDATES = [
+    {
+        "id": "SHADOW_META_30m_signal_quality_th65",
+        "base": "BTC_30min",
+        "model_id": "BTC_30min_signal_quality",
+        "threshold": 0.65,
+        "note": "30m second-stage signal-quality gate; meta-OOS +1.47pp with 57% retention, shadow only.",
+    },
+]
 RULE_SHADOW_CANDIDATES = [
     {
         "id": "SHADOW_RULE_10m_rsi_reversal_30_70",
@@ -516,6 +526,110 @@ def trend_label(score):
     return "neutral"
 
 
+def htf_score(row):
+    score = 0
+    thresholds = {
+        "htf_ret_1h": 0.0010,
+        "htf_ret_4h": 0.0025,
+        "htf_ret_24h": 0.0060,
+    }
+    for col, eps in thresholds.items():
+        v = float(row.get(col, 0) or 0)
+        if v > eps:
+            score += 1
+        elif v < -eps:
+            score -= 1
+    for col in ["htf_pos_4h", "htf_pos_24h"]:
+        v = float(row.get(col, 0.5) or 0.5)
+        if v >= 0.65:
+            score += 1
+        elif v <= 0.35:
+            score -= 1
+    return int(score)
+
+
+def htf_label(score):
+    if score >= 3:
+        return "strong_up"
+    if score <= -3:
+        return "strong_down"
+    if score > 0:
+        return "mild_up"
+    if score < 0:
+        return "mild_down"
+    return "range"
+
+
+def direction_sign(signal):
+    return 1 if signal == "UP" else -1
+
+
+def directional_alignment(signal, score):
+    return int(score or 0) * direction_sign(signal)
+
+
+def market_confirmation(signal, trend_val, htf_val, taker_ratio, atr_exp):
+    """Score whether current market structure supports the proposed direction."""
+    short_align = directional_alignment(signal, trend_val)
+    htf_align = directional_alignment(signal, htf_val)
+    score = 0
+    reasons = []
+
+    if short_align >= 3:
+        score += 2
+        reasons.append("short_trend_strong_align")
+    elif short_align > 0:
+        score += 1
+        reasons.append("short_trend_align")
+    elif short_align <= -3:
+        score -= 2
+        reasons.append("short_trend_strong_counter")
+    elif short_align < 0:
+        score -= 1
+        reasons.append("short_trend_counter")
+
+    if htf_align >= 3:
+        score += 2
+        reasons.append("htf_strong_align")
+    elif htf_align > 0:
+        score += 1
+        reasons.append("htf_align")
+    elif htf_align <= -3:
+        score -= 2
+        reasons.append("htf_strong_counter")
+    elif htf_align < 0:
+        score -= 1
+        reasons.append("htf_counter")
+
+    taker_align = 0
+    if taker_ratio >= 1.05:
+        taker_align = 1
+    elif taker_ratio <= 0.95:
+        taker_align = -1
+    if taker_align:
+        if taker_align == direction_sign(signal):
+            score += 1
+            reasons.append("taker_align")
+        else:
+            score -= 1
+            reasons.append("taker_counter")
+
+    if 0.65 <= float(atr_exp or 0) <= 2.25:
+        score += 1
+        reasons.append("volatility_normal")
+    elif float(atr_exp or 0) > 2.8:
+        score -= 1
+        reasons.append("volatility_hot")
+
+    return {
+        "score": int(score),
+        "reasons": reasons,
+        "short_align": int(short_align),
+        "htf_align": int(htf_align),
+        "taker_align": int(taker_align),
+    }
+
+
 class Strategy:
     def __init__(self, strategy_id, cfg):
         self.id = strategy_id
@@ -529,6 +643,10 @@ class Strategy:
         self.vol_min_rank = None if self.vol_min_rank is None else float(self.vol_min_rank)
         self.agree_mode = cfg.get("agree_mode", "all3")
         self.skip_hours_utc = sorted({int(h) for h in cfg.get("skip_hours_utc", [])})
+        self.session_filter_mode = cfg.get("session_filter_mode", "hard")
+        self.session_confidence_bump = float(cfg.get("session_confidence_bump", 8))
+        self.session_min_market_score = int(cfg.get("session_min_market_score", 2))
+        self.session_block_strong_countertrend = bool(cfg.get("session_block_strong_countertrend", True))
         self.fixed_amount = cfg.get("fixed_amount")
         self.model_label = model_label_for(strategy_id, cfg)
         self.countertrend_max_abs_trend6 = cfg.get("countertrend_max_abs_trend6")
@@ -565,6 +683,7 @@ class Strategy:
             f"| rsi_cap={self.rsi_extreme_cap if self.rsi_extreme_cap is not None else 'none'} "
             f"| conf_max={self.confidence_max if self.confidence_max is not None else 'none'} "
             f"| skip_hours_utc={self.skip_hours_utc or 'none'} "
+            f"| session_mode={self.session_filter_mode} "
             f"| amount={self.fixed_amount or 'config'}"
         )
 
@@ -589,6 +708,7 @@ class Strategy:
         rsi_val = float(X[0, self.feat_cols.index("rsi14")])
         rsi_extreme = rsi_val < self.rsi_lo or rsi_val > self.rsi_hi
         bbp_val = float(last.iloc[0].get("bbp", 0.5) or 0.5)
+        bbw_val = float(last.iloc[0].get("bbw", 0) or 0)
         hlp20_val = float(last.iloc[0].get("hlp20", 0.5) or 0.5)
         hlp50_val = float(last.iloc[0].get("hlp50", 0.5) or 0.5)
         trend12_val = float(last.iloc[0].get("trend12", 0) or 0)
@@ -596,6 +716,8 @@ class Strategy:
         pre50_val = float(last.iloc[0].get("pre50", 0) or 0)
         ema_stack_val = float(last.iloc[0].get("ema_stack", 0) or 0)
         atrp = float(X[0, self.feat_cols.index("atrp")]) if "atrp" in self.feat_cols else None
+        atr_exp_val = float(last.iloc[0].get("atr_exp", 0) or 0)
+        vr_val = float(last.iloc[0].get("vr", 1) or 1)
         vol_rank = None
         vol_ok = True
         if self.vol_min_rank is not None and "atrp" in fdf.columns:
@@ -606,22 +728,57 @@ class Strategy:
 
         candle_time = pd.to_datetime(df5["time"].iloc[-1], utc=True)
         candle_close_time = candle_time + pd.Timedelta(minutes=5)
-        session_ok = candle_time.hour not in self.skip_hours_utc
+        session_risk = candle_time.hour in self.skip_hours_utc
+        session_hard_block = session_risk and self.session_filter_mode == "hard"
+        session_ok = not session_hard_block
         trend_val = trend_score(last.iloc[0])
+        htf_val = htf_score(last.iloc[0])
+        taker_ratio_val = float(last.iloc[0].get("taker_ratio", 1) or 1)
 
         sig = None
         conf = None
+        strength_val = round(abs(avg - 0.5) * 2 * 100, 1)
+        base_strength_min = round(abs(self.threshold - 0.5) * 2 * 100, 1)
+        session_gate_ok = True
+        session_gate_reasons = []
+        market_confirm = {
+            "score": 0,
+            "reasons": [],
+            "short_align": 0,
+            "htf_align": 0,
+            "taker_align": 0,
+        }
         if agree and high_conf and rsi_extreme and vol_ok and session_ok:
             if self.agree_mode == "majority":
                 sig = "UP" if majority_up else "DOWN"
             else:
                 sig = "UP" if avg >= 0.5 else "DOWN"
-            conf = round(abs(avg - 0.5) * 2 * 100, 1)
+            conf = strength_val
+            market_confirm = market_confirmation(sig, trend_val, htf_val, taker_ratio_val, atr_exp_val)
+            if session_risk and self.session_filter_mode == "soft":
+                if strength_val < base_strength_min + self.session_confidence_bump:
+                    session_gate_ok = False
+                    session_gate_reasons.append("session_strength_bump")
+                if market_confirm["score"] < self.session_min_market_score:
+                    session_gate_ok = False
+                    session_gate_reasons.append("market_confirm_score")
+                if (
+                    self.session_block_strong_countertrend
+                    and market_confirm["short_align"] <= -3
+                    and market_confirm["htf_align"] <= 0
+                ):
+                    session_gate_ok = False
+                    session_gate_reasons.append("strong_countertrend_in_risk_session")
+            if session_risk and self.session_filter_mode == "hard":
+                session_gate_ok = False
+                session_gate_reasons.append("session_hard_block")
+            if not session_gate_ok:
+                sig = None
+                conf = None
         countertrend_guard_ok = True
         regime_filter_ok = True
         regime_filter_reasons = []
         trend6_val = float(last.iloc[0].get("trend6", 0) or 0)
-        strength_val = round(abs(avg - 0.5) * 2 * 100, 1)
         if sig:
             countertrend = (sig == "UP" and trend_val <= -3) or (sig == "DOWN" and trend_val >= 3)
             if countertrend:
@@ -665,12 +822,30 @@ class Strategy:
             "rsi_value": round(rsi_val, 1),
             "trend_score": trend_val,
             "trend_label": trend_label(trend_val),
+            "htf_score": htf_val,
+            "htf_label": htf_label(htf_val),
+            "htf_ret_1h": round(float(last.iloc[0].get("htf_ret_1h", 0) or 0), 6),
+            "htf_ret_4h": round(float(last.iloc[0].get("htf_ret_4h", 0) or 0), 6),
+            "htf_ret_24h": round(float(last.iloc[0].get("htf_ret_24h", 0) or 0), 6),
+            "htf_pos_1h": round(float(last.iloc[0].get("htf_pos_1h", 0.5) or 0.5), 4),
+            "htf_pos_4h": round(float(last.iloc[0].get("htf_pos_4h", 0.5) or 0.5), 4),
+            "htf_pos_24h": round(float(last.iloc[0].get("htf_pos_24h", 0.5) or 0.5), 4),
+            "htf_rng_1h": round(float(last.iloc[0].get("htf_rng_1h", 0) or 0), 6),
+            "htf_rng_4h": round(float(last.iloc[0].get("htf_rng_4h", 0) or 0), 6),
+            "htf_rng_24h": round(float(last.iloc[0].get("htf_rng_24h", 0) or 0), 6),
             "trend6": round(trend6_val, 6),
             "trend12": round(trend12_val, 6),
             "trend30": round(trend30_val, 6),
             "pre50": round(pre50_val, 6),
             "ema_stack": round(ema_stack_val, 3),
             "bbp": round(bbp_val, 4),
+            "bbw": round(bbw_val, 6),
+            "atrp": None if atrp is None else round(float(atrp), 8),
+            "atr_exp": round(atr_exp_val, 6),
+            "vr": round(vr_val, 6),
+            "taker_ratio": round(taker_ratio_val, 6),
+            "ls_ratio": round(float(last.iloc[0].get("ls_ratio", 1) or 1), 6),
+            "fund_rate": round(float(last.iloc[0].get("fund_rate", last.iloc[0].get("funding_rate", 0)) or 0), 8),
             "hlp20": round(hlp20_val, 4),
             "hlp50": round(hlp50_val, 4),
             "countertrend_guard_ok": countertrend_guard_ok,
@@ -685,7 +860,18 @@ class Strategy:
             "vol_rank": None if vol_rank is None else round(vol_rank, 3),
             "vol_min_rank": self.vol_min_rank,
             "session_ok": session_ok,
+            "session_risk": session_risk,
+            "session_filter_mode": self.session_filter_mode,
+            "session_gate_ok": session_gate_ok,
+            "session_gate_reasons": session_gate_reasons,
+            "session_confidence_bump": self.session_confidence_bump,
+            "session_min_market_score": self.session_min_market_score,
             "skip_hours_utc": self.skip_hours_utc,
+            "market_confirm_score": market_confirm["score"],
+            "market_confirm_reasons": market_confirm["reasons"],
+            "short_align": market_confirm["short_align"],
+            "htf_align": market_confirm["htf_align"],
+            "taker_align": market_confirm["taker_align"],
             "signal": sig,
             "confidence": conf,
             "interval_min": self.interval_min,
@@ -767,6 +953,7 @@ class RuleShadowStrategy:
         session_ok = candle_time.hour not in self.skip_hours_utc
         rsi_val = float(row.get("rsi14"))
         score = trend_score(row)
+        htf_val = htf_score(row)
         sig = None
         if self.kind == "rsi_reversal":
             sig = self._rsi_reversal(rsi_val, score)
@@ -803,6 +990,14 @@ class RuleShadowStrategy:
             "rsi_value": round(rsi_val, 1),
             "trend_score": score,
             "trend_label": trend_label(score),
+            "htf_score": htf_val,
+            "htf_label": htf_label(htf_val),
+            "htf_ret_1h": round(float(row.get("htf_ret_1h", 0) or 0), 6),
+            "htf_ret_4h": round(float(row.get("htf_ret_4h", 0) or 0), 6),
+            "htf_ret_24h": round(float(row.get("htf_ret_24h", 0) or 0), 6),
+            "htf_pos_1h": round(float(row.get("htf_pos_1h", 0.5) or 0.5), 4),
+            "htf_pos_4h": round(float(row.get("htf_pos_4h", 0.5) or 0.5), 4),
+            "htf_pos_24h": round(float(row.get("htf_pos_24h", 0.5) or 0.5), 4),
             "bbp": round(float(row.get("bbp", 0.5) or 0.5), 4),
             "session_ok": session_ok,
             "skip_hours_utc": self.skip_hours_utc,
@@ -863,6 +1058,135 @@ class StatefulShadowOverlay:
             out["stateful_filter_reasons"] = ["one_open_position"]
             return out
         self.active_until = entry_time + duration
+        return out
+
+
+def trend_direction_value(score):
+    score = int(score or 0)
+    if score >= 3:
+        return 1
+    if score <= -3:
+        return 0
+    return -1
+
+
+class MetaGateShadow:
+    def __init__(self, meta):
+        self.meta = meta
+        self.id = meta["id"]
+        self.base = meta["base"]
+        self.model_id = meta["model_id"]
+        self.threshold = float(meta["threshold"])
+        prefix = os.path.join(OUT, f"meta_gate_{self.model_id}")
+        self.model = None
+        self.feat_cols = []
+        try:
+            with open(f"{prefix}_lgb.pkl", "rb") as f:
+                self.model = pickle.load(f)
+            with open(f"{prefix}_cols.json", "r", encoding="utf-8") as f:
+                self.feat_cols = json.load(f)
+            print(
+                f"[Signal] {self.id} -> meta gate | base={self.base} "
+                f"| model={self.model_id} | th={self.threshold} | features={len(self.feat_cols)}"
+            )
+        except Exception as e:
+            print(f"[Signal] {self.id} disabled; meta gate model load failed: {e}")
+
+    def _features(self, base_result):
+        direction = base_result.get("signal")
+        direction_num = 1 if direction == "UP" else 0
+        trend_score_val = int(base_result.get("trend_score") or 0)
+        htf_score_val = int(base_result.get("htf_score") or 0)
+        short_trend_dir = trend_direction_value(trend_score_val)
+        htf_trend_dir = trend_direction_value(htf_score_val)
+        short_counter = short_trend_dir >= 0 and direction_num != short_trend_dir
+        htf_counter = htf_trend_dir >= 0 and direction_num != htf_trend_dir
+        both_counter = short_counter and htf_counter and short_trend_dir == htf_trend_dir
+        hour = pd.to_datetime(base_result.get("time"), utc=True).hour
+        row = {
+            "avg": float(base_result.get("avg_prob") or 0.5),
+            "strength": float(base_result.get("confidence") or 0),
+            "rsi14": float(base_result.get("rsi_value") or 50),
+            "bbp": float(base_result.get("bbp") or 0.5),
+            "bbw": float(base_result.get("bbw") or 0),
+            "atrp": float(base_result.get("atrp") or 0),
+            "atr_exp": float(base_result.get("atr_exp") or 0),
+            "vr": float(base_result.get("vr") or 1),
+            "trend6": float(base_result.get("trend6") or 0),
+            "trend12": float(base_result.get("trend12") or 0),
+            "trend30": float(base_result.get("trend30") or 0),
+            "pre50": float(base_result.get("pre50") or 0),
+            "ema_stack": float(base_result.get("ema_stack") or 0),
+            "trend_score": trend_score_val,
+            "htf_score": htf_score_val,
+            "htf_ret_1h": float(base_result.get("htf_ret_1h") or 0),
+            "htf_ret_4h": float(base_result.get("htf_ret_4h") or 0),
+            "htf_ret_24h": float(base_result.get("htf_ret_24h") or 0),
+            "htf_pos_1h": float(base_result.get("htf_pos_1h") or 0.5),
+            "htf_pos_4h": float(base_result.get("htf_pos_4h") or 0.5),
+            "htf_pos_24h": float(base_result.get("htf_pos_24h") or 0.5),
+            "htf_rng_1h": float(base_result.get("htf_rng_1h") or 0),
+            "htf_rng_4h": float(base_result.get("htf_rng_4h") or 0),
+            "htf_rng_24h": float(base_result.get("htf_rng_24h") or 0),
+            "taker_ratio": float(base_result.get("taker_ratio") or 1),
+            "ls_ratio": float(base_result.get("ls_ratio") or 1),
+            "fund_rate": float(base_result.get("fund_rate") or 0),
+            "short_align": trend_score_val if direction_num == 1 else -trend_score_val,
+            "htf_align": htf_score_val if direction_num == 1 else -htf_score_val,
+            "is_down": 1 if direction == "DOWN" else 0,
+            "short_countertrend": 1 if short_counter else 0,
+            "htf_countertrend": 1 if htf_counter else 0,
+            "both_countertrend": 1 if both_counter else 0,
+            "hour_sin": math.sin(2 * math.pi * hour / 24),
+            "hour_cos": math.cos(2 * math.pi * hour / 24),
+        }
+        return [[float(row.get(c, 0) or 0) for c in self.feat_cols]], {
+            "short_countertrend": short_counter,
+            "htf_countertrend": htf_counter,
+            "both_countertrend": both_counter,
+        }
+
+    def predict(self, base_result):
+        if not base_result:
+            return None
+        out = dict(base_result)
+        out.update({
+            "strategy_id": self.id,
+            "label": self.id,
+            "shadow": True,
+            "shadow_type": "meta_gate",
+            "shadow_base_strategy": self.base,
+            "meta_gate_model": self.model_id,
+            "meta_threshold": self.threshold,
+            "meta_gate_ok": False,
+            "meta_gate_reasons": [],
+            "fixed_amount": True,
+            "amount": "5",
+        })
+        if self.model is None:
+            out["signal"] = None
+            out["confidence"] = None
+            out["meta_gate_reasons"] = ["model_missing"]
+            return out
+        if not base_result.get("signal"):
+            out["signal"] = None
+            out["confidence"] = None
+            out["meta_gate_reasons"] = ["base_no_signal"]
+            return out
+        X, flags = self._features(base_result)
+        meta_prob = float(self.model.predict_proba(X)[0, 1])
+        gate_ok = meta_prob >= self.threshold
+        out.update({
+            "meta_prob": round(meta_prob, 4),
+            "meta_gate_ok": gate_ok,
+            "meta_short_countertrend": flags["short_countertrend"],
+            "meta_htf_countertrend": flags["htf_countertrend"],
+            "meta_both_countertrend": flags["both_countertrend"],
+        })
+        if not gate_ok:
+            out["signal"] = None
+            out["confidence"] = None
+            out["meta_gate_reasons"] = ["meta_prob_below_threshold"]
         return out
 
 
@@ -930,6 +1254,13 @@ def status_text(r):
         parts.append(f"RSI={r['rsi_value']}")
     if not r.get("vol_ok", True):
         parts.append(f"vol={r.get('vol_rank')}")
+    if r.get("session_filter_mode") == "soft" and r.get("session_risk"):
+        if r.get("session_gate_ok") is False:
+            parts.append("session risk " + ",".join(r.get("session_gate_reasons") or []))
+        else:
+            parts.append(f"session risk soft score={r.get('market_confirm_score')}")
+    elif r.get("session_ok") is False:
+        parts.append("session hard block")
     if r.get("countertrend_guard_ok") is False:
         parts.append("countertrend hot")
     if r.get("regime_filter_ok") is False:
@@ -965,6 +1296,7 @@ for shadow in RULE_SHADOW_CANDIDATES:
     base_cfg = dict(configs[shadow["base"]])
     rule_shadow_strategies.append((shadow, RuleShadowStrategy(shadow, base_cfg)))
 stateful_shadow_overlays = [(shadow, StatefulShadowOverlay(shadow)) for shadow in STATEFUL_SHADOW_CANDIDATES]
+meta_gate_shadows = [(shadow, MetaGateShadow(shadow)) for shadow in META_GATE_SHADOW_CANDIDATES]
 last_audit_keys = load_audit_keys(SIGNAL_AUDIT_FILE)
 
 print("[Signal] Loading BTC history...")
@@ -1040,6 +1372,26 @@ while True:
                         f"  {r['time']} {r['strategy_id']} stateful-shadow "
                         f"RSI={r['rsi_value']:.0f} {status_text(r)}"
                     )
+            if len(last_audit_keys) > 5000:
+                last_audit_keys = set(list(last_audit_keys)[-2000:])
+        for shadow_meta, meta_gate in meta_gate_shadows:
+            r = meta_gate.predict(signals.get(shadow_meta["base"]))
+            if not r:
+                continue
+            r["shadow_note"] = shadow_meta["note"]
+            key = f"shadow_candidate|{r.get('strategy_id')}|{r.get('time')}"
+            if key not in last_audit_keys:
+                append_jsonl(SIGNAL_AUDIT_FILE, {
+                    "event": "shadow_candidate",
+                    "serverTime": int(time.time() * 1000),
+                    **r,
+                })
+                last_audit_keys.add(key)
+            if r.get("signal"):
+                print(
+                    f"  {r['time']} {r['strategy_id']} meta-shadow "
+                    f"p={r.get('meta_prob')} RSI={r['rsi_value']:.0f} {status_text(r)}"
+                )
             if len(last_audit_keys) > 5000:
                 last_audit_keys = set(list(last_audit_keys)[-2000:])
         for shadow_meta, shadow_strategy in rule_shadow_strategies:

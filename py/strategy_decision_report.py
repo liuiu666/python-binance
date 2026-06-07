@@ -21,12 +21,17 @@ FILES = {
     "live_backtest_gap": os.path.join(OUT, "live_backtest_gap_report.json"),
     "live": os.path.join(OUT, "live_trade_audit_report.json"),
     "latency": os.path.join(OUT, "execution_latency_validation.json"),
+    "entry_timing_confirmation": os.path.join(OUT, "entry_timing_confirmation_report.json"),
     "robustness": os.path.join(OUT, "strategy_robustness_profile.json"),
     "session_filters": os.path.join(OUT, "session_filter_validation.json"),
     "ten_min_filter_scan": os.path.join(OUT, "optimize_10min_filters.json"),
     "ten_min_regime_filter_search": os.path.join(OUT, "ten_min_regime_filter_search.json"),
     "ten_min_stateful_policy_filter_search": os.path.join(OUT, "ten_min_stateful_policy_filter_search.json"),
     "thirty_min_regime_filter_search": os.path.join(OUT, "thirty_min_regime_filter_search.json"),
+    "htf_regime_filters": os.path.join(OUT, "htf_regime_filter_report.json"),
+    "countertrend_failures": os.path.join(OUT, "countertrend_failure_report.json"),
+    "countertrend_meta_gate": os.path.join(OUT, "countertrend_meta_gate_report.json"),
+    "orderbook_features": os.path.join(OUT, "orderbook_feature_report.json"),
     "regime_patterns": os.path.join(OUT, "regime_pattern_report.json"),
     "parallel_portfolio": os.path.join(OUT, "parallel_portfolio_report.json"),
     "queue_execution_policy": os.path.join(OUT, "queue_execution_policy_report.json"),
@@ -489,6 +494,160 @@ def summarize_regime_patterns(report):
     return out
 
 
+def summarize_countertrend_failures(report):
+    if not report:
+        return {
+            "status": "missing",
+            "note": "Run py/analyze_countertrend_failures.py to compare current, skip, and flip policies.",
+        }
+    out = {
+        "status": "ready",
+        "method": report.get("method"),
+        "safety": report.get("safety"),
+        "conclusions": report.get("conclusions") or [],
+        "strategies": {},
+    }
+    for strategy_id, payload in (report.get("strategies") or {}).items():
+        offline = payload.get("offline") or {}
+        live = payload.get("live_replay") or {}
+        ranked = offline.get("policies_ranked") or []
+        by_name = {r.get("name"): r for r in ranked}
+        out["strategies"][strategy_id] = {
+            "current": offline.get("current"),
+            "live_current": live.get("current"),
+            "best_policy": ranked[0] if ranked else None,
+            "skip_short_strong_countertrend": by_name.get("skip_short_strong_countertrend"),
+            "flip_short_strong_countertrend": by_name.get("flip_short_strong_countertrend"),
+            "live_policies": live.get("policies") or [],
+        }
+    return out
+
+
+def summarize_htf_regime_filters(report):
+    if not report:
+        return {
+            "status": "missing",
+            "note": "Run py/search_htf_regime_filters.py to compare higher-timeframe regime candidates.",
+        }
+    out = {
+        "status": "ready",
+        "method": report.get("method"),
+        "safety": report.get("safety"),
+        "conclusions": report.get("conclusions") or [],
+        "strategies": {},
+    }
+    for strategy_id, payload in (report.get("strategies") or {}).items():
+        best = payload.get("best_selected_for_review") or {}
+        current = payload.get("current") or {}
+        out["strategies"][strategy_id] = {
+            "current": {
+                "name": current.get("name"),
+                "overall": current.get("overall"),
+                "trades_per_day": current.get("trades_per_day"),
+                "time_block_summary": current.get("time_block_summary"),
+            },
+            "best_selected_for_review": {
+                "name": best.get("name"),
+                "kind": best.get("kind"),
+                "overall": best.get("overall"),
+                "trades_per_day": best.get("trades_per_day"),
+                "time_block_summary": best.get("time_block_summary"),
+            },
+            "top_usable_by_wr": (payload.get("top_usable_by_wr") or [])[:5],
+        }
+    return out
+
+
+def summarize_countertrend_meta_gate(report):
+    if not report:
+        return {
+            "status": "missing",
+            "note": "Run py/search_countertrend_meta_gate.py to validate the second-stage signal-win gate.",
+        }
+    out = {
+        "status": "ready",
+        "method": report.get("method"),
+        "safety": report.get("safety"),
+        "conclusions": report.get("conclusions") or [],
+        "strategies": {},
+    }
+    for strategy_id, payload in (report.get("strategies") or {}).items():
+        out["strategies"][strategy_id] = {
+            "status": payload.get("status"),
+            "current_full": payload.get("current_full"),
+            "current_meta_oos": payload.get("current_meta_oos"),
+            "countertrend_counts": payload.get("countertrend_counts"),
+            "top_usable": (payload.get("top_usable") or [])[:5],
+            "top_by_wr": (payload.get("top_by_wr") or [])[:5],
+        }
+    return out
+
+
+def summarize_entry_timing_confirmation(report):
+    if not report:
+        return {
+            "status": "missing",
+            "note": "Run py/analyze_entry_timing_confirmation.py to compare immediate, delayed, confirmation, and pullback entries.",
+        }
+
+    def compact(row):
+        if not row:
+            return None
+        overall = row.get("overall") or {}
+        freq = row.get("frequency") or {}
+        blocks = row.get("time_block_summary") or {}
+        return {
+            "policy": row.get("policy"),
+            "win_rate": overall.get("wr"),
+            "trades": overall.get("trades"),
+            "pnl_5u": overall.get("pnl_5u"),
+            "max_loss": overall.get("max_loss"),
+            "wr_delta_pp": row.get("wr_delta_pp"),
+            "retention_pct": row.get("retention_pct"),
+            "trades_per_day": freq.get("trades_per_day"),
+            "min_block_wr": blocks.get("min_block_wr"),
+            "positive_blocks": blocks.get("positive_blocks"),
+            "active_blocks": blocks.get("active_blocks"),
+        }
+
+    out = {
+        "status": "ready",
+        "method": report.get("method"),
+        "safety": report.get("safety"),
+        "conclusions": report.get("conclusions") or [],
+        "strategies": {},
+    }
+    for strategy_id, payload in (report.get("strategies") or {}).items():
+        top_usable = payload.get("top_usable") or []
+        top_by_wr = payload.get("top_by_wr") or []
+        out["strategies"][strategy_id] = {
+            "opportunities": payload.get("opportunities"),
+            "baseline": compact(payload.get("baseline")),
+            "best_usable": compact(top_usable[0] if top_usable else None),
+            "best_by_wr": compact(top_by_wr[0] if top_by_wr else None),
+            "top_usable": [compact(r) for r in top_usable[:5]],
+        }
+    return out
+
+
+def summarize_orderbook_features(report):
+    if not report:
+        return {
+            "status": "missing",
+            "note": "Run py/fetch_orderbook_snapshot.py to collect snapshots, then py/analyze_orderbook_features.py.",
+        }
+    return {
+        "status": report.get("status"),
+        "method": report.get("method"),
+        "safety": report.get("safety"),
+        "sample_count": report.get("sample_count"),
+        "latest_age_sec": report.get("latest_age_sec"),
+        "latest": report.get("latest"),
+        "feature_summary": report.get("feature_summary"),
+        "research_gate": report.get("research_gate"),
+    }
+
+
 def build_production_summary(robustness_summary, latency_summary):
     out = {}
     for strategy, row in robustness_summary.items():
@@ -859,12 +1018,17 @@ def main():
     live_backtest_gap = read_json(FILES["live_backtest_gap"], {})
     live = read_json(FILES["live"], {})
     latency = read_json(FILES["latency"], {})
+    entry_timing_confirmation = read_json(FILES["entry_timing_confirmation"], {})
     robustness = read_json(FILES["robustness"], {})
     session_filters = read_json(FILES["session_filters"], {})
     ten_min_filter_scan = read_json(FILES["ten_min_filter_scan"], {})
     ten_min_regime_filter_search = read_json(FILES["ten_min_regime_filter_search"], {})
     ten_min_stateful_policy_filter_search = read_json(FILES["ten_min_stateful_policy_filter_search"], {})
     thirty_min_regime_filter_search = read_json(FILES["thirty_min_regime_filter_search"], {})
+    htf_regime_filters = read_json(FILES["htf_regime_filters"], {})
+    countertrend_failures = read_json(FILES["countertrend_failures"], {})
+    countertrend_meta_gate = read_json(FILES["countertrend_meta_gate"], {})
+    orderbook_features = read_json(FILES["orderbook_features"], {})
     regime_patterns = read_json(FILES["regime_patterns"], {})
     parallel_portfolio = read_json(FILES["parallel_portfolio"], {})
     queue_execution_policy = read_json(FILES["queue_execution_policy"], {})
@@ -894,6 +1058,7 @@ def main():
         "walkforward_candidate_ranking": summarize_validation_ranking(validation),
         "production_summary": production_summary,
         "execution_latency": latency_summary,
+        "entry_timing_confirmation": summarize_entry_timing_confirmation(entry_timing_confirmation),
         "robustness_profile": robustness_summary,
         "parallel_portfolio": summarize_parallel_portfolio(parallel_portfolio),
         "queue_execution_policy": summarize_queue_execution_policy(queue_execution_policy),
@@ -906,6 +1071,10 @@ def main():
         "ten_min_regime_filter_search": summarize_10min_regime_filter_search(ten_min_regime_filter_search),
         "ten_min_stateful_policy_filter_search": summarize_10min_stateful_policy_filter_search(ten_min_stateful_policy_filter_search),
         "thirty_min_regime_filter_search": summarize_30min_regime_filter_search(thirty_min_regime_filter_search),
+        "htf_regime_filters": summarize_htf_regime_filters(htf_regime_filters),
+        "countertrend_failures": summarize_countertrend_failures(countertrend_failures),
+        "countertrend_meta_gate": summarize_countertrend_meta_gate(countertrend_meta_gate),
+        "orderbook_features": summarize_orderbook_features(orderbook_features),
         "regime_patterns": summarize_regime_patterns(regime_patterns),
         "system_health": {
             "overall": health.get("overall"),
@@ -1071,6 +1240,107 @@ def main():
                 "10m repeat-control replay is not a clear fix yet: "
                 f"offline WR delta {ten_repeat.get('offline_wr_delta_pp')}pp with {ten_repeat.get('offline_retention_pct')}% retention, "
                 f"live WR delta {ten_repeat.get('live_wr_delta_pp')}pp on a small sample."
+            )
+
+    countertrend = report.get("countertrend_failures") or {}
+    if countertrend.get("status") == "ready":
+        for line in (countertrend.get("conclusions") or [])[:4]:
+            report["recommendation"].append(f"Countertrend diagnostic: {line}")
+        for strategy, payload in (countertrend.get("strategies") or {}).items():
+            best = payload.get("best_policy") or {}
+            flip = payload.get("flip_short_strong_countertrend") or {}
+            skip = payload.get("skip_short_strong_countertrend") or {}
+            current = payload.get("current") or {}
+            if flip and float(flip.get("wr_delta_pp") or 0) < 0:
+                report["recommendation"].append(
+                    f"{strategy}: flipping strong-countertrend signals into trend-follow is rejected offline "
+                    f"(current WR {current.get('wr')}%, flip WR {(flip.get('overall') or {}).get('wr')}%, "
+                    f"delta {flip.get('wr_delta_pp')}pp). Do not promote a simple flip-to-trend rule."
+                )
+            if best and best.get("name") != "current":
+                report["recommendation"].append(
+                    f"{strategy}: best countertrend diagnostic policy is {best.get('name')} with WR "
+                    f"{(best.get('overall') or {}).get('wr')}% over {(best.get('overall') or {}).get('trades')} trades "
+                    f"({best.get('wr_delta_pp')}pp, retention {best.get('trade_retention_pct')}%). "
+                    "Keep as shadow/research only until direct live samples confirm it."
+                )
+            elif skip and float(skip.get("wr_delta_pp") or 0) < 0:
+                report["recommendation"].append(
+                    f"{strategy}: skipping all short strong-countertrend signals is not a validated improvement "
+                    f"(skip delta {skip.get('wr_delta_pp')}pp)."
+                )
+
+    htf_regime = report.get("htf_regime_filters") or {}
+    if htf_regime.get("status") == "ready":
+        for line in (htf_regime.get("conclusions") or [])[:4]:
+            report["recommendation"].append(f"HTF regime audit: {line}")
+        for strategy, payload in (htf_regime.get("strategies") or {}).items():
+            current = (payload.get("current") or {}).get("overall") or {}
+            best = payload.get("best_selected_for_review") or {}
+            best_overall = best.get("overall") or {}
+            if best.get("name") == "current_prod":
+                report["recommendation"].append(
+                    f"{strategy}: simple 1h/4h/24h regime switching did not beat current production "
+                    f"(current WR {current.get('wr')}%, best HTF candidate is still current_prod). "
+                    "Do not replace the model with a naive trend/range switch."
+                )
+            else:
+                report["recommendation"].append(
+                    f"{strategy}: HTF regime candidate {best.get('name')} has WR {best_overall.get('wr')}% "
+                    f"over {best_overall.get('trades')} trades; keep as shadow/research unless live samples confirm it."
+                )
+
+    meta_gate = report.get("countertrend_meta_gate") or {}
+    if meta_gate.get("status") == "ready":
+        for line in (meta_gate.get("conclusions") or [])[:4]:
+            report["recommendation"].append(f"Second-stage gate audit: {line}")
+        for strategy, payload in (meta_gate.get("strategies") or {}).items():
+            usable = payload.get("top_usable") or []
+            current = (payload.get("current_meta_oos") or {}).get("overall") or {}
+            if not usable or (usable[0].get("name") == "current_meta_oos"):
+                report["recommendation"].append(
+                    f"{strategy}: second-stage signal-win gate did not find a usable improvement "
+                    f"over the meta-OOS baseline WR {current.get('wr')}%; do not promote a meta gate for this strategy."
+                )
+            else:
+                best = usable[0]
+                overall = best.get("overall") or {}
+                report["recommendation"].append(
+                    f"{strategy}: second-stage gate candidate {best.get('name')} improves meta-OOS WR to "
+                    f"{overall.get('wr')}% over {overall.get('trades')} trades "
+                    f"({best.get('wr_delta_pp')}pp, retention {best.get('trade_retention_pct')}%). "
+                    "Run as live shadow only; do not enable real trading from this offline result."
+                )
+
+    entry_timing = report.get("entry_timing_confirmation") or {}
+    if entry_timing.get("status") == "ready":
+        for line in (entry_timing.get("conclusions") or [])[:4]:
+            report["recommendation"].append(f"Entry timing audit: {line}")
+        for strategy, payload in (entry_timing.get("strategies") or {}).items():
+            baseline = payload.get("baseline") or {}
+            best = payload.get("best_usable") or payload.get("best_by_wr") or {}
+            if best:
+                report["recommendation"].append(
+                    f"{strategy}: entry timing candidate {best.get('policy')} changes immediate WR "
+                    f"{baseline.get('win_rate')}%/{baseline.get('trades')} trades to "
+                    f"{best.get('win_rate')}%/{best.get('trades')} trades "
+                    f"({best.get('wr_delta_pp')}pp, retention {best.get('retention_pct')}%, "
+                    f"max loss {best.get('max_loss')}). Keep as shadow/research only because this uses 1m-close replay."
+                )
+
+    orderbook = report.get("orderbook_features") or {}
+    if orderbook.get("status") and orderbook.get("status") != "missing":
+        gate = orderbook.get("research_gate") or {}
+        samples = orderbook.get("sample_count")
+        if gate.get("can_train"):
+            report["recommendation"].append(
+                f"Order-book feature pipeline has {samples} samples, enough to start a separate signal-quality research model."
+            )
+        else:
+            report["recommendation"].append(
+                f"Order-book feature pipeline is working but not trainable yet: {samples} samples collected; "
+                f"need at least {gate.get('min_samples_for_first_read')} for a first read and "
+                f"{gate.get('min_samples_for_training')} for training."
             )
 
     regime_patterns = report.get("regime_patterns") or {}

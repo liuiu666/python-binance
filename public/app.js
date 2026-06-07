@@ -5,6 +5,7 @@
   const elBannerSignals=$("bannerSignals"),elSigTime=$("sigTime"),elStrategy10=$("strategy10"),elStrategy30=$("strategy30");
   const elReportHealth=$("reportHealth"),elReportEdge10=$("reportEdge10"),elReportEdge30=$("reportEdge30"),elReportFilter=$("reportFilter"),elReportTablet=$("reportTablet"),elReportShadow=$("reportShadow"),elReportLive=$("reportLive");
   const elBtnUp=$("btnUp"),elBtnDown=$("btnDown"),elUpPayout=$("upPayout"),elDownPayout=$("downPayout");
+  const elActiveList=$("activeList"),elHistoryList=$("historyList"),elActiveCount=$("activeCount"),elHistoryCount=$("historyCount"),elHistoryWinrate=$("winrate"),elHistoryPnl=$("pnl"),elHistoryWinloss=$("winloss");
   const canvas=$("priceChart"),ctx=canvas.getContext("2d");
   const gaugeCanvas=$("gaugeCanvas"),gCtx=gaugeCanvas.getContext("2d");
 
@@ -64,7 +65,10 @@
     if(!s.high_conf)reasons.push("强度不足");
     if(!s.rsi_extreme)reasons.push("RSI "+(s.rsi_value!=null?Number(s.rsi_value).toFixed(0):"--"));
     if(s.vol_ok===false)reasons.push("波动不足");
-    if(s.session_ok===false)reasons.push("时段过滤");
+    if(s.session_filter_mode==="soft"&&s.session_risk){
+      if(s.session_gate_ok===false)reasons.push("时段风险确认不足");
+      else reasons.push("时段风险");
+    }else if(s.session_ok===false)reasons.push("硬时段过滤");
     return reasons.length?reasons.join(" | "):"等待";
   }
 
@@ -183,6 +187,77 @@
   function age(ms){if(ms==null)return"--";const s=Math.max(0,Math.floor(ms/1000));if(s<60)return s+"s";const m=Math.floor(s/60);return m<60?m+"m":Math.floor(m/60)+"h"}
   function fetchRuntime(){fetch("/api/runtime").then(r=>r.json()).then(d=>{setReportValue(elReportTablet,(d.tabletUrl||"").replace("http://",""),"ok");elReportTablet.title="page="+(d.tabletPageUrl||"--")+" | bootstrap="+(d.bootstrapUrl||"--")+" | loader="+(d.loaderUrl||"--")+" | script="+(d.scriptUrl||"--")+" | "+(d.scriptVersion||"no version")}).catch(()=>setReportValue(elReportTablet,"--","warn"))}
   function fetchTabletDiagnostics(){fetch("/api/tablet-diagnostics").then(r=>r.json()).then(d=>{let label="no heartbeat",state="warn";if(d.status==="has_order_done"){label="orders ok";state="ok"}else if(d.status==="autojs_online_waiting_for_order_done"){label="heartbeat "+age(d.latestHeartbeatAgeMs);state="ok"}else if(d.checks&&d.checks.loaderError){label="loader error"}else if(d.checks&&d.checks.loaderStarted){label="loader seen"}else if(d.checks&&d.checks.tabletPageSeen){label="page seen"}setReportValue(elReportLive,label,state);elReportLive.title=(d.nextAction||"")+" | bootstrap="+((d.runtime||{}).bootstrapUrl||"--")}).catch(()=>{})}
+
+  function esc(v){return String(v==null?"--":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
+  function timeText(ms){if(!ms)return"--";return new Date(Number(ms)).toLocaleString("zh-CN",{hour12:false,month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}
+  function timeParts(ms){
+    if(!ms)return{date:"--",time:"--"};
+    const d=new Date(Number(ms));
+    return{
+      date:d.toLocaleDateString("zh-CN",{month:"2-digit",day:"2-digit"}),
+      time:d.toLocaleTimeString("zh-CN",{hour12:false,hour:"2-digit",minute:"2-digit"})
+    };
+  }
+  function strategyText(r){const s=r&&r.strategyId?r.strategyId:"manual";if(s==="BTC_10min")return"10分钟";if(s==="BTC_30min")return"30分钟";return s==="manual"?"手动":s}
+  function directionText(d){return d==="UP"?"看涨":d==="DOWN"?"看跌":"--"}
+  function statusText(s){return s==="won"?"赢":s==="lost"?"亏":s==="tie"?"平":s==="pending"?"等待":s==="aborted"?"失败":s||"--"}
+  function statusClass(s){return s==="won"?"won":s==="lost"?"lost":s==="tie"?"tie":s==="aborted"?"aborted":"pending"}
+  function pnlText(r){
+    if(!r||r.status==="pending")return"待结算";
+    if(r.status==="aborted")return r.reason?("失败: "+r.reason):"失败";
+    const p=Number(r.pnl||0);
+    return (p>0?"+":"")+fmt(p,2)+"U";
+  }
+  function renderTradeRows(rows,target,emptyText){
+    if(!target)return;
+    target.innerHTML="";
+    if(!rows||!rows.length){
+      const e=document.createElement("div");
+      e.className="empty-state";
+      e.textContent=emptyText;
+      target.appendChild(e);
+      return;
+    }
+    rows.forEach(r=>{
+      const cls=statusClass(r.status);
+      const dir=(r.direction||"").toLowerCase();
+      const card=document.createElement("div");
+      card.className="history-row "+cls;
+      const confidence=r.confidence!=null?Number(r.confidence).toFixed(0)+"%":"--";
+      const rsi=r.rsi_value!=null?Number(r.rsi_value).toFixed(0):"--";
+      const queue=r.queueLength?("队列 "+(r.queuePosition||1)+"/"+r.queueLength):"单笔";
+      const close=r.closePrice!=null?fmtPrice(r.closePrice):(r.status==="pending"?"待到期":"--");
+      const tp=timeParts(r.openTime);
+      card.innerHTML=
+        '<div><span class="status-pill '+cls+'">'+esc(statusText(r.status))+'</span></div>'+
+        '<div class="history-main">'+
+          '<div class="history-strategy"><span class="dir-pill '+dir+'">'+esc(directionText(r.direction))+'</span><span class="history-name">'+esc(strategyText(r))+'</span></div>'+
+          '<div class="history-sub">强度 '+esc(confidence)+' | RSI '+esc(rsi)+' | '+esc(queue)+'</div>'+
+        '</div>'+
+        '<div class="history-amount">'+esc(fmt(r.amount,0))+'U<br><small>'+esc(r.duration||"--")+'分</small></div>'+
+        '<div class="history-time"><small>'+esc(tp.date)+'</small><br><strong>'+esc(tp.time)+'</strong></div>'+
+        '<div class="history-price"><span>开 '+esc(fmtPrice(r.openPrice))+'</span><span>到 '+esc(close)+'</span></div>'+
+        '<div class="history-pnl '+cls+'">'+esc(pnlText(r))+'</div>';
+      target.appendChild(card);
+    });
+  }
+  function updateTradeHistory(data){
+    const summary=(data&&data.summary)||{};
+    const active=(data&&data.active)||[];
+    const recent=(data&&data.recent)||[];
+    if(elActiveCount)elActiveCount.textContent=String(summary.pending!=null?summary.pending:active.length);
+    if(elHistoryCount)elHistoryCount.textContent=String(summary.total!=null?summary.total:recent.length);
+    if(elHistoryWinrate)elHistoryWinrate.textContent=summary.winRate!=null?Number(summary.winRate).toFixed(1)+"%":"--";
+    if(elHistoryPnl){
+      const p=Number(summary.pnl||0);
+      elHistoryPnl.textContent=(p>0?"+":"")+fmt(p,2)+"U";
+      elHistoryPnl.style.color=p>0?"var(--green)":p<0?"var(--red)":"var(--text-primary)";
+    }
+    if(elHistoryWinloss)elHistoryWinloss.textContent=(summary.wins||0)+"/"+(summary.losses||0);
+    renderTradeRows(active,elActiveList,"暂无持仓中订单");
+    renderTradeRows(recent,elHistoryList,"暂无历史订单");
+  }
+  function fetchTradeHistory(){fetch("/api/trade-history?limit=120").then(r=>r.json()).then(updateTradeHistory).catch(()=>{})}
 
   function renderTiers(tiers){
     const list=$("tiersList");
@@ -319,7 +394,7 @@
       if(msg.type==="price"){currentPrice=msg.price;if(msg.history)priceHistory=msg.history;if(!firstPrice&&currentPrice)firstPrice=currentPrice;lastWsPrice=Date.now();updatePriceDisplay();drawChart()}
       if(msg.type==="state"&&msg.realBalance&&msg.realBalance.amount!=null){elRealBalance.textContent=fmt(msg.realBalance.amount,2);elRealBalance.style.color="var(--green)"}
       if(msg.type==="balance"&&msg.amount!=null){elRealBalance.textContent=fmt(msg.amount,2);elRealBalance.style.color="var(--green)"}
-      if(msg.type==="trade_update"&&msg.trade){showToast("订单 #"+msg.trade.id+" "+msg.trade.status,"info")}
+      if(msg.type==="trade_update"&&msg.trade){showToast("订单 #"+msg.trade.id+" "+msg.trade.status,"info");fetchTradeHistory()}
       if(msg.type==="error")showToast(msg.message,"error");
     };
     ws.onclose=()=>setTimeout(connect,2000);ws.onerror=()=>ws.close();
@@ -340,7 +415,7 @@
   });
   window.addEventListener("resize",()=>{resizeCanvas();drawChart()});
   resizeCanvas();drawGauge(null,null,null);connect();loadConfig();updatePayouts();
-  fetchSignals();fetchReports();fetchRuntime();fetchTabletDiagnostics();fetchPriceFallback();
+  fetchSignals();fetchReports();fetchRuntime();fetchTabletDiagnostics();fetchTradeHistory();fetchPriceFallback();
   setInterval(fetchSignals,3000);setInterval(fetchPriceFallback,3000);setInterval(updateTopbar,2000);
-  setInterval(fetchReports,15000);setInterval(fetchRuntime,30000);setInterval(fetchTabletDiagnostics,15000);setInterval(loadConfig,10000);
+  setInterval(fetchReports,15000);setInterval(fetchRuntime,30000);setInterval(fetchTabletDiagnostics,15000);setInterval(fetchTradeHistory,5000);setInterval(loadConfig,10000);
 })();

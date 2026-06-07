@@ -130,6 +130,17 @@ function tailJsonl(file, limit) {
   } catch (e) { return []; }
 }
 
+function readJsonl(file) {
+  try {
+    if (!fs.existsSync(file)) return [];
+    const raw = fs.readFileSync(file, "utf8").trim();
+    if (!raw) return [];
+    return raw.split(/\r?\n/).filter(Boolean).map(line => {
+      try { return JSON.parse(line); } catch (e) { return null; }
+    }).filter(Boolean);
+  } catch (e) { return []; }
+}
+
 function readJsonFile(file, fallback = null) {
   try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : fallback; }
   catch (e) { return fallback; }
@@ -235,15 +246,255 @@ function amountForStrategy(strategyId, sig) {
   return String(tradeConfig.amount);
 }
 
+const ENTRY_TIMING_ENABLED = true;
+const ENTRY_TIMING_POLICIES = {
+  BTC_10min: {
+    name: "pullback_0bp_then_confirm_5m",
+    type: "pullback_then_confirm",
+    pullbackBps: 0,
+    maxWaitMin: 5,
+    minPullbackDelayMs: 60000,
+    minConfirmDelayMs: 60000
+  },
+  BTC_30min: {
+    name: "pullback_5bp_within_3m",
+    type: "pullback_within",
+    pullbackBps: 5,
+    maxWaitMin: 3,
+    minPullbackDelayMs: 60000,
+    minConfirmDelayMs: 0
+  }
+};
+const entryTimingState = {};
+
+function isoTime(ms) {
+  return new Date(ms).toISOString();
+}
+
+function signalActionableMs(sig) {
+  const t = sig && (sig.actionable_time || sig.candle_close_time || sig.time);
+  const ms = t ? Date.parse(t) : NaN;
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function entryTimingKey(strategyId, sig) {
+  return [
+    strategyId,
+    sig && sig.signal,
+    sig && (sig.actionable_time || sig.candle_close_time || sig.time || "")
+  ].join("|");
+}
+
+function directionOk(direction, later, reference) {
+  if (!Number.isFinite(later) || !Number.isFinite(reference)) return false;
+  return direction === "UP" ? later > reference : later < reference;
+}
+
+function pullbackOk(direction, price, reference, bps) {
+  if (!Number.isFinite(price) || !Number.isFinite(reference)) return false;
+  const move = reference * Number(bps || 0) / 10000;
+  return direction === "UP" ? price <= reference - move : price >= reference + move;
+}
+
+function blockSignalForEntryTiming(sig, state, reason) {
+  const out = { ...sig };
+  out.signal = null;
+  out.confidence = null;
+  out.entry_timing = {
+    enabled: true,
+    ok: false,
+    reason,
+    policy: state.policy.name,
+    reference_price: state.referencePrice,
+    current_price: currentPrice,
+    started_at: isoTime(state.startedAt),
+    expires_at: isoTime(state.expiresAt),
+    pullback_seen: !!state.pullbackSeen,
+    pullback_price: state.pullbackPrice || null,
+    pullback_time: state.pullbackTime ? isoTime(state.pullbackTime) : null
+  };
+  return out;
+}
+
+function allowSignalForEntryTiming(sig, state, reason) {
+  const now = Date.now();
+  if (!state.allowedAt) {
+    state.allowedAt = now;
+    state.allowedActionableTime = isoTime(now);
+  } else if (now - state.allowedAt > SIGNAL_EXPIRY_MS) {
+    delete entryTimingState[state.strategyId];
+    return blockSignalForEntryTiming(sig, state, "entry_timing_entry_window_elapsed");
+  }
+  return {
+    ...sig,
+    actionable_time: state.allowedActionableTime,
+    entry_timing: {
+      enabled: true,
+      ok: true,
+      reason,
+      policy: state.policy.name,
+      original_actionable_time: state.originalActionableTime,
+      reference_price: state.referencePrice,
+      current_price: currentPrice,
+      started_at: isoTime(state.startedAt),
+      entry_time: state.allowedActionableTime,
+      pullback_seen: !!state.pullbackSeen,
+      pullback_price: state.pullbackPrice || null,
+      pullback_time: state.pullbackTime ? isoTime(state.pullbackTime) : null
+    }
+  };
+}
+
+function applyEntryTimingForSignal(strategyId, sig) {
+  const policy = ENTRY_TIMING_POLICIES[strategyId];
+  if (!ENTRY_TIMING_ENABLED || !policy || !sig || !sig.signal) return sig;
+
+  const now = Date.now();
+  const actionableMs = signalActionableMs(sig);
+  if (!actionableMs || actionableMs > now) {
+    return {
+      ...sig,
+      signal: null,
+      confidence: null,
+      entry_timing: { enabled: true, ok: false, policy: policy.name, reason: "wait_actionable_time" }
+    };
+  }
+
+  const key = entryTimingKey(strategyId, sig);
+  let state = entryTimingState[strategyId];
+  if (!state || state.key !== key) {
+    const referencePrice = Number.isFinite(Number(currentPrice)) ? Number(currentPrice) : Number(sig.price);
+    state = {
+      key,
+      policy,
+      strategyId,
+      signal: sig.signal,
+      referencePrice,
+      startedAt: now,
+      originalActionableMs: actionableMs,
+      originalActionableTime: sig.actionable_time || sig.candle_close_time || sig.time || null,
+      earliestPullbackAt: actionableMs + Number(policy.minPullbackDelayMs || 0),
+      expiresAt: actionableMs + Number(policy.maxWaitMin || 0) * 60000,
+      pullbackSeen: false,
+      pullbackPrice: null,
+      pullbackTime: null
+    };
+    entryTimingState[strategyId] = state;
+    appendJsonl(TRADE_AUDIT_FILE, {
+      serverTime: now,
+      event: "entry_timing_start",
+      strategyId,
+      signal: sig.signal,
+      policy: policy.name,
+      referencePrice,
+      originalActionableTime: state.originalActionableTime,
+      expiresAt: state.expiresAt
+    });
+  }
+
+  if (!Number.isFinite(Number(currentPrice))) {
+    return blockSignalForEntryTiming(sig, state, "missing_live_price");
+  }
+  if (now > state.expiresAt) {
+    appendJsonl(TRADE_AUDIT_FILE, {
+      serverTime: now,
+      event: "entry_timing_expired",
+      strategyId,
+      signal: sig.signal,
+      policy: policy.name,
+      referencePrice: state.referencePrice,
+      currentPrice
+    });
+    delete entryTimingState[strategyId];
+    return blockSignalForEntryTiming(sig, state, "expired_without_confirmation");
+  }
+  if (now < state.earliestPullbackAt) {
+    return blockSignalForEntryTiming(sig, state, "waiting_first_1m_check");
+  }
+
+  const price = Number(currentPrice);
+  if (policy.type === "pullback_within") {
+    if (pullbackOk(sig.signal, price, state.referencePrice, policy.pullbackBps)) {
+      appendJsonl(TRADE_AUDIT_FILE, {
+        serverTime: now,
+        event: "entry_timing_allow",
+        strategyId,
+        signal: sig.signal,
+        policy: policy.name,
+        referencePrice: state.referencePrice,
+        entryPrice: price
+      });
+      return allowSignalForEntryTiming(sig, state, "pullback_seen");
+    }
+    return blockSignalForEntryTiming(sig, state, "waiting_pullback");
+  }
+
+  if (policy.type === "pullback_then_confirm") {
+    if (!state.pullbackSeen) {
+      if (pullbackOk(sig.signal, price, state.referencePrice, policy.pullbackBps)) {
+        state.pullbackSeen = true;
+        state.pullbackPrice = price;
+        state.pullbackTime = now;
+        appendJsonl(TRADE_AUDIT_FILE, {
+          serverTime: now,
+          event: "entry_timing_pullback_seen",
+          strategyId,
+          signal: sig.signal,
+          policy: policy.name,
+          referencePrice: state.referencePrice,
+          pullbackPrice: price
+        });
+      }
+      return blockSignalForEntryTiming(sig, state, "waiting_pullback");
+    }
+    if (now < state.pullbackTime + Number(policy.minConfirmDelayMs || 0)) {
+      return blockSignalForEntryTiming(sig, state, "waiting_confirm_1m");
+    }
+    if (directionOk(sig.signal, price, Number(state.pullbackPrice))) {
+      appendJsonl(TRADE_AUDIT_FILE, {
+        serverTime: now,
+        event: "entry_timing_allow",
+        strategyId,
+        signal: sig.signal,
+        policy: policy.name,
+        referencePrice: state.referencePrice,
+        pullbackPrice: state.pullbackPrice,
+        entryPrice: price
+      });
+      return allowSignalForEntryTiming(sig, state, "pullback_confirmed");
+    }
+    return blockSignalForEntryTiming(sig, state, "waiting_direction_confirm");
+  }
+
+  return sig;
+}
+
+function applyEntryTiming(signals) {
+  const out = { ...signals };
+  for (const strategyId of Object.keys(ENTRY_TIMING_POLICIES)) {
+    out[strategyId] = applyEntryTimingForSignal(strategyId, signals[strategyId]);
+    if (!signals[strategyId] || !signals[strategyId].signal) delete entryTimingState[strategyId];
+  }
+  return out;
+}
+
 function buildSignalResponse() {
-  const signals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {};
+  const rawSignals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {};
+  const signals = applyEntryTiming(rawSignals);
   const strategyAmounts = {};
   for (const [strategyId, sig] of Object.entries(signals)) {
     strategyAmounts[strategyId] = amountForStrategy(strategyId, sig);
   }
   const legacySig = signals.BTC_30min || signals.BTC_10min;
   const legacyAmount = legacySig ? amountForStrategy(legacySig.strategy_id || "BTC_30min", legacySig) : String(tradeConfig.amount);
-  return { ...signals, _config: tradeConfig, _strategyAmounts: strategyAmounts, _signalAmount: legacyAmount };
+  return {
+    ...signals,
+    _config: tradeConfig,
+    _strategyAmounts: strategyAmounts,
+    _signalAmount: legacyAmount,
+    _entryTimingEnabled: ENTRY_TIMING_ENABLED,
+    _entryTimingPolicies: ENTRY_TIMING_POLICIES
+  };
 }
 
 app.get("/api/signal", (req, res) => {
@@ -395,6 +646,173 @@ function tabletDiagnostics() {
     balance: realBalance,
     balanceAgeMs,
     recentAutojsEvents: autojsRows.slice(-20)
+  };
+}
+
+function priceAtOrAfter(ticks, targetTime) {
+  let lo = 0, hi = ticks.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (Number(ticks[mid].time) < targetTime) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo < ticks.length ? Number(ticks[lo].price) : null;
+}
+
+function settleStatus(direction, openPrice, closePrice) {
+  if (openPrice == null || closePrice == null) return "pending";
+  if (Number(closePrice) === Number(openPrice)) return "tie";
+  if (direction === "UP") return Number(closePrice) > Number(openPrice) ? "won" : "lost";
+  if (direction === "DOWN") return Number(closePrice) < Number(openPrice) ? "won" : "lost";
+  return "pending";
+}
+
+function statusPnl(status, amount) {
+  const stake = Number(amount) || 0;
+  if (status === "won") return Number((stake * PAYOUT_RATE).toFixed(2));
+  if (status === "lost") return -stake;
+  return 0;
+}
+
+function liveOrderHistory(limit = 100) {
+  const audit = readJsonl(TRADE_AUDIT_FILE);
+  const ticks = readJsonl(PRICE_TICKS_FILE)
+    .filter(t => Number.isFinite(Number(t.time)) && Number.isFinite(Number(t.price)))
+    .map(t => ({ time: Number(t.time), price: Number(t.price) }))
+    .sort((a, b) => a.time - b.time);
+
+  const rows = [];
+  for (const row of audit) {
+    if (row.event !== "order_done") continue;
+    const duration = Math.max(1, Number(row.duration) || 0);
+    const openTime = Number(row.serverTime || row.clientTime || 0);
+    if (!duration || !openTime) continue;
+    const openPrice = row.price != null ? Number(row.price) : priceAtOrAfter(ticks, openTime);
+    const settleTime = openTime + duration * 60 * 1000;
+    const closePrice = priceAtOrAfter(ticks, settleTime);
+    const status = settleStatus(row.direction, openPrice, closePrice);
+    const amount = Number(row.amount) || 0;
+    const id = [
+      "autojs",
+      row.strategyId || "manual",
+      row.signalTime || "",
+      row.queueBatchId || "",
+      openTime
+    ].join("|");
+    rows.push({
+      id,
+      source: "autojs",
+      event: row.event,
+      strategyId: row.strategyId || "manual",
+      direction: row.direction,
+      amount,
+      duration: String(duration),
+      openTime,
+      settleTime,
+      openPrice,
+      closePrice,
+      status,
+      pnl: statusPnl(status, amount),
+      confidence: row.confidence,
+      rsi_value: row.rsi_value,
+      avg_prob: row.avg_prob,
+      threshold: row.threshold,
+      signalTime: row.signalTime,
+      actionableTime: row.actionableTime,
+      queueBatchId: row.queueBatchId,
+      queuePosition: row.queuePosition,
+      queueLength: row.queueLength,
+      queueOrderPolicy: row.queueOrderPolicy,
+      device: row.device,
+      balance: row.balance,
+      realBalance: row.realBalance
+    });
+  }
+
+  for (const row of audit) {
+    if (row.event !== "order_abort") continue;
+    const openTime = Number(row.serverTime || row.clientTime || 0);
+    if (!openTime) continue;
+    const id = ["autojs_abort", row.strategyId || "manual", row.signalTime || "", openTime].join("|");
+    rows.push({
+      id,
+      source: "autojs",
+      event: row.event,
+      strategyId: row.strategyId || "manual",
+      direction: row.direction,
+      amount: Number(row.amount) || 0,
+      duration: String(row.duration || ""),
+      openTime,
+      settleTime: openTime,
+      openPrice: row.price != null ? Number(row.price) : null,
+      closePrice: null,
+      status: "aborted",
+      pnl: 0,
+      reason: row.reason,
+      confidence: row.confidence,
+      rsi_value: row.rsi_value,
+      signalTime: row.signalTime,
+      queueBatchId: row.queueBatchId,
+      queuePosition: row.queuePosition,
+      queueLength: row.queueLength,
+      device: row.device,
+      balance: row.balance,
+      realBalance: row.realBalance
+    });
+  }
+
+  for (const t of trades) {
+    rows.push({
+      id: "server|" + t.id,
+      source: t.source || "server",
+      event: "server_trade",
+      strategyId: String(t.source || "").replace(/^auto:/, "") || "manual",
+      direction: t.direction,
+      amount: Number(t.amount) || 0,
+      duration: String(t.duration || ""),
+      openTime: Number(t.openTime),
+      settleTime: Number(t.settleTime),
+      openPrice: t.strikePrice,
+      closePrice: t.settlePrice,
+      status: t.status === "active" ? "pending" : t.status,
+      pnl: t.status === "won" ? Number(((Number(t.payout) || 0) - (Number(t.amount) || 0)).toFixed(2)) : statusPnl(t.status, t.amount),
+      confidence: null,
+      rsi_value: null
+    });
+  }
+
+  rows.sort((a, b) => Number(b.openTime || 0) - Number(a.openTime || 0));
+
+  const seen = new Set();
+  const unique = rows.filter(row => {
+    const key = row.id || JSON.stringify([row.source, row.strategyId, row.signalTime, row.openTime]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const settled = unique.filter(r => ["won", "lost", "tie"].includes(r.status));
+  const wins = settled.filter(r => r.status === "won").length;
+  const losses = settled.filter(r => r.status === "lost").length;
+  const ties = settled.filter(r => r.status === "tie").length;
+  const pnl = settled.reduce((sum, r) => sum + (Number(r.pnl) || 0), 0);
+  const pending = unique.filter(r => r.status === "pending").length;
+  const active = unique.filter(r => r.status === "pending").slice(0, limit);
+  const recent = unique.slice(0, limit);
+  return {
+    updatedAt: Date.now(),
+    summary: {
+      total: unique.length,
+      settled: settled.length,
+      wins,
+      losses,
+      ties,
+      pending,
+      winRate: settled.length ? Number((wins / settled.length * 100).toFixed(2)) : null,
+      pnl: Number(pnl.toFixed(2))
+    },
+    active,
+    recent
   };
 }
 
@@ -639,7 +1057,7 @@ function checkAutoTrade() {
   // Read current signal
   try {
     if (!fs.existsSync(SIGNAL_FILE)) return;
-    const signals = JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8"));
+    const signals = buildSignalResponse();
     for (const strategyId of ["BTC_30min", "BTC_10min"]) {
       const sig = signals[strategyId];
       if (!sig || !sig.signal || !sig.confidence) continue;
@@ -780,13 +1198,15 @@ app.get("/api/config", (req, res) => {
 
 app.post("/api/config", express.json(), (req, res) => {
   let safetyBlocked = null;
+  let forceAutoTrade = false;
   if (req.body.amount !== undefined) tradeConfig.amount = String(req.body.amount);
   if (req.body.duration !== undefined) tradeConfig.duration = String(req.body.duration);
   if (req.body.autoTrade !== undefined) {
     const requestedAutoTrade = !!req.body.autoTrade;
     if (requestedAutoTrade) {
       const gate = autoTradeSafetyGate();
-      if (gate.blocked) {
+      forceAutoTrade = req.body.forceAutoTrade === true || req.body.forceAutoTrade === "true";
+      if (gate.blocked && !forceAutoTrade) {
         tradeConfig.autoTrade = false;
         safetyBlocked = gate;
         appendJsonl(TRADE_AUDIT_FILE, {
@@ -796,6 +1216,21 @@ app.post("/api/config", express.json(), (req, res) => {
         });
       } else {
         tradeConfig.autoTrade = true;
+        if (forceAutoTrade && gate.blocked) {
+          appendJsonl(TRADE_AUDIT_FILE, {
+            serverTime: Date.now(),
+            event: "auto_trade_force_enabled",
+            gate,
+            config: {
+              amount: tradeConfig.amount,
+              minConfidence: tradeConfig.minConfidence,
+              tiersEnabled: tradeConfig.tiersEnabled,
+              tiers: tradeConfig.tiers,
+              preventOverlapOrders: tradeConfig.preventOverlapOrders,
+              queueOrderPolicy: tradeConfig.queueOrderPolicy
+            }
+          });
+        }
       }
     } else {
       tradeConfig.autoTrade = false;
@@ -817,7 +1252,7 @@ app.post("/api/config", express.json(), (req, res) => {
   }
     saveTradeConfig();
   console.log("[Config] Updated:", JSON.stringify(tradeConfig));
-  res.json({ ...tradeConfig, safetyBlocked });
+  res.json({ ...tradeConfig, safetyBlocked, forceAutoTrade });
 });
 
 
@@ -845,6 +1280,11 @@ app.delete('/api/manual', (req, res) => {
 app.get('/api/trade-audit', (req, res) => {
   const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
   res.json({ items: tailJsonl(TRADE_AUDIT_FILE, limit) });
+});
+
+app.get('/api/trade-history', (req, res) => {
+  const limit = Math.min(300, Math.max(10, Number(req.query.limit) || 100));
+  res.json(liveOrderHistory(limit));
 });
 
 app.post('/api/trade-audit', (req, res) => {

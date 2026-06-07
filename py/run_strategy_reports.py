@@ -19,8 +19,12 @@ FULL_EXTRA_SCRIPTS = [
     "search_10m_regime_filters.py",
     "search_10m_stateful_policy_filters.py",
     "search_30m_regime_filters.py",
+    "search_htf_regime_filters.py",
+    "analyze_countertrend_failures.py",
+    "search_countertrend_meta_gate.py",
     "analyze_regime_patterns.py",
     "validate_execution_latency.py",
+    "analyze_entry_timing_confirmation.py",
     "strategy_robustness_profile.py",
     "analyze_parallel_portfolio.py",
     "analyze_queue_execution_policy.py",
@@ -29,6 +33,7 @@ FULL_EXTRA_SCRIPTS = [
     "optimize_portfolio_risk_filters.py",
     "validate_portfolio_filter_stability.py",
     "validate_session_filters.py",
+    "analyze_orderbook_features.py",
 ]
 
 

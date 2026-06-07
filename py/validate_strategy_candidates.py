@@ -9,6 +9,7 @@ import os
 import sys
 import time
 import warnings
+import hashlib
 
 import numpy as np
 from lightgbm import LGBMClassifier
@@ -159,9 +160,10 @@ def metric(wins):
 
 def cache_path(label, horizon, fdf):
     last_time = str(fdf["time"].iloc[-1]).replace(":", "-").replace(" ", "_")
+    cols_hash = hashlib.sha1("|".join(fcols(fdf)).encode("utf-8")).hexdigest()[:10]
     return os.path.join(
         CACHE_DIR,
-        f"walkforward_{label}_h{horizon}_tr{TRAIN_SIZE}_te{TEST_SIZE}_st{STEP}_n{len(fdf)}_{last_time}.npz",
+        f"walkforward_{label}_h{horizon}_tr{TRAIN_SIZE}_te{TEST_SIZE}_st{STEP}_n{len(fdf)}_c{cols_hash}_{last_time}.npz",
     )
 
 

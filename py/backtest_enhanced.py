@@ -181,6 +181,22 @@ def build_features(df5, horizon=6):
         F[f"hlp{p}"] = np.where(hp!=lp, (c-lp)/(hp-lp), 0.5)
         F[f"rng{p}"] = (hp-lp)/c
 
+    # Higher-timeframe context on the same 5m bars. These features let the
+    # models distinguish short RSI extremes inside a larger trend from true
+    # range-bound reversal setups.
+    for name, p in [("1h", 12), ("4h", 48), ("24h", 288)]:
+        prev = np.full(n, np.nan)
+        prev[p:] = c[:-p]
+        F[f"htf_ret_{name}"] = np.where(prev > 0, (c - prev) / prev, np.nan)
+
+        hp = np.full(n, np.nan)
+        lp = np.full(n, np.nan)
+        for i in range(p - 1, n):
+            hp[i] = h[i - p + 1:i + 1].max()
+            lp[i] = l[i - p + 1:i + 1].min()
+        F[f"htf_pos_{name}"] = np.where(hp != lp, (c - lp) / (hp - lp), np.nan)
+        F[f"htf_rng_{name}"] = np.where(c > 0, (hp - lp) / c, np.nan)
+
     # Volatility regime
     for p in [10,20,50]:
         F[f"vreg{p}"] = np.full(n, np.nan)

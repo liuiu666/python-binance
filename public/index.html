@@ -68,6 +68,44 @@
         <span class="price-change" id="priceChange"></span>
       </div>
       <div class="chart-container"><canvas id="priceChart"></canvas></div>
+
+      <section class="history-section">
+        <div class="history-header">
+          <div>
+            <div class="section-title">
+              历史单记录
+              <span class="count-badge" id="historyCount">0</span>
+            </div>
+            <div class="history-caption">AutoJS 实盘下单记录，按开仓时间倒序</div>
+          </div>
+          <div class="history-summary">
+            <span>胜率 <strong id="winrate">--</strong></span>
+            <span>盈亏 <strong id="pnl">--</strong></span>
+            <span>胜/负 <strong id="winloss">--</strong></span>
+          </div>
+        </div>
+
+        <div class="active-ledger">
+          <div class="history-panel-title">
+            持仓中
+            <span class="count-badge" id="activeCount">0</span>
+          </div>
+          <div class="history-list compact" id="activeList"></div>
+        </div>
+
+        <div class="trade-table">
+          <div class="trade-table-head">
+            <span>结果</span>
+            <span>策略 / 方向</span>
+            <span>金额</span>
+            <span>开仓时间</span>
+            <span>价格</span>
+            <span>盈亏</span>
+          </div>
+          <div class="history-list" id="historyList"></div>
+        </div>
+        <span id="balance" style="display:none"></span>
+      </section>
     </section>
 
     <section class="trade-panel">
@@ -173,14 +211,6 @@
       </div>
     </section>
   </main>
-
-  <section class="history-section">
-    <div style="display:none">
-      <span id="balance"></span><span id="pnl"></span><span id="winloss"></span><span id="winrate"></span>
-      <span id="activeCount"></span><span id="historyCount"></span>
-      <div id="activeList"></div><div id="historyList"></div>
-    </div>
-  </section>
 
   <script src="app.js"></script>
 </body>
