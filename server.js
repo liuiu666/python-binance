@@ -29,6 +29,7 @@ const REPORT_FILES = {
   signalAudit: path.join(__dirname, "data", "signal_audit_report.json"),
   liveBacktestGap: path.join(__dirname, "data", "live_backtest_gap_report.json"),
   tenMinRegimeFilter: path.join(__dirname, "data", "ten_min_regime_filter_search.json"),
+  regimePattern: path.join(__dirname, "data", "regime_pattern_report.json"),
   liveAudit: path.join(__dirname, "data", "live_trade_audit_report.json"),
   shadowDecision: path.join(__dirname, "data", "shadow_decision_report.json"),
   latency: path.join(__dirname, "data", "execution_latency_validation.json")
@@ -260,6 +261,7 @@ app.get("/api/reports", (req, res) => {
     signalAudit: readJsonFile(REPORT_FILES.signalAudit),
     liveBacktestGap: readJsonFile(REPORT_FILES.liveBacktestGap),
     tenMinRegimeFilter: readJsonFile(REPORT_FILES.tenMinRegimeFilter),
+    regimePattern: readJsonFile(REPORT_FILES.regimePattern),
     liveAudit: readJsonFile(REPORT_FILES.liveAudit),
     shadowDecision: readJsonFile(REPORT_FILES.shadowDecision),
     latency: readJsonFile(REPORT_FILES.latency),

@@ -17,6 +17,7 @@ QUICK_SCRIPTS = [
 
 FULL_EXTRA_SCRIPTS = [
     "search_10m_regime_filters.py",
+    "analyze_regime_patterns.py",
     "validate_execution_latency.py",
     "strategy_robustness_profile.py",
     "analyze_parallel_portfolio.py",

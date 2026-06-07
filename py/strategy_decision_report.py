@@ -25,6 +25,7 @@ FILES = {
     "session_filters": os.path.join(OUT, "session_filter_validation.json"),
     "ten_min_filter_scan": os.path.join(OUT, "optimize_10min_filters.json"),
     "ten_min_regime_filter_search": os.path.join(OUT, "ten_min_regime_filter_search.json"),
+    "regime_patterns": os.path.join(OUT, "regime_pattern_report.json"),
     "parallel_portfolio": os.path.join(OUT, "parallel_portfolio_report.json"),
     "queue_execution_policy": os.path.join(OUT, "queue_execution_policy_report.json"),
     "dual_causal_filter_search": os.path.join(OUT, "dual_strategy_causal_filter_search.json"),
@@ -324,6 +325,45 @@ def summarize_10min_regime_filter_search(report):
         "top_live_drift_replay_candidates": live_drift[:5],
         "scan_top": report.get("scan_top") or [],
     }
+
+
+def summarize_regime_patterns(report):
+    if not report:
+        return {
+            "status": "missing",
+            "note": "Run py/analyze_regime_patterns.py to compare rules, ML, hybrids, and market regimes.",
+        }
+    out = {
+        "status": "ready",
+        "method": report.get("method"),
+        "safety": report.get("safety"),
+        "conclusions": report.get("conclusions") or [],
+        "strategies": {},
+    }
+    for strategy_id, payload in (report.get("strategies") or {}).items():
+        best = {}
+        for group, row in (payload.get("best_by_group") or {}).items():
+            overall = row.get("overall") or {}
+            block = row.get("time_block_summary") or {}
+            best[group] = {
+                "name": row.get("name"),
+                "kind": row.get("kind"),
+                "win_rate": overall.get("wr"),
+                "trades": overall.get("trades"),
+                "max_loss": overall.get("max_loss"),
+                "min_block_wr": block.get("min_block_wr"),
+            }
+        current = next(
+            (r for r in (payload.get("candidate_comparison") or []) if r.get("name") == "current_ml_prod"),
+            None,
+        )
+        out["strategies"][strategy_id] = {
+            "best_by_group": best,
+            "current_weak_buckets": (current or {}).get("weak_buckets") or [],
+            "top_market_regime_patterns": (payload.get("market_regime_patterns") or [])[:8],
+            "conclusions": payload.get("conclusions") or [],
+        }
+    return out
 
 
 def build_production_summary(robustness_summary, latency_summary):
@@ -700,6 +740,7 @@ def main():
     session_filters = read_json(FILES["session_filters"], {})
     ten_min_filter_scan = read_json(FILES["ten_min_filter_scan"], {})
     ten_min_regime_filter_search = read_json(FILES["ten_min_regime_filter_search"], {})
+    regime_patterns = read_json(FILES["regime_patterns"], {})
     parallel_portfolio = read_json(FILES["parallel_portfolio"], {})
     queue_execution_policy = read_json(FILES["queue_execution_policy"], {})
     dual_causal_filter_search = read_json(FILES["dual_causal_filter_search"], {})
@@ -738,6 +779,7 @@ def main():
         "session_filter_validation": session_filter_summary,
         "ten_min_filter_scan": summarize_10min_filter_scan(ten_min_filter_scan),
         "ten_min_regime_filter_search": summarize_10min_regime_filter_search(ten_min_regime_filter_search),
+        "regime_patterns": summarize_regime_patterns(regime_patterns),
         "system_health": {
             "overall": health.get("overall"),
             "price": health.get("price"),
@@ -903,6 +945,19 @@ def main():
                 f"offline WR delta {ten_repeat.get('offline_wr_delta_pp')}pp with {ten_repeat.get('offline_retention_pct')}% retention, "
                 f"live WR delta {ten_repeat.get('live_wr_delta_pp')}pp on a small sample."
             )
+
+    regime_patterns = report.get("regime_patterns") or {}
+    if regime_patterns.get("status") == "ready":
+        for line in (regime_patterns.get("conclusions") or [])[:8]:
+            report["recommendation"].append(f"Regime pattern audit: {line}")
+        for strategy, payload in (regime_patterns.get("strategies") or {}).items():
+            weak = (payload.get("current_weak_buckets") or [])
+            if weak:
+                worst = weak[0]
+                report["recommendation"].append(
+                    f"{strategy}: current ML weak bucket to monitor is {worst.get('align_bucket')} / {worst.get('rsi_zone')} "
+                    f"WR {worst.get('wr')}% over {worst.get('trades')} trades; use shadow filters before changing production."
+                )
 
     portfolio = report.get("parallel_portfolio") or {}
     if portfolio.get("status") == "ready":
