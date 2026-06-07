@@ -81,6 +81,76 @@ SHADOW_CANDIDATES = [
         "note": "High-strength 30m guard candidate aligned with live shadow safety review.",
     },
 ]
+RULE_SHADOW_CANDIDATES = [
+    {
+        "id": "SHADOW_RULE_10m_rsi_reversal_30_70",
+        "base": "BTC_10min",
+        "kind": "rsi_reversal",
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "trend_gate": "none",
+        "note": "Rule-only RSI mean reversion; live shadow only.",
+    },
+    {
+        "id": "SHADOW_RULE_10m_rsi_reversal_no_strong_trend",
+        "base": "BTC_10min",
+        "kind": "rsi_reversal",
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "trend_gate": "no_strong_trend_score3",
+        "note": "Rule-only RSI mean reversion, skipped in strong trend; live shadow only.",
+    },
+    {
+        "id": "SHADOW_RULE_10m_pullback_follow",
+        "base": "BTC_10min",
+        "kind": "pullback_follow",
+        "score_min": 3,
+        "note": "Rule-only trend pullback follow; live shadow only.",
+    },
+    {
+        "id": "SHADOW_RULE_10m_hybrid_regime",
+        "base": "BTC_10min",
+        "kind": "hybrid_regime",
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "score_min": 3,
+        "note": "Trend-follow in strong trend, RSI reversal in range; live shadow only.",
+    },
+    {
+        "id": "SHADOW_RULE_30m_rsi_reversal_30_70",
+        "base": "BTC_30min",
+        "kind": "rsi_reversal",
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "trend_gate": "none",
+        "note": "Rule-only RSI mean reversion; live shadow only.",
+    },
+    {
+        "id": "SHADOW_RULE_30m_rsi_reversal_no_strong_trend",
+        "base": "BTC_30min",
+        "kind": "rsi_reversal",
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "trend_gate": "no_strong_trend_score3",
+        "note": "Rule-only RSI mean reversion, skipped in strong trend; live shadow only.",
+    },
+    {
+        "id": "SHADOW_RULE_30m_pullback_follow",
+        "base": "BTC_30min",
+        "kind": "pullback_follow",
+        "score_min": 3,
+        "note": "Rule-only trend pullback follow; live shadow only.",
+    },
+    {
+        "id": "SHADOW_RULE_30m_hybrid_regime",
+        "base": "BTC_30min",
+        "kind": "hybrid_regime",
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "score_min": 3,
+        "note": "Trend-follow in strong trend, RSI reversal in range; live shadow only.",
+    },
+]
 BASE_URLS = [
     "https://data-api.binance.vision",
     "https://api.binance.com",
@@ -185,6 +255,35 @@ def load_config():
 
 def model_label_for(strategy_id, cfg):
     return cfg.get("model_label") or f"BTC_{int(cfg.get('interval_min', cfg['horizon'] * 5))}min"
+
+
+def trend_score(row):
+    score = 0
+    eps = 0.00005
+    for col in ["trend6", "trend12", "trend30", "pre50"]:
+        v = float(row.get(col, 0) or 0)
+        if v > eps:
+            score += 1
+        elif v < -eps:
+            score -= 1
+    stack = float(row.get("ema_stack", 0) or 0)
+    if stack > 0:
+        score += 1
+    elif stack < 0:
+        score -= 1
+    return int(score)
+
+
+def trend_label(score):
+    if score >= 3:
+        return "strong_uptrend"
+    if score <= -3:
+        return "strong_downtrend"
+    if score > 0:
+        return "mild_uptrend"
+    if score < 0:
+        return "mild_downtrend"
+    return "neutral"
 
 
 class Strategy:
@@ -296,6 +395,124 @@ class Strategy:
         return result
 
 
+class RuleShadowStrategy:
+    def __init__(self, meta, cfg):
+        self.meta = meta
+        self.id = meta["id"]
+        self.base = meta["base"]
+        self.kind = meta["kind"]
+        self.horizon = int(cfg["horizon"])
+        self.interval_min = int(cfg.get("interval_min", self.horizon * 5))
+        self.skip_hours_utc = sorted({int(h) for h in cfg.get("skip_hours_utc", [])})
+        self.rsi_lo = float(meta.get("rsi_lo", cfg.get("rsi_lo", 30)))
+        self.rsi_hi = float(meta.get("rsi_hi", cfg.get("rsi_hi", 70)))
+        self.score_min = int(meta.get("score_min", 3))
+        self.trend_gate = meta.get("trend_gate", "none")
+        print(
+            f"[Signal] {self.id} -> rule {self.kind} | base={self.base} "
+            f"| horizon={self.horizon} | RSI<{self.rsi_lo}/{self.rsi_hi}> "
+            f"| score_min={self.score_min} | trend_gate={self.trend_gate} "
+            f"| skip_hours_utc={self.skip_hours_utc or 'none'}"
+        )
+
+    def _rsi_reversal(self, rsi_val, score):
+        sig = None
+        if rsi_val < self.rsi_lo:
+            sig = "UP"
+        elif rsi_val > self.rsi_hi:
+            sig = "DOWN"
+        if not sig:
+            return None
+        if self.trend_gate == "no_strong_trend_score3" and abs(score) >= 3:
+            return None
+        if self.trend_gate == "skip_opposite_score3":
+            if sig == "UP" and score <= -3:
+                return None
+            if sig == "DOWN" and score >= 3:
+                return None
+        return sig
+
+    def _pullback_follow(self, row, rsi_val, score):
+        bbp = float(row.get("bbp", 0.5) or 0.5)
+        if score >= self.score_min and rsi_val <= 60 and bbp <= 0.65:
+            return "UP"
+        if score <= -self.score_min and rsi_val >= 40 and bbp >= 0.35:
+            return "DOWN"
+        return None
+
+    def _hybrid_regime(self, row, rsi_val, score):
+        if score >= self.score_min:
+            return "UP"
+        if score <= -self.score_min:
+            return "DOWN"
+        return self._rsi_reversal(rsi_val, score)
+
+    def predict(self, df5):
+        fdf = build_features(df5, self.horizon)
+        if len(fdf) < 10:
+            return None
+        row = fdf.iloc[-1]
+        candle_time = pd.to_datetime(df5["time"].iloc[-1], utc=True)
+        candle_close_time = candle_time + pd.Timedelta(minutes=5)
+        session_ok = candle_time.hour not in self.skip_hours_utc
+        rsi_val = float(row.get("rsi14"))
+        score = trend_score(row)
+        sig = None
+        if self.kind == "rsi_reversal":
+            sig = self._rsi_reversal(rsi_val, score)
+        elif self.kind == "pullback_follow":
+            sig = self._pullback_follow(row, rsi_val, score)
+        elif self.kind == "hybrid_regime":
+            sig = self._hybrid_regime(row, rsi_val, score)
+        else:
+            raise RuntimeError(f"unknown rule shadow kind: {self.kind}")
+        if not session_ok:
+            sig = None
+
+        rsi_extreme = rsi_val < self.rsi_lo or rsi_val > self.rsi_hi
+        confidence = None
+        if sig:
+            if self.kind == "rsi_reversal":
+                confidence = round(min(100.0, max(0.0, abs(rsi_val - 50) * 2)), 1)
+            else:
+                confidence = round(min(100.0, max(0.0, abs(score) / 5 * 100)), 1)
+
+        return {
+            "strategy_id": self.id,
+            "shadow_rule": True,
+            "shadow_type": "rule",
+            "shadow_base_strategy": self.base,
+            "rule_kind": self.kind,
+            "avg_prob": None,
+            "probs": [],
+            "agree": True,
+            "agree_mode": "rule",
+            "agree_all": True,
+            "high_conf": bool(sig),
+            "rsi_extreme": rsi_extreme,
+            "rsi_value": round(rsi_val, 1),
+            "trend_score": score,
+            "trend_label": trend_label(score),
+            "bbp": round(float(row.get("bbp", 0.5) or 0.5), 4),
+            "session_ok": session_ok,
+            "skip_hours_utc": self.skip_hours_utc,
+            "signal": sig,
+            "confidence": confidence,
+            "interval_min": self.interval_min,
+            "duration": str(self.interval_min),
+            "price": round(float(df5["close"].iloc[-1]), 2),
+            "time": str(candle_time),
+            "candle_close_time": str(candle_close_time),
+            "actionable_time": str(candle_close_time),
+            "symbol": "BTCUSDT",
+            "label": self.id,
+            "model_label": "rule",
+            "threshold": None,
+            "amount": "5",
+            "fixed_amount": True,
+        }
+
+
 def fetch_live_klines():
     last_err = None
     for base in BASE_URLS:
@@ -378,6 +595,10 @@ for shadow in SHADOW_CANDIDATES:
         "enabled": True,
     })
     shadow_strategies.append((shadow, Strategy(shadow["id"], base_cfg)))
+rule_shadow_strategies = []
+for shadow in RULE_SHADOW_CANDIDATES:
+    base_cfg = dict(configs[shadow["base"]])
+    rule_shadow_strategies.append((shadow, RuleShadowStrategy(shadow, base_cfg)))
 last_audit_keys = load_audit_keys(SIGNAL_AUDIT_FILE)
 
 print("[Signal] Loading BTC history...")
@@ -429,6 +650,27 @@ while True:
                 print(
                     f"  {r['time']} {r['strategy_id']} shadow avg={r['avg_prob']:.3f} "
                     f"RSI={r['rsi_value']:.0f} {status_text(r)}"
+                )
+            if len(last_audit_keys) > 5000:
+                last_audit_keys = set(list(last_audit_keys)[-2000:])
+        for shadow_meta, shadow_strategy in rule_shadow_strategies:
+            r = shadow_strategy.predict(df5)
+            if not r:
+                continue
+            r["shadow"] = True
+            r["shadow_note"] = shadow_meta["note"]
+            key = f"shadow_candidate|{r.get('strategy_id')}|{r.get('time')}"
+            if key not in last_audit_keys:
+                append_jsonl(SIGNAL_AUDIT_FILE, {
+                    "event": "shadow_candidate",
+                    "serverTime": int(time.time() * 1000),
+                    **r,
+                })
+                last_audit_keys.add(key)
+            if r.get("signal"):
+                print(
+                    f"  {r['time']} {r['strategy_id']} rule-shadow "
+                    f"RSI={r['rsi_value']:.0f} trend={r['trend_score']} {status_text(r)}"
                 )
             if len(last_audit_keys) > 5000:
                 last_audit_keys = set(list(last_audit_keys)[-2000:])

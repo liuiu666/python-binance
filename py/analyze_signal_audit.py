@@ -188,6 +188,16 @@ def policy_metrics(trades):
     return out
 
 
+def grouped_metrics(trades, key_fields):
+    out = {}
+    for field in key_fields:
+        buckets = defaultdict(list)
+        for item in trades:
+            buckets[str(item.get(field) or "unknown")].append(item)
+        out[field] = {k: metrics(v) for k, v in sorted(buckets.items())}
+    return out
+
+
 def reason_for(row):
     if row.get("signal"):
         return "signal"
@@ -246,6 +256,11 @@ def analyze_rows(rows, times, prices):
             status = settle(row.get("signal"), open_price, close_price)
         trades.append({
             "strategyId": strategy,
+            "shadowType": row.get("shadow_type") or ("model" if row.get("shadow") else None),
+            "shadowBaseStrategy": row.get("shadow_base_strategy"),
+            "ruleKind": row.get("rule_kind"),
+            "trendScore": row.get("trend_score"),
+            "trendLabel": row.get("trend_label"),
             "direction": row.get("signal"),
             "duration": str(duration),
             "signalTime": str(signal_time),
@@ -272,6 +287,7 @@ def analyze_rows(rows, times, prices):
         "by_strategy": {k: metrics(v) for k, v in sorted(by_strategy.items())},
         "confidence_bins": confidence_bins(trades),
         "policy_metrics": policy_metrics(trades),
+        "grouped_metrics": grouped_metrics(trades, ["shadowType", "shadowBaseStrategy", "ruleKind", "trendLabel"]),
         "reason_counts": {k: dict(v) for k, v in sorted(reason_counts.items())},
         "recent_tradeable": trades[-50:],
     }
