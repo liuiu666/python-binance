@@ -124,6 +124,23 @@ function tailJsonl(file, limit) {
   } catch (e) { return []; }
 }
 
+function readJsonFile(file, fallback = null) {
+  try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : fallback; }
+  catch (e) { return fallback; }
+}
+
+function autoTradeSafetyGate() {
+  const report = readJsonFile(REPORT_FILES.shadowDecision, null);
+  const verdict = report && report.safety ? report.safety.verdict : null;
+  const allow = verdict === "allow_real_auto_trading";
+  return {
+    allow,
+    blocked: !allow,
+    verdict: verdict || "missing_shadow_decision",
+    requiredVerdict: "allow_real_auto_trading"
+  };
+}
+
 function runScript(script, cb) {
   const out = fs.openSync(REPORT_STDOUT_FILE, "a");
   const err = fs.openSync(REPORT_STDERR_FILE, "a");
@@ -234,17 +251,13 @@ app.get("/api/price", (req, res) => {
 });
 
 app.get("/api/reports", (req, res) => {
-  const read = (file) => {
-    try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null; }
-    catch (e) { return null; }
-  };
   res.json({
-    decision: read(REPORT_FILES.decision),
-    health: read(REPORT_FILES.health),
-    signalAudit: read(REPORT_FILES.signalAudit),
-    liveAudit: read(REPORT_FILES.liveAudit),
-    shadowDecision: read(REPORT_FILES.shadowDecision),
-    latency: read(REPORT_FILES.latency),
+    decision: readJsonFile(REPORT_FILES.decision),
+    health: readJsonFile(REPORT_FILES.health),
+    signalAudit: readJsonFile(REPORT_FILES.signalAudit),
+    liveAudit: readJsonFile(REPORT_FILES.liveAudit),
+    shadowDecision: readJsonFile(REPORT_FILES.shadowDecision),
+    latency: readJsonFile(REPORT_FILES.latency),
     reportRefresh
   });
 });
@@ -755,9 +768,28 @@ app.get("/api/config", (req, res) => {
 });
 
 app.post("/api/config", express.json(), (req, res) => {
+  let safetyBlocked = null;
   if (req.body.amount !== undefined) tradeConfig.amount = String(req.body.amount);
   if (req.body.duration !== undefined) tradeConfig.duration = String(req.body.duration);
-  if (req.body.autoTrade !== undefined) tradeConfig.autoTrade = !!req.body.autoTrade;
+  if (req.body.autoTrade !== undefined) {
+    const requestedAutoTrade = !!req.body.autoTrade;
+    if (requestedAutoTrade) {
+      const gate = autoTradeSafetyGate();
+      if (gate.blocked) {
+        tradeConfig.autoTrade = false;
+        safetyBlocked = gate;
+        appendJsonl(TRADE_AUDIT_FILE, {
+          serverTime: Date.now(),
+          event: "auto_trade_safety_block",
+          gate
+        });
+      } else {
+        tradeConfig.autoTrade = true;
+      }
+    } else {
+      tradeConfig.autoTrade = false;
+    }
+  }
   if (req.body.minConfidence !== undefined) tradeConfig.minConfidence = Number(req.body.minConfidence);
   if (req.body.tiersEnabled !== undefined) tradeConfig.tiersEnabled = !!req.body.tiersEnabled;
   if (req.body.skipConflictSignals !== undefined) tradeConfig.skipConflictSignals = !!req.body.skipConflictSignals;
@@ -774,7 +806,7 @@ app.post("/api/config", express.json(), (req, res) => {
   }
     saveTradeConfig();
   console.log("[Config] Updated:", JSON.stringify(tradeConfig));
-  res.json(tradeConfig);
+  res.json({ ...tradeConfig, safetyBlocked });
 });
 
 

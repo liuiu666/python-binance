@@ -26,6 +26,36 @@ MAX_LIVE_LOSS_STREAK = 3
 MIN_OFFLINE_WR = 60.0
 MIN_OFFLINE_TRADES = 80
 MIN_OFFLINE_BLOCK_WR = 52.0
+EMPTY_LIVE_METRIC = {
+    "settled": 0,
+    "wins": 0,
+    "losses": 0,
+    "ties": 0,
+    "wr": 0.0,
+    "pnl": 0.0,
+    "max_loss": 0,
+    "pending": 0,
+}
+CANDIDATE_OFFLINE_KEYS = {
+    "BTC_10min": "current_prod",
+    "BTC_30min": "current_prod",
+    "SHADOW_10m_strict_th58_rsi30_70_all3": "ml_th58_rsi30_70_all3_none",
+    "SHADOW_10m_guard_th68_rsi30_70_all3": "ml_th68_rsi30_70_all3_none",
+    "SHADOW_10m_more_trades_th60_rsi35_65_vol_hi_majority": "ml_th60_rsi35_65_majority_none",
+    "SHADOW_10m_recent_scan_th65_rsi35_65_all3": "ml_th65_rsi35_65_all3_none",
+    "SHADOW_10m_ctcool_t630_str30": "ml_th55_rsi30_70_majority_ctcool_t630_str30",
+    "SHADOW_30m_stable_th58_rsi30_70_all3": "ml_th58_rsi30_70_all3_none",
+    "SHADOW_30m_guard_th68_rsi30_70_all3": "ml_th68_rsi30_70_all3_none",
+    "SHADOW_30m_ctcool_t625_str30": "ml_th58_rsi30_70_majority_ctcool_t625_str30",
+    "SHADOW_RULE_10m_rsi_reversal_30_70": "rule_rsi_rev_30_70_none",
+    "SHADOW_RULE_10m_rsi_reversal_no_strong_trend": "rule_rsi_rev_30_70_no_strong_trend_score3",
+    "SHADOW_RULE_10m_pullback_follow": "rule_pullback_s3_u60_65_d40_35",
+    "SHADOW_RULE_10m_hybrid_regime": "hybrid_rule_regime_s3_rsi30_70",
+    "SHADOW_RULE_30m_rsi_reversal_30_70": "rule_rsi_rev_30_70_none",
+    "SHADOW_RULE_30m_rsi_reversal_no_strong_trend": "rule_rsi_rev_30_70_no_strong_trend_score3",
+    "SHADOW_RULE_30m_pullback_follow": "rule_pullback_s3_u60_65_d40_35",
+    "SHADOW_RULE_30m_hybrid_regime": "hybrid_rule_regime_s3_rsi30_70",
+}
 
 
 def read_json(path, default=None):
@@ -62,28 +92,8 @@ def flatten_lab(lab):
 
 
 def offline_key_for(candidate_id, strategy_id):
-    mappings = {
-        "BTC_10min": "current_prod",
-        "BTC_30min": "current_prod",
-        "SHADOW_10m_strict_th58_rsi30_70_all3": "ml_th58_rsi30_70_all3_none",
-        "SHADOW_10m_guard_th68_rsi30_70_all3": "ml_th68_rsi30_70_all3_none",
-        "SHADOW_10m_more_trades_th60_rsi35_65_vol_hi_majority": "ml_th60_rsi35_65_majority_none",
-        "SHADOW_10m_recent_scan_th65_rsi35_65_all3": "ml_th65_rsi35_65_all3_none",
-        "SHADOW_10m_ctcool_t630_str30": "ml_th55_rsi30_70_majority_ctcool_t630_str30",
-        "SHADOW_30m_stable_th58_rsi30_70_all3": "ml_th58_rsi30_70_all3_none",
-        "SHADOW_30m_guard_th68_rsi30_70_all3": "ml_th68_rsi30_70_all3_none",
-        "SHADOW_30m_ctcool_t625_str30": "ml_th58_rsi30_70_majority_ctcool_t625_str30",
-        "SHADOW_RULE_10m_rsi_reversal_30_70": "rule_rsi_rev_30_70_none",
-        "SHADOW_RULE_10m_rsi_reversal_no_strong_trend": "rule_rsi_rev_30_70_no_strong_trend_score3",
-        "SHADOW_RULE_10m_pullback_follow": "rule_pullback_s3_u60_65_d40_35",
-        "SHADOW_RULE_10m_hybrid_regime": "hybrid_rule_regime_s3_rsi30_70",
-        "SHADOW_RULE_30m_rsi_reversal_30_70": "rule_rsi_rev_30_70_none",
-        "SHADOW_RULE_30m_rsi_reversal_no_strong_trend": "rule_rsi_rev_30_70_no_strong_trend_score3",
-        "SHADOW_RULE_30m_pullback_follow": "rule_pullback_s3_u60_65_d40_35",
-        "SHADOW_RULE_30m_hybrid_regime": "hybrid_rule_regime_s3_rsi30_70",
-    }
-    if candidate_id in mappings:
-        return mappings[candidate_id]
+    if candidate_id in CANDIDATE_OFFLINE_KEYS:
+        return CANDIDATE_OFFLINE_KEYS[candidate_id]
     if candidate_id.startswith("SHADOW_RULE_"):
         return None
     return "current_prod" if strategy_id in ("BTC_10min", "BTC_30min") else None
@@ -140,6 +150,7 @@ def offline_summary(row):
 def judge(candidate_id, live, offline, config):
     reasons = []
     settled = int(live.get("settled") or 0)
+    pending = int(live.get("pending") or 0)
     wr = float(live.get("wr") or 0)
     pnl = float(live.get("pnl") or 0)
     max_loss = int(live.get("max_loss") or 0)
@@ -157,7 +168,9 @@ def judge(candidate_id, live, offline, config):
         if (offline.get("min_block_wr") is None) or float(offline.get("min_block_wr") or 0) < MIN_OFFLINE_BLOCK_WR:
             reasons.append("offline_block_unstable")
 
-    if settled < MIN_LIVE_SETTLED:
+    if settled == 0 and pending == 0:
+        reasons.append("live_no_samples_yet")
+    elif settled < MIN_LIVE_SETTLED:
         reasons.append("live_sample_too_small")
     if settled >= 20 and wr <= BREAKEVEN_WR:
         reasons.append("live_wr_below_breakeven")
@@ -193,7 +206,9 @@ def main():
     live = live_rows(signal_audit)
 
     candidates = []
-    for candidate_id, live_metric in sorted(live.items()):
+    candidate_ids = sorted(set(CANDIDATE_OFFLINE_KEYS) | set(live))
+    for candidate_id in candidate_ids:
+        live_metric = live.get(candidate_id, dict(EMPTY_LIVE_METRIC))
         base = base_strategy_for(candidate_id)
         offline_key = offline_key_for(candidate_id, base)
         offline_row = lab_index.get(base, {}).get(offline_key) if offline_key else None

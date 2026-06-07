@@ -296,6 +296,12 @@
     fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(c)})
       .then(r=>r.json())
       .then(d=>{
+        if(d.safetyBlocked){
+          showToast("AutoTrade blocked by safety gate: "+(d.safetyBlocked.verdict||"not allowed"),"error");
+          configDirty=false;
+          loadConfig(true);
+          return;
+        }
         showToast("配置已保存: 10分钟/30分钟 "+(d.tiersEnabled?"按档位":"默认 "+d.amount+"U"),"success");
         configDirty=false;
         $("configStatus").textContent="已同步";
