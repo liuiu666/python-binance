@@ -293,6 +293,9 @@ def reason_for(row):
         reasons.append("vol_filter")
     if row.get("countertrend_guard_ok") is False:
         reasons.append("countertrend_not_cooled")
+    if row.get("regime_filter_ok") is False:
+        parts = row.get("regime_filter_reasons") or []
+        reasons.append("regime_filter" + (":" + ",".join(parts) if parts else ""))
     if row.get("session_ok") is False:
         reasons.append("session_blocked")
     return "+".join(reasons) or "no_signal"
@@ -428,6 +431,13 @@ def analyze_rows(rows, times, prices, trend_lookup=None):
             "ruleKind": row.get("rule_kind"),
             "trendScore": trend_score_value,
             "trendLabel": trend_label_value,
+            "bbp": row.get("bbp"),
+            "hlp20": row.get("hlp20"),
+            "hlp50": row.get("hlp50"),
+            "trend6": row.get("trend6"),
+            "trend12": row.get("trend12"),
+            "trend30": row.get("trend30"),
+            "pre50": row.get("pre50"),
             "direction": row.get("signal"),
             "duration": str(duration),
             "signalTime": str(signal_time),

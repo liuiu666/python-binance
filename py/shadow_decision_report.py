@@ -14,6 +14,7 @@ from collections import defaultdict
 
 OUT = "E:/codex/data"
 LAB_FILE = os.path.join(OUT, "strategy_research_lab_report.json")
+TEN_MIN_REGIME_FILE = os.path.join(OUT, "ten_min_regime_filter_search.json")
 SIGNAL_AUDIT_FILE = os.path.join(OUT, "signal_audit_report.json")
 LIVE_BACKTEST_GAP_FILE = os.path.join(OUT, "live_backtest_gap_report.json")
 LIVE_AUDIT_FILE = os.path.join(OUT, "live_trade_audit_report.json")
@@ -45,6 +46,11 @@ CANDIDATE_OFFLINE_KEYS = {
     "SHADOW_10m_more_trades_th60_rsi35_65_vol_hi_majority": "ml_th60_rsi35_65_majority_none",
     "SHADOW_10m_recent_scan_th65_rsi35_65_all3": "ml_th65_rsi35_65_all3_none",
     "SHADOW_10m_ctcool_t630_str30": "ml_th55_rsi30_70_majority_ctcool_t630_str30",
+    "SHADOW_10m_bbp_cap105_th55_rsi30_70_majority": "ten_min_regime_filter_search",
+    "SHADOW_10m_bbp_cap120_th55_rsi30_70_majority": "ten_min_regime_filter_search",
+    "SHADOW_10m_rsi_cap74_th55_rsi30_70_majority": "ten_min_regime_filter_search",
+    "SHADOW_10m_skip_hour12_th55_rsi30_70_majority": "ten_min_regime_filter_search",
+    "SHADOW_10m_conf_lt40_th55_rsi30_70_majority": "ten_min_regime_filter_search",
     "SHADOW_30m_stable_th58_rsi30_70_all3": "ml_th58_rsi30_70_all3_none",
     "SHADOW_30m_guard_th68_rsi30_70_all3": "ml_th68_rsi30_70_all3_none",
     "SHADOW_30m_ctcool_t625_str30": "ml_th58_rsi30_70_majority_ctcool_t625_str30",
@@ -89,6 +95,14 @@ def flatten_lab(lab):
                 name = row.get("name") or (row.get("candidate") or {}).get("name")
                 if name and name not in out[strategy_id]:
                     out[strategy_id][name] = row
+    return out
+
+
+def flatten_ten_min_regime(report):
+    out = {}
+    for row in report.get("shadow_candidates") or []:
+        if row.get("id"):
+            out[row["id"]] = row
     return out
 
 
@@ -268,11 +282,13 @@ def judge(candidate_id, live, offline, config):
 
 def main():
     lab = read_json(LAB_FILE, {})
+    ten_min_regime = read_json(TEN_MIN_REGIME_FILE, {})
     signal_audit = read_json(SIGNAL_AUDIT_FILE, {})
     live_gap = read_json(LIVE_BACKTEST_GAP_FILE, {})
     live_audit = read_json(LIVE_AUDIT_FILE, {})
     config = read_json(TRADE_CONFIG_FILE, {})
     lab_index = flatten_lab(lab)
+    ten_min_regime_index = flatten_ten_min_regime(ten_min_regime)
     live = live_rows(signal_audit)
 
     candidates = []
@@ -281,7 +297,10 @@ def main():
         live_metric = live.get(candidate_id, dict(EMPTY_LIVE_METRIC))
         base = base_strategy_for(candidate_id)
         offline_key = offline_key_for(candidate_id, base)
-        offline_row = lab_index.get(base, {}).get(offline_key) if offline_key else None
+        if offline_key == "ten_min_regime_filter_search":
+            offline_row = ten_min_regime_index.get(candidate_id)
+        else:
+            offline_row = lab_index.get(base, {}).get(offline_key) if offline_key else None
         offline = offline_summary(offline_row)
         decision, reasons = judge(candidate_id, live_metric, offline, config)
         candidates.append({

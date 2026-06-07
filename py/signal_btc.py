@@ -73,6 +73,61 @@ SHADOW_CANDIDATES = [
         "note": "10m counter-trend cooling guard; shadow only until live sample confirms.",
     },
     {
+        "id": "SHADOW_10m_bbp_cap105_th55_rsi30_70_majority",
+        "base": "BTC_10min",
+        "threshold": 0.55,
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "vol_min_rank": None,
+        "agree_mode": "majority",
+        "bbp_cap": 1.05,
+        "note": "10m BBP regime cap; shadow only until live sample confirms.",
+    },
+    {
+        "id": "SHADOW_10m_bbp_cap120_th55_rsi30_70_majority",
+        "base": "BTC_10min",
+        "threshold": 0.55,
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "vol_min_rank": None,
+        "agree_mode": "majority",
+        "bbp_cap": 1.20,
+        "note": "10m high-retention BBP regime cap; shadow only until live sample confirms.",
+    },
+    {
+        "id": "SHADOW_10m_rsi_cap74_th55_rsi30_70_majority",
+        "base": "BTC_10min",
+        "threshold": 0.55,
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "vol_min_rank": None,
+        "agree_mode": "majority",
+        "rsi_extreme_cap": 74,
+        "note": "10m RSI stretch cap; shadow only until live sample confirms.",
+    },
+    {
+        "id": "SHADOW_10m_skip_hour12_th55_rsi30_70_majority",
+        "base": "BTC_10min",
+        "threshold": 0.55,
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "vol_min_rank": None,
+        "agree_mode": "majority",
+        "extra_skip_hours_utc": [12],
+        "note": "10m extra UTC hour-12 filter; shadow only until live sample confirms.",
+    },
+    {
+        "id": "SHADOW_10m_conf_lt40_th55_rsi30_70_majority",
+        "base": "BTC_10min",
+        "threshold": 0.55,
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "vol_min_rank": None,
+        "agree_mode": "majority",
+        "confidence_max": 40,
+        "note": "10m high-strength confidence cap; shadow only until live sample confirms.",
+    },
+    {
         "id": "SHADOW_30m_stable_th58_rsi30_70_all3",
         "base": "BTC_30min",
         "threshold": 0.58,
@@ -333,6 +388,12 @@ class Strategy:
         self.countertrend_max_strength = (
             None if self.countertrend_max_strength is None else float(self.countertrend_max_strength)
         )
+        self.bbp_cap = cfg.get("bbp_cap")
+        self.bbp_cap = None if self.bbp_cap is None else float(self.bbp_cap)
+        self.rsi_extreme_cap = cfg.get("rsi_extreme_cap")
+        self.rsi_extreme_cap = None if self.rsi_extreme_cap is None else float(self.rsi_extreme_cap)
+        self.confidence_max = cfg.get("confidence_max")
+        self.confidence_max = None if self.confidence_max is None else float(self.confidence_max)
         self.xgb_models = []
         for i in range(2):
             m = XGBClassifier()
@@ -349,6 +410,9 @@ class Strategy:
             f"| agree={self.agree_mode} "
             f"| ctcool_t6={self.countertrend_max_abs_trend6 if self.countertrend_max_abs_trend6 is not None else 'none'} "
             f"| ctcool_strength={self.countertrend_max_strength if self.countertrend_max_strength is not None else 'none'} "
+            f"| bbp_cap={self.bbp_cap if self.bbp_cap is not None else 'none'} "
+            f"| rsi_cap={self.rsi_extreme_cap if self.rsi_extreme_cap is not None else 'none'} "
+            f"| conf_max={self.confidence_max if self.confidence_max is not None else 'none'} "
             f"| skip_hours_utc={self.skip_hours_utc or 'none'} "
             f"| amount={self.fixed_amount or 'config'}"
         )
@@ -373,6 +437,13 @@ class Strategy:
         high_conf = avg >= self.threshold or avg <= (1 - self.threshold)
         rsi_val = float(X[0, self.feat_cols.index("rsi14")])
         rsi_extreme = rsi_val < self.rsi_lo or rsi_val > self.rsi_hi
+        bbp_val = float(last.iloc[0].get("bbp", 0.5) or 0.5)
+        hlp20_val = float(last.iloc[0].get("hlp20", 0.5) or 0.5)
+        hlp50_val = float(last.iloc[0].get("hlp50", 0.5) or 0.5)
+        trend12_val = float(last.iloc[0].get("trend12", 0) or 0)
+        trend30_val = float(last.iloc[0].get("trend30", 0) or 0)
+        pre50_val = float(last.iloc[0].get("pre50", 0) or 0)
+        ema_stack_val = float(last.iloc[0].get("ema_stack", 0) or 0)
         atrp = float(X[0, self.feat_cols.index("atrp")]) if "atrp" in self.feat_cols else None
         vol_rank = None
         vol_ok = True
@@ -396,6 +467,8 @@ class Strategy:
                 sig = "UP" if avg >= 0.5 else "DOWN"
             conf = round(abs(avg - 0.5) * 2 * 100, 1)
         countertrend_guard_ok = True
+        regime_filter_ok = True
+        regime_filter_reasons = []
         trend6_val = float(last.iloc[0].get("trend6", 0) or 0)
         strength_val = round(abs(avg - 0.5) * 2 * 100, 1)
         if sig:
@@ -414,6 +487,20 @@ class Strategy:
             if not countertrend_guard_ok:
                 sig = None
                 conf = None
+            if sig and self.bbp_cap is not None:
+                if (sig == "DOWN" and bbp_val > self.bbp_cap) or (sig == "UP" and bbp_val < 1 - self.bbp_cap):
+                    regime_filter_ok = False
+                    regime_filter_reasons.append("bbp_cap")
+            if sig and self.rsi_extreme_cap is not None:
+                if (sig == "DOWN" and rsi_val > self.rsi_extreme_cap) or (sig == "UP" and rsi_val < 100 - self.rsi_extreme_cap):
+                    regime_filter_ok = False
+                    regime_filter_reasons.append("rsi_extreme_cap")
+            if sig and self.confidence_max is not None and strength_val >= self.confidence_max:
+                regime_filter_ok = False
+                regime_filter_reasons.append("confidence_max")
+            if sig and not regime_filter_ok:
+                sig = None
+                conf = None
 
         result = {
             "strategy_id": self.id,
@@ -428,9 +515,21 @@ class Strategy:
             "trend_score": trend_val,
             "trend_label": trend_label(trend_val),
             "trend6": round(trend6_val, 6),
+            "trend12": round(trend12_val, 6),
+            "trend30": round(trend30_val, 6),
+            "pre50": round(pre50_val, 6),
+            "ema_stack": round(ema_stack_val, 3),
+            "bbp": round(bbp_val, 4),
+            "hlp20": round(hlp20_val, 4),
+            "hlp50": round(hlp50_val, 4),
             "countertrend_guard_ok": countertrend_guard_ok,
             "countertrend_max_abs_trend6": self.countertrend_max_abs_trend6,
             "countertrend_max_strength": self.countertrend_max_strength,
+            "regime_filter_ok": regime_filter_ok,
+            "regime_filter_reasons": regime_filter_reasons,
+            "bbp_cap": self.bbp_cap,
+            "rsi_extreme_cap": self.rsi_extreme_cap,
+            "confidence_max": self.confidence_max,
             "vol_ok": vol_ok,
             "vol_rank": None if vol_rank is None else round(vol_rank, 3),
             "vol_min_rank": self.vol_min_rank,
@@ -639,6 +738,8 @@ def status_text(r):
         parts.append(f"vol={r.get('vol_rank')}")
     if r.get("countertrend_guard_ok") is False:
         parts.append("countertrend hot")
+    if r.get("regime_filter_ok") is False:
+        parts.append("regime " + ",".join(r.get("regime_filter_reasons") or []))
     return " | ".join(parts) if parts else "waiting"
 
 
@@ -656,6 +757,10 @@ for shadow in SHADOW_CANDIDATES:
         "fixed_amount": 5,
         "countertrend_max_abs_trend6": shadow.get("countertrend_max_abs_trend6"),
         "countertrend_max_strength": shadow.get("countertrend_max_strength"),
+        "bbp_cap": shadow.get("bbp_cap"),
+        "rsi_extreme_cap": shadow.get("rsi_extreme_cap"),
+        "confidence_max": shadow.get("confidence_max"),
+        "skip_hours_utc": sorted(set(base_cfg.get("skip_hours_utc", [])) | set(shadow.get("extra_skip_hours_utc", []))),
         "enabled": True,
     })
     shadow_strategies.append((shadow, Strategy(shadow["id"], base_cfg)))

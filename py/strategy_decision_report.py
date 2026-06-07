@@ -24,6 +24,7 @@ FILES = {
     "robustness": os.path.join(OUT, "strategy_robustness_profile.json"),
     "session_filters": os.path.join(OUT, "session_filter_validation.json"),
     "ten_min_filter_scan": os.path.join(OUT, "optimize_10min_filters.json"),
+    "ten_min_regime_filter_search": os.path.join(OUT, "ten_min_regime_filter_search.json"),
     "parallel_portfolio": os.path.join(OUT, "parallel_portfolio_report.json"),
     "queue_execution_policy": os.path.join(OUT, "queue_execution_policy_report.json"),
     "dual_causal_filter_search": os.path.join(OUT, "dual_strategy_causal_filter_search.json"),
@@ -268,6 +269,32 @@ def summarize_10min_filter_scan(scan):
             "High-threshold 10-minute filters can show very high recent WR, "
             "but candidates under 100 trades are treated as shadow-only evidence, not production changes."
         ),
+    }
+
+
+def summarize_10min_regime_filter_search(report):
+    if not report:
+        return {
+            "status": "missing",
+            "note": "Run py/search_10m_regime_filters.py to evaluate focused 10-minute regime filters.",
+        }
+    rows = report.get("shadow_candidates") or []
+    top = sorted(
+        rows,
+        key=lambda r: (
+            float(r.get("wr_delta_pp") or 0),
+            float(r.get("trade_retention_pct") or 0),
+            -int(((r.get("overall") or {}).get("max_loss")) or 0),
+        ),
+        reverse=True,
+    )
+    return {
+        "status": "ready",
+        "method": report.get("method"),
+        "baseline": report.get("baseline"),
+        "shadow_candidates": rows,
+        "top_shadow_candidates": top[:5],
+        "scan_top": report.get("scan_top") or [],
     }
 
 
@@ -644,6 +671,7 @@ def main():
     robustness = read_json(FILES["robustness"], {})
     session_filters = read_json(FILES["session_filters"], {})
     ten_min_filter_scan = read_json(FILES["ten_min_filter_scan"], {})
+    ten_min_regime_filter_search = read_json(FILES["ten_min_regime_filter_search"], {})
     parallel_portfolio = read_json(FILES["parallel_portfolio"], {})
     queue_execution_policy = read_json(FILES["queue_execution_policy"], {})
     dual_causal_filter_search = read_json(FILES["dual_causal_filter_search"], {})
@@ -681,6 +709,7 @@ def main():
         "portfolio_filter_stability": summarize_portfolio_filter_stability(portfolio_filter_stability),
         "session_filter_validation": session_filter_summary,
         "ten_min_filter_scan": summarize_10min_filter_scan(ten_min_filter_scan),
+        "ten_min_regime_filter_search": summarize_10min_regime_filter_search(ten_min_regime_filter_search),
         "system_health": {
             "overall": health.get("overall"),
             "price": health.get("price"),
@@ -993,6 +1022,19 @@ def main():
         best = usable[0]
         report["recommendation"].append(
             f"BTC_10min: recent scan usable candidate {best.get('label')} WR {best.get('wr')}% over {best.get('trades')} trades; keep as shadow candidate until walk-forward/session validation confirms it."
+        )
+
+    regime_search = report.get("ten_min_regime_filter_search") or {}
+    regime_candidates = regime_search.get("top_shadow_candidates") or []
+    if regime_candidates:
+        best = regime_candidates[0]
+        overall = best.get("overall") or {}
+        block = best.get("time_block_summary") or {}
+        report["recommendation"].append(
+            f"BTC_10min focused regime filter: {best.get('id')} has offline WR {overall.get('wr')}% "
+            f"over {overall.get('trades')} trades, delta {best.get('wr_delta_pp')}pp, "
+            f"retention {best.get('trade_retention_pct')}%, min block WR {block.get('min_block_wr')}%. "
+            "Run as live shadow only."
         )
 
     with open(REPORT_FILE, "w", encoding="utf-8") as f:
