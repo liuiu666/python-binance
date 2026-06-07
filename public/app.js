@@ -168,7 +168,15 @@
     setReportValue(elReportEdge30,e30!=null?("+"+Number(e30).toFixed(2)+"pp"):"--",e30>0?"ok":"warn");
     const p=d.parallel_portfolio||{};
     setReportValue(elReportFilter,p.win_rate!=null?Number(p.win_rate).toFixed(1)+"% / "+Number((p.frequency||{}).trades_per_day||0).toFixed(1)+"/d":"--",p.win_rate?"ok":"warn");
-    setReportValue(elReportShadow,(d.shadow_candidate_decision||{}).status?"watching":"--","warn");
+    const sd=data&&data.shadowDecision?data.shadowDecision:null;
+    if(sd&&sd.summary_counts){
+      const c=sd.summary_counts;
+      const txt="watch "+(c.watch||0)+" / reject "+((c.reject_live_weak||0)+(c.reject_offline_weak||0));
+      setReportValue(elReportShadow,txt,(c.promote_candidate||0)>0?"ok":"warn");
+      elReportShadow.title=(sd.safety&&sd.safety.verdict?sd.safety.verdict:"shadow decision")+" | autoTrade="+((sd.safety||{}).autoTrade);
+    }else{
+      setReportValue(elReportShadow,(d.shadow_candidate_decision||{}).status?"watching":"--","warn");
+    }
   }
 
   function fetchReports(){fetch("/api/reports").then(r=>r.json()).then(updateReports).catch(()=>{})}

@@ -26,6 +26,7 @@ const REPORT_FILES = {
   health: path.join(__dirname, "data", "strategy_health_report.json"),
   signalAudit: path.join(__dirname, "data", "signal_audit_report.json"),
   liveAudit: path.join(__dirname, "data", "live_trade_audit_report.json"),
+  shadowDecision: path.join(__dirname, "data", "shadow_decision_report.json"),
   latency: path.join(__dirname, "data", "execution_latency_validation.json")
 };
 const PYTHON_EXE = process.env.PYTHON_EXE || "python";
@@ -167,6 +168,7 @@ app.get("/api/reports", (req, res) => {
     health: read(REPORT_FILES.health),
     signalAudit: read(REPORT_FILES.signalAudit),
     liveAudit: read(REPORT_FILES.liveAudit),
+    shadowDecision: read(REPORT_FILES.shadowDecision),
     latency: read(REPORT_FILES.latency)
   });
 });
