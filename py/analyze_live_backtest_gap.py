@@ -69,6 +69,49 @@ def metrics(items):
     }
 
 
+def chronological_blocks(rows, blocks=10, min_active_trades=5):
+    ordered = sorted(rows, key=lambda r: pd.to_datetime(r["time"], utc=True))
+    if not ordered:
+        return [], {
+            "active_blocks": 0,
+            "positive_blocks": 0,
+            "min_block_wr": None,
+            "worst_block": None,
+        }
+    block_rows = []
+    size = len(ordered)
+    for i in range(blocks):
+        start = round(i * size / blocks)
+        end = round((i + 1) * size / blocks)
+        part = ordered[start:end]
+        if not part:
+            continue
+        m = metrics(part)
+        block_rows.append({
+            "slice": f"block_{i + 1:02d}",
+            "start": part[0]["time"],
+            "end": part[-1]["time"],
+            **m,
+        })
+    active = [b for b in block_rows if int(b.get("trades") or 0) >= min_active_trades]
+    if not active:
+        summary = {
+            "active_blocks": 0,
+            "positive_blocks": 0,
+            "min_block_wr": None,
+            "worst_block": None,
+        }
+    else:
+        worst = min(active, key=lambda b: float(b.get("wr") or 0))
+        summary = {
+            "active_blocks": len(active),
+            "positive_blocks": sum(1 for b in active if float(b.get("pnl_5u") or 0) > 0),
+            "min_block_wr": worst.get("wr"),
+            "worst_block": worst.get("slice"),
+        }
+    return block_rows, summary
+
+
 def align_bucket(align_score):
     if align_score >= 3:
         return "strong_aligned"
@@ -244,6 +287,18 @@ def compare_bucket_field(live_rows, offline_rows, field):
     return out
 
 
+def short_strategy(strategy):
+    if strategy == "BTC_10min":
+        return "10m"
+    if strategy == "BTC_30min":
+        return "30m"
+    return strategy.replace("BTC_", "").replace("min", "m")
+
+
+def policy_id(strategy, name):
+    return f"POLICY_{short_strategy(strategy)}_{name}"
+
+
 def filter_defs():
     return [
         {
@@ -254,6 +309,16 @@ def filter_defs():
         {
             "name": "one_open_position_per_strategy",
             "description": "Skip signals while the same strategy has an unsettled option.",
+            "fn": None,
+        },
+        {
+            "name": "same_direction_gap_1x_duration",
+            "description": "Skip a signal if the same strategy already selected the same direction within one option duration.",
+            "fn": None,
+        },
+        {
+            "name": "same_direction_gap_2x_duration",
+            "description": "Skip a signal if the same strategy already selected the same direction within two option durations.",
             "fn": None,
         },
         {
@@ -278,6 +343,7 @@ def apply_stateful_filter(rows, name):
     selected = []
     active_until = {}
     cooldown_until = {}
+    last_selected_same_direction = {}
     for row in sorted(rows, key=lambda r: (pd.to_datetime(r["time"], utc=True), r["strategy"])):
         strategy = row["strategy"]
         start = pd.to_datetime(row["entry_time"] or row["time"], utc=True)
@@ -288,6 +354,14 @@ def apply_stateful_filter(rows, name):
                 continue
             selected.append(row)
             active_until[strategy] = expiry
+        elif name in ("same_direction_gap_1x_duration", "same_direction_gap_2x_duration"):
+            key = (strategy, row.get("direction"))
+            gap_mult = 1 if name == "same_direction_gap_1x_duration" else 2
+            previous = last_selected_same_direction.get(key)
+            if previous is not None and start < previous + duration * gap_mult:
+                continue
+            selected.append(row)
+            last_selected_same_direction[key] = start
         elif name == "cooldown_after_loss_1x_duration":
             if strategy in active_until and start < active_until[strategy]:
                 continue
@@ -314,13 +388,19 @@ def filter_screen(live_rows, offline_rows):
             offline_keep = [r for r in offline_rows if item["fn"](r, None)]
         live_m = metrics(live_keep)
         offline_m = metrics(offline_keep)
+        _, live_block_summary = chronological_blocks(live_keep, min_active_trades=3)
+        _, offline_block_summary = chronological_blocks(offline_keep, min_active_trades=20)
         base_live = metrics(live_rows)
         base_offline = metrics(offline_rows)
         rows.append({
+            "id": policy_id(live_rows[0]["strategy"] if live_rows else offline_rows[0]["strategy"], name)
+                if (live_rows or offline_rows) else name,
             "name": name,
             "description": item["description"],
             "live": live_m,
+            "live_block_summary": live_block_summary,
             "offline": offline_m,
+            "offline_block_summary": offline_block_summary,
             "live_trades_delta": live_m["trades"] - base_live["trades"],
             "offline_trades_delta": offline_m["trades"] - base_offline["trades"],
             "live_wr_delta_pp": round(live_m["wr"] - base_live["wr"], 2) if base_live["trades"] else None,
@@ -450,6 +530,25 @@ def main():
             "wr_gap_live_minus_offline_pp": round(metrics(combined_live)["wr"] - metrics(combined_offline)["wr"], 2)
                 if combined_live and combined_offline else None,
         },
+        "policy_candidates": [
+            {
+                "id": row["id"],
+                "strategy": strategy,
+                "name": row["name"],
+                "description": row["description"],
+                "live": row["live"],
+                "live_block_summary": row["live_block_summary"],
+                "offline": row["offline"],
+                "offline_block_summary": row["offline_block_summary"],
+                "live_wr_delta_pp": row["live_wr_delta_pp"],
+                "offline_wr_delta_pp": row["offline_wr_delta_pp"],
+                "offline_retention_pct": row["offline_retention_pct"],
+                "evidence": row["evidence"],
+            }
+            for strategy, data in strategy_reports.items()
+            for row in data["filter_screen"]
+            if row["name"] != "baseline_all_signals"
+        ],
         "repeated_exposure": repeated_exposure(combined_live),
         "strategies": strategy_reports,
         "diagnosis": [],

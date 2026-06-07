@@ -15,6 +15,7 @@ from collections import defaultdict
 OUT = "E:/codex/data"
 LAB_FILE = os.path.join(OUT, "strategy_research_lab_report.json")
 SIGNAL_AUDIT_FILE = os.path.join(OUT, "signal_audit_report.json")
+LIVE_BACKTEST_GAP_FILE = os.path.join(OUT, "live_backtest_gap_report.json")
 LIVE_AUDIT_FILE = os.path.join(OUT, "live_trade_audit_report.json")
 TRADE_CONFIG_FILE = os.path.join(OUT, "trade_config.json")
 REPORT_FILE = os.path.join(OUT, "shadow_decision_report.json")
@@ -110,6 +111,8 @@ def base_strategy_for(candidate_id, row=None):
 
 
 def candidate_type(candidate_id, grouped=None):
+    if candidate_id.startswith("POLICY_"):
+        return "policy_replay"
     if candidate_id.startswith("SHADOW_RULE_"):
         if "hybrid" in candidate_id:
             return "rule_hybrid"
@@ -130,6 +133,64 @@ def live_rows(signal_audit):
     for strategy_id, metric in (derived.get("by_strategy") or {}).items():
         if strategy_id not in rows or int((rows[strategy_id] or {}).get("settled") or 0) == 0:
             rows[strategy_id] = {**metric, "source": "derived_replay"}
+    return rows
+
+
+def metric_to_live(metric, source):
+    return {
+        "settled": int(metric.get("trades") or metric.get("settled") or 0),
+        "wins": int(metric.get("wins") or 0),
+        "losses": int(metric.get("losses") or 0),
+        "ties": int(metric.get("ties") or 0),
+        "wr": metric.get("wr"),
+        "pnl": metric.get("pnl_5u", metric.get("pnl")),
+        "max_loss": metric.get("max_loss"),
+        "pending": 0,
+        "source": source,
+    }
+
+
+def metric_to_offline(metric, block_summary, name):
+    return {
+        "name": name,
+        "kind": "execution_policy_replay",
+        "trades": metric.get("trades"),
+        "wr": metric.get("wr"),
+        "pnl_5u": metric.get("pnl_5u"),
+        "max_loss": metric.get("max_loss"),
+        "min_block_wr": (block_summary or {}).get("min_block_wr"),
+        "positive_blocks": (block_summary or {}).get("positive_blocks"),
+        "active_blocks": (block_summary or {}).get("active_blocks"),
+    }
+
+
+def policy_replay_candidates(live_gap):
+    rows = []
+    for row in live_gap.get("policy_candidates") or []:
+        candidate_id = row.get("id")
+        if not candidate_id:
+            continue
+        rows.append({
+            "id": candidate_id,
+            "base_strategy": row.get("strategy") or base_strategy_for(candidate_id),
+            "type": "policy_replay",
+            "policy_name": row.get("name"),
+            "description": row.get("description"),
+            "live": metric_to_live(row.get("live") or {}, "policy_replay"),
+            "offline": metric_to_offline(
+                row.get("offline") or {},
+                row.get("offline_block_summary") or {},
+                row.get("name"),
+            ),
+            "policy_replay": {
+                "live_wr_delta_pp": row.get("live_wr_delta_pp"),
+                "offline_wr_delta_pp": row.get("offline_wr_delta_pp"),
+                "offline_retention_pct": row.get("offline_retention_pct"),
+                "evidence": row.get("evidence"),
+                "live_block_summary": row.get("live_block_summary"),
+                "offline_block_summary": row.get("offline_block_summary"),
+            },
+        })
     return rows
 
 
@@ -163,6 +224,8 @@ def judge(candidate_id, live, offline, config):
         reasons.append("autoTrade_not_disabled")
     if live.get("source") == "derived_replay":
         reasons.append("derived_replay_not_live_shadow")
+    if live.get("source") == "policy_replay":
+        reasons.append("policy_replay_not_live_shadow")
 
     if offline is None:
         reasons.append("offline_missing")
@@ -206,6 +269,7 @@ def judge(candidate_id, live, offline, config):
 def main():
     lab = read_json(LAB_FILE, {})
     signal_audit = read_json(SIGNAL_AUDIT_FILE, {})
+    live_gap = read_json(LIVE_BACKTEST_GAP_FILE, {})
     live_audit = read_json(LIVE_AUDIT_FILE, {})
     config = read_json(TRADE_CONFIG_FILE, {})
     lab_index = flatten_lab(lab)
@@ -229,6 +293,15 @@ def main():
             "offline_key": offline_key,
             "offline": offline,
             "live": live_metric,
+        })
+
+    for policy in policy_replay_candidates(live_gap):
+        decision, reasons = judge(policy["id"], policy["live"], policy["offline"], config)
+        candidates.append({
+            **policy,
+            "decision": decision,
+            "reasons": reasons,
+            "offline_key": None,
         })
 
     summary_counts = defaultdict(int)

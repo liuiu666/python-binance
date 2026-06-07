@@ -146,6 +146,7 @@ def summarize_live_backtest_gap(report):
         "safety": report.get("safety"),
         "data": report.get("data"),
         "overall": report.get("overall"),
+        "policy_candidates": report.get("policy_candidates") or [],
         "repeated_exposure": report.get("repeated_exposure"),
         "strategies": strategies,
         "diagnosis": report.get("diagnosis") or [],
@@ -811,6 +812,40 @@ def main():
                     f"{strategy}: repeated same-direction exposure is high ({repeat.get('repeat_rate_pct')}% within one duration, WR {(repeat.get('repeat_metrics') or {}).get('wr')}%); "
                     "test same-strategy non-overlap/cooldown in shadow before allowing repeated real entries."
                 )
+        policies = live_gap.get("policy_candidates") or []
+        useful_policy_candidates = [
+            p for p in policies
+            if p.get("name") != "baseline_all_signals"
+            and float(p.get("offline_wr_delta_pp") or 0) > 0
+            and float(p.get("offline_retention_pct") or 0) >= 80
+            and (((p.get("offline_block_summary") or {}).get("min_block_wr") or 0) >= 52)
+        ]
+        useful_policy_candidates.sort(
+            key=lambda p: (
+                float(p.get("offline_wr_delta_pp") or 0),
+                float(p.get("offline_retention_pct") or 0),
+            ),
+            reverse=True,
+        )
+        if useful_policy_candidates:
+            best_policy = useful_policy_candidates[0]
+            live_m = best_policy.get("live") or {}
+            offline_m = best_policy.get("offline") or {}
+            report["recommendation"].append(
+                f"Best diagnostic policy candidate: {best_policy.get('id')} keeps {best_policy.get('offline_retention_pct')}% offline trades, "
+                f"offline WR {offline_m.get('wr')}% ({best_policy.get('offline_wr_delta_pp')}pp), "
+                f"live replay WR {live_m.get('wr')}% over {live_m.get('trades')} trades. Keep as shadow/replay only."
+            )
+        ten_repeat = next(
+            (p for p in policies if p.get("id") == "POLICY_10m_same_direction_gap_1x_duration"),
+            None,
+        )
+        if ten_repeat:
+            report["recommendation"].append(
+                "10m repeat-control replay is not a clear fix yet: "
+                f"offline WR delta {ten_repeat.get('offline_wr_delta_pp')}pp with {ten_repeat.get('offline_retention_pct')}% retention, "
+                f"live WR delta {ten_repeat.get('live_wr_delta_pp')}pp on a small sample."
+            )
 
     portfolio = report.get("parallel_portfolio") or {}
     if portfolio.get("status") == "ready":
