@@ -2,7 +2,7 @@
   "amount": "5",
   "duration": "30",
   "autoTrade": false,
-  "minConfidence": 10,
+  "minConfidence": 35,
   "tiersEnabled": true,
   "tiers": [
     {
@@ -19,5 +19,6 @@
     }
   ],
   "skipConflictSignals": false,
-  "queueOrderPolicy": "confidence_desc"
+  "queueOrderPolicy": "confidence_desc",
+  "preventOverlapOrders": true
 }

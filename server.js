@@ -537,6 +537,7 @@ function checkAutoTrade() {
       const sig = signals[strategyId];
       if (!sig || !sig.signal || !sig.confidence) continue;
       if (Number(sig.confidence) < Number(tradeConfig.minConfidence || 0)) continue;
+      if (tradeConfig.preventOverlapOrders && trades.some(t => t.status === "active" && t.source === "auto:" + strategyId)) continue;
 
       // Check if signal is fresh (within last 2 minutes)
       const sigTime = new Date(sig.actionable_time || sig.candle_close_time || sig.time).getTime();
@@ -635,10 +636,11 @@ wss.on("connection", (ws) => {
 
 // --- Dynamic Trade Config ---
 const DEFAULT_TRADE_CONFIG = {
-  amount: "5", duration: "30", autoTrade: true, minConfidence: 10,
+  amount: "5", duration: "30", autoTrade: false, minConfidence: 35,
   tiersEnabled: false, tiers: [{min:80,amount:20},{min:60,amount:10},{min:40,amount:5}],
   skipConflictSignals: false,
-  queueOrderPolicy: "confidence_desc"
+  queueOrderPolicy: "confidence_desc",
+  preventOverlapOrders: true
 };
 
 let tradeConfig = (() => {
@@ -676,6 +678,7 @@ app.post("/api/config", express.json(), (req, res) => {
   if (req.body.minConfidence !== undefined) tradeConfig.minConfidence = Number(req.body.minConfidence);
   if (req.body.tiersEnabled !== undefined) tradeConfig.tiersEnabled = !!req.body.tiersEnabled;
   if (req.body.skipConflictSignals !== undefined) tradeConfig.skipConflictSignals = !!req.body.skipConflictSignals;
+  if (req.body.preventOverlapOrders !== undefined) tradeConfig.preventOverlapOrders = !!req.body.preventOverlapOrders;
   if (req.body.queueOrderPolicy !== undefined) {
     const allowed = new Set(["confidence_desc", "30_then_10", "10_then_30"]);
     if (allowed.has(String(req.body.queueOrderPolicy))) tradeConfig.queueOrderPolicy = String(req.body.queueOrderPolicy);

@@ -147,6 +147,10 @@
           <button class="toggle-btn off" id="cfgSkipConflictSignals" onclick="toggleConflictFilter()">关闭</button>
         </div>
         <div class="config-row">
+          <label>同策略不重叠</label>
+          <button class="toggle-btn on" id="cfgPreventOverlapOrders" onclick="togglePreventOverlap()">开启</button>
+        </div>
+        <div class="config-row">
           <label>队列顺序</label>
           <select id="cfgQueueOrderPolicy">
             <option value="confidence_desc" selected>高强度优先</option>

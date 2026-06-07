@@ -31,6 +31,16 @@ SHADOW_CANDIDATES = [
         "note": "Strict walk-forward 10m candidate; shadow only until live sample confirms.",
     },
     {
+        "id": "SHADOW_10m_guard_th68_rsi30_70_all3",
+        "base": "BTC_10min",
+        "threshold": 0.68,
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "vol_min_rank": None,
+        "agree_mode": "all3",
+        "note": "High-strength 10m guard candidate aligned with live shadow safety review.",
+    },
+    {
         "id": "SHADOW_10m_more_trades_th60_rsi35_65_vol_hi_majority",
         "base": "BTC_10min",
         "threshold": 0.60,
@@ -59,6 +69,16 @@ SHADOW_CANDIDATES = [
         "vol_min_rank": None,
         "agree_mode": "all3",
         "note": "Strict walk-forward 30m stable candidate; shadow only until live sample confirms.",
+    },
+    {
+        "id": "SHADOW_30m_guard_th68_rsi30_70_all3",
+        "base": "BTC_30min",
+        "threshold": 0.68,
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "vol_min_rank": None,
+        "agree_mode": "all3",
+        "note": "High-strength 30m guard candidate aligned with live shadow safety review.",
     },
 ]
 BASE_URLS = [

@@ -14,6 +14,7 @@ import pandas as pd
 OUT = "E:/codex/data"
 SIGNAL_AUDIT_FILE = os.path.join(OUT, "signal_audit.jsonl")
 BTC_1M_FILE = os.path.join(OUT, "btcusdt_1m.csv")
+PRICE_TICKS_FILE = os.path.join(OUT, "price_ticks.jsonl")
 REPORT_FILE = os.path.join(OUT, "signal_audit_report.json")
 PAYOUT = 0.85
 DEFAULT_STAKE = 5
@@ -36,10 +37,42 @@ def read_jsonl(path):
 
 
 def load_price_series():
-    df = pd.read_csv(BTC_1M_FILE, parse_dates=["open_time"])
-    df = df.sort_values("open_time").reset_index(drop=True)
-    times = pd.to_datetime(df["open_time"], utc=True)
-    prices = df["close"].astype(float).to_numpy()
+    parts = []
+    if os.path.exists(BTC_1M_FILE):
+        df = pd.read_csv(BTC_1M_FILE, parse_dates=["open_time"])
+        hist = pd.DataFrame({
+            "time": pd.to_datetime(df["open_time"], utc=True),
+            "price": df["close"].astype(float),
+            "source": "history_1m",
+        })
+        parts.append(hist)
+    if os.path.exists(PRICE_TICKS_FILE):
+        tick_rows = []
+        with open(PRICE_TICKS_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    row = json.loads(line)
+                    if row.get("time") is None or row.get("price") is None:
+                        continue
+                    tick_rows.append({
+                        "time": pd.to_datetime(int(row["time"]), unit="ms", utc=True),
+                        "price": float(row["price"]),
+                        "source": "live_tick",
+                    })
+                except Exception:
+                    continue
+        if tick_rows:
+            parts.append(pd.DataFrame(tick_rows))
+    if not parts:
+        raise FileNotFoundError("No BTC price data found")
+    df = pd.concat(parts, ignore_index=True).dropna(subset=["time", "price"])
+    # Live ticks are more precise than the historical 1m close when timestamps
+    # overlap, so keep the latest row after sorting by source priority.
+    df["source_priority"] = (df["source"] == "live_tick").astype(int)
+    df = df.sort_values(["time", "source_priority"]).drop_duplicates("time", keep="last")
+    df = df.sort_values("time").reset_index(drop=True)
+    times = pd.to_datetime(df["time"], utc=True)
+    prices = df["price"].astype(float).to_numpy()
     return times, prices
 
 
@@ -86,6 +119,73 @@ def metrics(items):
         "max_loss": max_loss_streak([x.get("status") for x in settled]),
         "pending": len(items) - len(settled),
     }
+
+
+def confidence_bins(items):
+    bins = [
+        ("0_20", 0, 20),
+        ("20_30", 20, 30),
+        ("30_40", 30, 40),
+        ("40_50", 40, 50),
+        ("50_plus", 50, 10**9),
+    ]
+    out = {}
+    for name, lo, hi in bins:
+        part = []
+        for x in items:
+            conf = x.get("confidence")
+            if conf is None:
+                continue
+            conf = float(conf)
+            if lo <= conf < hi:
+                part.append(x)
+        out[name] = metrics(part)
+    return out
+
+
+def filter_non_overlapping(trades, min_confidence=None, loss_cooldown_mult=0):
+    """Simulate a safer executor policy on already-generated signal rows."""
+    selected = []
+    active_until_by_strategy = {}
+    cooldown_until_by_strategy = {}
+    for trade in sorted(trades, key=lambda x: (x.get("entryTime") or "", x.get("strategyId") or "")):
+        strategy = trade.get("strategyId") or "unknown"
+        entry = pd.to_datetime(trade.get("entryTime"), utc=True)
+        expiry = pd.to_datetime(trade.get("expiryTime"), utc=True)
+        confidence = trade.get("confidence")
+        if min_confidence is not None and (confidence is None or float(confidence) < float(min_confidence)):
+            continue
+        if strategy in active_until_by_strategy and entry < active_until_by_strategy[strategy]:
+            continue
+        if strategy in cooldown_until_by_strategy and entry < cooldown_until_by_strategy[strategy]:
+            continue
+        selected.append(trade)
+        active_until_by_strategy[strategy] = expiry
+        if trade.get("status") == "lost" and loss_cooldown_mult:
+            duration = pd.Timedelta(minutes=int(float(trade.get("duration") or 0)))
+            cooldown_until_by_strategy[strategy] = expiry + duration * int(loss_cooldown_mult)
+    return selected
+
+
+def policy_metrics(trades):
+    variants = {
+        "all_signals": trades,
+        "non_overlapping_by_strategy": filter_non_overlapping(trades),
+        "non_overlap_min_conf_20": filter_non_overlapping(trades, min_confidence=20),
+        "non_overlap_min_conf_30": filter_non_overlapping(trades, min_confidence=30),
+        "non_overlap_min_conf_35": filter_non_overlapping(trades, min_confidence=35),
+        "non_overlap_loss_cooldown_1x": filter_non_overlapping(trades, loss_cooldown_mult=1),
+    }
+    out = {}
+    for name, items in variants.items():
+        by_strategy = defaultdict(list)
+        for item in items:
+            by_strategy[item["strategyId"]].append(item)
+        out[name] = {
+            "overall": metrics(items),
+            "by_strategy": {k: metrics(v) for k, v in sorted(by_strategy.items())},
+        }
+    return out
 
 
 def reason_for(row):
@@ -170,6 +270,8 @@ def analyze_rows(rows, times, prices):
         "tradeable_signals": len(trades),
         "overall": metrics(trades),
         "by_strategy": {k: metrics(v) for k, v in sorted(by_strategy.items())},
+        "confidence_bins": confidence_bins(trades),
+        "policy_metrics": policy_metrics(trades),
         "reason_counts": {k: dict(v) for k, v in sorted(reason_counts.items())},
         "recent_tradeable": trades[-50:],
     }

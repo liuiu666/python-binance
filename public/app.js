@@ -238,6 +238,7 @@
   };
   window.toggleAuto=function(){markConfigDirty();const b=$("cfgAutoTrade"),on=!b.classList.contains("on");b.textContent=on?"开启":"关闭";b.className="toggle-btn "+(on?"on":"off")};
   window.toggleConflictFilter=function(){markConfigDirty();const b=$("cfgSkipConflictSignals"),on=!b.classList.contains("on");b.textContent=on?"开启":"关闭";b.className="toggle-btn "+(on?"on":"off")};
+  window.togglePreventOverlap=function(){markConfigDirty();const b=$("cfgPreventOverlapOrders"),on=!b.classList.contains("on");b.textContent=on?"开启":"关闭";b.className="toggle-btn "+(on?"on":"off")};
   window.loadConfig=function(force){
     if(configDirty&&!force)return;
     if(configLoadInFlight)return;
@@ -258,6 +259,12 @@
         conflict.textContent=c.skipConflictSignals?"开启":"关闭";
         conflict.className="toggle-btn "+(c.skipConflictSignals?"on":"off");
       }
+      const overlap=$("cfgPreventOverlapOrders");
+      if(overlap){
+        const on=c.preventOverlapOrders!==false;
+        overlap.textContent=on?"开启":"关闭";
+        overlap.className="toggle-btn "+(on?"on":"off");
+      }
       const queuePolicy=$("cfgQueueOrderPolicy");
       if(queuePolicy)queuePolicy.value=c.queueOrderPolicy||"confidence_desc";
       renderTiers(c.tiers&&c.tiers.length?c.tiers:[{min:80,amount:25},{min:60,amount:12},{min:40,amount:6}]);
@@ -274,6 +281,7 @@
       autoTrade:$("cfgAutoTrade").classList.contains("on"),
       tiersEnabled:$("cfgTiersEnabled").classList.contains("on"),
       skipConflictSignals:$("cfgSkipConflictSignals")&&$("cfgSkipConflictSignals").classList.contains("on"),
+      preventOverlapOrders:!$("cfgPreventOverlapOrders")||$("cfgPreventOverlapOrders").classList.contains("on"),
       queueOrderPolicy:$("cfgQueueOrderPolicy")?$("cfgQueueOrderPolicy").value:"confidence_desc",
       tiers:collectTiers()
     };

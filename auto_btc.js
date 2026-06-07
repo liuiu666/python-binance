@@ -7,15 +7,16 @@ var CONFIG_URL = BASE_URL + "/api/config";
 var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
-var SCRIPT_VERSION = "2026-06-07-dedupe-v6";
+var SCRIPT_VERSION = "2026-06-07-safety-v7";
 var POLL_INTERVAL = 3000;
 var SIGNAL_MAX_AGE_MS = 120000;
 
-var tradeConfig = { amount: "5", duration: "30", autoTrade: true, minConfidence: 10, tiersEnabled: false, tiers: [], skipConflictSignals: false, queueOrderPolicy: "confidence_desc" };
+var tradeConfig = { amount: "5", duration: "30", autoTrade: false, minConfidence: 35, tiersEnabled: false, tiers: [], skipConflictSignals: false, queueOrderPolicy: "confidence_desc", preventOverlapOrders: true };
 var lastTradeTime = 0;
 var lastDirection = "";
 var lastSignalKeyByStrategy = {};
 var lastTradeTimeByStrategy = {};
+var activeUntilByStrategy = {};
 var persistedOrderKeys = {};
 var lastConflictSkipKey = "";
 var isRunning = true;
@@ -439,6 +440,7 @@ function fetchConfig() {
             if (c.minConfidence !== undefined) tradeConfig.minConfidence = c.minConfidence;
             if (c.skipConflictSignals !== undefined) tradeConfig.skipConflictSignals = c.skipConflictSignals;
             if (c.queueOrderPolicy !== undefined) tradeConfig.queueOrderPolicy = c.queueOrderPolicy;
+            if (c.preventOverlapOrders !== undefined) tradeConfig.preventOverlapOrders = !!c.preventOverlapOrders;
         }
     } catch (e) {}
 }
@@ -460,6 +462,7 @@ function getSignalPayload() {
                 if (c.tiers && c.tiers.length !== undefined) tradeConfig.tiers = c.tiers;
                 if (c.skipConflictSignals !== undefined) tradeConfig.skipConflictSignals = c.skipConflictSignals;
                 if (c.queueOrderPolicy !== undefined) tradeConfig.queueOrderPolicy = c.queueOrderPolicy;
+                if (c.preventOverlapOrders !== undefined) tradeConfig.preventOverlapOrders = !!c.preventOverlapOrders;
                 delete data._config;
             }
             return data;
@@ -819,21 +822,33 @@ function loadOrderHistory() {
         if (!files.exists(ORDER_HISTORY_FILE)) return;
         var raw = files.read(ORDER_HISTORY_FILE) || "{}";
         var data = JSON.parse(raw);
+        var keyData = data.keys ? data.keys : data;
+        activeUntilByStrategy = {};
+        if (data.activeUntilByStrategy) {
+            for (var sid in data.activeUntilByStrategy) {
+                var until = Number(data.activeUntilByStrategy[sid]);
+                if (until && until > Date.now()) activeUntilByStrategy[sid] = until;
+            }
+        }
         var cutoff = Date.now() - 24 * 60 * 60 * 1000;
         persistedOrderKeys = {};
-        for (var k in data) {
-            if (Number(data[k]) >= cutoff) persistedOrderKeys[k] = Number(data[k]);
+        for (var k in keyData) {
+            if (Number(keyData[k]) >= cutoff) persistedOrderKeys[k] = Number(keyData[k]);
         }
-        log("[Dedupe] loaded " + Object.keys(persistedOrderKeys).length + " order keys");
+        log("[Dedupe] loaded " + Object.keys(persistedOrderKeys).length + " order keys, active=" + JSON.stringify(activeUntilByStrategy));
     } catch (e) {
         persistedOrderKeys = {};
+        activeUntilByStrategy = {};
         log("[Dedupe] load err: " + e);
     }
 }
 
 function saveOrderHistory() {
     try {
-        files.write(ORDER_HISTORY_FILE, JSON.stringify(persistedOrderKeys));
+        files.write(ORDER_HISTORY_FILE, JSON.stringify({
+            keys: persistedOrderKeys,
+            activeUntilByStrategy: activeUntilByStrategy
+        }));
     } catch (e) {
         log("[Dedupe] save err: " + e);
     }
@@ -851,6 +866,20 @@ function rememberPersistedOrder(order) {
     if (!k) return;
     persistedOrderKeys[k] = Date.now();
     saveOrderHistory();
+}
+
+function setStrategyActiveUntil(order) {
+    if (!order || !order.strategyId) return;
+    var dur = Math.max(1, Number(order.duration || 0) || 0);
+    activeUntilByStrategy[order.strategyId] = Date.now() + dur * 60 * 1000;
+    saveOrderHistory();
+}
+
+function isStrategyOverlapping(order) {
+    if (!tradeConfig.preventOverlapOrders || !order || !order.strategyId) return false;
+    var until = Number(activeUntilByStrategy[order.strategyId] || 0);
+    if (!until || until <= Date.now()) return false;
+    return true;
 }
 
 function acquireLock() {
@@ -930,6 +959,10 @@ function main() {
                     order.sinceQueueBatchStartMs = Date.now() - queueBatchStart;
                     var conf = order.confidence || 0;
                     var actionableMs = order.actionableTime ? new Date(order.actionableTime).getTime() : 0;
+                    if (Number(conf) < Number(tradeConfig.minConfidence || 0)) {
+                        reportTradeAudit("signal_skipped", order, { reason: "min_confidence_filter", minConfidence: tradeConfig.minConfidence });
+                        continue;
+                    }
                     if (actionableMs && Date.now() - actionableMs > SIGNAL_MAX_AGE_MS) {
                         reportTradeAudit("signal_skipped", order, { reason: "stale", ageMs: Date.now() - actionableMs });
                         continue;
@@ -944,6 +977,10 @@ function main() {
                         reportTradeAudit("signal_skipped", order, { reason: "duplicate_after_restart" });
                         continue;
                     }
+                    if (isStrategyOverlapping(order)) {
+                        reportTradeAudit("signal_skipped", order, { reason: "strategy_overlap_guard", activeUntil: activeUntilByStrategy[order.strategyId] });
+                        continue;
+                    }
                     if (now - lastTs < 60000) continue;
                     log("SIGNAL " + order.strategyId + ": " + order.signal + " " + conf + "% RSI=" + order.rsi_value + " amt=" + order.amount + "U dur=" + order.duration + "min");
                     reportTradeAudit("signal_tradeable", order, {});
@@ -953,6 +990,7 @@ function main() {
                         lastSignalKeyByStrategy[order.strategyId] = key;
                         lastTradeTimeByStrategy[order.strategyId] = now;
                         rememberPersistedOrder(order);
+                        setStrategyActiveUntil(order);
                         lastTradeTime = now;
                         lastDirection = order.signal;
                         traded = true;

@@ -24,6 +24,10 @@ HORIZONS = {"BTC_10min": 2, "BTC_30min": 6}
 TREND_EPS = 0.00005
 
 
+def pct(value):
+    return int(round(float(value) * 100))
+
+
 def read_json(path, default=None):
     if not os.path.exists(path):
         return default
@@ -353,7 +357,7 @@ def build_candidates(strategy_id, cfg):
     for lo, hi in [(0.05, 0.95), (0.10, 0.90), (0.20, 0.80)]:
         for gate in ["none", "skip_opposite_score2", "skip_opposite_score3", "no_strong_trend_score3", "range_only_score2"]:
             cands.append({
-                "name": f"rule_bb_rev_{int(lo * 100)}_{int(hi * 100)}_{gate}",
+                "name": f"rule_bb_rev_{pct(lo)}_{pct(hi)}_{gate}",
                 "kind": "rule_bb_reversal",
                 "bbp": (lo, hi),
                 "trend_gate": gate,
@@ -376,7 +380,7 @@ def build_candidates(strategy_id, cfg):
     for score_min in [3, 4]:
         for rsi_max, bbp_max, rsi_min, bbp_min in [(55, 0.55, 45, 0.45), (60, 0.65, 40, 0.35), (65, 0.75, 35, 0.25)]:
             cands.append({
-                "name": f"rule_pullback_s{score_min}_u{rsi_max}_{int(bbp_max*100)}_d{rsi_min}_{int(bbp_min*100)}",
+                "name": f"rule_pullback_s{score_min}_u{rsi_max}_{pct(bbp_max)}_d{rsi_min}_{pct(bbp_min)}",
                 "kind": "rule_pullback_follow",
                 "score_min": score_min,
                 "up_rsi_max": rsi_max,
@@ -390,7 +394,7 @@ def build_candidates(strategy_id, cfg):
             for agree in ["majority", "all3"]:
                 for gate in ["none", "skip_opposite_score2", "skip_opposite_score3", "align_or_neutral", "range_only_score2"]:
                     cands.append({
-                        "name": f"ml_th{int(th*100)}_rsi{lo}_{hi}_{agree}_{gate}",
+                        "name": f"ml_th{pct(th)}_rsi{lo}_{hi}_{agree}_{gate}",
                         "kind": "ml_rsi",
                         "threshold": th,
                         "rsi": (lo, hi),
@@ -404,7 +408,7 @@ def build_candidates(strategy_id, cfg):
             for score_min in [3, 4]:
                 for agree in ["majority", "all3"]:
                     cands.append({
-                        "name": f"hybrid_ml_trend{int(trend_th*100)}_range{int(range_th*100)}_s{score_min}_{agree}",
+                        "name": f"hybrid_ml_trend{pct(trend_th)}_range{pct(range_th)}_s{score_min}_{agree}",
                         "kind": "hybrid_trend_else_ml",
                         "trend_threshold": trend_th,
                         "range_threshold": range_th,
