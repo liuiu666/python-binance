@@ -1,0 +1,30 @@
+{
+  "BTC_10min": {
+    "enabled": true,
+    "symbol": "btcusdt",
+    "horizon": 2,
+    "interval_min": 10,
+    "threshold": 0.55,
+    "rsi_lo": 30,
+    "rsi_hi": 70,
+    "agree_mode": "majority",
+    "skip_hours_utc": [5, 10, 13, 14, 15, 19, 22, 23],
+    "model_label": "BTC_10min",
+    "models": ["xgb1", "xgb2", "lgb"],
+    "strategy": "causal_majority_hour_filter_v2"
+  },
+  "BTC_30min": {
+    "enabled": true,
+    "symbol": "btcusdt",
+    "horizon": 6,
+    "interval_min": 30,
+    "threshold": 0.55,
+    "rsi_lo": 30,
+    "rsi_hi": 70,
+    "agree_mode": "majority",
+    "skip_hours_utc": [8, 11, 13, 22, 23],
+    "model_label": "BTC_30min",
+    "models": ["xgb1", "xgb2", "lgb"],
+    "strategy": "walkforward_rsi_ml_balanced_portfolio_filter_v1"
+  }
+}

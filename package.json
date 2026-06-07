@@ -1,0 +1,17 @@
+{
+  "name": "btc-binary-options",
+  "version": "1.0.0",
+  "description": "BTC 10-minute binary options trading system",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "reports": "python py/run_strategy_reports.py",
+    "reports:full": "python py/run_strategy_reports.py --full",
+    "audit:probe": "python py/audit_probe.py"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "ws": "^8.18.0"
+  }
+}

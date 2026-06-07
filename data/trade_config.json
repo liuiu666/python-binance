@@ -1,0 +1,23 @@
+{
+  "amount": "5",
+  "duration": "30",
+  "autoTrade": false,
+  "minConfidence": 10,
+  "tiersEnabled": true,
+  "tiers": [
+    {
+      "min": 80,
+      "amount": 5
+    },
+    {
+      "min": 60,
+      "amount": 5
+    },
+    {
+      "min": 40,
+      "amount": 5
+    }
+  ],
+  "skipConflictSignals": false,
+  "queueOrderPolicy": "confidence_desc"
+}

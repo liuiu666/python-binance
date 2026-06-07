@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AutoJS Tablet</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b1020;--panel:#121a2d;--line:#26334f;--text:#eef4ff;--muted:#8ea0bd;--green:#00d4aa;--yellow:#ffd32a;--red:#ff4757}
+    *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--text)}
+    main{max-width:780px;margin:0 auto;padding:18px}
+    h1{font-size:22px;margin:0 0 14px}h2{font-size:14px;margin:0 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+    .grid{display:grid;gap:12px}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+    .status{font-size:28px;font-weight:800;margin:2px 0 8px}.ok{color:var(--green)}.warn{color:var(--yellow)}.fail{color:var(--red)}
+    .row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,.06)}
+    .row:first-child{border-top:0}.label{color:var(--muted)}.value{text-align:right;font-weight:700;word-break:break-all}
+    a{color:var(--green);text-decoration:none}.url{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px}
+    .steps{margin:0;padding-left:20px;color:var(--text)}.steps li{margin:8px 0}
+    code{background:#0a1325;border:1px solid var(--line);border-radius:6px;padding:2px 5px}
+    pre{margin:0;white-space:pre-wrap;background:#0a1325;border:1px solid var(--line);border-radius:8px;padding:10px;color:#c9d7ef;font-size:12px;max-height:210px;overflow:auto}
+    button{appearance:none;border:1px solid var(--line);background:#16233d;color:var(--text);padding:10px 12px;border-radius:8px;font-weight:800;width:100%}
+  </style>
+</head>
+<body>
+<main class="grid">
+  <h1>AutoJS Tablet</h1>
+  <section class="card">
+    <h2>Connection</h2>
+    <div class="status warn" id="status">loading</div>
+    <div class="row"><span class="label">Next</span><span class="value" id="nextAction">--</span></div>
+    <div class="row"><span class="label">Bootstrap</span><span class="value url"><a id="bootstrapUrl" href="/auto_btc_bootstrap.js">--</a></span></div>
+    <div class="row"><span class="label">Loader</span><span class="value url"><a id="loaderUrl" href="/auto_btc_loader.js">--</a></span></div>
+    <div class="row"><span class="label">Script</span><span class="value url"><a id="scriptUrl" href="/auto_btc.js">--</a></span></div>
+    <div class="row"><span class="label">Version</span><span class="value" id="scriptVersion">--</span></div>
+    <div class="row"><span class="label">Audit</span><span class="value url" id="auditUrl">--</span></div>
+  </section>
+
+  <section class="card">
+    <h2>Run Checklist</h2>
+    <ol class="steps">
+      <li>在平板 AutoJS 里打开/导入上面的 <code>auto_btc_bootstrap.js</code>，如果能直接运行 URL，也可以运行 <code>auto_btc_loader.js</code>。</li>
+      <li>loader 会自动下载并运行最新版 <code>auto_btc.js</code>。</li>
+      <li>运行后日志应出现 <code>VERSION=2026-06-07-portfolio-filter-v1</code>。</li>
+      <li>随后应出现 <code>[Audit] start event posted</code>。</li>
+      <li>一分钟内本页状态应从 <code>no heartbeat</code> 变成 <code>heartbeat</code>。</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>Checks</h2>
+    <div id="checks"></div>
+  </section>
+
+  <section class="card">
+    <h2>Recent AutoJS Events</h2>
+    <pre id="events">[]</pre>
+  </section>
+
+  <button id="refreshBtn">Refresh</button>
+</main>
+<script src="/tablet.js"></script>
+</body>
+</html>
