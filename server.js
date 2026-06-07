@@ -16,6 +16,8 @@ const SIGNAL_FILE = path.join(__dirname, "data", "live_signals.json");
 const SIGNAL_SCRIPT_FILE = path.join(__dirname, "py", "signal_btc.py");
 const SIGNAL_STDOUT_FILE = path.join(__dirname, ".sig.out");
 const SIGNAL_STDERR_FILE = path.join(__dirname, ".sig.err");
+const REPORT_STDOUT_FILE = path.join(__dirname, ".reports.out");
+const REPORT_STDERR_FILE = path.join(__dirname, ".reports.err");
 const PRICE_FILE = path.join(__dirname, "data", "current_price.json");
 const CONFIG_FILE = path.join(__dirname, "data", "trade_config.json");
 const TRADE_AUDIT_FILE = path.join(__dirname, "data", "trade_audit.jsonl");
@@ -30,6 +32,12 @@ const REPORT_FILES = {
   latency: path.join(__dirname, "data", "execution_latency_validation.json")
 };
 const PYTHON_EXE = process.env.PYTHON_EXE || "python";
+const REPORT_REFRESH_INTERVAL_MS = 60 * 1000;
+const LIGHT_REPORT_SCRIPTS = [
+  path.join(__dirname, "py", "analyze_signal_audit.py"),
+  path.join(__dirname, "py", "shadow_decision_report.py"),
+  path.join(__dirname, "py", "strategy_decision_report.py")
+];
 
 let signalService = {
   pid: null,
@@ -37,6 +45,14 @@ let signalService = {
   lastExit: null,
   restarts: 0,
   restartTimer: null
+};
+let reportRefresh = {
+  running: false,
+  lastStart: null,
+  lastFinish: null,
+  lastExitCode: null,
+  lastError: null,
+  runs: 0
 };
 let shuttingDown = false;
 
@@ -108,6 +124,65 @@ function tailJsonl(file, limit) {
   } catch (e) { return []; }
 }
 
+function runScript(script, cb) {
+  const out = fs.openSync(REPORT_STDOUT_FILE, "a");
+  const err = fs.openSync(REPORT_STDERR_FILE, "a");
+  let done = false;
+  const finish = (code, signal, error) => {
+    if (done) return;
+    done = true;
+    try { fs.closeSync(out); } catch (e) {}
+    try { fs.closeSync(err); } catch (e) {}
+    cb(code, signal, error);
+  };
+  const child = spawn(PYTHON_EXE, [script], {
+    cwd: __dirname,
+    windowsHide: true,
+    env: { ...process.env, PYTHONUNBUFFERED: "1" },
+    stdio: ["ignore", out, err]
+  });
+  child.on("exit", (code, signal) => finish(code, signal));
+  child.on("error", (e) => finish(null, null, e));
+}
+
+function refreshLightReports(reason = "timer") {
+  if (reportRefresh.running) return;
+  reportRefresh.running = true;
+  reportRefresh.lastStart = Date.now();
+  reportRefresh.lastError = null;
+  reportRefresh.runs += 1;
+  appendJsonl(TRADE_AUDIT_FILE, { serverTime: Date.now(), event: "report_refresh_start", reason });
+  let idx = 0;
+  const next = () => {
+    if (idx >= LIGHT_REPORT_SCRIPTS.length) {
+      reportRefresh.running = false;
+      reportRefresh.lastFinish = Date.now();
+      reportRefresh.lastExitCode = 0;
+      appendJsonl(TRADE_AUDIT_FILE, { serverTime: Date.now(), event: "report_refresh_done", reason });
+      return;
+    }
+    const script = LIGHT_REPORT_SCRIPTS[idx++];
+    runScript(script, (code, signal, err) => {
+      if (err || code !== 0) {
+        reportRefresh.running = false;
+        reportRefresh.lastFinish = Date.now();
+        reportRefresh.lastExitCode = code;
+        reportRefresh.lastError = err ? String(err.message || err) : `code=${code} signal=${signal || ""}`;
+        appendJsonl(TRADE_AUDIT_FILE, {
+          serverTime: Date.now(),
+          event: "report_refresh_error",
+          reason,
+          script,
+          error: reportRefresh.lastError
+        });
+        return;
+      }
+      next();
+    });
+  };
+  next();
+}
+
 function readRawJson(req, cb) {
   let chunks = [];
   req.on("data", ck => chunks.push(ck));
@@ -169,8 +244,14 @@ app.get("/api/reports", (req, res) => {
     signalAudit: read(REPORT_FILES.signalAudit),
     liveAudit: read(REPORT_FILES.liveAudit),
     shadowDecision: read(REPORT_FILES.shadowDecision),
-    latency: read(REPORT_FILES.latency)
+    latency: read(REPORT_FILES.latency),
+    reportRefresh
   });
+});
+
+app.post("/api/reports/refresh", (req, res) => {
+  refreshLightReports("manual_api");
+  res.json({ ok: true, reportRefresh });
 });
 
 function localHttpUrls() {
@@ -775,6 +856,8 @@ process.on("exit", stopSignalService);
 
 server.listen(PORT, '0.0.0.0', () => {
   startSignalService("server_listen");
+  refreshLightReports("server_listen");
+  setInterval(() => refreshLightReports("timer"), REPORT_REFRESH_INTERVAL_MS);
   console.log(`BTC 二元期权 http://localhost:${PORT} | 自动交易: ${AUTO_TRADE_ENABLED}`);
 });
 

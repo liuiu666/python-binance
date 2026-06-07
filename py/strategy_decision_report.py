@@ -31,6 +31,7 @@ FILES = {
     "portfolio_filter_stability": os.path.join(OUT, "portfolio_filter_stability.json"),
     "health": os.path.join(OUT, "strategy_health_report.json"),
     "config": os.path.join(OUT, "prod_config.json"),
+    "shadow_decision": os.path.join(OUT, "shadow_decision_report.json"),
 }
 REPORT_FILE = os.path.join(OUT, "strategy_decision_report.json")
 
@@ -615,6 +616,7 @@ def main():
     portfolio_filter_stability = read_json(FILES["portfolio_filter_stability"], {})
     health = read_json(FILES["health"], {})
     config = read_json(FILES["config"], {})
+    shadow_decision_gate = read_json(FILES["shadow_decision"], {})
 
     latency_summary = summarize_latency(latency)
     robustness_summary = summarize_robustness(robustness)
@@ -650,6 +652,7 @@ def main():
             "trade_audit": health.get("trade_audit"),
         },
         "shadow_signal_audit": shadow_signal_summary,
+        "live_shadow_gate": shadow_decision_gate,
         "shadow_candidate_decision": evaluate_shadow_candidates(
             (shadow_signal_summary.get("shadow_candidates") or {}),
             production_summary,
@@ -658,6 +661,17 @@ def main():
         "live_readiness": live_readiness(live),
         "recommendation": [],
     }
+
+    gate_safety = (shadow_decision_gate.get("safety") or {})
+    gate_counts = shadow_decision_gate.get("summary_counts") or {}
+    if gate_safety.get("verdict") == "do_not_resume_real_auto_trading":
+        report["recommendation"].append(
+            "HARD SAFETY GATE: do not resume real auto trading. "
+            f"Shadow promotion report shows watch={gate_counts.get('watch', 0)}, "
+            f"reject_live_weak={gate_counts.get('reject_live_weak', 0)}, "
+            f"reject_offline_weak={gate_counts.get('reject_offline_weak', 0)}; "
+            "no candidate has passed the live shadow promotion gate."
+        )
 
     for strategy, row in report["validated_walkforward"].items():
         latency_row = report["execution_latency"].get(strategy, {})
