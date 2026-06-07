@@ -153,7 +153,7 @@ def build_live_replay_trades(df5, cfg):
         }
         for col in feature_cols:
             if col != "time_key":
-                item[col] = np.nan
+                item[col] = row.get(col, np.nan)
         if signal_time in by_time.index:
             feat = by_time.loc[signal_time]
             for col in available:

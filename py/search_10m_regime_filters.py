@@ -72,6 +72,30 @@ HAND_PICKED_SHADOWS = [
         "filter": {"confidence_max": 40},
         "note": "Drops rare very high-strength signals; almost all trades retained.",
     },
+    {
+        "id": "SHADOW_10m_bbp105_conf_lt40_th55_rsi30_70_majority",
+        "name": "bbp_1.05_confidence_lt_40",
+        "filter": {"bbp_cap": 1.05, "confidence_max": 40},
+        "note": "10m drift guard combining BBP cap and confidence cap; filters the current weak live cluster, shadow only.",
+    },
+    {
+        "id": "SHADOW_10m_bbp105_rsi78_conf_lt40_th55_rsi30_70_majority",
+        "name": "bbp_1.05_rsi_cap_78_confidence_lt_40",
+        "filter": {"bbp_cap": 1.05, "rsi_cap": 78, "confidence_max": 40},
+        "note": "10m WR-first combo guard; lowers offline max loss and must collect direct shadow samples.",
+    },
+    {
+        "id": "SHADOW_10m_bbp105_rsi78_conf_lt50_th55_rsi30_70_majority",
+        "name": "bbp_1.05_rsi_cap_78_confidence_lt_50",
+        "filter": {"bbp_cap": 1.05, "rsi_cap": 78, "confidence_max": 50},
+        "note": "10m balanced combo guard with moderate retention and lower max loss; shadow only.",
+    },
+    {
+        "id": "SHADOW_10m_bbp120_rsi74_conf_lt50_th55_rsi30_70_majority",
+        "name": "bbp_1.20_rsi_cap_74_confidence_lt_50",
+        "filter": {"bbp_cap": 1.20, "rsi_cap": 74, "confidence_max": 50},
+        "note": "10m balanced BBP+RSI+confidence combo; lower max loss in offline scan, shadow only.",
+    },
 ]
 
 
@@ -175,7 +199,7 @@ def build_live_replay_trades(df5, cfg):
         }
         for col in feature_cols:
             if col != "time_key":
-                item[col] = np.nan
+                item[col] = row.get(col, np.nan)
         if signal_time in by_time.index:
             feat = by_time.loc[signal_time]
             for col in available:
@@ -301,6 +325,22 @@ def generate_scan_rows(trades, base_metrics):
                 "name": f"bbp_{bbp_cap:.2f}_rsi_cap_{rsi_cap}",
                 "filter": {"bbp_cap": bbp_cap, "rsi_cap": rsi_cap},
                 "note": "Generated BBP plus RSI overextension scan.",
+            })
+    for bbp_cap in [1.05, 1.20]:
+        for rsi_cap in [74, 78]:
+            for conf_cap in [40, 50]:
+                candidates.append({
+                    "id": f"SCAN_10m_bbp{int(bbp_cap * 100)}_rsi{rsi_cap}_conf_lt{conf_cap}",
+                    "name": f"bbp_{bbp_cap:.2f}_rsi_cap_{rsi_cap}_confidence_lt_{conf_cap}",
+                    "filter": {"bbp_cap": bbp_cap, "rsi_cap": rsi_cap, "confidence_max": conf_cap},
+                    "note": "Generated BBP plus RSI plus confidence cap scan.",
+                })
+        for conf_cap in [40, 50]:
+            candidates.append({
+                "id": f"SCAN_10m_bbp{int(bbp_cap * 100)}_conf_lt{conf_cap}",
+                "name": f"bbp_{bbp_cap:.2f}_confidence_lt_{conf_cap}",
+                "filter": {"bbp_cap": bbp_cap, "confidence_max": conf_cap},
+                "note": "Generated BBP plus confidence cap scan.",
             })
     for row in candidates:
         rows.append(summarize_candidate(trades, base_metrics, row))

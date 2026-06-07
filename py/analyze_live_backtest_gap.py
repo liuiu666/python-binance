@@ -225,6 +225,13 @@ def live_signal_trades():
             "rsi_value": row.get("rsi_value"),
             "trend_score": trend_score_value,
             "trend6": trend6_value,
+            "trend12": row.get("trend12", trend.get("trend12")),
+            "trend30": row.get("trend30", trend.get("trend30")),
+            "pre50": row.get("pre50", trend.get("pre50")),
+            "ema_stack": row.get("ema_stack", trend.get("ema_stack")),
+            "bbp": row.get("bbp"),
+            "hlp20": row.get("hlp20"),
+            "hlp50": row.get("hlp50"),
             "amount": row.get("amount") or DEFAULT_STAKE,
         }))
     return trades
