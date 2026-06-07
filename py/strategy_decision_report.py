@@ -18,6 +18,7 @@ SHADOW_MAX_LOSS_EXTRA = 2
 FILES = {
     "validation": os.path.join(OUT, "strategy_candidate_validation.json"),
     "signal": os.path.join(OUT, "signal_audit_report.json"),
+    "live_backtest_gap": os.path.join(OUT, "live_backtest_gap_report.json"),
     "live": os.path.join(OUT, "live_trade_audit_report.json"),
     "latency": os.path.join(OUT, "execution_latency_validation.json"),
     "robustness": os.path.join(OUT, "strategy_robustness_profile.json"),
@@ -116,6 +117,39 @@ def summarize_audit(report):
     if report.get("shadow_candidates"):
         out["shadow_candidates"] = summarize_audit(report["shadow_candidates"])
     return out
+
+
+def summarize_live_backtest_gap(report):
+    if not report:
+        return {
+            "status": "missing",
+            "note": "Run py/analyze_live_backtest_gap.py to compare live drift against walk-forward OOS buckets.",
+        }
+    strategies = {}
+    for strategy, row in (report.get("strategies") or {}).items():
+        repeat = row.get("repeated_exposure") or {}
+        strategies[strategy] = {
+            "live": row.get("live"),
+            "offline": row.get("offline"),
+            "wr_gap_live_minus_offline_pp": row.get("wr_gap_live_minus_offline_pp"),
+            "sample_warning": row.get("sample_warning"),
+            "repeated_exposure": repeat,
+            "loss_clusters": row.get("loss_clusters"),
+            "filter_screen": row.get("filter_screen"),
+            "strong_countertrend": (
+                ((row.get("bucket_comparison") or {}).get("align_bucket") or {}).get("strong_countertrend")
+            ),
+        }
+    return {
+        "status": "ready",
+        "method": report.get("method"),
+        "safety": report.get("safety"),
+        "data": report.get("data"),
+        "overall": report.get("overall"),
+        "repeated_exposure": report.get("repeated_exposure"),
+        "strategies": strategies,
+        "diagnosis": report.get("diagnosis") or [],
+    }
 
 
 def live_readiness(live):
@@ -603,6 +637,7 @@ def evaluate_shadow_candidates(shadow_summary, production_summary):
 def main():
     validation = read_json(FILES["validation"], {})
     signal = read_json(FILES["signal"], {})
+    live_backtest_gap = read_json(FILES["live_backtest_gap"], {})
     live = read_json(FILES["live"], {})
     latency = read_json(FILES["latency"], {})
     robustness = read_json(FILES["robustness"], {})
@@ -652,6 +687,7 @@ def main():
             "trade_audit": health.get("trade_audit"),
         },
         "shadow_signal_audit": shadow_signal_summary,
+        "live_backtest_gap": summarize_live_backtest_gap(live_backtest_gap),
         "live_shadow_gate": shadow_decision_gate,
         "shadow_candidate_decision": evaluate_shadow_candidates(
             (shadow_signal_summary.get("shadow_candidates") or {}),
@@ -742,6 +778,39 @@ def main():
         report["recommendation"].append(
             "Live queue audit: no multi-order batch has been observed yet; keep collecting AutoJS order_attempt/order_done events to verify queue-delay assumptions."
         )
+
+    live_gap = report.get("live_backtest_gap") or {}
+    if live_gap.get("status") == "ready":
+        overall_gap = (live_gap.get("overall") or {}).get("wr_gap_live_minus_offline_pp")
+        overall_live = ((live_gap.get("overall") or {}).get("live") or {})
+        overall_offline = ((live_gap.get("overall") or {}).get("offline") or {})
+        report["recommendation"].append(
+            f"Live/backtest gap audit: live signal WR {overall_live.get('wr')}% over {overall_live.get('trades')} trades "
+            f"vs walk-forward WR {overall_offline.get('wr')}%; gap {overall_gap}pp. Treat this as diagnostic only until live sample reaches 50+ settled signals."
+        )
+        for strategy, row in (live_gap.get("strategies") or {}).items():
+            live_m = row.get("live") or {}
+            offline_m = row.get("offline") or {}
+            gap = row.get("wr_gap_live_minus_offline_pp")
+            repeat = row.get("repeated_exposure") or {}
+            strong = row.get("strong_countertrend") or {}
+            strong_live = strong.get("live") or {}
+            strong_offline = strong.get("offline") or {}
+            if live_m.get("trades") and gap is not None and gap <= -5:
+                report["recommendation"].append(
+                    f"{strategy}: live/backtest drift is material: live WR {live_m.get('wr')}% over {live_m.get('trades')} trades "
+                    f"vs offline WR {offline_m.get('wr')}%, gap {gap}pp. Do not increase stake or resume real auto trading from this state."
+                )
+            if strong_live.get("trades"):
+                report["recommendation"].append(
+                    f"{strategy}: current live signals concentrate in strong countertrend "
+                    f"({strong_live.get('trades')} trades, WR {strong_live.get('wr')}%) while offline strong-countertrend WR is {strong_offline.get('wr')}%; keep collecting shadow data for this regime."
+                )
+            if float(repeat.get("repeat_rate_pct") or 0) >= 50:
+                report["recommendation"].append(
+                    f"{strategy}: repeated same-direction exposure is high ({repeat.get('repeat_rate_pct')}% within one duration, WR {(repeat.get('repeat_metrics') or {}).get('wr')}%); "
+                    "test same-strategy non-overlap/cooldown in shadow before allowing repeated real entries."
+                )
 
     portfolio = report.get("parallel_portfolio") or {}
     if portfolio.get("status") == "ready":

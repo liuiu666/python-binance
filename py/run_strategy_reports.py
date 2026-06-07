@@ -8,6 +8,7 @@ PY_DIR = os.path.join(ROOT, "py")
 
 QUICK_SCRIPTS = [
     "analyze_signal_audit.py",
+    "analyze_live_backtest_gap.py",
     "analyze_live_trade_audit.py",
     "shadow_decision_report.py",
     "strategy_health_report.py",

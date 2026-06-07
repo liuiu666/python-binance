@@ -27,6 +27,7 @@ const REPORT_FILES = {
   decision: path.join(__dirname, "data", "strategy_decision_report.json"),
   health: path.join(__dirname, "data", "strategy_health_report.json"),
   signalAudit: path.join(__dirname, "data", "signal_audit_report.json"),
+  liveBacktestGap: path.join(__dirname, "data", "live_backtest_gap_report.json"),
   liveAudit: path.join(__dirname, "data", "live_trade_audit_report.json"),
   shadowDecision: path.join(__dirname, "data", "shadow_decision_report.json"),
   latency: path.join(__dirname, "data", "execution_latency_validation.json")
@@ -35,6 +36,7 @@ const PYTHON_EXE = process.env.PYTHON_EXE || "python";
 const REPORT_REFRESH_INTERVAL_MS = 60 * 1000;
 const LIGHT_REPORT_SCRIPTS = [
   path.join(__dirname, "py", "analyze_signal_audit.py"),
+  path.join(__dirname, "py", "analyze_live_backtest_gap.py"),
   path.join(__dirname, "py", "shadow_decision_report.py"),
   path.join(__dirname, "py", "strategy_decision_report.py")
 ];
@@ -255,6 +257,7 @@ app.get("/api/reports", (req, res) => {
     decision: readJsonFile(REPORT_FILES.decision),
     health: readJsonFile(REPORT_FILES.health),
     signalAudit: readJsonFile(REPORT_FILES.signalAudit),
+    liveBacktestGap: readJsonFile(REPORT_FILES.liveBacktestGap),
     liveAudit: readJsonFile(REPORT_FILES.liveAudit),
     shadowDecision: readJsonFile(REPORT_FILES.shadowDecision),
     latency: readJsonFile(REPORT_FILES.latency),
