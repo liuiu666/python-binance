@@ -25,6 +25,7 @@ FILES = {
     "session_filters": os.path.join(OUT, "session_filter_validation.json"),
     "ten_min_filter_scan": os.path.join(OUT, "optimize_10min_filters.json"),
     "ten_min_regime_filter_search": os.path.join(OUT, "ten_min_regime_filter_search.json"),
+    "ten_min_stateful_policy_filter_search": os.path.join(OUT, "ten_min_stateful_policy_filter_search.json"),
     "thirty_min_regime_filter_search": os.path.join(OUT, "thirty_min_regime_filter_search.json"),
     "regime_patterns": os.path.join(OUT, "regime_pattern_report.json"),
     "parallel_portfolio": os.path.join(OUT, "parallel_portfolio_report.json"),
@@ -379,6 +380,73 @@ def summarize_30min_regime_filter_search(report):
         "top_stable_shadow_candidates": stable[:5],
         "top_live_drift_replay_candidates": live_drift[:5],
         "scan_top": report.get("scan_top") or [],
+    }
+
+
+def summarize_10min_stateful_policy_filter_search(report):
+    if not report:
+        return {
+            "status": "missing",
+            "note": "Run py/search_10m_stateful_policy_filters.py to evaluate stateful 10-minute policy overlays.",
+        }
+    rows = report.get("policy_candidates") or []
+    top = sorted(
+        rows,
+        key=lambda r: (
+            float(r.get("wr_delta_pp") or 0),
+            -int(((r.get("overall") or {}).get("max_loss")) or 0),
+            float(r.get("trade_retention_pct") or 0),
+        ),
+        reverse=True,
+    )
+    stable = [
+        r for r in rows
+        if int(((r.get("overall") or {}).get("trades")) or 0) >= 180
+        and float(((r.get("time_block_summary") or {}).get("min_block_wr")) or 0) >= 55
+        and int(((r.get("time_block_summary") or {}).get("positive_blocks")) or 0) >= 9
+        and int(((r.get("overall") or {}).get("max_loss")) or 0) <= 7
+        and float(r.get("wr_delta_pp") or 0) > 0
+    ]
+    stable.sort(
+        key=lambda r: (
+            float(r.get("wr_delta_pp") or 0),
+            -int(((r.get("overall") or {}).get("max_loss")) or 0),
+            float(((r.get("time_block_summary") or {}).get("min_block_wr")) or 0),
+            float(r.get("trade_retention_pct") or 0),
+        ),
+        reverse=True,
+    )
+    live_drift = [
+        r for r in rows
+        if (((r.get("live_replay") or {}).get("overall") or {}).get("trades") or 0)
+        and float(((r.get("live_replay") or {}).get("wr_delta_pp")) or 0) > 0
+    ]
+    live_drift.sort(
+        key=lambda r: (
+            float(((r.get("live_replay") or {}).get("wr_delta_pp")) or 0),
+            float(r.get("trade_retention_pct") or 0),
+        ),
+        reverse=True,
+    )
+    overlay = [r for r in stable if r.get("policy_id") != "static_only"]
+    overlay.sort(
+        key=lambda r: (
+            float(r.get("wr_delta_pp") or 0),
+            -int(((r.get("overall") or {}).get("max_loss")) or 0),
+            float(((r.get("time_block_summary") or {}).get("min_block_wr")) or 0),
+            float(r.get("trade_retention_pct") or 0),
+        ),
+        reverse=True,
+    )
+    return {
+        "status": "ready",
+        "method": report.get("method"),
+        "baseline": report.get("baseline"),
+        "policy_candidates": rows,
+        "top_policy_candidates": top[:5],
+        "top_stable_policy_candidates": stable[:5],
+        "top_stateful_overlay_candidates": (report.get("top_stateful_overlay_candidates") or overlay)[:5],
+        "top_live_drift_replay_candidates": live_drift[:5],
     }
 
 
@@ -795,6 +863,7 @@ def main():
     session_filters = read_json(FILES["session_filters"], {})
     ten_min_filter_scan = read_json(FILES["ten_min_filter_scan"], {})
     ten_min_regime_filter_search = read_json(FILES["ten_min_regime_filter_search"], {})
+    ten_min_stateful_policy_filter_search = read_json(FILES["ten_min_stateful_policy_filter_search"], {})
     thirty_min_regime_filter_search = read_json(FILES["thirty_min_regime_filter_search"], {})
     regime_patterns = read_json(FILES["regime_patterns"], {})
     parallel_portfolio = read_json(FILES["parallel_portfolio"], {})
@@ -835,6 +904,7 @@ def main():
         "session_filter_validation": session_filter_summary,
         "ten_min_filter_scan": summarize_10min_filter_scan(ten_min_filter_scan),
         "ten_min_regime_filter_search": summarize_10min_regime_filter_search(ten_min_regime_filter_search),
+        "ten_min_stateful_policy_filter_search": summarize_10min_stateful_policy_filter_search(ten_min_stateful_policy_filter_search),
         "thirty_min_regime_filter_search": summarize_30min_regime_filter_search(thirty_min_regime_filter_search),
         "regime_patterns": summarize_regime_patterns(regime_patterns),
         "system_health": {
@@ -1186,6 +1256,43 @@ def main():
             f"{live_overall.get('wr')}% over {live_overall.get('trades')} trades "
             f"(delta {live_replay.get('wr_delta_pp')}pp, retention {live_replay.get('trade_retention_pct')}%). "
             "This is not promotion evidence; collect direct shadow samples first."
+        )
+
+    stateful_search = report.get("ten_min_stateful_policy_filter_search") or {}
+    stateful_candidates = stateful_search.get("top_stable_policy_candidates") or stateful_search.get("top_policy_candidates") or []
+    if stateful_candidates:
+        best = stateful_candidates[0]
+        overall = best.get("overall") or {}
+        block = best.get("time_block_summary") or {}
+        static = best.get("static_overall") or {}
+        report["recommendation"].append(
+            f"BTC_10min stateful policy overlay: {best.get('id')} has offline WR {overall.get('wr')}% "
+            f"over {overall.get('trades')} trades, max loss {overall.get('max_loss')}, "
+            f"delta {best.get('wr_delta_pp')}pp vs production and {best.get('stateful_wr_delta_vs_static_pp')}pp vs its static filter. "
+            f"Static filter WR was {static.get('wr')}%; retention {best.get('trade_retention_pct')}%, "
+            f"min block WR {block.get('min_block_wr')}%. Keep as shadow/replay only."
+        )
+    overlay_candidates = stateful_search.get("top_stateful_overlay_candidates") or []
+    if overlay_candidates:
+        best_overlay = overlay_candidates[0]
+        overall = best_overlay.get("overall") or {}
+        block = best_overlay.get("time_block_summary") or {}
+        report["recommendation"].append(
+            f"BTC_10min best non-static stateful overlay: {best_overlay.get('id')} has offline WR {overall.get('wr')}% "
+            f"over {overall.get('trades')} trades, max loss {overall.get('max_loss')}, "
+            f"retention {best_overlay.get('trade_retention_pct')}%, min block WR {block.get('min_block_wr')}%. "
+            "It reduces repeated-exposure risk but sacrifices trades/WR; keep as shadow/replay until live evidence improves."
+        )
+    stateful_live_candidates = stateful_search.get("top_live_drift_replay_candidates") or []
+    if stateful_live_candidates:
+        best_live = stateful_live_candidates[0]
+        live_replay = best_live.get("live_replay") or {}
+        live_overall = live_replay.get("overall") or {}
+        report["recommendation"].append(
+            f"BTC_10min stateful live-drift diagnostic: {best_live.get('id')} replays the current small live sample at "
+            f"{live_overall.get('wr')}% over {live_overall.get('trades')} trades "
+            f"(delta {live_replay.get('wr_delta_pp')}pp, retention {live_replay.get('trade_retention_pct')}%). "
+            "This remains diagnostic until direct shadow samples settle."
         )
 
     thirty_regime_search = report.get("thirty_min_regime_filter_search") or {}
