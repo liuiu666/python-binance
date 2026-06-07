@@ -37,7 +37,17 @@ const REPORT_FILES = {
   latency: path.join(__dirname, "data", "execution_latency_validation.json")
 };
 const PYTHON_EXE = process.env.PYTHON_EXE || "python";
-const REPORT_REFRESH_INTERVAL_MS = 60 * 1000;
+const REPORT_REFRESH_INTERVAL_MS = Math.max(
+  60 * 1000,
+  Number(process.env.REPORT_REFRESH_INTERVAL_MS || 10 * 60 * 1000)
+);
+const REPORT_SCRIPT_ENV = {
+  PYTHONUNBUFFERED: "1",
+  OMP_NUM_THREADS: "1",
+  OPENBLAS_NUM_THREADS: "1",
+  MKL_NUM_THREADS: "1",
+  NUMEXPR_NUM_THREADS: "1"
+};
 const LIGHT_REPORT_SCRIPTS = [
   path.join(__dirname, "py", "analyze_signal_audit.py"),
   path.join(__dirname, "py", "analyze_live_backtest_gap.py"),
@@ -172,7 +182,7 @@ function runScript(script, cb) {
   const child = spawn(PYTHON_EXE, [script], {
     cwd: __dirname,
     windowsHide: true,
-    env: { ...process.env, PYTHONUNBUFFERED: "1" },
+    env: { ...process.env, ...REPORT_SCRIPT_ENV },
     stdio: ["ignore", out, err]
   });
   child.on("exit", (code, signal) => finish(code, signal));
