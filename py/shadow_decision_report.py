@@ -122,10 +122,14 @@ def candidate_type(candidate_id, grouped=None):
 def live_rows(signal_audit):
     rows = {}
     for strategy_id, metric in (signal_audit.get("by_strategy") or {}).items():
-        rows[strategy_id] = metric
+        rows[strategy_id] = {**metric, "source": "production_signal_audit"}
     shadow = signal_audit.get("shadow_candidates") or {}
     for strategy_id, metric in (shadow.get("by_strategy") or {}).items():
-        rows[strategy_id] = metric
+        rows[strategy_id] = {**metric, "source": "direct_shadow_audit"}
+    derived = signal_audit.get("derived_shadow_candidates") or {}
+    for strategy_id, metric in (derived.get("by_strategy") or {}).items():
+        if strategy_id not in rows or int((rows[strategy_id] or {}).get("settled") or 0) == 0:
+            rows[strategy_id] = {**metric, "source": "derived_replay"}
     return rows
 
 
@@ -157,6 +161,8 @@ def judge(candidate_id, live, offline, config):
 
     if config.get("autoTrade") is not False:
         reasons.append("autoTrade_not_disabled")
+    if live.get("source") == "derived_replay":
+        reasons.append("derived_replay_not_live_shadow")
 
     if offline is None:
         reasons.append("offline_missing")

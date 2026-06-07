@@ -19,6 +19,28 @@ REPORT_FILE = os.path.join(OUT, "signal_audit_report.json")
 PAYOUT = 0.85
 DEFAULT_STAKE = 5
 TREND_EPS = 0.00005
+DERIVED_MODEL_REPLAY_CANDIDATES = [
+    {
+        "id": "SHADOW_10m_ctcool_t630_str30",
+        "base_strategy": "BTC_10min",
+        "threshold": 0.55,
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "agree_mode": "majority",
+        "countertrend_max_abs_trend6": 0.0030,
+        "countertrend_max_strength": 30,
+    },
+    {
+        "id": "SHADOW_30m_ctcool_t625_str30",
+        "base_strategy": "BTC_30min",
+        "threshold": 0.58,
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "agree_mode": "majority",
+        "countertrend_max_abs_trend6": 0.0025,
+        "countertrend_max_strength": 30,
+    },
+]
 
 
 def read_jsonl(path):
@@ -130,6 +152,7 @@ def build_trend_lookup(times, prices):
         lookup[pd.to_datetime(row.period, utc=True)] = {
             "trend_score": int(score),
             "trend_label": trend_label(int(score)),
+            "trend6": float(getattr(row, "trend6") or 0),
         }
     return lookup
 
@@ -290,6 +313,82 @@ def dedupe_rows(raw_rows):
     return list(by_key.values())
 
 
+def replay_model_candidate_rows(rows, trend_lookup):
+    by_base = defaultdict(list)
+    for row in rows:
+        strategy = row.get("strategy_id") or row.get("label")
+        if strategy:
+            by_base[strategy].append(row)
+
+    replay_rows = []
+    for cand in DERIVED_MODEL_REPLAY_CANDIDATES:
+        for row in by_base.get(cand["base_strategy"], []):
+            signal_time = pd.to_datetime(row.get("time"), utc=True)
+            trend = trend_lookup.get(signal_time.floor("5min"), {})
+            probs = row.get("probs") or []
+            if probs and len(probs) >= 3:
+                probs = [float(p) for p in probs[:3]]
+                up_votes = sum(1 for p in probs if p >= 0.5)
+                majority_up = up_votes >= 2
+                agree_all = (probs[0] >= 0.5) == (probs[1] >= 0.5) == (probs[2] >= 0.5)
+            else:
+                avg = float(row.get("avg_prob") or 0.5)
+                majority_up = avg >= 0.5
+                agree_all = bool(row.get("agree_all", row.get("agree", True)))
+            avg = float(row.get("avg_prob") or 0.5)
+            agree = agree_all if cand["agree_mode"] == "all3" else bool(row.get("agree", True))
+            high_conf = avg >= cand["threshold"] or avg <= (1 - cand["threshold"])
+            rsi_value = float(row.get("rsi_value") or 50)
+            rsi_extreme = rsi_value < cand["rsi_lo"] or rsi_value > cand["rsi_hi"]
+            vol_ok = row.get("vol_ok", True) is not False
+            session_ok = row.get("session_ok", True) is not False
+
+            sig = None
+            confidence = None
+            countertrend_guard_ok = True
+            if agree and high_conf and rsi_extreme and vol_ok and session_ok:
+                sig = "UP" if majority_up else "DOWN"
+                confidence = round(abs(avg - 0.5) * 2 * 100, 1)
+                trend_score_value = int(trend.get("trend_score") or row.get("trend_score") or 0)
+                trend6_value = float(trend.get("trend6") or row.get("trend6") or 0)
+                countertrend = (sig == "UP" and trend_score_value <= -3) or (sig == "DOWN" and trend_score_value >= 3)
+                if countertrend:
+                    if abs(trend6_value) > float(cand["countertrend_max_abs_trend6"]):
+                        countertrend_guard_ok = False
+                    if confidence > float(cand["countertrend_max_strength"]):
+                        countertrend_guard_ok = False
+                if not countertrend_guard_ok:
+                    sig = None
+                    confidence = None
+
+            out = dict(row)
+            out.update({
+                "event": "derived_shadow_candidate",
+                "strategy_id": cand["id"],
+                "label": cand["id"],
+                "shadow": True,
+                "shadow_type": "model_replay",
+                "shadow_base_strategy": cand["base_strategy"],
+                "replay_source": "signal_snapshot",
+                "agree_mode": cand["agree_mode"],
+                "threshold": cand["threshold"],
+                "rsi_extreme": rsi_extreme,
+                "rsi_value": round(rsi_value, 1),
+                "trend_score": trend.get("trend_score", row.get("trend_score")),
+                "trend_label": trend.get("trend_label", row.get("trend_label")),
+                "trend6": round(float(trend.get("trend6") or row.get("trend6") or 0), 6),
+                "countertrend_guard_ok": countertrend_guard_ok,
+                "countertrend_max_abs_trend6": cand["countertrend_max_abs_trend6"],
+                "countertrend_max_strength": cand["countertrend_max_strength"],
+                "signal": sig,
+                "confidence": confidence,
+                "fixed_amount": True,
+                "amount": str(DEFAULT_STAKE),
+            })
+            replay_rows.append(out)
+    return replay_rows
+
+
 def analyze_rows(rows, times, prices, trend_lookup=None):
     trades = []
     reason_counts = defaultdict(Counter)
@@ -376,6 +475,15 @@ def main():
     shadow_report["raw_signal_snapshots"] = len(shadow_raw_rows)
     shadow_report["deduped_snapshots"] = len(shadow_raw_rows) - len(shadow_rows)
     report["shadow_candidates"] = shadow_report
+    derived_rows = replay_model_candidate_rows(rows, trend_lookup)
+    derived_report = analyze_rows(derived_rows, times, prices, trend_lookup)
+    derived_report["method"] = {
+        "type": "derived_shadow_replay",
+        "source": "historical signal_snapshot rows",
+        "note": "Replay uses already-recorded live snapshots; it is useful for screening but is not a substitute for real live shadow samples.",
+    }
+    derived_report["raw_signal_snapshots"] = len(derived_rows)
+    report["derived_shadow_candidates"] = derived_report
     with open(REPORT_FILE, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
     print(json.dumps(report, indent=2, ensure_ascii=False))
