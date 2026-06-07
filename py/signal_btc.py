@@ -321,6 +321,16 @@ META_GATE_SHADOW_CANDIDATES = [
         "note": "30m second-stage signal-quality gate; meta-OOS +1.47pp with 57% retention, shadow only.",
     },
 ]
+TWO_MINUTE_LIVE_CANDIDATES = [
+    {
+        "id": "BTC_10min",
+        "base": "BTC_10min",
+        "model_id": "BTC_2m_10min_primary_lowvol_up_gate",
+        "live": True,
+        "note": "LIVE 10m signal: 2m aggregated research model with regime thresholds and low-volatility UP strength gate.",
+    },
+]
+TWO_MINUTE_SHADOW_CANDIDATES = []
 RULE_SHADOW_CANDIDATES = [
     {
         "id": "SHADOW_RULE_10m_rsi_reversal_30_70",
@@ -447,6 +457,7 @@ def acquire_singleton_lock():
 LOCK_HANDLE, LOCK_SOCKET = acquire_singleton_lock()
 
 import pandas as pd
+import numpy as np
 import requests
 from lightgbm import LGBMClassifier
 from xgboost import XGBClassifier
@@ -455,6 +466,14 @@ warnings.filterwarnings("ignore")
 
 sys.path.insert(0, "E:/codex/py")
 from backtest_enhanced import build_features, load_symbol
+from research_2m_10min_binary import (
+    SYMBOL as RESEARCH_2M_SYMBOL,
+    aggregate_bars as aggregate_2m_bars,
+    build_features as build_2m_features,
+    load_1m as load_2m_1m,
+    merge_external as merge_2m_external,
+)
+from research_regime_strategy_2m import classify_regime as classify_2m_regime
 
 
 def append_jsonl(path, obj):
@@ -891,6 +910,195 @@ class Strategy:
         return result
 
 
+def regime_group_2m(regime):
+    return "transition" if str(regime).startswith("transition") else str(regime)
+
+
+def enrich_live_2m_features(fdf, bars2):
+    bars = bars2[["time", "open", "high", "low", "close", "volume"]].copy()
+    bars["time"] = pd.to_datetime(bars["time"], utc=True)
+    out = fdf.copy()
+    out["time"] = pd.to_datetime(out["time"], utc=True)
+    out = out.merge(bars, on="time", how="left")
+    return out.dropna(subset=["close"]).reset_index(drop=True)
+
+
+class TwoMinuteRegimeShadow:
+    def __init__(self, meta):
+        self.meta = meta
+        self.id = meta["id"]
+        self.base = meta["base"]
+        self.model_id = meta["model_id"]
+        self.live = bool(meta.get("live", False))
+        self.model = None
+        self.feat_cols = []
+        self.policy = {}
+        self.df1 = None
+        self.cached_period = None
+        self.cached_result = None
+        prefix = os.path.join(OUT, f"prod_{self.model_id}")
+        try:
+            with open(f"{prefix}_hgb.pkl", "rb") as f:
+                self.model = pickle.load(f)
+            with open(f"{prefix}_cols.json", "r", encoding="utf-8") as f:
+                self.feat_cols = json.load(f)
+            with open(f"{prefix}_policy.json", "r", encoding="utf-8") as f:
+                self.policy = json.load(f)
+            self.df1 = load_2m_1m(RESEARCH_2M_SYMBOL)
+            print(
+                f"[Signal] {self.id} -> 2m {'LIVE' if self.live else 'shadow'} | model={self.model_id} "
+                f"| features={len(self.feat_cols)} | policy={self.policy.get('name')}"
+            )
+        except Exception as e:
+            print(f"[Signal] {self.id} disabled: {e}")
+
+    def _merge_live_1m(self, live1m):
+        if self.df1 is None:
+            return
+        if live1m is None or len(live1m) == 0:
+            return
+        merged = pd.concat([self.df1, live1m], ignore_index=True)
+        merged["open_time"] = pd.to_datetime(merged["open_time"], utc=True)
+        merged = merged.drop_duplicates("open_time", keep="last").sort_values("open_time").reset_index(drop=True)
+        self.df1 = merged
+
+    def _last_closed_2m_period(self):
+        latest_1m = pd.to_datetime(self.df1["open_time"].max(), utc=True)
+        return (latest_1m - pd.Timedelta(minutes=2)).floor("2min")
+
+    def _build_live_frame(self):
+        two = aggregate_2m_bars(self.df1)
+        latest_1m = pd.to_datetime(self.df1["open_time"].max(), utc=True)
+        two["time"] = pd.to_datetime(two["time"], utc=True)
+        two["close_time"] = two["time"] + pd.Timedelta(minutes=2)
+        two = two[two["close_time"] <= latest_1m].drop(columns=["close_time"]).reset_index(drop=True)
+        two = merge_2m_external(two)
+        fdf = build_2m_features(two, keep_unlabeled=True)
+        frame = classify_2m_regime(enrich_live_2m_features(fdf, two))
+        frame["regime_group"] = frame["regime"].map(regime_group_2m)
+        return frame
+
+    def _threshold_for_group(self, group):
+        thresholds = self.policy.get("regime_thresholds") or {}
+        return float(thresholds.get(group, thresholds.get("uncertain", 0.65)))
+
+    def predict(self, live1m):
+        if self.model is None or not self.feat_cols or self.df1 is None:
+            return None
+        self._merge_live_1m(live1m)
+        period = self._last_closed_2m_period()
+        if self.cached_period is not None and period == self.cached_period:
+            return dict(self.cached_result) if self.cached_result else None
+
+        frame = self._build_live_frame()
+        if len(frame) < 10:
+            return None
+        last = frame.iloc[[-1]].copy()
+        missing = [c for c in self.feat_cols if c not in last.columns]
+        if missing:
+            raise RuntimeError(f"{self.id} missing 2m features: {missing[:5]}")
+        row = last.iloc[0]
+        X = last[self.feat_cols].replace([np.inf, -np.inf], np.nan).fillna(0).to_numpy(dtype=np.float32)
+        prob = float(self.model.predict_proba(X)[0, 1])
+        group = regime_group_2m(row.get("regime_group", "uncertain"))
+        threshold = self._threshold_for_group(group)
+
+        direction = None
+        margin = 0.0
+        if prob >= threshold:
+            direction = 1
+            margin = prob - threshold
+        elif prob <= 1 - threshold:
+            direction = 0
+            margin = (1 - prob) - threshold
+
+        raw_signal = "UP" if direction == 1 else ("DOWN" if direction == 0 else None)
+        sig = raw_signal
+        filter_reasons = []
+        taker_ratio_val = float(row.get("taker_ratio", 1) or 1)
+        if sig and self.policy.get("block_flow_opposes", False):
+            if (sig == "UP" and taker_ratio_val < 0.85) or (sig == "DOWN" and taker_ratio_val > 1.15):
+                sig = None
+                filter_reasons.append("flow_opposes")
+
+        gate = self.policy.get("gate") or {}
+        if sig and gate.get("kind") == "raise_margin":
+            atr_rank = float(row.get("atr_rank", 0.5) or 0.5)
+            bbw_rank = float(row.get("bbw_rank", 0.5) or 0.5)
+            directions = set(gate.get("directions") or [])
+            direction_ok = (sig == "UP" and "UP" in directions) or (sig == "DOWN" and "DOWN" in directions)
+            lowvol = atr_rank <= float(gate.get("atr_max", 1.0)) and bbw_rank <= float(gate.get("bbw_max", 1.0))
+            if direction_ok and lowvol and margin < float(gate.get("min_margin", 0)):
+                sig = None
+                filter_reasons.append("lowvol_strength_gate")
+
+        candle_time = pd.to_datetime(row["time"], utc=True)
+        candle_close_time = candle_time + pd.Timedelta(minutes=2)
+        strength_val = round(abs(prob - 0.5) * 200, 1)
+        trend_val = int(float(row.get("trend_score", 0) or 0))
+        htf_val = int(float(row.get("htf_score", 0) or 0))
+        rsi_val = float(row.get("rsi14", 50) or 50)
+        result = {
+            "strategy_id": self.id,
+            "engine": "two_minute_regime_model",
+            "shadow": not self.live,
+            "shadow_type": "two_minute_regime_model",
+            "shadow_base_strategy": self.base,
+            "shadow_model_id": self.model_id,
+            "live_model": self.live,
+            "policy_name": self.policy.get("name"),
+            "probs": [round(prob, 4)],
+            "avg_prob": round(prob, 4),
+            "policy_threshold": round(threshold, 4),
+            "policy_margin": round(float(margin), 4),
+            "agree": True,
+            "agree_mode": "single_hgb_2m",
+            "agree_all": True,
+            "high_conf": raw_signal is not None,
+            "rsi_extreme": True,
+            "rsi_value": round(rsi_val, 1),
+            "regime": str(row.get("regime", "unknown")),
+            "regime_group": group,
+            "trend_score": trend_val,
+            "trend_label": trend_label(trend_val),
+            "htf_score": htf_val,
+            "htf_label": htf_label(htf_val),
+            "bbp": round(float(row.get("bbp", 0.5) or 0.5), 4),
+            "bbw": round(float(row.get("bbw", 0) or 0), 6),
+            "bbw_rank": round(float(row.get("bbw_rank", 0.5) or 0.5), 4),
+            "atrp": round(float(row.get("atrp", 0) or 0), 8),
+            "atr_rank": round(float(row.get("atr_rank", 0.5) or 0.5), 4),
+            "atr_exp": round(float(row.get("atr_exp", 0) or 0), 6),
+            "vr": round(float(row.get("vr", 1) or 1), 6),
+            "vr_rank": round(float(row.get("vr_rank", 0.5) or 0.5), 4),
+            "taker_ratio": round(taker_ratio_val, 6),
+            "ls_ratio": round(float(row.get("ls_ratio", 1) or 1), 6),
+            "fund_rate": round(float(row.get("funding_rate", 0) or 0), 8),
+            "regime_filter_ok": len(filter_reasons) == 0,
+            "regime_filter_reasons": filter_reasons,
+            "signal": sig,
+            "raw_signal": raw_signal,
+            "confidence": strength_val if sig else None,
+            "bypass_min_confidence_filter": self.live,
+            "bypass_entry_timing": self.live,
+            "interval_min": int(self.policy.get("interval_min", 10)),
+            "duration": str(int(self.policy.get("interval_min", 10))),
+            "price": round(float(row.get("close", 0) or 0), 2),
+            "time": str(candle_time),
+            "candle_close_time": str(candle_close_time),
+            "actionable_time": str(candle_close_time),
+            "symbol": "BTCUSDT",
+            "label": self.id,
+            "model_label": self.model_id,
+            "threshold": threshold,
+            "amount": str(self.policy.get("fixed_amount", 5)),
+            "fixed_amount": True,
+        }
+        self.cached_period = period
+        self.cached_result = dict(result)
+        return result
+
+
 class RuleShadowStrategy:
     def __init__(self, meta, cfg):
         self.meta = meta
@@ -1190,13 +1398,13 @@ class MetaGateShadow:
         return out
 
 
-def fetch_live_klines():
+def fetch_live_1m_raw(limit=1000):
     last_err = None
     for base in BASE_URLS:
         try:
             r = requests.get(
                 f"{base}/api/v3/klines",
-                params={"symbol": "BTCUSDT", "interval": "1m", "limit": 500},
+                params={"symbol": "BTCUSDT", "interval": "1m", "limit": int(limit)},
                 timeout=10,
             )
             r.raise_for_status()
@@ -1213,6 +1421,11 @@ def fetch_live_klines():
     df = df[["ot", "o", "h", "l", "c", "v"]].rename(
         columns={"ot": "open_time", "o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"}
     )
+    return df
+
+
+def aggregate_live_5m(df):
+    df = df.copy()
     df["p"] = df["open_time"].dt.floor("5min")
     latest_1m_open = df["open_time"].max()
     live = df.groupby("p").agg(
@@ -1227,6 +1440,10 @@ def fetch_live_klines():
     live["close_time"] = live["time"] + pd.Timedelta(minutes=5)
     live = live[live["close_time"] <= latest_1m_open].drop(columns=["close_time"])
     return live
+
+
+def fetch_live_klines():
+    return aggregate_live_5m(fetch_live_1m_raw(500))
 
 
 def merge_live(df5, live):
@@ -1271,9 +1488,17 @@ def status_text(r):
 
 
 configs = load_config()
-strategies = [Strategy(k, v) for k, v in configs.items() if v.get("enabled", True)]
+live_two_minute_ids = {item["id"] for item in TWO_MINUTE_LIVE_CANDIDATES}
+strategies = [
+    Strategy(k, v)
+    for k, v in configs.items()
+    if v.get("enabled", True) and k not in live_two_minute_ids
+]
+live_two_minute_strategies = [(item, TwoMinuteRegimeShadow(item)) for item in TWO_MINUTE_LIVE_CANDIDATES]
 shadow_strategies = []
 for shadow in SHADOW_CANDIDATES:
+    if not configs.get(shadow["base"], {}).get("enabled", True):
+        continue
     base_cfg = dict(configs[shadow["base"]])
     base_cfg.update({
         "threshold": shadow["threshold"],
@@ -1293,10 +1518,21 @@ for shadow in SHADOW_CANDIDATES:
     shadow_strategies.append((shadow, Strategy(shadow["id"], base_cfg)))
 rule_shadow_strategies = []
 for shadow in RULE_SHADOW_CANDIDATES:
+    if not configs.get(shadow["base"], {}).get("enabled", True):
+        continue
     base_cfg = dict(configs[shadow["base"]])
     rule_shadow_strategies.append((shadow, RuleShadowStrategy(shadow, base_cfg)))
-stateful_shadow_overlays = [(shadow, StatefulShadowOverlay(shadow)) for shadow in STATEFUL_SHADOW_CANDIDATES]
-meta_gate_shadows = [(shadow, MetaGateShadow(shadow)) for shadow in META_GATE_SHADOW_CANDIDATES]
+stateful_shadow_overlays = [
+    (shadow, StatefulShadowOverlay(shadow))
+    for shadow in STATEFUL_SHADOW_CANDIDATES
+    if configs.get(shadow["base"], {}).get("enabled", True)
+]
+meta_gate_shadows = [
+    (shadow, MetaGateShadow(shadow))
+    for shadow in META_GATE_SHADOW_CANDIDATES
+    if configs.get(shadow["base"], {}).get("enabled", True)
+]
+two_minute_shadow_strategies = [(shadow, TwoMinuteRegimeShadow(shadow)) for shadow in TWO_MINUTE_SHADOW_CANDIDATES]
 last_audit_keys = load_audit_keys(SIGNAL_AUDIT_FILE)
 
 print("[Signal] Loading BTC history...")
@@ -1306,7 +1542,8 @@ print("\n[Signal] Starting BTC dual-strategy loop (every 15s)...")
 
 while True:
     try:
-        live = fetch_live_klines()
+        live_1m = fetch_live_1m_raw(1000)
+        live = aggregate_live_5m(live_1m)
         df5 = merge_live(df5, live)
         signals = {}
         for strategy in strategies:
@@ -1316,6 +1553,14 @@ while True:
                 print(
                     f"  {r['time']} {strategy.id} avg={r['avg_prob']:.3f} "
                     f"RSI={r['rsi_value']:.0f} {status_text(r)}"
+                )
+        for _, strategy in live_two_minute_strategies:
+            r = strategy.predict(live_1m)
+            if r:
+                signals[strategy.id] = r
+                print(
+                    f"  {r['time']} {strategy.id} 2m-live p={r['avg_prob']:.3f} "
+                    f"regime={r.get('regime_group')} {status_text(r)}"
                 )
         if signals:
             with open(SIGNAL_FILE, "w", encoding="utf-8") as f:
@@ -1391,6 +1636,26 @@ while True:
                 print(
                     f"  {r['time']} {r['strategy_id']} meta-shadow "
                     f"p={r.get('meta_prob')} RSI={r['rsi_value']:.0f} {status_text(r)}"
+                )
+            if len(last_audit_keys) > 5000:
+                last_audit_keys = set(list(last_audit_keys)[-2000:])
+        for shadow_meta, shadow_strategy in two_minute_shadow_strategies:
+            r = shadow_strategy.predict(live_1m)
+            if not r:
+                continue
+            r["shadow_note"] = shadow_meta["note"]
+            key = f"shadow_candidate|{r.get('strategy_id')}|{r.get('time')}"
+            if key not in last_audit_keys:
+                append_jsonl(SIGNAL_AUDIT_FILE, {
+                    "event": "shadow_candidate",
+                    "serverTime": int(time.time() * 1000),
+                    **r,
+                })
+                last_audit_keys.add(key)
+            if r.get("signal"):
+                print(
+                    f"  {r['time']} {r['strategy_id']} 2m-shadow "
+                    f"p={r.get('avg_prob')} {status_text(r)}"
                 )
             if len(last_audit_keys) > 5000:
                 last_audit_keys = set(list(last_audit_keys)[-2000:])

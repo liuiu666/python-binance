@@ -124,7 +124,11 @@
     ["bar1","bar2","bar3"].forEach((id,i)=>{const p=probs[i]??0.5,bar=$(id),val=$("val"+(i+1));if(bar){bar.style.width=(p*100)+"%";bar.style.background=p>0.6?"#00d4aa":p<0.4?"#ff4757":"#ffd32a"}if(val){val.textContent=(p*100).toFixed(1)+"%";val.style.color=bar?bar.style.background:"#ffd32a"}});
     $("verdictText").textContent=active.signal?(active.signal==="UP"?"看涨 ":"看跌 ")+active.confidence+"%":strategyLabel(active);
     $("verdictText").style.color=active.signal?(active.signal==="UP"?"#00d4aa":"#ff4757"):"#5a6478";
-    $("thresholdInfo").textContent=active.signal?"RSI="+Number(active.rsi_value).toFixed(0)+" | 强度 "+active.confidence+"%":"强度=离50%多远，还需 RSI<30 或 >70";
+    if(active.engine==="two_minute_regime_model"){
+      $("thresholdInfo").textContent=active.signal?"2m模型 | "+(active.regime_group||"--")+" | p="+Number(active.avg_prob||0).toFixed(3)+" / th="+Number(active.policy_threshold||active.threshold||0).toFixed(2):"2m模型监控中 | "+(active.regime_group||"--");
+    }else{
+      $("thresholdInfo").textContent=active.signal?"RSI="+Number(active.rsi_value).toFixed(0)+" | 强度 "+active.confidence+"%":"强度=离50%多远，还需 RSI<30 或 >70";
+    }
     updateTopbar();
   }
 

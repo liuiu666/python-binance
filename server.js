@@ -357,6 +357,7 @@ function allowSignalForEntryTiming(sig, state, reason) {
 
 function applyEntryTimingForSignal(strategyId, sig) {
   const policy = ENTRY_TIMING_POLICIES[strategyId];
+  if (sig && sig.bypass_entry_timing) return sig;
   if (!ENTRY_TIMING_ENABLED || !policy || !sig || !sig.signal) return sig;
 
   const now = Date.now();
@@ -482,7 +483,9 @@ function applyEntryTimingForSignal(strategyId, sig) {
 function applyEntryTiming(signals) {
   const out = { ...signals };
   for (const strategyId of Object.keys(ENTRY_TIMING_POLICIES)) {
-    out[strategyId] = applyEntryTimingForSignal(strategyId, signals[strategyId]);
+    const next = applyEntryTimingForSignal(strategyId, signals[strategyId]);
+    if (next) out[strategyId] = next;
+    else delete out[strategyId];
     if (!signals[strategyId] || !signals[strategyId].signal) delete entryTimingState[strategyId];
   }
   return out;
@@ -1071,7 +1074,7 @@ function checkAutoTrade() {
     for (const strategyId of ["BTC_30min", "BTC_10min"]) {
       const sig = signals[strategyId];
       if (!sig || !sig.signal || !sig.confidence) continue;
-      if (Number(sig.confidence) < Number(tradeConfig.minConfidence || 0)) continue;
+      if (!sig.bypass_min_confidence_filter && Number(sig.confidence) < Number(tradeConfig.minConfidence || 0)) continue;
       if (tradeConfig.preventOverlapOrders && trades.some(t => t.status === "active" && t.source === "auto:" + strategyId)) continue;
 
       // Check if signal is fresh (within last 2 minutes)

@@ -205,7 +205,7 @@ def merge_external(df):
     return out
 
 
-def build_features(df):
+def build_features(df, keep_unlabeled=False):
     c = df["close"].astype(float).reset_index(drop=True)
     h = df["high"].astype(float).reset_index(drop=True)
     l = df["low"].astype(float).reset_index(drop=True)
@@ -336,6 +336,9 @@ def build_features(df):
     future = c.shift(-HORIZON)
     target[:-HORIZON] = np.where(future.iloc[:-HORIZON] > c.iloc[:-HORIZON], 1, np.where(future.iloc[:-HORIZON] < c.iloc[:-HORIZON], 0, np.nan))
     F["target"] = target
+    if keep_unlabeled:
+        feature_columns = [c for c in F.columns if c != "target"]
+        return F.dropna(subset=feature_columns).reset_index(drop=True)
     return F.dropna().reset_index(drop=True)
 
 

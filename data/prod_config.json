@@ -15,10 +15,13 @@
     "session_block_strong_countertrend": true,
     "model_label": "BTC_10min",
     "models": ["xgb1", "xgb2", "lgb"],
-    "strategy": "causal_majority_hour_filter_v2"
+    "strategy": "2m_regime_lowvol_up_gate_live_v1",
+    "live_engine": "two_minute_regime_model",
+    "live_model_id": "BTC_2m_10min_primary_lowvol_up_gate",
+    "legacy_model_label": "BTC_10min"
   },
   "BTC_30min": {
-    "enabled": true,
+    "enabled": false,
     "symbol": "btcusdt",
     "horizon": 6,
     "interval_min": 30,
@@ -33,6 +36,7 @@
     "session_block_strong_countertrend": true,
     "model_label": "BTC_30min",
     "models": ["xgb1", "xgb2", "lgb"],
-    "strategy": "walkforward_rsi_ml_balanced_portfolio_filter_v1"
+    "strategy": "walkforward_rsi_ml_balanced_portfolio_filter_v1",
+    "paused_reason": "temporarily_disabled_focus_on_10min"
   }
 }

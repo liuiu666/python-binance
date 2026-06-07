@@ -515,6 +515,7 @@ function buildTradeQueue(data) {
             actionableTime: sig.actionable_time || sig.candle_close_time || sig.time || "",
             amount: String(amount),
             duration: String(sig.duration || d.duration),
+            bypassMinConfidence: !!sig.bypass_min_confidence_filter,
             raw: sig
         });
     }
@@ -959,7 +960,7 @@ function main() {
                     order.sinceQueueBatchStartMs = Date.now() - queueBatchStart;
                     var conf = order.confidence || 0;
                     var actionableMs = order.actionableTime ? new Date(order.actionableTime).getTime() : 0;
-                    if (Number(conf) < Number(tradeConfig.minConfidence || 0)) {
+                    if (!order.bypassMinConfidence && Number(conf) < Number(tradeConfig.minConfidence || 0)) {
                         reportTradeAudit("signal_skipped", order, { reason: "min_confidence_filter", minConfidence: tradeConfig.minConfidence });
                         continue;
                     }
