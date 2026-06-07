@@ -18,6 +18,7 @@ PRICE_TICKS_FILE = os.path.join(OUT, "price_ticks.jsonl")
 REPORT_FILE = os.path.join(OUT, "signal_audit_report.json")
 PAYOUT = 0.85
 DEFAULT_STAKE = 5
+TREND_EPS = 0.00005
 
 
 def read_jsonl(path):
@@ -74,6 +75,63 @@ def load_price_series():
     times = pd.to_datetime(df["time"], utc=True)
     prices = df["price"].astype(float).to_numpy()
     return times, prices
+
+
+def trend_label(score):
+    if score >= 3:
+        return "strong_uptrend"
+    if score <= -3:
+        return "strong_downtrend"
+    if score > 0:
+        return "mild_uptrend"
+    if score < 0:
+        return "mild_downtrend"
+    return "neutral"
+
+
+def build_trend_lookup(times, prices):
+    """Approximate the signal service trend score from historical/live prices."""
+    if len(times) == 0:
+        return {}
+    frame = pd.DataFrame({
+        "time": pd.to_datetime(times, utc=True),
+        "price": prices,
+    }).dropna()
+    if frame.empty:
+        return {}
+    frame["period"] = frame["time"].dt.floor("5min")
+    bars = frame.groupby("period", as_index=False).agg(close=("price", "last"))
+    c = bars["close"].astype(float)
+    for span in [5, 10, 20, 50]:
+        bars[f"ema{span}"] = c.ewm(span=span, adjust=False).mean()
+    bars["pre50"] = c / bars["ema50"] - 1
+    for span in [6, 12, 30]:
+        bars[f"trend{span}"] = c / c.shift(span) - 1
+    up_stack = (bars["ema5"] >= bars["ema10"]) & (bars["ema10"] >= bars["ema20"]) & (bars["ema20"] >= bars["ema50"])
+    down_stack = (bars["ema5"] <= bars["ema10"]) & (bars["ema10"] <= bars["ema20"]) & (bars["ema20"] <= bars["ema50"])
+    bars["ema_stack"] = 0
+    bars.loc[up_stack, "ema_stack"] = 1
+    bars.loc[down_stack, "ema_stack"] = -1
+
+    lookup = {}
+    for row in bars.dropna(subset=["pre50", "trend6", "trend12", "trend30"]).itertuples(index=False):
+        score = 0
+        for name in ["trend6", "trend12", "trend30", "pre50"]:
+            value = float(getattr(row, name) or 0)
+            if value > TREND_EPS:
+                score += 1
+            elif value < -TREND_EPS:
+                score -= 1
+        stack = int(getattr(row, "ema_stack"))
+        if stack > 0:
+            score += 1
+        elif stack < 0:
+            score -= 1
+        lookup[pd.to_datetime(row.period, utc=True)] = {
+            "trend_score": int(score),
+            "trend_label": trend_label(int(score)),
+        }
+    return lookup
 
 
 def settle(direction, open_price, close_price):
@@ -210,6 +268,8 @@ def reason_for(row):
         reasons.append("rsi_not_extreme")
     if row.get("vol_ok") is False:
         reasons.append("vol_filter")
+    if row.get("countertrend_guard_ok") is False:
+        reasons.append("countertrend_not_cooled")
     if row.get("session_ok") is False:
         reasons.append("session_blocked")
     return "+".join(reasons) or "no_signal"
@@ -230,9 +290,10 @@ def dedupe_rows(raw_rows):
     return list(by_key.values())
 
 
-def analyze_rows(rows, times, prices):
+def analyze_rows(rows, times, prices, trend_lookup=None):
     trades = []
     reason_counts = defaultdict(Counter)
+    trend_lookup = trend_lookup or {}
 
     for row in rows:
         strategy = row.get("strategy_id") or row.get("label") or "unknown"
@@ -240,6 +301,13 @@ def analyze_rows(rows, times, prices):
         if not row.get("signal"):
             continue
         signal_time = pd.to_datetime(row.get("time"), utc=True)
+        trend_score_value = row.get("trend_score")
+        trend_label_value = row.get("trend_label")
+        if trend_score_value is None or trend_label_value is None:
+            trend = trend_lookup.get(signal_time.floor("5min"))
+            if trend:
+                trend_score_value = trend.get("trend_score")
+                trend_label_value = trend.get("trend_label")
         duration = int(float(row.get("duration") or row.get("interval_min") or 0))
         if duration <= 0:
             continue
@@ -259,8 +327,8 @@ def analyze_rows(rows, times, prices):
             "shadowType": row.get("shadow_type") or ("model" if row.get("shadow") else None),
             "shadowBaseStrategy": row.get("shadow_base_strategy"),
             "ruleKind": row.get("rule_kind"),
-            "trendScore": row.get("trend_score"),
-            "trendLabel": row.get("trend_label"),
+            "trendScore": trend_score_value,
+            "trendLabel": trend_label_value,
             "direction": row.get("signal"),
             "duration": str(duration),
             "signalTime": str(signal_time),
@@ -300,10 +368,11 @@ def main():
     rows = dedupe_rows(raw_rows)
     shadow_rows = dedupe_rows(shadow_raw_rows)
     times, prices = load_price_series()
-    report = analyze_rows(rows, times, prices)
+    trend_lookup = build_trend_lookup(times, prices)
+    report = analyze_rows(rows, times, prices, trend_lookup)
     report["raw_signal_snapshots"] = len(raw_rows)
     report["deduped_snapshots"] = len(raw_rows) - len(rows)
-    shadow_report = analyze_rows(shadow_rows, times, prices)
+    shadow_report = analyze_rows(shadow_rows, times, prices, trend_lookup)
     shadow_report["raw_signal_snapshots"] = len(shadow_raw_rows)
     shadow_report["deduped_snapshots"] = len(shadow_raw_rows) - len(shadow_rows)
     report["shadow_candidates"] = shadow_report

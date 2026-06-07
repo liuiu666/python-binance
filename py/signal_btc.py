@@ -61,6 +61,18 @@ SHADOW_CANDIDATES = [
         "note": "Recent-history high-WR candidate; strict validation was weak, shadow only.",
     },
     {
+        "id": "SHADOW_10m_ctcool_t630_str30",
+        "base": "BTC_10min",
+        "threshold": 0.55,
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "vol_min_rank": None,
+        "agree_mode": "majority",
+        "countertrend_max_abs_trend6": 0.0030,
+        "countertrend_max_strength": 30,
+        "note": "10m counter-trend cooling guard; shadow only until live sample confirms.",
+    },
+    {
         "id": "SHADOW_30m_stable_th58_rsi30_70_all3",
         "base": "BTC_30min",
         "threshold": 0.58,
@@ -79,6 +91,18 @@ SHADOW_CANDIDATES = [
         "vol_min_rank": None,
         "agree_mode": "all3",
         "note": "High-strength 30m guard candidate aligned with live shadow safety review.",
+    },
+    {
+        "id": "SHADOW_30m_ctcool_t625_str30",
+        "base": "BTC_30min",
+        "threshold": 0.58,
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "vol_min_rank": None,
+        "agree_mode": "majority",
+        "countertrend_max_abs_trend6": 0.0025,
+        "countertrend_max_strength": 30,
+        "note": "30m counter-trend cooling guard; shadow only until live sample confirms.",
     },
 ]
 RULE_SHADOW_CANDIDATES = [
@@ -301,6 +325,14 @@ class Strategy:
         self.skip_hours_utc = sorted({int(h) for h in cfg.get("skip_hours_utc", [])})
         self.fixed_amount = cfg.get("fixed_amount")
         self.model_label = model_label_for(strategy_id, cfg)
+        self.countertrend_max_abs_trend6 = cfg.get("countertrend_max_abs_trend6")
+        self.countertrend_max_abs_trend6 = (
+            None if self.countertrend_max_abs_trend6 is None else float(self.countertrend_max_abs_trend6)
+        )
+        self.countertrend_max_strength = cfg.get("countertrend_max_strength")
+        self.countertrend_max_strength = (
+            None if self.countertrend_max_strength is None else float(self.countertrend_max_strength)
+        )
         self.xgb_models = []
         for i in range(2):
             m = XGBClassifier()
@@ -315,6 +347,8 @@ class Strategy:
             f"| th={self.threshold} | RSI<{self.rsi_lo}/{self.rsi_hi}> "
             f"| vol_min_rank={self.vol_min_rank if self.vol_min_rank is not None else 'none'} "
             f"| agree={self.agree_mode} "
+            f"| ctcool_t6={self.countertrend_max_abs_trend6 if self.countertrend_max_abs_trend6 is not None else 'none'} "
+            f"| ctcool_strength={self.countertrend_max_strength if self.countertrend_max_strength is not None else 'none'} "
             f"| skip_hours_utc={self.skip_hours_utc or 'none'} "
             f"| amount={self.fixed_amount or 'config'}"
         )
@@ -351,6 +385,7 @@ class Strategy:
         candle_time = pd.to_datetime(df5["time"].iloc[-1], utc=True)
         candle_close_time = candle_time + pd.Timedelta(minutes=5)
         session_ok = candle_time.hour not in self.skip_hours_utc
+        trend_val = trend_score(last.iloc[0])
 
         sig = None
         conf = None
@@ -360,6 +395,25 @@ class Strategy:
             else:
                 sig = "UP" if avg >= 0.5 else "DOWN"
             conf = round(abs(avg - 0.5) * 2 * 100, 1)
+        countertrend_guard_ok = True
+        trend6_val = float(last.iloc[0].get("trend6", 0) or 0)
+        strength_val = round(abs(avg - 0.5) * 2 * 100, 1)
+        if sig:
+            countertrend = (sig == "UP" and trend_val <= -3) or (sig == "DOWN" and trend_val >= 3)
+            if countertrend:
+                if (
+                    self.countertrend_max_abs_trend6 is not None
+                    and abs(trend6_val) > self.countertrend_max_abs_trend6
+                ):
+                    countertrend_guard_ok = False
+                if (
+                    self.countertrend_max_strength is not None
+                    and strength_val > self.countertrend_max_strength
+                ):
+                    countertrend_guard_ok = False
+            if not countertrend_guard_ok:
+                sig = None
+                conf = None
 
         result = {
             "strategy_id": self.id,
@@ -371,6 +425,12 @@ class Strategy:
             "high_conf": high_conf,
             "rsi_extreme": rsi_extreme,
             "rsi_value": round(rsi_val, 1),
+            "trend_score": trend_val,
+            "trend_label": trend_label(trend_val),
+            "trend6": round(trend6_val, 6),
+            "countertrend_guard_ok": countertrend_guard_ok,
+            "countertrend_max_abs_trend6": self.countertrend_max_abs_trend6,
+            "countertrend_max_strength": self.countertrend_max_strength,
             "vol_ok": vol_ok,
             "vol_rank": None if vol_rank is None else round(vol_rank, 3),
             "vol_min_rank": self.vol_min_rank,
@@ -577,6 +637,8 @@ def status_text(r):
         parts.append(f"RSI={r['rsi_value']}")
     if not r.get("vol_ok", True):
         parts.append(f"vol={r.get('vol_rank')}")
+    if r.get("countertrend_guard_ok") is False:
+        parts.append("countertrend hot")
     return " | ".join(parts) if parts else "waiting"
 
 
@@ -592,6 +654,8 @@ for shadow in SHADOW_CANDIDATES:
         "agree_mode": shadow["agree_mode"],
         "vol_min_rank": shadow["vol_min_rank"],
         "fixed_amount": 5,
+        "countertrend_max_abs_trend6": shadow.get("countertrend_max_abs_trend6"),
+        "countertrend_max_strength": shadow.get("countertrend_max_strength"),
         "enabled": True,
     })
     shadow_strategies.append((shadow, Strategy(shadow["id"], base_cfg)))

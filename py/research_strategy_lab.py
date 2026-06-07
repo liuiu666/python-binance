@@ -154,6 +154,26 @@ def trend_gate(direction, score, mode):
     raise ValueError(f"unknown trend gate: {mode}")
 
 
+def bps(value):
+    return int(round(float(value) * 10000))
+
+
+def apply_countertrend_cooling_guard(frame, direction, mask, cand):
+    max_abs_trend6 = cand.get("countertrend_max_abs_trend6")
+    max_strength = cand.get("countertrend_max_strength")
+    if max_abs_trend6 is None and max_strength is None:
+        return mask
+
+    score = frame["trend_score"].astype(int).to_numpy()
+    countertrend = ((direction == 1) & (score <= -3)) | ((direction == 0) & (score >= 3))
+    guard_ok = np.ones(len(frame), dtype=bool)
+    if max_abs_trend6 is not None:
+        guard_ok &= frame["trend6"].astype(float).abs().to_numpy() <= float(max_abs_trend6)
+    if max_strength is not None:
+        guard_ok &= frame["strength"].astype(float).to_numpy() <= float(max_strength)
+    return mask & (~countertrend | guard_ok)
+
+
 def apply_skip_hours(frame, mask, skip_hours):
     if skip_hours:
         mask &= ~frame["hour_utc"].isin(skip_hours).to_numpy()
@@ -251,6 +271,7 @@ def candidate_signals(frame, cand):
         raise ValueError(f"unknown candidate kind: {kind}")
 
     mask &= direction >= 0
+    mask = apply_countertrend_cooling_guard(frame, direction, mask, cand)
     mask = apply_skip_hours(frame, mask, cand.get("skip_hours_utc", []))
     return direction, mask
 
@@ -402,6 +423,22 @@ def build_candidates(strategy_id, cfg):
                         "trend_gate": gate,
                         "skip_hours_utc": skip_hours,
                     })
+                for trend6_cap in [0.0015, 0.0020, 0.0025, 0.0030]:
+                    for strength_cap in [18, 22, 26, 30, None]:
+                        suffix = f"ctcool_t6{bps(trend6_cap)}"
+                        if strength_cap is not None:
+                            suffix += f"_str{int(strength_cap)}"
+                        cands.append({
+                            "name": f"ml_th{pct(th)}_rsi{lo}_{hi}_{agree}_{suffix}",
+                            "kind": "ml_rsi",
+                            "threshold": th,
+                            "rsi": (lo, hi),
+                            "agree_mode": agree,
+                            "trend_gate": "none",
+                            "countertrend_max_abs_trend6": trend6_cap,
+                            "countertrend_max_strength": strength_cap,
+                            "skip_hours_utc": skip_hours,
+                        })
 
     for trend_th in [0.55, 0.58, 0.60, 0.62]:
         for range_th in [0.55, 0.58, 0.60, 0.62]:
