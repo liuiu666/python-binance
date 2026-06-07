@@ -302,6 +302,15 @@ SHADOW_CANDIDATES = [
         "note": "30m BBP+RSI overextension guard; shadow only because max loss did not improve offline.",
     },
 ]
+STATEFUL_SHADOW_CANDIDATES = [
+    {
+        "id": "STATEFUL_10m_bbp_1.20_rsi_cap_74_confidence_lt_50_one_open_position",
+        "base": "BTC_10min",
+        "source_shadow": "SHADOW_10m_bbp120_rsi74_conf_lt50_th55_rsi30_70_majority",
+        "policy": "one_open_position",
+        "note": "10m stateful overlay: BBP+RSI+confidence guard plus one open shadow position at a time.",
+    },
+]
 RULE_SHADOW_CANDIDATES = [
     {
         "id": "SHADOW_RULE_10m_rsi_reversal_30_70",
@@ -814,6 +823,49 @@ class RuleShadowStrategy:
         }
 
 
+class StatefulShadowOverlay:
+    def __init__(self, meta):
+        self.meta = meta
+        self.id = meta["id"]
+        self.base = meta["base"]
+        self.source_shadow = meta["source_shadow"]
+        self.policy = meta.get("policy", "one_open_position")
+        self.active_until = None
+        print(
+            f"[Signal] {self.id} -> stateful overlay | base={self.base} "
+            f"| source={self.source_shadow} | policy={self.policy}"
+        )
+
+    def predict(self, source_result):
+        if not source_result:
+            return None
+        out = dict(source_result)
+        out.update({
+            "strategy_id": self.id,
+            "label": self.id,
+            "shadow": True,
+            "shadow_type": "stateful_overlay",
+            "shadow_base_strategy": self.base,
+            "stateful_source_strategy": self.source_shadow,
+            "stateful_policy": self.policy,
+            "stateful_filter_ok": True,
+            "stateful_filter_reasons": [],
+        })
+        sig = out.get("signal")
+        if not sig:
+            return out
+        entry_time = pd.to_datetime(out.get("actionable_time") or out.get("candle_close_time") or out.get("time"), utc=True)
+        duration = pd.Timedelta(minutes=int(float(out.get("duration") or out.get("interval_min") or 0)))
+        if self.policy == "one_open_position" and self.active_until is not None and entry_time < self.active_until:
+            out["signal"] = None
+            out["confidence"] = None
+            out["stateful_filter_ok"] = False
+            out["stateful_filter_reasons"] = ["one_open_position"]
+            return out
+        self.active_until = entry_time + duration
+        return out
+
+
 def fetch_live_klines():
     last_err = None
     for base in BASE_URLS:
@@ -882,6 +934,8 @@ def status_text(r):
         parts.append("countertrend hot")
     if r.get("regime_filter_ok") is False:
         parts.append("regime " + ",".join(r.get("regime_filter_reasons") or []))
+    if r.get("stateful_filter_ok") is False:
+        parts.append("stateful " + ",".join(r.get("stateful_filter_reasons") or []))
     return " | ".join(parts) if parts else "waiting"
 
 
@@ -910,6 +964,7 @@ rule_shadow_strategies = []
 for shadow in RULE_SHADOW_CANDIDATES:
     base_cfg = dict(configs[shadow["base"]])
     rule_shadow_strategies.append((shadow, RuleShadowStrategy(shadow, base_cfg)))
+stateful_shadow_overlays = [(shadow, StatefulShadowOverlay(shadow)) for shadow in STATEFUL_SHADOW_CANDIDATES]
 last_audit_keys = load_audit_keys(SIGNAL_AUDIT_FILE)
 
 print("[Signal] Loading BTC history...")
@@ -942,6 +997,7 @@ while True:
                         **r,
                     })
                     last_audit_keys.add(key)
+        shadow_results = {}
         for shadow_meta, shadow_strategy in shadow_strategies:
             r = shadow_strategy.predict(df5)
             if not r:
@@ -949,6 +1005,7 @@ while True:
             r["shadow"] = True
             r["shadow_base_strategy"] = shadow_meta["base"]
             r["shadow_note"] = shadow_meta["note"]
+            shadow_results[r.get("strategy_id")] = r
             key = f"shadow_candidate|{r.get('strategy_id')}|{r.get('time')}"
             if key not in last_audit_keys:
                 append_jsonl(SIGNAL_AUDIT_FILE, {
@@ -962,6 +1019,27 @@ while True:
                     f"  {r['time']} {r['strategy_id']} shadow avg={r['avg_prob']:.3f} "
                     f"RSI={r['rsi_value']:.0f} {status_text(r)}"
                 )
+            if len(last_audit_keys) > 5000:
+                last_audit_keys = set(list(last_audit_keys)[-2000:])
+        for shadow_meta, overlay in stateful_shadow_overlays:
+            r = overlay.predict(shadow_results.get(shadow_meta["source_shadow"]))
+            if not r:
+                continue
+            r["shadow_note"] = shadow_meta["note"]
+            key = f"shadow_candidate|{r.get('strategy_id')}|{r.get('time')}"
+            if key not in last_audit_keys:
+                append_jsonl(SIGNAL_AUDIT_FILE, {
+                    "event": "shadow_candidate",
+                    "serverTime": int(time.time() * 1000),
+                    **r,
+                })
+                last_audit_keys.add(key)
+                source_had_signal = bool(shadow_results.get(shadow_meta["source_shadow"], {}).get("signal"))
+                if source_had_signal:
+                    print(
+                        f"  {r['time']} {r['strategy_id']} stateful-shadow "
+                        f"RSI={r['rsi_value']:.0f} {status_text(r)}"
+                    )
             if len(last_audit_keys) > 5000:
                 last_audit_keys = set(list(last_audit_keys)[-2000:])
         for shadow_meta, shadow_strategy in rule_shadow_strategies:

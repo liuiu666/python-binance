@@ -209,6 +209,7 @@ def summarize_candidate(base_trades, live_trades, base_overall, base_live_overal
 
     return {
         "id": f"STATEFUL_10m_{static_row['name']}_{policy['id']}",
+        "kind": "stateful_policy_overlay",
         "static_filter_id": static_row["id"],
         "static_filter_name": static_row["name"],
         "policy_id": policy["id"],

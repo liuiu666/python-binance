@@ -15,6 +15,7 @@ from collections import defaultdict
 OUT = "E:/codex/data"
 LAB_FILE = os.path.join(OUT, "strategy_research_lab_report.json")
 TEN_MIN_REGIME_FILE = os.path.join(OUT, "ten_min_regime_filter_search.json")
+TEN_MIN_STATEFUL_FILE = os.path.join(OUT, "ten_min_stateful_policy_filter_search.json")
 THIRTY_MIN_REGIME_FILE = os.path.join(OUT, "thirty_min_regime_filter_search.json")
 SIGNAL_AUDIT_FILE = os.path.join(OUT, "signal_audit_report.json")
 LIVE_BACKTEST_GAP_FILE = os.path.join(OUT, "live_backtest_gap_report.json")
@@ -59,6 +60,7 @@ CANDIDATE_OFFLINE_KEYS = {
     "SHADOW_10m_bbp105_rsi78_conf_lt40_th55_rsi30_70_majority": "ten_min_regime_filter_search",
     "SHADOW_10m_bbp105_rsi78_conf_lt50_th55_rsi30_70_majority": "ten_min_regime_filter_search",
     "SHADOW_10m_bbp120_rsi74_conf_lt50_th55_rsi30_70_majority": "ten_min_regime_filter_search",
+    "STATEFUL_10m_bbp_1.20_rsi_cap_74_confidence_lt_50_one_open_position": "ten_min_stateful_policy_filter_search",
     "SHADOW_30m_stable_th58_rsi30_70_all3": "ml_th58_rsi30_70_all3_none",
     "SHADOW_30m_guard_th68_rsi30_70_all3": "ml_th68_rsi30_70_all3_none",
     "SHADOW_30m_ctcool_t625_str30": "ml_th58_rsi30_70_majority_ctcool_t625_str30",
@@ -119,6 +121,14 @@ def flatten_regime_filter_report(report):
     return out
 
 
+def flatten_stateful_policy_report(report):
+    out = {}
+    for row in report.get("policy_candidates") or []:
+        if row.get("id"):
+            out[row["id"]] = row
+    return out
+
+
 def offline_key_for(candidate_id, strategy_id):
     if candidate_id in CANDIDATE_OFFLINE_KEYS:
         return CANDIDATE_OFFLINE_KEYS[candidate_id]
@@ -140,6 +150,8 @@ def base_strategy_for(candidate_id, row=None):
 def candidate_type(candidate_id, grouped=None):
     if candidate_id.startswith("POLICY_"):
         return "policy_replay"
+    if candidate_id.startswith("STATEFUL_"):
+        return "stateful_shadow"
     if candidate_id.startswith("SHADOW_RULE_"):
         if "hybrid" in candidate_id:
             return "rule_hybrid"
@@ -227,8 +239,8 @@ def offline_summary(row):
     overall = row.get("overall") or {}
     block = row.get("time_block_summary") or row.get("block_summary") or {}
     return {
-        "name": row.get("name") or (row.get("candidate") or {}).get("name"),
-        "kind": row.get("kind"),
+        "name": row.get("name") or row.get("policy_name") or row.get("id") or (row.get("candidate") or {}).get("name"),
+        "kind": row.get("kind") or ("stateful_policy_overlay" if row.get("policy_id") else None),
         "trades": overall.get("trades"),
         "wr": overall.get("wr"),
         "pnl_5u": overall.get("pnl_5u"),
@@ -296,6 +308,7 @@ def judge(candidate_id, live, offline, config):
 def main():
     lab = read_json(LAB_FILE, {})
     ten_min_regime = read_json(TEN_MIN_REGIME_FILE, {})
+    ten_min_stateful = read_json(TEN_MIN_STATEFUL_FILE, {})
     thirty_min_regime = read_json(THIRTY_MIN_REGIME_FILE, {})
     signal_audit = read_json(SIGNAL_AUDIT_FILE, {})
     live_gap = read_json(LIVE_BACKTEST_GAP_FILE, {})
@@ -303,8 +316,12 @@ def main():
     config = read_json(TRADE_CONFIG_FILE, {})
     lab_index = flatten_lab(lab)
     ten_min_regime_index = flatten_regime_filter_report(ten_min_regime)
+    ten_min_stateful_index = flatten_stateful_policy_report(ten_min_stateful)
     thirty_min_regime_index = flatten_regime_filter_report(thirty_min_regime)
     live = live_rows(signal_audit)
+    for candidate_id in CANDIDATE_OFFLINE_KEYS:
+        if candidate_id.startswith("STATEFUL_") and candidate_id not in live:
+            live[candidate_id] = {**EMPTY_LIVE_METRIC, "source": "configured_shadow_no_live_samples"}
 
     candidates = []
     candidate_ids = sorted(set(CANDIDATE_OFFLINE_KEYS) | set(live))
@@ -314,6 +331,8 @@ def main():
         offline_key = offline_key_for(candidate_id, base)
         if offline_key == "ten_min_regime_filter_search":
             offline_row = ten_min_regime_index.get(candidate_id)
+        elif offline_key == "ten_min_stateful_policy_filter_search":
+            offline_row = ten_min_stateful_index.get(candidate_id)
         elif offline_key == "thirty_min_regime_filter_search":
             offline_row = thirty_min_regime_index.get(candidate_id)
         else:
