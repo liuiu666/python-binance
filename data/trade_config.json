@@ -20,5 +20,6 @@
   ],
   "skipConflictSignals": false,
   "queueOrderPolicy": "confidence_desc",
-  "preventOverlapOrders": true
+  "preventOverlapOrders": true,
+  "realTradingOverride": true
 }

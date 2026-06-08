@@ -20,6 +20,10 @@ CONFIG_FILE = os.path.join(OUT, "prod_config.json")
 SIGNAL_AUDIT_FILE = os.path.join(OUT, "signal_audit.jsonl")
 LOCK_FILE = os.path.join(OUT, "signal_btc.lock")
 LOCK_DIR = os.path.join(OUT, "signal_btc.lockdir")
+HISTORY_1M_FILE = os.path.join(OUT, "btcusdt_1m.csv")
+TAKER_FILE = os.path.join(OUT, "btcusdt_taker.csv")
+LS_RATIO_FILE = os.path.join(OUT, "btcusdt_lsratio.csv")
+FUNDING_FILE = os.path.join(OUT, "btcusdt_funding.csv")
 SHADOW_CANDIDATES = [
     {
         "id": "SHADOW_10m_strict_th58_rsi30_70_all3",
@@ -464,6 +468,13 @@ from xgboost import XGBClassifier
 
 warnings.filterwarnings("ignore")
 
+HISTORY_1M_MAX_AGE = pd.Timedelta(minutes=15)
+EXTERNAL_RATIO_MAX_AGE = pd.Timedelta(minutes=30)
+FUNDING_MAX_AGE = pd.Timedelta(hours=12)
+LIVE_1M_MAX_AGE = pd.Timedelta(minutes=3)
+MAX_HISTORY_LIVE_GAP = pd.Timedelta(minutes=2)
+MAX_5M_LIVE_MERGE_GAP = pd.Timedelta(minutes=7)
+
 sys.path.insert(0, "E:/codex/py")
 from backtest_enhanced import build_features, load_symbol
 from research_2m_10min_binary import (
@@ -479,6 +490,145 @@ from research_regime_strategy_2m import classify_regime as classify_2m_regime
 def append_jsonl(path, obj):
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+
+
+def file_mtime(path):
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
+
+
+def csv_header(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.readline().strip().split(",")
+    except OSError:
+        return []
+
+
+def csv_tail_rows(path, limit=120, chunk_size=65536):
+    if not os.path.exists(path):
+        return []
+    header = csv_header(path)
+    if not header:
+        return []
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as f:
+            f.seek(max(0, size - chunk_size))
+            text = f.read().decode("utf-8", errors="ignore")
+        lines = [line for line in text.splitlines() if line.strip()]
+        data_lines = [
+            line for line in lines
+            if line != ",".join(header) and not line.startswith(header[0] + ",")
+        ][-limit:]
+        rows = []
+        for line in data_lines:
+            cells = line.split(",")
+            if len(cells) < len(header):
+                continue
+            rows.append({col: cells[idx] for idx, col in enumerate(header)})
+        return rows
+    except OSError:
+        return []
+
+
+def csv_tail_time(path, time_col):
+    rows = csv_tail_rows(path, limit=5, chunk_size=8192)
+    for row in reversed(rows):
+        if time_col not in row:
+            continue
+        ts = pd.to_datetime(row[time_col], utc=True, format="ISO8601", errors="coerce")
+        if pd.notna(ts):
+            return ts
+    return None
+
+
+def age_status(now, name, path, time_col, max_age):
+    ts = csv_tail_time(path, time_col)
+    age = None if ts is None else now - ts
+    reasons = []
+    if not os.path.exists(path):
+        reasons.append(f"{name}_missing")
+    elif ts is None:
+        reasons.append(f"{name}_unparseable")
+    elif age > max_age:
+        reasons.append(f"{name}_stale")
+    return {
+        "last_time": None if ts is None else str(ts),
+        "age_seconds": None if age is None else round(age.total_seconds(), 3),
+        "max_age_seconds": round(max_age.total_seconds(), 3),
+        "reasons": reasons,
+    }
+
+
+def build_live_data_health(live_1m):
+    now = pd.Timestamp.now(tz="UTC")
+    checks = {
+        "history_1m": age_status(now, "history_1m", HISTORY_1M_FILE, "open_time", HISTORY_1M_MAX_AGE),
+        "taker": age_status(now, "taker", TAKER_FILE, "timestamp", EXTERNAL_RATIO_MAX_AGE),
+        "lsratio": age_status(now, "lsratio", LS_RATIO_FILE, "timestamp", EXTERNAL_RATIO_MAX_AGE),
+        "funding": age_status(now, "funding", FUNDING_FILE, "fundingTime", FUNDING_MAX_AGE),
+    }
+    reasons = []
+    for item in checks.values():
+        reasons.extend(item["reasons"])
+
+    live_info = {"first_time": None, "last_time": None, "age_seconds": None}
+    if live_1m is None or len(live_1m) == 0:
+        reasons.append("live_1m_missing")
+    else:
+        live_times = pd.to_datetime(live_1m["open_time"], utc=True).sort_values().reset_index(drop=True)
+        live_first = live_times.iloc[0]
+        live_last = live_times.iloc[-1]
+        live_age = now - live_last
+        live_info = {
+            "first_time": str(live_first),
+            "last_time": str(live_last),
+            "age_seconds": round(live_age.total_seconds(), 3),
+        }
+        if live_age > LIVE_1M_MAX_AGE:
+            reasons.append("live_1m_stale")
+        gaps = live_times.diff().dropna()
+        if len(gaps) and gaps.max() > MAX_HISTORY_LIVE_GAP:
+            reasons.append("live_1m_recent_gap")
+            live_info["max_gap_seconds"] = round(gaps.max().total_seconds(), 3)
+        hist_last = csv_tail_time(HISTORY_1M_FILE, "open_time")
+        if hist_last is not None and hist_last + MAX_HISTORY_LIVE_GAP < live_first:
+            reasons.append("history_live_gap")
+            live_info["history_live_gap_seconds"] = round((live_first - hist_last).total_seconds(), 3)
+
+    unique_reasons = sorted(set(reasons))
+    return {
+        "blocked": bool(unique_reasons),
+        "reasons": unique_reasons,
+        "checks": checks,
+        "live_1m": live_info,
+    }
+
+
+def apply_signal_data_health(signals, health):
+    if not health.get("blocked"):
+        for sig in signals.values():
+            if isinstance(sig, dict) and not sig.get("shadow"):
+                sig["data_health_blocked"] = False
+        return signals
+    out = {}
+    for strategy_id, sig in signals.items():
+        if not isinstance(sig, dict) or sig.get("shadow"):
+            out[strategy_id] = sig
+            continue
+        blocked = dict(sig)
+        blocked["signal"] = None
+        blocked["confidence"] = None
+        blocked["data_health_blocked"] = True
+        blocked["data_health_block_reasons"] = health.get("reasons", [])
+        blocked["data_health"] = health
+        blocked["blocked_signal"] = sig.get("signal")
+        blocked["blocked_confidence"] = sig.get("confidence")
+        out[strategy_id] = blocked
+    return out
 
 
 def load_audit_keys(path, limit=20000):
@@ -945,6 +1095,7 @@ class TwoMinuteRegimeShadow:
             with open(f"{prefix}_policy.json", "r", encoding="utf-8") as f:
                 self.policy = json.load(f)
             self.df1 = load_2m_1m(RESEARCH_2M_SYMBOL)
+            self.df1_mtime = file_mtime(HISTORY_1M_FILE)
             print(
                 f"[Signal] {self.id} -> 2m {'LIVE' if self.live else 'shadow'} | model={self.model_id} "
                 f"| features={len(self.feat_cols)} | policy={self.policy.get('name')}"
@@ -952,10 +1103,29 @@ class TwoMinuteRegimeShadow:
         except Exception as e:
             print(f"[Signal] {self.id} disabled: {e}")
 
+    def _reload_base_1m_if_changed(self):
+        mtime = file_mtime(HISTORY_1M_FILE)
+        if mtime is None or mtime == self.df1_mtime:
+            return
+        self.df1 = load_2m_1m(RESEARCH_2M_SYMBOL)
+        self.df1_mtime = mtime
+        self.cached_period = None
+        self.cached_result = None
+        print(f"[Signal] Reloaded 2m base 1m history after data update: {len(self.df1)} rows")
+
     def _merge_live_1m(self, live1m):
         if self.df1 is None:
             return
+        self._reload_base_1m_if_changed()
         if live1m is None or len(live1m) == 0:
+            return
+        hist_last = pd.to_datetime(self.df1["open_time"].max(), utc=True)
+        live_first = pd.to_datetime(live1m["open_time"].min(), utc=True)
+        if hist_last + MAX_HISTORY_LIVE_GAP < live_first:
+            print(
+                f"[Signal] 2m live merge blocked: history/live gap "
+                f"{(live_first - hist_last).total_seconds():.0f}s ({hist_last} -> {live_first})"
+            )
             return
         merged = pd.concat([self.df1, live1m], ignore_index=True)
         merged["open_time"] = pd.to_datetime(merged["open_time"], utc=True)
@@ -1079,7 +1249,7 @@ class TwoMinuteRegimeShadow:
             "signal": sig,
             "raw_signal": raw_signal,
             "confidence": strength_val if sig else None,
-            "bypass_min_confidence_filter": self.live,
+            "bypass_min_confidence_filter": False,
             "bypass_entry_timing": self.live,
             "interval_min": int(self.policy.get("interval_min", 10)),
             "duration": str(int(self.policy.get("interval_min", 10))),
@@ -1451,6 +1621,13 @@ def merge_live(df5, live):
     live["time_dt"] = pd.to_datetime(live["time"], utc=True)
     new = live[live["time_dt"] > last_hist]
     if len(new) > 0:
+        first_new = pd.to_datetime(new["time_dt"].min(), utc=True)
+        if last_hist + MAX_5M_LIVE_MERGE_GAP < first_new:
+            print(
+                f"[Signal] 5m live merge blocked: history/live gap "
+                f"{(first_new - last_hist).total_seconds():.0f}s ({last_hist} -> {first_new})"
+            )
+            return df5
         for c in ["funding_rate", "ls_ratio", "ls_long", "ls_short", "taker_ratio", "taker_buy", "taker_sell"]:
             if c in df5.columns:
                 new[c] = df5[c].iloc[-1]
@@ -1537,12 +1714,24 @@ last_audit_keys = load_audit_keys(SIGNAL_AUDIT_FILE)
 
 print("[Signal] Loading BTC history...")
 df5 = load_symbol("btcusdt")
+df5_history_mtime = file_mtime(HISTORY_1M_FILE)
 print(f"[Signal] {len(df5)} 5m candles")
 print("\n[Signal] Starting BTC dual-strategy loop (every 15s)...")
+last_data_health_key = None
 
 while True:
     try:
+        current_history_mtime = file_mtime(HISTORY_1M_FILE)
+        if current_history_mtime is not None and current_history_mtime != df5_history_mtime:
+            df5 = load_symbol("btcusdt")
+            df5_history_mtime = current_history_mtime
+            print(f"[Signal] Reloaded 5m history after data update: {len(df5)} candles")
         live_1m = fetch_live_1m_raw(1000)
+        data_health = build_live_data_health(live_1m)
+        data_health_key = "blocked:" + ",".join(data_health["reasons"]) if data_health["blocked"] else "ok"
+        if data_health_key != last_data_health_key:
+            print(f"[Signal] Data health {data_health_key}")
+            last_data_health_key = data_health_key
         live = aggregate_live_5m(live_1m)
         df5 = merge_live(df5, live)
         signals = {}
@@ -1563,6 +1752,7 @@ while True:
                     f"regime={r.get('regime_group')} {status_text(r)}"
                 )
         if signals:
+            signals = apply_signal_data_health(signals, data_health)
             with open(SIGNAL_FILE, "w", encoding="utf-8") as f:
                 json.dump(signals, f, ensure_ascii=False)
             for strategy_id, r in signals.items():

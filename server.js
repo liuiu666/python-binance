@@ -18,9 +18,14 @@ const SIGNAL_STDOUT_FILE = path.join(__dirname, ".sig.out");
 const SIGNAL_STDERR_FILE = path.join(__dirname, ".sig.err");
 const REPORT_STDOUT_FILE = path.join(__dirname, ".reports.out");
 const REPORT_STDERR_FILE = path.join(__dirname, ".reports.err");
+const DATA_UPDATE_SCRIPT_FILE = path.join(__dirname, "py", "update_live_data.py");
+const DATA_UPDATE_STATUS_FILE = path.join(__dirname, "data", "live_data_update_status.json");
+const DATA_UPDATE_STDOUT_FILE = path.join(__dirname, ".data_update.out");
+const DATA_UPDATE_STDERR_FILE = path.join(__dirname, ".data_update.err");
 const PRICE_FILE = path.join(__dirname, "data", "current_price.json");
 const CONFIG_FILE = path.join(__dirname, "data", "trade_config.json");
 const TRADE_AUDIT_FILE = path.join(__dirname, "data", "trade_audit.jsonl");
+const REAL_BALANCE_FILE = path.join(__dirname, "data", "real_balance.json");
 const AUTO_SCRIPT_FILE = path.join(__dirname, "auto_btc.js");
 const PRICE_TICKS_FILE = path.join(__dirname, "data", "price_ticks.jsonl");
 const REPORT_FILES = {
@@ -37,10 +42,46 @@ const REPORT_FILES = {
   latency: path.join(__dirname, "data", "execution_latency_validation.json")
 };
 const PYTHON_EXE = process.env.PYTHON_EXE || "python";
+const SERVER_SIM_TRADING_ENABLED = process.env.SERVER_SIM_TRADING_ENABLED === "1";
+const DATA_UPDATE_INTERVAL_MS = Math.max(
+  60 * 1000,
+  Number(process.env.DATA_UPDATE_INTERVAL_MS || 5 * 60 * 1000)
+);
 const REPORT_REFRESH_INTERVAL_MS = Math.max(
   60 * 1000,
   Number(process.env.REPORT_REFRESH_INTERVAL_MS || 10 * 60 * 1000)
 );
+const DATA_HEALTH_FILES = {
+  klines1m: {
+    file: path.join(__dirname, "data", "btcusdt_1m.csv"),
+    timeCol: "open_time",
+    maxAgeMs: Number(process.env.DATA_HEALTH_1M_MAX_AGE_MS || 15 * 60 * 1000),
+    intervalMs: 60 * 1000,
+    maxRecentGapMs: Number(process.env.DATA_HEALTH_1M_MAX_GAP_MS || 90 * 1000)
+  },
+  taker: {
+    file: path.join(__dirname, "data", "btcusdt_taker.csv"),
+    timeCol: "timestamp",
+    maxAgeMs: Number(process.env.DATA_HEALTH_TAKER_MAX_AGE_MS || 30 * 60 * 1000),
+    intervalMs: 5 * 60 * 1000,
+    maxRecentGapMs: Number(process.env.DATA_HEALTH_5M_MAX_GAP_MS || 8 * 60 * 1000)
+  },
+  lsratio: {
+    file: path.join(__dirname, "data", "btcusdt_lsratio.csv"),
+    timeCol: "timestamp",
+    maxAgeMs: Number(process.env.DATA_HEALTH_LSRATIO_MAX_AGE_MS || 30 * 60 * 1000),
+    intervalMs: 5 * 60 * 1000,
+    maxRecentGapMs: Number(process.env.DATA_HEALTH_5M_MAX_GAP_MS || 8 * 60 * 1000)
+  },
+  funding: {
+    file: path.join(__dirname, "data", "btcusdt_funding.csv"),
+    timeCol: "fundingTime",
+    maxAgeMs: Number(process.env.DATA_HEALTH_FUNDING_MAX_AGE_MS || 12 * 60 * 60 * 1000),
+    intervalMs: 8 * 60 * 60 * 1000,
+    maxRecentGapMs: Number(process.env.DATA_HEALTH_FUNDING_MAX_GAP_MS || 10 * 60 * 60 * 1000)
+  }
+};
+const SIGNAL_SNAPSHOT_MAX_AGE_MS = Number(process.env.SIGNAL_SNAPSHOT_MAX_AGE_MS || 5 * 60 * 1000);
 const REPORT_SCRIPT_ENV = {
   PYTHONUNBUFFERED: "1",
   OMP_NUM_THREADS: "1",
@@ -63,6 +104,14 @@ let signalService = {
   restartTimer: null
 };
 let reportRefresh = {
+  running: false,
+  lastStart: null,
+  lastFinish: null,
+  lastExitCode: null,
+  lastError: null,
+  runs: 0
+};
+let dataUpdate = {
   running: false,
   lastStart: null,
   lastFinish: null,
@@ -156,15 +205,155 @@ function readJsonFile(file, fallback = null) {
   catch (e) { return fallback; }
 }
 
+function readCsvHeader(file) {
+  try {
+    const fd = fs.openSync(file, "r");
+    const stat = fs.fstatSync(fd);
+    const len = Math.min(stat.size, 4096);
+    const buf = Buffer.alloc(len);
+    fs.readSync(fd, buf, 0, len, 0);
+    fs.closeSync(fd);
+    return buf.toString("utf8").split(/\r?\n/)[0].split(",");
+  } catch (e) {
+    return [];
+  }
+}
+
+function readLastCsvRows(file, limit = 200, bytes = 65536) {
+  try {
+    if (!fs.existsSync(file)) return [];
+    const header = readCsvHeader(file);
+    if (!header.length) return [];
+    const stat = fs.statSync(file);
+    const len = Math.min(stat.size, bytes);
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(len);
+    fs.readSync(fd, buf, 0, len, stat.size - len);
+    fs.closeSync(fd);
+    const lines = buf.toString("utf8").split(/\r?\n/).filter(Boolean);
+    const dataLines = lines.filter(line => line !== header.join(",") && !line.startsWith(header[0] + ",")).slice(-limit);
+    return dataLines.map(line => {
+      const cells = line.split(",");
+      const row = {};
+      header.forEach((col, idx) => { row[col] = cells[idx]; });
+      return row;
+    });
+  } catch (e) {
+    return [];
+  }
+}
+
+function parseCsvTimeMs(value) {
+  if (value === undefined || value === null) return null;
+  let s = String(value).trim();
+  if (!s) return null;
+  s = s.replace(" ", "T").replace(/(\.\d{3})\d+/, "$1");
+  const ms = Date.parse(s);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function csvDataHealth(name, spec, now) {
+  const exists = fs.existsSync(spec.file);
+  const rows = readLastCsvRows(spec.file, name === "klines1m" ? 300 : 120);
+  const times = rows
+    .map(row => parseCsvTimeMs(row[spec.timeCol]))
+    .filter(ms => Number.isFinite(ms))
+    .sort((a, b) => a - b);
+  const reasons = [];
+  if (!exists) reasons.push(`${name}_missing`);
+  if (exists && !times.length) reasons.push(`${name}_empty_or_unparseable`);
+
+  const lastMs = times.length ? times[times.length - 1] : null;
+  const ageMs = lastMs === null ? null : now - lastMs;
+  if (ageMs !== null && ageMs > spec.maxAgeMs) reasons.push(`${name}_stale`);
+
+  let maxObservedGapMs = null;
+  for (let i = 1; i < times.length; i += 1) {
+    const gap = times[i] - times[i - 1];
+    if (maxObservedGapMs === null || gap > maxObservedGapMs) maxObservedGapMs = gap;
+  }
+  if (maxObservedGapMs !== null && maxObservedGapMs > spec.maxRecentGapMs) reasons.push(`${name}_recent_gap`);
+
+  return {
+    ok: reasons.length === 0,
+    reasons,
+    lastTime: lastMs === null ? null : new Date(lastMs).toISOString(),
+    ageMs,
+    maxAgeMs: spec.maxAgeMs,
+    rowsChecked: times.length,
+    maxObservedGapMs,
+    maxRecentGapMs: spec.maxRecentGapMs
+  };
+}
+
+function signalTimeMs(sig) {
+  if (!sig || typeof sig !== "object") return null;
+  return parseCsvTimeMs(sig.actionable_time || sig.candle_close_time || sig.time);
+}
+
+function dataHealthGate(signals) {
+  const now = Date.now();
+  const files = {};
+  const reasons = [];
+  for (const [name, spec] of Object.entries(DATA_HEALTH_FILES)) {
+    files[name] = csvDataHealth(name, spec, now);
+    reasons.push(...files[name].reasons);
+  }
+
+  const updateStatus = readJsonFile(DATA_UPDATE_STATUS_FILE, null);
+  if (updateStatus && updateStatus.ok === false) reasons.push("data_update_failed");
+
+  const realSignals = Object.entries(signals || {})
+    .filter(([key, sig]) => !key.startsWith("_") && sig && typeof sig === "object" && !sig.shadow);
+  const signalTimes = realSignals
+    .map(([strategyId, sig]) => ({ strategyId, ms: signalTimeMs(sig), blocked: !!sig.data_health_blocked }))
+    .filter(row => Number.isFinite(row.ms));
+  if (!fs.existsSync(SIGNAL_FILE)) {
+    reasons.push("signal_file_missing");
+  } else if (!realSignals.length || !signalTimes.length) {
+    reasons.push("signal_snapshot_missing");
+  }
+  const latestSignal = signalTimes.sort((a, b) => b.ms - a.ms)[0] || null;
+  const signalAgeMs = latestSignal ? now - latestSignal.ms : null;
+  if (signalAgeMs !== null && signalAgeMs > SIGNAL_SNAPSHOT_MAX_AGE_MS) reasons.push("signal_snapshot_stale");
+  if (realSignals.some(([, sig]) => sig && sig.data_health_blocked)) reasons.push("signal_process_data_health_blocked");
+
+  const uniqueReasons = [...new Set(reasons)];
+  return {
+    allow: uniqueReasons.length === 0,
+    blocked: uniqueReasons.length > 0,
+    reasons: uniqueReasons,
+    files,
+    update: {
+      running: dataUpdate.running,
+      lastStart: dataUpdate.lastStart,
+      lastFinish: dataUpdate.lastFinish,
+      lastExitCode: dataUpdate.lastExitCode,
+      lastError: dataUpdate.lastError,
+      runs: dataUpdate.runs,
+      status: updateStatus
+    },
+    signal: {
+      strategies: realSignals.map(([strategyId]) => strategyId),
+      latestTime: latestSignal ? new Date(latestSignal.ms).toISOString() : null,
+      ageMs: signalAgeMs,
+      maxAgeMs: SIGNAL_SNAPSHOT_MAX_AGE_MS
+    }
+  };
+}
+
 function autoTradeSafetyGate() {
   const report = readJsonFile(REPORT_FILES.shadowDecision, null);
   const verdict = report && report.safety ? report.safety.verdict : null;
-  const allow = verdict === "allow_real_auto_trading";
+  const manualOverride = !!(tradeConfig && tradeConfig.realTradingOverride);
+  const allow = verdict === "allow_real_auto_trading" || manualOverride;
   return {
     allow,
     blocked: !allow,
     verdict: verdict || "missing_shadow_decision",
-    requiredVerdict: "allow_real_auto_trading"
+    requiredVerdict: "allow_real_auto_trading",
+    manualOverride,
+    overrideSource: manualOverride ? "trade_config.realTradingOverride" : null
   };
 }
 
@@ -187,6 +376,59 @@ function runScript(script, cb) {
   });
   child.on("exit", (code, signal) => finish(code, signal));
   child.on("error", (e) => finish(null, null, e));
+}
+
+function runDataUpdate(reason = "timer") {
+  if (dataUpdate.running) return;
+  if (!fs.existsSync(DATA_UPDATE_SCRIPT_FILE)) return;
+  dataUpdate.running = true;
+  dataUpdate.lastStart = Date.now();
+  dataUpdate.lastError = null;
+  dataUpdate.runs += 1;
+  appendJsonl(TRADE_AUDIT_FILE, { serverTime: Date.now(), event: "data_update_start", reason });
+  let out = null;
+  let err = null;
+  try {
+    out = fs.openSync(DATA_UPDATE_STDOUT_FILE, "a");
+    err = fs.openSync(DATA_UPDATE_STDERR_FILE, "a");
+    const child = spawn(PYTHON_EXE, [DATA_UPDATE_SCRIPT_FILE], {
+      cwd: __dirname,
+      windowsHide: true,
+      env: { ...process.env, ...REPORT_SCRIPT_ENV },
+      stdio: ["ignore", out, err]
+    });
+    const finish = (code, signal, error) => {
+      try { if (out !== null) fs.closeSync(out); } catch (e) {}
+      try { if (err !== null) fs.closeSync(err); } catch (e) {}
+      dataUpdate.running = false;
+      dataUpdate.lastFinish = Date.now();
+      dataUpdate.lastExitCode = code;
+      dataUpdate.lastError = error ? String(error.message || error) : (code === 0 ? null : `code=${code} signal=${signal || ""}`);
+      appendJsonl(TRADE_AUDIT_FILE, {
+        serverTime: Date.now(),
+        event: dataUpdate.lastError ? "data_update_error" : "data_update_done",
+        reason,
+        code,
+        signal,
+        error: dataUpdate.lastError
+      });
+    };
+    child.on("exit", (code, signal) => finish(code, signal));
+    child.on("error", (e) => finish(null, null, e));
+  } catch (e) {
+    try { if (out !== null) fs.closeSync(out); } catch (e2) {}
+    try { if (err !== null) fs.closeSync(err); } catch (e2) {}
+    dataUpdate.running = false;
+    dataUpdate.lastFinish = Date.now();
+    dataUpdate.lastExitCode = null;
+    dataUpdate.lastError = String(e && e.message ? e.message : e);
+    appendJsonl(TRADE_AUDIT_FILE, {
+      serverTime: Date.now(),
+      event: "data_update_error",
+      reason,
+      error: dataUpdate.lastError
+    });
+  }
 }
 
 function refreshLightReports(reason = "timer") {
@@ -491,9 +733,49 @@ function applyEntryTiming(signals) {
   return out;
 }
 
+function applyAutoTradeSafetyGate(signals) {
+  const gate = autoTradeSafetyGate();
+  if (!gate.blocked) return { signals, gate };
+  const out = { ...signals };
+  for (const [strategyId, sig] of Object.entries(signals)) {
+    if (!sig || typeof sig !== "object" || sig.shadow) continue;
+    out[strategyId] = {
+      ...sig,
+      signal: null,
+      confidence: null,
+      safety_blocked: true,
+      safety_block_reason: gate.verdict,
+      blocked_signal: sig.signal || null,
+      blocked_confidence: sig.confidence == null ? null : sig.confidence
+    };
+  }
+  return { signals: out, gate };
+}
+
+function applyDataHealthGate(signals, gate) {
+  if (!gate.blocked) return { signals, gate };
+  const out = { ...signals };
+  for (const [strategyId, sig] of Object.entries(signals)) {
+    if (!sig || typeof sig !== "object" || sig.shadow) continue;
+    out[strategyId] = {
+      ...sig,
+      signal: null,
+      confidence: null,
+      data_health_blocked: true,
+      data_health_block_reasons: gate.reasons,
+      blocked_signal: sig.blocked_signal || sig.signal || null,
+      blocked_confidence: sig.blocked_confidence || (sig.confidence == null ? null : sig.confidence)
+    };
+  }
+  return { signals: out, gate };
+}
+
 function buildSignalResponse() {
   const rawSignals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {};
-  const signals = applyEntryTiming(rawSignals);
+  const timedSignals = applyEntryTiming(rawSignals);
+  const health = applyDataHealthGate(timedSignals, dataHealthGate(timedSignals));
+  const safety = applyAutoTradeSafetyGate(health.signals);
+  const signals = safety.signals;
   const strategyAmounts = {};
   for (const [strategyId, sig] of Object.entries(signals)) {
     strategyAmounts[strategyId] = amountForStrategy(strategyId, sig);
@@ -506,7 +788,9 @@ function buildSignalResponse() {
     _strategyAmounts: strategyAmounts,
     _signalAmount: legacyAmount,
     _entryTimingEnabled: ENTRY_TIMING_ENABLED,
-    _entryTimingPolicies: ENTRY_TIMING_POLICIES
+    _entryTimingPolicies: ENTRY_TIMING_POLICIES,
+    _dataHealthGate: health.gate,
+    _autoTradeSafetyGate: safety.gate
   };
 }
 
@@ -533,6 +817,7 @@ app.get("/api/reports", (req, res) => {
     liveAudit: readJsonFile(REPORT_FILES.liveAudit),
     shadowDecision: readJsonFile(REPORT_FILES.shadowDecision),
     latency: readJsonFile(REPORT_FILES.latency),
+    dataUpdate,
     reportRefresh
   });
 });
@@ -540,6 +825,17 @@ app.get("/api/reports", (req, res) => {
 app.post("/api/reports/refresh", (req, res) => {
   refreshLightReports("manual_api");
   res.json({ ok: true, reportRefresh });
+});
+
+app.get("/api/data-health", (req, res) => {
+  let signals = {};
+  try { signals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {}; } catch (e) {}
+  res.json(dataHealthGate(signals));
+});
+
+app.post("/api/data-update/refresh", (req, res) => {
+  runDataUpdate("manual_api");
+  res.json({ ok: true, dataUpdate });
 });
 
 function localHttpUrls() {
@@ -582,7 +878,8 @@ function runtimeInfo() {
     scriptUrl: `${base}/auto_btc.js`,
     loaderUrl: `${base}/auto_btc_loader.js`,
     bootstrapUrl: `${base}/auto_btc_bootstrap.js`,
-    scriptVersion: autoScriptVersion()
+    scriptVersion: autoScriptVersion(),
+    serverSimTradingEnabled: SERVER_SIM_TRADING_ENABLED
   };
 }
 
@@ -838,7 +1135,8 @@ app.get("/api/signal-service", (req, res) => {
     ...signalService,
     running: !!signalService.pid,
     python: PYTHON_EXE,
-    script: SIGNAL_SCRIPT_FILE
+    script: SIGNAL_SCRIPT_FILE,
+    dataUpdate
   });
 });
 
@@ -951,7 +1249,7 @@ const PAYOUT_RATE = 0.85;
 const DURATION_MS = 30 * 60 * 1000;  // 30 minutes
 const WINDOW_SEC = 60;  // 60-second trading window (wider than before)
 const AUTO_TRADE_AMOUNT = 100;  // Auto-trade 100 USDT per signal
-const AUTO_TRADE_ENABLED = true;
+const AUTO_TRADE_ENABLED = SERVER_SIM_TRADING_ENABLED;
 const SIGNAL_EXPIRY_MS = 120 * 1000;  // Signal valid for 2 minutes
 
 let currentPrice = null;
@@ -962,7 +1260,52 @@ let nextTradeId = 1;
 let account = { balance: 10000.0, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0 };
 let lastSignals = {};
 let autoTradeLog = [];
-let realBalance = { amount: null, time: null, device: null };
+let realBalance = normalizeRealBalance(readJsonFile(REAL_BALANCE_FILE, null));
+
+function normalizeRealBalance(raw) {
+  if (!raw || typeof raw !== "object") return { amount: null, time: null, device: null };
+  const amount = Number(raw.amount);
+  return {
+    amount: Number.isFinite(amount) && amount >= 0 ? amount : null,
+    time: Number(raw.time) || null,
+    device: raw.device || null,
+    source: raw.source || null
+  };
+}
+
+function persistRealBalance() {
+  try {
+    fs.writeFileSync(REAL_BALANCE_FILE, JSON.stringify(realBalance, null, 2), "utf8");
+  } catch (e) {}
+}
+
+function broadcastRealBalance() {
+  wss.clients.forEach(cl => {
+    if (cl.readyState === WebSocket.OPEN) cl.send(JSON.stringify({ type: "balance", ...realBalance }));
+  });
+}
+
+function updateRealBalanceFromPayload(payload, source = "unknown") {
+  if (!payload || typeof payload !== "object") return null;
+  const rawAmount = source === "trade-audit"
+    ? (payload.balance !== undefined ? payload.balance :
+      (payload.realBalance && payload.realBalance.amount !== undefined ? payload.realBalance.amount : null))
+    : (payload.amount !== undefined ? payload.amount :
+      (payload.balance !== undefined ? payload.balance :
+        (payload.realBalance && payload.realBalance.amount !== undefined ? payload.realBalance.amount : null)));
+  const amt = Number(rawAmount);
+  if (!Number.isFinite(amt) || amt < 0) return null;
+  const deviceName = payload.device || payload.deviceId || (payload.realBalance && payload.realBalance.device) || "unknown";
+  realBalance = {
+    amount: amt,
+    time: Number(payload.balanceTime || payload.time || payload.clientTime) || Date.now(),
+    device: deviceName,
+    source
+  };
+  persistRealBalance();
+  broadcastRealBalance();
+  return realBalance;
+}
 
 function getTradeWindowStatus() {
   const now = new Date();
@@ -1026,6 +1369,7 @@ function broadcastState() {
     recentTrades: trades.filter(t => t.status !== "active").slice(-20).reverse(),
     autoTradeLog: autoTradeLog.slice(-10).reverse(),
     autoTradeEnabled: AUTO_TRADE_ENABLED && tradeConfig.autoTrade,
+    serverSimTradingEnabled: SERVER_SIM_TRADING_ENABLED,
     realBalance
   });
   wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(msg); });
@@ -1063,7 +1407,7 @@ function placeTrade(direction, amount, source, durationMin) {
 
 // Auto-trade logic
 function checkAutoTrade() {
-  if (!AUTO_TRADE_ENABLED || !tradeConfig.autoTrade || !currentPrice) return;
+  if (!SERVER_SIM_TRADING_ENABLED || !AUTO_TRADE_ENABLED || !tradeConfig.autoTrade || !currentPrice) return;
   const status = getTradeWindowStatus();
   if (!status.inWindow) return;
   
@@ -1142,6 +1486,7 @@ wss.on("connection", (ws) => {
     account: { ...account }, activeTrades: trades.filter(t => t.status === "active"),
     recentTrades: trades.filter(t => t.status !== "active").slice(-20).reverse(),
     autoTradeLog: autoTradeLog.slice(-10).reverse(), autoTradeEnabled: AUTO_TRADE_ENABLED && tradeConfig.autoTrade,
+    serverSimTradingEnabled: SERVER_SIM_TRADING_ENABLED,
     realBalance
   };
   const wStatus = getTradeWindowStatus();
@@ -1178,7 +1523,8 @@ const DEFAULT_TRADE_CONFIG = {
   tiersEnabled: false, tiers: [{min:80,amount:20},{min:60,amount:10},{min:40,amount:5}],
   skipConflictSignals: false,
   queueOrderPolicy: "confidence_desc",
-  preventOverlapOrders: true
+  preventOverlapOrders: true,
+  realTradingOverride: false
 };
 
 let tradeConfig = (() => {
@@ -1229,6 +1575,7 @@ app.post("/api/config", express.json(), (req, res) => {
         });
       } else {
         tradeConfig.autoTrade = true;
+        if (forceAutoTrade) tradeConfig.realTradingOverride = true;
         if (forceAutoTrade && gate.blocked) {
           appendJsonl(TRADE_AUDIT_FILE, {
             serverTime: Date.now(),
@@ -1247,7 +1594,11 @@ app.post("/api/config", express.json(), (req, res) => {
       }
     } else {
       tradeConfig.autoTrade = false;
+      tradeConfig.realTradingOverride = false;
     }
+  }
+  if (req.body.realTradingOverride !== undefined) {
+    tradeConfig.realTradingOverride = req.body.realTradingOverride === true || req.body.realTradingOverride === "true";
   }
   if (req.body.minConfidence !== undefined) tradeConfig.minConfidence = Number(req.body.minConfidence);
   if (req.body.tiersEnabled !== undefined) tradeConfig.tiersEnabled = !!req.body.tiersEnabled;
@@ -1306,11 +1657,12 @@ app.post('/api/trade-audit', (req, res) => {
       res.status(400).json({ error: 'invalid body', raw: raw.substring(0, 200) });
       return;
     }
+    updateRealBalanceFromPayload(payload, 'trade-audit');
     const item = {
       serverTime: Date.now(),
       price: currentPrice,
-      realBalance,
-      ...payload
+      ...payload,
+      realBalance
     };
     appendJsonl(TRADE_AUDIT_FILE, item);
     res.json({ ok: true, item });
@@ -1329,19 +1681,13 @@ app.post('/api/balance', (req, res) => {
       res.status(400).json({ error: 'invalid body', raw: raw.substring(0, 200) });
       return;
     }
-    const amt = parseFloat(payload.amount);
-    if (isNaN(amt) || amt < 0) {
+    const updated = updateRealBalanceFromPayload(payload, 'balance-api');
+    if (!updated) {
       console.log('[Balance POST] invalid amount:', payload.amount);
       res.status(400).json({ error: 'invalid amount' });
       return;
     }
-    realBalance = {
-      amount: amt,
-      time: Number(payload.time) || Date.now(),
-      device: payload.device || 'unknown'
-    };
-    console.log('[Balance] ' + realBalance.device + ': ' + amt + ' USDT');
-    wss.clients.forEach(cl => { if (cl.readyState === WebSocket.OPEN) cl.send(JSON.stringify({ type: 'balance', ...realBalance })); });
+    console.log('[Balance] ' + realBalance.device + ': ' + realBalance.amount + ' USDT');
     res.json(realBalance);
   });
 });
@@ -1351,7 +1697,9 @@ process.on("SIGTERM", stopSignalService);
 process.on("exit", stopSignalService);
 
 server.listen(PORT, '0.0.0.0', () => {
+  runDataUpdate("server_listen");
   startSignalService("server_listen");
+  setInterval(() => runDataUpdate("timer"), DATA_UPDATE_INTERVAL_MS);
   refreshLightReports("server_listen");
   setInterval(() => refreshLightReports("timer"), REPORT_REFRESH_INTERVAL_MS);
   console.log(`BTC 二元期权 http://localhost:${PORT} | 自动交易: ${AUTO_TRADE_ENABLED}`);

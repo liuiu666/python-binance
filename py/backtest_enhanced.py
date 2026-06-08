@@ -11,6 +11,9 @@ warnings.filterwarnings("ignore")
 from xgboost import XGBClassifier
 
 OUT = "E:/codex/data"
+FUNDING_MAX_AGE = pd.Timedelta(hours=12)
+LS_RATIO_MAX_AGE = pd.Timedelta(minutes=30)
+TAKER_MAX_AGE = pd.Timedelta(minutes=30)
 
 SYMBOLS = ["btcusdt"]  # solo BTC for fast baseline
 HORIZONS = {"10min": 2, "15min": 3, "30min": 6, "1hr": 12}  # bars on 5m aggregation
@@ -35,6 +38,22 @@ def rsi(a, p):
     return 100 - 100/(1+np.where(al>0, ag/al, 100))
 
 # ============ LOAD & MERGE ============
+def read_external(path, time_col):
+    if not os.path.exists(path):
+        return None
+    df = pd.read_csv(path)
+    if df.empty or time_col not in df.columns:
+        return None
+    df[time_col] = pd.to_datetime(df[time_col], utc=True, format="ISO8601")
+    return df.dropna(subset=[time_col]).sort_values(time_col).reset_index(drop=True)
+
+def stale_asof_mask(out, source_col, max_age):
+    if source_col not in out.columns:
+        return pd.Series(True, index=out.index)
+    source_time = pd.to_datetime(out[source_col], utc=True)
+    age = pd.to_datetime(out["time"], utc=True) - source_time
+    return source_time.isna() | (age > max_age)
+
 def load_symbol(sym):
     """Load klines + funding + ls ratio + taker for a symbol."""
     # Klines
@@ -51,52 +70,65 @@ def load_symbol(sym):
         open=("open","first"), high=("high","max"), low=("low","min"),
         close=("close","last"), volume=("volume","sum"),
     ).reset_index().rename(columns={"period":"time"})
+    df5["time"] = pd.to_datetime(df5["time"], utc=True)
+    df5["funding_rate"] = 0.0
+    df5["ls_ratio"] = 1.0
+    df5["ls_long"] = 0.5
+    df5["ls_short"] = 0.5
+    df5["taker_ratio"] = 1.0
+    df5["taker_buy"] = 0.0
+    df5["taker_sell"] = 0.0
 
     # Funding rate (merge by closest timestamp)
-    fund_path = os.path.join(OUT, f"{sym}_funding.csv")
-    if os.path.exists(fund_path):
-        fund = pd.read_csv(fund_path)
-        fund["fundingTime"] = pd.to_datetime(fund["fundingTime"], utc=True, format="ISO8601")
-        fund = fund.sort_values("fundingTime")
-        # Forward-fill funding rate to each 5m bar
-        df5["time_utc"] = pd.to_datetime(df5["time"], utc=True)
-        fund_idx = np.searchsorted(fund["fundingTime"].values, df5["time_utc"].values, side="right") - 1
-        fund_idx = np.clip(fund_idx, 0, len(fund)-1)
-        df5["funding_rate"] = fund["fundingRate"].values[fund_idx]
-        df5["funding_rate"] = df5["funding_rate"].fillna(0)
-        df5 = df5.drop(columns=["time_utc"])
+    fund = read_external(os.path.join(OUT, f"{sym}_funding.csv"), "fundingTime")
+    if fund is not None:
+        fund["fundingRate"] = pd.to_numeric(fund["fundingRate"], errors="coerce")
+        df5 = pd.merge_asof(
+            df5.sort_values("time"),
+            fund[["fundingTime", "fundingRate"]],
+            left_on="time",
+            right_on="fundingTime",
+            direction="backward",
+        )
+        stale = stale_asof_mask(df5, "fundingTime", FUNDING_MAX_AGE)
+        df5["funding_rate"] = df5["fundingRate"].where(~stale, 0.0).fillna(0.0)
+        df5 = df5.drop(columns=[c for c in ["fundingTime", "fundingRate"] if c in df5.columns])
 
     # Long/short ratio
-    ls_path = os.path.join(OUT, f"{sym}_lsratio.csv")
-    if os.path.exists(ls_path):
-        ls = pd.read_csv(ls_path)
-        ls["timestamp"] = pd.to_datetime(ls["timestamp"], utc=True, format="ISO8601")
-        ls = ls.sort_values("timestamp")
-        df5["time_utc"] = pd.to_datetime(df5["time"], utc=True)
-        ls_idx = np.searchsorted(ls["timestamp"].values, df5["time_utc"].values, side="right") - 1
-        ls_idx = np.clip(ls_idx, 0, len(ls)-1)
-        df5["ls_ratio"] = ls["longShortRatio"].values[ls_idx]
-        df5["ls_long"] = ls["longAccount"].values[ls_idx]
-        df5["ls_short"] = ls["shortAccount"].values[ls_idx]
-        for c in ["ls_ratio","ls_long","ls_short"]:
-            df5[c] = df5[c].fillna(1.0 if c == "ls_ratio" else 0.5)
-        df5 = df5.drop(columns=["time_utc"])
+    ls = read_external(os.path.join(OUT, f"{sym}_lsratio.csv"), "timestamp")
+    if ls is not None:
+        for col in ["longShortRatio", "longAccount", "shortAccount"]:
+            ls[col] = pd.to_numeric(ls[col], errors="coerce")
+        df5 = pd.merge_asof(
+            df5.sort_values("time"),
+            ls[["timestamp", "longShortRatio", "longAccount", "shortAccount"]],
+            left_on="time",
+            right_on="timestamp",
+            direction="backward",
+        )
+        stale = stale_asof_mask(df5, "timestamp", LS_RATIO_MAX_AGE)
+        df5["ls_ratio"] = df5["longShortRatio"].where(~stale, 1.0).fillna(1.0)
+        df5["ls_long"] = df5["longAccount"].where(~stale, 0.5).fillna(0.5)
+        df5["ls_short"] = df5["shortAccount"].where(~stale, 0.5).fillna(0.5)
+        df5 = df5.drop(columns=[c for c in ["timestamp", "longShortRatio", "longAccount", "shortAccount"] if c in df5.columns])
 
     # Taker buy/sell
-    tk_path = os.path.join(OUT, f"{sym}_taker.csv")
-    if os.path.exists(tk_path):
-        tk = pd.read_csv(tk_path)
-        tk["timestamp"] = pd.to_datetime(tk["timestamp"], utc=True, format="ISO8601")
-        tk = tk.sort_values("timestamp")
-        df5["time_utc"] = pd.to_datetime(df5["time"], utc=True)
-        tk_idx = np.searchsorted(tk["timestamp"].values, df5["time_utc"].values, side="right") - 1
-        tk_idx = np.clip(tk_idx, 0, len(tk)-1)
-        df5["taker_ratio"] = tk["buySellRatio"].values[tk_idx]
-        df5["taker_buy"] = tk["buyVol"].values[tk_idx]
-        df5["taker_sell"] = tk["sellVol"].values[tk_idx]
-        for c in ["taker_ratio","taker_buy","taker_sell"]:
-            df5[c] = df5[c].fillna(1.0 if c == "taker_ratio" else 0)
-        df5 = df5.drop(columns=["time_utc"])
+    tk = read_external(os.path.join(OUT, f"{sym}_taker.csv"), "timestamp")
+    if tk is not None:
+        for col in ["buySellRatio", "buyVol", "sellVol"]:
+            tk[col] = pd.to_numeric(tk[col], errors="coerce")
+        df5 = pd.merge_asof(
+            df5.sort_values("time"),
+            tk[["timestamp", "buySellRatio", "buyVol", "sellVol"]],
+            left_on="time",
+            right_on="timestamp",
+            direction="backward",
+        )
+        stale = stale_asof_mask(df5, "timestamp", TAKER_MAX_AGE)
+        df5["taker_ratio"] = df5["buySellRatio"].where(~stale, 1.0).fillna(1.0)
+        df5["taker_buy"] = df5["buyVol"].where(~stale, 0.0).fillna(0.0)
+        df5["taker_sell"] = df5["sellVol"].where(~stale, 0.0).fillna(0.0)
+        df5 = df5.drop(columns=[c for c in ["timestamp", "buySellRatio", "buyVol", "sellVol"] if c in df5.columns])
 
     return df5
 

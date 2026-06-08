@@ -36,6 +36,9 @@ HORIZON = OPTION_MIN // BAR_MIN
 PAYOUT = 0.85
 STAKE = 5
 BREAKEVEN_WR = 100 / (1 + PAYOUT)
+FUNDING_MAX_AGE = pd.Timedelta(hours=12)
+LS_RATIO_MAX_AGE = pd.Timedelta(minutes=30)
+TAKER_MAX_AGE = pd.Timedelta(minutes=30)
 TRAIN_SIZE = int(os.environ.get("RESEARCH_2M_TRAIN_SIZE", "12000"))
 TEST_SIZE = int(os.environ.get("RESEARCH_2M_TEST_SIZE", "1000"))
 STEP = int(os.environ.get("RESEARCH_2M_STEP", "1000"))
@@ -149,6 +152,14 @@ def read_external(path, time_col):
     return df.dropna(subset=[time_col]).sort_values(time_col).reset_index(drop=True)
 
 
+def stale_asof_mask(out, source_col, max_age):
+    if source_col not in out.columns:
+        return pd.Series(True, index=out.index)
+    source_time = pd.to_datetime(out[source_col], utc=True)
+    age = pd.to_datetime(out["time"], utc=True) - source_time
+    return source_time.isna() | (age > max_age)
+
+
 def merge_external(df):
     out = df.sort_values("time").reset_index(drop=True)
     out["time"] = pd.to_datetime(out["time"], utc=True)
@@ -157,7 +168,8 @@ def merge_external(df):
     if fund is not None:
         fund["fundingRate"] = pd.to_numeric(fund["fundingRate"], errors="coerce")
         out = pd.merge_asof(out, fund[["fundingTime", "fundingRate"]], left_on="time", right_on="fundingTime", direction="backward")
-        out["funding_rate"] = out["fundingRate"].fillna(0.0)
+        stale = stale_asof_mask(out, "fundingTime", FUNDING_MAX_AGE)
+        out["funding_rate"] = out["fundingRate"].where(~stale, 0.0).fillna(0.0)
         out = out.drop(columns=[c for c in ["fundingTime", "fundingRate"] if c in out.columns])
     else:
         out["funding_rate"] = 0.0
@@ -173,9 +185,10 @@ def merge_external(df):
             right_on="timestamp",
             direction="backward",
         )
-        out["ls_ratio"] = out["longShortRatio"].fillna(1.0)
-        out["ls_long"] = out["longAccount"].fillna(0.5)
-        out["ls_short"] = out["shortAccount"].fillna(0.5)
+        stale = stale_asof_mask(out, "timestamp", LS_RATIO_MAX_AGE)
+        out["ls_ratio"] = out["longShortRatio"].where(~stale, 1.0).fillna(1.0)
+        out["ls_long"] = out["longAccount"].where(~stale, 0.5).fillna(0.5)
+        out["ls_short"] = out["shortAccount"].where(~stale, 0.5).fillna(0.5)
         out = out.drop(columns=[c for c in ["timestamp", "longShortRatio", "longAccount", "shortAccount"] if c in out.columns])
     else:
         out["ls_ratio"] = 1.0
@@ -193,9 +206,10 @@ def merge_external(df):
             right_on="timestamp",
             direction="backward",
         )
-        out["taker_ratio"] = out["buySellRatio"].fillna(1.0)
-        out["taker_buy"] = out["buyVol"].fillna(0.0)
-        out["taker_sell"] = out["sellVol"].fillna(0.0)
+        stale = stale_asof_mask(out, "timestamp", TAKER_MAX_AGE)
+        out["taker_ratio"] = out["buySellRatio"].where(~stale, 1.0).fillna(1.0)
+        out["taker_buy"] = out["buyVol"].where(~stale, 0.0).fillna(0.0)
+        out["taker_sell"] = out["sellVol"].where(~stale, 0.0).fillna(0.0)
         out = out.drop(columns=[c for c in ["timestamp", "buySellRatio", "buyVol", "sellVol"] if c in out.columns])
     else:
         out["taker_ratio"] = 1.0

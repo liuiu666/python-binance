@@ -14,12 +14,15 @@ data/*.csv
 data/*.pkl
 data/*.npz
 data/cache/
+data/archive/
 data/*.lock
 data/*.lockdir/
 data/price_proxy.lockdir/
 data/signal_btc.lockdir/
 data/current_price.json
 data/live_signals.json
+data/live_data_update_status.json
+data/real_balance.json
 data/prod_BTC_*
 data/prod_config.*.json
 data/prod_config.json.bak*
