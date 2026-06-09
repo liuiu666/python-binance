@@ -11,6 +11,7 @@ __pycache__/
 # Runtime and research artifacts
 data/*.jsonl
 data/*.csv
+data/*.csv.tmp
 data/*.pkl
 data/*.npz
 data/cache/

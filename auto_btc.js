@@ -7,7 +7,8 @@ var CONFIG_URL = BASE_URL + "/api/config";
 var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
-var SCRIPT_VERSION = "2026-06-09-server-url-v9";
+var API_TOKEN = "";
+var SCRIPT_VERSION = "2026-06-09-arch-v10";
 var POLL_INTERVAL = 3000;
 var SIGNAL_MAX_AGE_MS = 60000;
 
@@ -42,6 +43,11 @@ device.keepScreenOn();
 function log(msg) {
     var t = new Date().toLocaleTimeString();
     console.log("[" + t + "] " + msg);
+}
+
+function authUrl(url) {
+    if (!API_TOKEN) return url;
+    return url + (url.indexOf("?") >= 0 ? "&" : "?") + "token=" + encodeURIComponent(API_TOKEN);
 }
 
 function reportTradeAudit(event, order, extra) {
@@ -83,9 +89,9 @@ function reportTradeAudit(event, order, extra) {
         }
         var res = null;
         try {
-            res = http.postJson(AUDIT_URL, payload, { timeout: 2500 });
+            res = http.postJson(authUrl(AUDIT_URL), payload, { timeout: 2500 });
         } catch (e1) {
-            res = http.post(AUDIT_URL, { payload: JSON.stringify(payload) }, { timeout: 2500 });
+            res = http.post(authUrl(AUDIT_URL), { payload: JSON.stringify(payload) }, { timeout: 2500 });
         }
         return !!(res && res.statusCode >= 200 && res.statusCode < 300);
     } catch (e) {
@@ -495,9 +501,9 @@ function reportBalance() {
         var payload = { amount: amt, time: Date.now(), device: deviceId };
         var res = null;
         try {
-            res = http.postJson(BALANCE_URL, payload, { timeout: 3000 });
+            res = http.postJson(authUrl(BALANCE_URL), payload, { timeout: 3000 });
         } catch (e1) {
-            res = http.post(BALANCE_URL, { amount: String(amt), time: String(Date.now()), device: String(deviceId) }, { timeout: 3000 });
+            res = http.post(authUrl(BALANCE_URL), { amount: String(amt), time: String(Date.now()), device: String(deviceId) }, { timeout: 3000 });
         }
         if (res && res.statusCode == 200) {
             lastBalanceValue = amt;
@@ -517,7 +523,7 @@ function reportBalance() {
 // ========== Fetch dynamic config ==========
 function fetchConfig() {
     try {
-        var r = http.get(CONFIG_URL, { timeout: 3000 });
+        var r = http.get(authUrl(CONFIG_URL), { timeout: 3000 });
         if (r.statusCode == 200) {
             var c = r.body.json();
             if (c.amount) tradeConfig.amount = c.amount;
@@ -535,7 +541,7 @@ function fetchConfig() {
 // ========== Signal ==========
 function getSignalPayload() {
     try {
-        var r = http.get(SIGNAL_URL, { timeout: 5000 });
+        var r = http.get(authUrl(SIGNAL_URL), { timeout: 5000 });
         if (r.statusCode == 200) {
             var data = r.body.json();
             // Extract config if present
@@ -889,7 +895,7 @@ function placeTrade(dir, order) {
 // Check for manual trade command from web
 function checkManualTrade() {
     try {
-        var r = http.get(MANUAL_URL, { timeout: 3000 });
+        var r = http.get(authUrl(MANUAL_URL), { timeout: 3000 });
         if (r.statusCode == 200) {
             var cmd = r.body.json();
             if (cmd && cmd.direction && Date.now() - cmd.time < 30000) {
@@ -905,7 +911,7 @@ function checkManualTrade() {
                 tradeConfig.duration = prevDur;
                 durationSet = false;
                 durationSetTarget = "";
-                http.request(MANUAL_URL, { method: "DELETE", timeout: 3000 });
+                http.request(authUrl(MANUAL_URL), { method: "DELETE", timeout: 3000 });
                 return true;
             }
         }

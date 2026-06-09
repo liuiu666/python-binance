@@ -5,44 +5,52 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const { spawn } = require("child_process");
+const { EventStore } = require("./lib/event_store");
+const { createApiAuth } = require("./lib/auth");
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 app.use(express.static(path.join(__dirname, "public")));
 const PORT = process.env.PORT || 3000;
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
+const SERVER_ID = process.env.SERVER_ID || os.hostname() || "unknown";
+const eventStore = new EventStore({ serverId: SERVER_ID });
+const apiAuth = createApiAuth(process.env);
+const requireApiToken = apiAuth.middleware;
 
-const SIGNAL_FILE = path.join(__dirname, "data", "live_signals.json");
+const SIGNAL_FILE = path.join(DATA_DIR, "live_signals.json");
 const SIGNAL_SCRIPT_FILE = path.join(__dirname, "py", "signal_btc.py");
 const SIGNAL_STDOUT_FILE = path.join(__dirname, ".sig.out");
 const SIGNAL_STDERR_FILE = path.join(__dirname, ".sig.err");
 const REPORT_STDOUT_FILE = path.join(__dirname, ".reports.out");
 const REPORT_STDERR_FILE = path.join(__dirname, ".reports.err");
 const DATA_UPDATE_SCRIPT_FILE = path.join(__dirname, "py", "update_live_data.py");
-const DATA_UPDATE_STATUS_FILE = path.join(__dirname, "data", "live_data_update_status.json");
+const DATA_UPDATE_STATUS_FILE = path.join(DATA_DIR, "live_data_update_status.json");
 const DATA_UPDATE_STDOUT_FILE = path.join(__dirname, ".data_update.out");
 const DATA_UPDATE_STDERR_FILE = path.join(__dirname, ".data_update.err");
-const PRICE_FILE = path.join(__dirname, "data", "current_price.json");
-const CONFIG_FILE = path.join(__dirname, "data", "trade_config.json");
-const TRADE_AUDIT_FILE = path.join(__dirname, "data", "trade_audit.jsonl");
-const REAL_BALANCE_FILE = path.join(__dirname, "data", "real_balance.json");
+const PRICE_FILE = path.join(DATA_DIR, "current_price.json");
+const CONFIG_FILE = path.join(DATA_DIR, "trade_config.json");
+const TRADE_AUDIT_FILE = path.join(DATA_DIR, "trade_audit.jsonl");
+const REAL_BALANCE_FILE = path.join(DATA_DIR, "real_balance.json");
 const AUTO_SCRIPT_FILE = path.join(__dirname, "auto_btc.js");
-const PRICE_TICKS_FILE = path.join(__dirname, "data", "price_ticks.jsonl");
+const PRICE_TICKS_FILE = path.join(DATA_DIR, "price_ticks.jsonl");
 const REPORT_FILES = {
-  decision: path.join(__dirname, "data", "strategy_decision_report.json"),
-  health: path.join(__dirname, "data", "strategy_health_report.json"),
-  signalAudit: path.join(__dirname, "data", "signal_audit_report.json"),
-  liveBacktestGap: path.join(__dirname, "data", "live_backtest_gap_report.json"),
-  tenMinRegimeFilter: path.join(__dirname, "data", "ten_min_regime_filter_search.json"),
-  tenMinStatefulPolicyFilter: path.join(__dirname, "data", "ten_min_stateful_policy_filter_search.json"),
-  thirtyMinRegimeFilter: path.join(__dirname, "data", "thirty_min_regime_filter_search.json"),
-  regimePattern: path.join(__dirname, "data", "regime_pattern_report.json"),
-  liveAudit: path.join(__dirname, "data", "live_trade_audit_report.json"),
-  shadowDecision: path.join(__dirname, "data", "shadow_decision_report.json"),
-  latency: path.join(__dirname, "data", "execution_latency_validation.json")
+  decision: path.join(DATA_DIR, "strategy_decision_report.json"),
+  health: path.join(DATA_DIR, "strategy_health_report.json"),
+  signalAudit: path.join(DATA_DIR, "signal_audit_report.json"),
+  liveBacktestGap: path.join(DATA_DIR, "live_backtest_gap_report.json"),
+  tenMinRegimeFilter: path.join(DATA_DIR, "ten_min_regime_filter_search.json"),
+  tenMinStatefulPolicyFilter: path.join(DATA_DIR, "ten_min_stateful_policy_filter_search.json"),
+  thirtyMinRegimeFilter: path.join(DATA_DIR, "thirty_min_regime_filter_search.json"),
+  regimePattern: path.join(DATA_DIR, "regime_pattern_report.json"),
+  liveAudit: path.join(DATA_DIR, "live_trade_audit_report.json"),
+  shadowDecision: path.join(DATA_DIR, "shadow_decision_report.json"),
+  latency: path.join(DATA_DIR, "execution_latency_validation.json")
 };
 const PYTHON_EXE = process.env.PYTHON_EXE || "python";
 const SERVER_SIM_TRADING_ENABLED = process.env.SERVER_SIM_TRADING_ENABLED === "1";
+const MANAGED_PROCESSES_ENABLED = process.env.DISABLE_MANAGED_PROCESSES !== "1";
 const DATA_UPDATE_INTERVAL_MS = Math.max(
   60 * 1000,
   Number(process.env.DATA_UPDATE_INTERVAL_MS || 5 * 60 * 1000)
@@ -53,28 +61,28 @@ const REPORT_REFRESH_INTERVAL_MS = Math.max(
 );
 const DATA_HEALTH_FILES = {
   klines1m: {
-    file: path.join(__dirname, "data", "btcusdt_1m.csv"),
+    file: path.join(DATA_DIR, "btcusdt_1m.csv"),
     timeCol: "open_time",
     maxAgeMs: Number(process.env.DATA_HEALTH_1M_MAX_AGE_MS || 15 * 60 * 1000),
     intervalMs: 60 * 1000,
     maxRecentGapMs: Number(process.env.DATA_HEALTH_1M_MAX_GAP_MS || 90 * 1000)
   },
   taker: {
-    file: path.join(__dirname, "data", "btcusdt_taker.csv"),
+    file: path.join(DATA_DIR, "btcusdt_taker.csv"),
     timeCol: "timestamp",
     maxAgeMs: Number(process.env.DATA_HEALTH_TAKER_MAX_AGE_MS || 30 * 60 * 1000),
     intervalMs: 5 * 60 * 1000,
     maxRecentGapMs: Number(process.env.DATA_HEALTH_5M_MAX_GAP_MS || 8 * 60 * 1000)
   },
   lsratio: {
-    file: path.join(__dirname, "data", "btcusdt_lsratio.csv"),
+    file: path.join(DATA_DIR, "btcusdt_lsratio.csv"),
     timeCol: "timestamp",
     maxAgeMs: Number(process.env.DATA_HEALTH_LSRATIO_MAX_AGE_MS || 30 * 60 * 1000),
     intervalMs: 5 * 60 * 1000,
     maxRecentGapMs: Number(process.env.DATA_HEALTH_5M_MAX_GAP_MS || 8 * 60 * 1000)
   },
   funding: {
-    file: path.join(__dirname, "data", "btcusdt_funding.csv"),
+    file: path.join(DATA_DIR, "btcusdt_funding.csv"),
     timeCol: "fundingTime",
     maxAgeMs: Number(process.env.DATA_HEALTH_FUNDING_MAX_AGE_MS || 12 * 60 * 60 * 1000),
     intervalMs: 8 * 60 * 60 * 1000,
@@ -181,27 +189,15 @@ function stopSignalService() {
 }
 
 function appendJsonl(file, obj) {
-  try { fs.appendFileSync(file, JSON.stringify(obj) + "\n"); } catch (e) {}
+  return eventStore.appendJsonl(file, obj, { normalize: file === TRADE_AUDIT_FILE });
 }
 
 function tailJsonl(file, limit) {
-  try {
-    if (!fs.existsSync(file)) return [];
-    return fs.readFileSync(file, "utf8").trim().split(/\r?\n/).filter(Boolean).slice(-limit).map(line => {
-      try { return JSON.parse(line); } catch (e) { return { raw: line }; }
-    });
-  } catch (e) { return []; }
+  return eventStore.tailJsonl(file, limit);
 }
 
 function readJsonl(file) {
-  try {
-    if (!fs.existsSync(file)) return [];
-    const raw = fs.readFileSync(file, "utf8").trim();
-    if (!raw) return [];
-    return raw.split(/\r?\n/).filter(Boolean).map(line => {
-      try { return JSON.parse(line); } catch (e) { return null; }
-    }).filter(Boolean);
-  } catch (e) { return []; }
+  return eventStore.readJsonl(file);
 }
 
 function readJsonFile(file, fallback = null) {
@@ -929,7 +925,7 @@ app.get("/api/reports", (req, res) => {
   });
 });
 
-app.post("/api/reports/refresh", (req, res) => {
+app.post("/api/reports/refresh", requireApiToken, (req, res) => {
   refreshLightReports("manual_api");
   res.json({ ok: true, reportRefresh });
 });
@@ -940,7 +936,7 @@ app.get("/api/data-health", (req, res) => {
   res.json(dataHealthGate(signals));
 });
 
-app.post("/api/data-update/refresh", (req, res) => {
+app.post("/api/data-update/refresh", requireApiToken, (req, res) => {
   runDataUpdate("manual_api");
   res.json({ ok: true, dataUpdate });
 });
@@ -977,6 +973,8 @@ function runtimeInfo() {
   const publicBase = String(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
   const base = publicBase || (preferred ? preferred.url : `http://127.0.0.1:${PORT}`);
   return {
+    serverId: eventStore.serverId,
+    dataDir: DATA_DIR,
     port: Number(PORT),
     urls,
     tabletUrl: base,
@@ -987,7 +985,9 @@ function runtimeInfo() {
     loaderUrl: `${base}/auto_btc_loader.js`,
     bootstrapUrl: `${base}/auto_btc_bootstrap.js`,
     scriptVersion: autoScriptVersion(),
-    serverSimTradingEnabled: SERVER_SIM_TRADING_ENABLED
+    serverSimTradingEnabled: SERVER_SIM_TRADING_ENABLED,
+    managedProcessesEnabled: MANAGED_PROCESSES_ENABLED,
+    apiAuth: apiAuth.publicInfo()
   };
 }
 
@@ -1240,6 +1240,7 @@ app.get("/api/runtime", (req, res) => {
 
 app.get("/api/signal-service", (req, res) => {
   res.json({
+    serverId: eventStore.serverId,
     ...signalService,
     running: !!signalService.pid,
     python: PYTHON_EXE,
@@ -1663,7 +1664,7 @@ app.get("/api/config", (req, res) => {
   res.json(tradeConfig);
 });
 
-app.post("/api/config", express.json(), (req, res) => {
+app.post("/api/config", requireApiToken, express.json(), (req, res) => {
   let safetyBlocked = null;
   let forceAutoTrade = false;
   if (req.body.amount !== undefined) tradeConfig.amount = String(req.body.amount);
@@ -1741,7 +1742,7 @@ app.get('/api/manual', (req, res) => {
   res.json(manualTrade);
 });
 
-app.post('/api/manual', express.json(), (req, res) => {
+app.post('/api/manual', requireApiToken, express.json(), (req, res) => {
   const { direction, amount, duration } = req.body;
   if (direction !== 'UP' && direction !== 'DOWN') { res.json({ error: 'invalid direction' }); return; }
   manualTrade = { direction, amount: amount || tradeConfig.amount, duration: duration || tradeConfig.duration, time: Date.now() };
@@ -1749,7 +1750,7 @@ app.post('/api/manual', express.json(), (req, res) => {
   res.json(manualTrade);
 });
 
-app.delete('/api/manual', (req, res) => {
+app.delete('/api/manual', requireApiToken, (req, res) => {
   manualTrade = null;
   res.json({ cleared: true });
 });
@@ -1757,7 +1758,7 @@ app.delete('/api/manual', (req, res) => {
 // --- Trade audit reported by AutoJS tablet and server simulator ---
 app.get('/api/trade-audit', (req, res) => {
   const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
-  res.json({ items: tailJsonl(TRADE_AUDIT_FILE, limit) });
+  res.json({ serverId: eventStore.serverId, items: tailJsonl(TRADE_AUDIT_FILE, limit) });
 });
 
 app.get('/api/trade-history', (req, res) => {
@@ -1765,7 +1766,19 @@ app.get('/api/trade-history', (req, res) => {
   res.json(liveOrderHistory(limit));
 });
 
-app.post('/api/trade-audit', (req, res) => {
+app.post('/api/trade-audit/import', requireApiToken, express.json({ limit: "20mb" }), (req, res) => {
+  const body = req.body || {};
+  const items = Array.isArray(body) ? body : body.items;
+  if (!Array.isArray(items)) {
+    res.status(400).json({ error: "items must be an array" });
+    return;
+  }
+  const source = body.source || body.importSource || "manual_import";
+  const result = eventStore.importJsonl(TRADE_AUDIT_FILE, items, { importSource: source });
+  res.json({ ok: true, ...result });
+});
+
+app.post('/api/trade-audit', requireApiToken, (req, res) => {
   readRawJson(req, (payload, raw) => {
     if (!payload || typeof payload !== 'object') {
       res.status(400).json({ error: 'invalid body', raw: raw.substring(0, 200) });
@@ -1778,8 +1791,8 @@ app.post('/api/trade-audit', (req, res) => {
       ...payload,
       realBalance
     };
-    appendJsonl(TRADE_AUDIT_FILE, item);
-    res.json({ ok: true, item });
+    const written = appendJsonl(TRADE_AUDIT_FILE, item);
+    res.json({ ok: true, item: written || item });
   });
 });
 
@@ -1788,7 +1801,7 @@ app.get('/api/balance', (req, res) => {
   res.json(realBalance);
 });
 
-app.post('/api/balance', (req, res) => {
+app.post('/api/balance', requireApiToken, (req, res) => {
   readRawJson(req, (payload, raw) => {
     if (!payload) {
       console.log('[Balance POST] failed to parse body');
@@ -1811,11 +1824,15 @@ process.on("SIGTERM", stopSignalService);
 process.on("exit", stopSignalService);
 
 server.listen(PORT, '0.0.0.0', () => {
-  runDataUpdate("server_listen");
-  startSignalService("server_listen");
-  setInterval(() => runDataUpdate("timer"), DATA_UPDATE_INTERVAL_MS);
-  refreshLightReports("server_listen");
-  setInterval(() => refreshLightReports("timer"), REPORT_REFRESH_INTERVAL_MS);
+  if (MANAGED_PROCESSES_ENABLED) {
+    runDataUpdate("server_listen");
+    startSignalService("server_listen");
+    setInterval(() => runDataUpdate("timer"), DATA_UPDATE_INTERVAL_MS);
+    refreshLightReports("server_listen");
+    setInterval(() => refreshLightReports("timer"), REPORT_REFRESH_INTERVAL_MS);
+  } else {
+    console.log("[Server] Managed Python processes disabled by DISABLE_MANAGED_PROCESSES=1");
+  }
   console.log(`BTC 二元期权 http://localhost:${PORT} | 自动交易: ${AUTO_TRADE_ENABLED}`);
 });
 
