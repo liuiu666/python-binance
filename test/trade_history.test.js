@@ -1,0 +1,54 @@
+const assert = require("node:assert");
+const test = require("node:test");
+const {
+  buildLiveOrderHistory,
+  priceAtOrAfter,
+  settleStatus,
+  statusPnl
+} = require("../lib/trade_history");
+
+test("priceAtOrAfter returns the first tick at or after target", () => {
+  const ticks = [{ time: 10, price: 100 }, { time: 20, price: 101 }];
+  assert.equal(priceAtOrAfter(ticks, 1), 100);
+  assert.equal(priceAtOrAfter(ticks, 20), 101);
+  assert.equal(priceAtOrAfter(ticks, 30), null);
+});
+
+test("settle status and pnl match binary option rules", () => {
+  assert.equal(settleStatus("UP", 100, 101), "won");
+  assert.equal(settleStatus("UP", 100, 99), "lost");
+  assert.equal(settleStatus("DOWN", 100, 99), "won");
+  assert.equal(settleStatus("DOWN", 100, 100), "tie");
+  assert.equal(statusPnl("won", 10), 8.5);
+  assert.equal(statusPnl("lost", 10), -10);
+  assert.equal(statusPnl("tie", 10), 0);
+});
+
+test("live order history summarizes settled, pending, aborted, and server rows", () => {
+  const history = buildLiveOrderHistory({
+    now: 1710000000000,
+    limit: 10,
+    auditRows: [
+      { event: "order_done", serverTime: 1000, duration: 1, direction: "UP", amount: 10, price: 100, strategyId: "BTC_10min" },
+      { event: "order_done", serverTime: 2000, duration: 1, direction: "DOWN", amount: 5, price: 100, strategyId: "BTC_30min" },
+      { event: "order_abort", serverTime: 3000, direction: "UP", amount: 5, reason: "button_not_found" }
+    ],
+    priceTicks: [
+      { time: 61000, price: 101 },
+      { time: 62000, price: 100 }
+    ],
+    serverTrades: [
+      { id: 1, source: "server", direction: "UP", amount: 2, duration: "30", openTime: 4000, settleTime: 5000, strikePrice: 100, settlePrice: null, status: "active" }
+    ]
+  });
+
+  assert.equal(history.updatedAt, 1710000000000);
+  assert.equal(history.summary.total, 4);
+  assert.equal(history.summary.settled, 2);
+  assert.equal(history.summary.wins, 1);
+  assert.equal(history.summary.ties, 1);
+  assert.equal(history.summary.pending, 1);
+  assert.equal(history.summary.pnl, 8.5);
+  assert.equal(history.active.length, 1);
+  assert.equal(history.recent[0].event, "server_trade");
+});

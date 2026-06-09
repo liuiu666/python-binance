@@ -616,6 +616,40 @@ function ManualPanel({ draft, onManualTrade }) {
   );
 }
 
+function OpsPanel({ runtime, tablet, onRefreshData, onRefreshReports }) {
+  const links = [
+    { label: "平板页", url: runtime?.tabletPageUrl },
+    { label: "Loader", url: runtime?.loaderUrl },
+    { label: "脚本", url: runtime?.scriptUrl },
+    { label: "信号", url: runtime?.signalUrl }
+  ].filter(item => item.url);
+  return (
+    <section className="panel ops-panel">
+      <header className="panel-header">
+        <span><RefreshCcw size={15} /> 运行操作</span>
+        <em className={tablet?.checks?.heartbeatOnline ? "synced" : "dirty"}>
+          {tablet?.checks?.heartbeatOnline ? "平板在线" : "等待平板"}
+        </em>
+      </header>
+      <div className="ops-actions">
+        <button className="secondary-button" type="button" onClick={onRefreshData}>
+          <RefreshCcw size={14} /> 刷新数据
+        </button>
+        <button className="secondary-button" type="button" onClick={onRefreshReports}>
+          <RefreshCcw size={14} /> 刷新报告
+        </button>
+      </div>
+      <div className="ops-links">
+        {links.map(item => (
+          <a href={item.url} target="_blank" rel="noreferrer" key={item.label}>
+            {item.label}
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function TradeHistory({ history }) {
   const summary = history?.summary || {};
   const active = history?.active || [];
@@ -869,6 +903,33 @@ export default function App() {
       .catch(error => notify(`发送失败：${error.message}`, "error"));
   }, [apiFetch, configDraft, notify]);
 
+  const triggerServerAction = useCallback((url, label, after) => {
+    apiFetch(url, { method: "POST" })
+      .then(async res => {
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+        return body;
+      })
+      .then(body => {
+        notify(`${label}已触发`, "success");
+        if (after) after(body);
+      })
+      .catch(error => notify(`${label}失败：${error.message}`, "error"));
+  }, [apiFetch, notify]);
+
+  const refreshDataNow = useCallback(() => {
+    triggerServerAction("/api/data-update/refresh", "数据刷新", () => {
+      loadRuntime();
+      loadSignals();
+    });
+  }, [loadRuntime, loadSignals, triggerServerAction]);
+
+  const refreshReportsNow = useCallback(() => {
+    triggerServerAction("/api/reports/refresh", "报告刷新", () => {
+      loadReports();
+    });
+  }, [loadReports, triggerServerAction]);
+
   const refreshAll = useCallback(() => {
     loadSignals();
     loadReports();
@@ -1026,6 +1087,12 @@ export default function App() {
               onSave={saveConfig}
             />
             <ManualPanel draft={configDraft} onManualTrade={manualTrade} />
+            <OpsPanel
+              runtime={runtime}
+              tablet={tablet}
+              onRefreshData={refreshDataNow}
+              onRefreshReports={refreshReportsNow}
+            />
             <section className="panel runtime-panel">
               <header className="panel-header">
                 <span><Wifi size={15} /> 运行状态</span>

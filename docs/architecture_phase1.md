@@ -108,6 +108,52 @@ npm run frontend:dev
 
 The Vite dev server proxies `/api` and `/ws` to `127.0.0.1:3000`.
 
+The dashboard also exposes common runtime actions:
+
+- trigger `/api/data-update/refresh`
+- trigger `/api/reports/refresh`
+- open tablet page, loader, script, and signal links
+
+If API auth is enabled, fill the same token in the dashboard `API Token` field before using write/control actions.
+
+## Tests
+
+Run all Node tests:
+
+```powershell
+npm test
+```
+
+The test suite covers:
+
+- API token middleware
+- event store import/dedupe
+- trade config patching
+- live trade history calculation
+- isolated API smoke tests for the React root page and write endpoints
+
+## Sync To Server
+
+After committing local changes, deploy the committed tree to the server with:
+
+```powershell
+Set-Location E:\codex
+powershell -ExecutionPolicy Bypass -File .\tools\sync_server.ps1 `
+  -ServerHost "115.190.218.128" `
+  -ServerUser "root" `
+  -RemotePath "/opt/codex"
+```
+
+The script runs tests, builds the React dashboard, creates a `git archive`, uploads it with `scp`,
+extracts it on the server, runs `npm install`, and rebuilds the dashboard on the server.
+
+If the server service has a restart command, pass it explicitly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\sync_server.ps1 `
+  -RestartCommand "pm2 restart btc-binary-options"
+```
+
 ## Import Local Trade Audit To Server
 
 Use this when old tablet events were posted to the local machine before the tablet was

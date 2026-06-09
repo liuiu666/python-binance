@@ -7,6 +7,16 @@ const os = require("os");
 const { spawn } = require("child_process");
 const { EventStore } = require("./lib/event_store");
 const { createApiAuth } = require("./lib/auth");
+const {
+  DEFAULT_TRADE_CONFIG,
+  amountForConfidence,
+  normalizeTradeConfig,
+  applyTradeConfigPatch
+} = require("./lib/trade_config");
+const {
+  DEFAULT_PAYOUT_RATE,
+  buildLiveOrderHistory
+} = require("./lib/trade_history");
 
 const app = express();
 const server = http.createServer(app);
@@ -1078,171 +1088,14 @@ function tabletDiagnostics() {
   };
 }
 
-function priceAtOrAfter(ticks, targetTime) {
-  let lo = 0, hi = ticks.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (Number(ticks[mid].time) < targetTime) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo < ticks.length ? Number(ticks[lo].price) : null;
-}
-
-function settleStatus(direction, openPrice, closePrice) {
-  if (openPrice == null || closePrice == null) return "pending";
-  if (Number(closePrice) === Number(openPrice)) return "tie";
-  if (direction === "UP") return Number(closePrice) > Number(openPrice) ? "won" : "lost";
-  if (direction === "DOWN") return Number(closePrice) < Number(openPrice) ? "won" : "lost";
-  return "pending";
-}
-
-function statusPnl(status, amount) {
-  const stake = Number(amount) || 0;
-  if (status === "won") return Number((stake * PAYOUT_RATE).toFixed(2));
-  if (status === "lost") return -stake;
-  return 0;
-}
-
 function liveOrderHistory(limit = 100) {
-  const audit = readJsonl(TRADE_AUDIT_FILE);
-  const ticks = readJsonl(PRICE_TICKS_FILE)
-    .filter(t => Number.isFinite(Number(t.time)) && Number.isFinite(Number(t.price)))
-    .map(t => ({ time: Number(t.time), price: Number(t.price) }))
-    .sort((a, b) => a.time - b.time);
-
-  const rows = [];
-  for (const row of audit) {
-    if (row.event !== "order_done") continue;
-    const duration = Math.max(1, Number(row.duration) || 0);
-    const openTime = Number(row.serverTime || row.clientTime || 0);
-    if (!duration || !openTime) continue;
-    const openPrice = row.price != null ? Number(row.price) : priceAtOrAfter(ticks, openTime);
-    const settleTime = openTime + duration * 60 * 1000;
-    const closePrice = priceAtOrAfter(ticks, settleTime);
-    const status = settleStatus(row.direction, openPrice, closePrice);
-    const amount = Number(row.amount) || 0;
-    const id = [
-      "autojs",
-      row.strategyId || "manual",
-      row.signalTime || "",
-      row.queueBatchId || "",
-      openTime
-    ].join("|");
-    rows.push({
-      id,
-      source: "autojs",
-      event: row.event,
-      strategyId: row.strategyId || "manual",
-      direction: row.direction,
-      amount,
-      duration: String(duration),
-      openTime,
-      settleTime,
-      openPrice,
-      closePrice,
-      status,
-      pnl: statusPnl(status, amount),
-      confidence: row.confidence,
-      rsi_value: row.rsi_value,
-      avg_prob: row.avg_prob,
-      threshold: row.threshold,
-      signalTime: row.signalTime,
-      actionableTime: row.actionableTime,
-      queueBatchId: row.queueBatchId,
-      queuePosition: row.queuePosition,
-      queueLength: row.queueLength,
-      queueOrderPolicy: row.queueOrderPolicy,
-      device: row.device,
-      balance: row.balance,
-      realBalance: row.realBalance
-    });
-  }
-
-  for (const row of audit) {
-    if (row.event !== "order_abort") continue;
-    const openTime = Number(row.serverTime || row.clientTime || 0);
-    if (!openTime) continue;
-    const id = ["autojs_abort", row.strategyId || "manual", row.signalTime || "", openTime].join("|");
-    rows.push({
-      id,
-      source: "autojs",
-      event: row.event,
-      strategyId: row.strategyId || "manual",
-      direction: row.direction,
-      amount: Number(row.amount) || 0,
-      duration: String(row.duration || ""),
-      openTime,
-      settleTime: openTime,
-      openPrice: row.price != null ? Number(row.price) : null,
-      closePrice: null,
-      status: "aborted",
-      pnl: 0,
-      reason: row.reason,
-      confidence: row.confidence,
-      rsi_value: row.rsi_value,
-      signalTime: row.signalTime,
-      queueBatchId: row.queueBatchId,
-      queuePosition: row.queuePosition,
-      queueLength: row.queueLength,
-      device: row.device,
-      balance: row.balance,
-      realBalance: row.realBalance
-    });
-  }
-
-  for (const t of trades) {
-    rows.push({
-      id: "server|" + t.id,
-      source: t.source || "server",
-      event: "server_trade",
-      strategyId: String(t.source || "").replace(/^auto:/, "") || "manual",
-      direction: t.direction,
-      amount: Number(t.amount) || 0,
-      duration: String(t.duration || ""),
-      openTime: Number(t.openTime),
-      settleTime: Number(t.settleTime),
-      openPrice: t.strikePrice,
-      closePrice: t.settlePrice,
-      status: t.status === "active" ? "pending" : t.status,
-      pnl: t.status === "won" ? Number(((Number(t.payout) || 0) - (Number(t.amount) || 0)).toFixed(2)) : statusPnl(t.status, t.amount),
-      confidence: null,
-      rsi_value: null
-    });
-  }
-
-  rows.sort((a, b) => Number(b.openTime || 0) - Number(a.openTime || 0));
-
-  const seen = new Set();
-  const unique = rows.filter(row => {
-    const key = row.id || JSON.stringify([row.source, row.strategyId, row.signalTime, row.openTime]);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+  return buildLiveOrderHistory({
+    auditRows: readJsonl(TRADE_AUDIT_FILE),
+    priceTicks: readJsonl(PRICE_TICKS_FILE),
+    serverTrades: trades,
+    payoutRate: PAYOUT_RATE,
+    limit
   });
-
-  const settled = unique.filter(r => ["won", "lost", "tie"].includes(r.status));
-  const wins = settled.filter(r => r.status === "won").length;
-  const losses = settled.filter(r => r.status === "lost").length;
-  const ties = settled.filter(r => r.status === "tie").length;
-  const pnl = settled.reduce((sum, r) => sum + (Number(r.pnl) || 0), 0);
-  const pending = unique.filter(r => r.status === "pending").length;
-  const active = unique.filter(r => r.status === "pending").slice(0, limit);
-  const recent = unique.slice(0, limit);
-  return {
-    updatedAt: Date.now(),
-    summary: {
-      total: unique.length,
-      settled: settled.length,
-      wins,
-      losses,
-      ties,
-      pending,
-      winRate: settled.length ? Number((wins / settled.length * 100).toFixed(2)) : null,
-      pnl: Number(pnl.toFixed(2))
-    },
-    active,
-    recent
-  };
 }
 
 app.get("/api/runtime", (req, res) => {
@@ -1365,7 +1218,7 @@ try {
 });
 
 // --- State ---
-const PAYOUT_RATE = 0.85;
+const PAYOUT_RATE = DEFAULT_PAYOUT_RATE;
 const DURATION_MS = 30 * 60 * 1000;  // 30 minutes
 const WINDOW_SEC = 60;  // 60-second trading window (wider than before)
 const AUTO_TRADE_AMOUNT = 100;  // Auto-trade 100 USDT per signal
@@ -1637,38 +1490,18 @@ wss.on("connection", (ws) => {
 });
 
 // --- Dynamic Trade Config ---
-const DEFAULT_TRADE_CONFIG = {
-  amount: "5", duration: "30", autoTrade: false, minConfidence: 35,
-  tiersEnabled: false, tiers: [{min:80,amount:20},{min:60,amount:10},{min:40,amount:5}],
-  skipConflictSignals: false,
-  queueOrderPolicy: "confidence_desc",
-  preventOverlapOrders: true,
-  realTradingOverride: false,
-  maxActionableLagMs: 60000
-};
-
 let tradeConfig = (() => {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const saved = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-      return { ...DEFAULT_TRADE_CONFIG, ...saved };
+      return normalizeTradeConfig(saved);
     }
   } catch (e) {}
-  return { ...DEFAULT_TRADE_CONFIG };
+  return normalizeTradeConfig(DEFAULT_TRADE_CONFIG);
 })();
 
 function saveTradeConfig() {
   try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(tradeConfig, null, 2)); } catch (e) {}
-}
-
-function amountForConfidence(conf, cfg) {
-  if (cfg.tiersEnabled && Array.isArray(cfg.tiers) && cfg.tiers.length) {
-    const sorted = [...cfg.tiers].sort((a,b) => Number(b.min) - Number(a.min));
-    for (const t of sorted) {
-      if (Number(conf) >= Number(t.min)) return String(t.amount);
-    }
-  }
-  return String(cfg.amount);
 }
 
 app.get("/api/config", (req, res) => {
@@ -1676,73 +1509,14 @@ app.get("/api/config", (req, res) => {
 });
 
 app.post("/api/config", requireApiToken, express.json(), (req, res) => {
-  let safetyBlocked = null;
-  let forceAutoTrade = false;
-  if (req.body.amount !== undefined) tradeConfig.amount = String(req.body.amount);
-  if (req.body.duration !== undefined) tradeConfig.duration = String(req.body.duration);
-  if (req.body.autoTrade !== undefined) {
-    const requestedAutoTrade = !!req.body.autoTrade;
-    if (requestedAutoTrade) {
-      const gate = autoTradeSafetyGate();
-      forceAutoTrade = req.body.forceAutoTrade === true || req.body.forceAutoTrade === "true";
-      if (gate.blocked && !forceAutoTrade) {
-        tradeConfig.autoTrade = false;
-        safetyBlocked = gate;
-        appendJsonl(TRADE_AUDIT_FILE, {
-          serverTime: Date.now(),
-          event: "auto_trade_safety_block",
-          gate
-        });
-      } else {
-        tradeConfig.autoTrade = true;
-        if (forceAutoTrade) tradeConfig.realTradingOverride = true;
-        if (forceAutoTrade && gate.blocked) {
-          appendJsonl(TRADE_AUDIT_FILE, {
-            serverTime: Date.now(),
-            event: "auto_trade_force_enabled",
-            gate,
-            config: {
-              amount: tradeConfig.amount,
-              minConfidence: tradeConfig.minConfidence,
-              tiersEnabled: tradeConfig.tiersEnabled,
-              tiers: tradeConfig.tiers,
-              preventOverlapOrders: tradeConfig.preventOverlapOrders,
-              queueOrderPolicy: tradeConfig.queueOrderPolicy
-            }
-          });
-        }
-      }
-    } else {
-      tradeConfig.autoTrade = false;
-      tradeConfig.realTradingOverride = false;
-    }
+  const result = applyTradeConfigPatch(tradeConfig, req.body, { autoTradeSafetyGate });
+  tradeConfig = result.tradeConfig;
+  for (const event of result.auditEvents) {
+    appendJsonl(TRADE_AUDIT_FILE, { serverTime: Date.now(), ...event });
   }
-  if (req.body.realTradingOverride !== undefined) {
-    tradeConfig.realTradingOverride = req.body.realTradingOverride === true || req.body.realTradingOverride === "true";
-  }
-  if (req.body.minConfidence !== undefined) tradeConfig.minConfidence = Number(req.body.minConfidence);
-  if (req.body.maxActionableLagMs !== undefined) {
-    const lag = Number(req.body.maxActionableLagMs);
-    if (Number.isFinite(lag) && lag >= 5000 && lag <= 10 * 60 * 1000) {
-      tradeConfig.maxActionableLagMs = Math.round(lag);
-    }
-  }
-  if (req.body.tiersEnabled !== undefined) tradeConfig.tiersEnabled = !!req.body.tiersEnabled;
-  if (req.body.skipConflictSignals !== undefined) tradeConfig.skipConflictSignals = !!req.body.skipConflictSignals;
-  if (req.body.preventOverlapOrders !== undefined) tradeConfig.preventOverlapOrders = !!req.body.preventOverlapOrders;
-  if (req.body.queueOrderPolicy !== undefined) {
-    const allowed = new Set(["confidence_desc", "30_then_10", "10_then_30"]);
-    if (allowed.has(String(req.body.queueOrderPolicy))) tradeConfig.queueOrderPolicy = String(req.body.queueOrderPolicy);
-  }
-  if (Array.isArray(req.body.tiers)) {
-    tradeConfig.tiers = req.body.tiers
-      .map(t => ({ min: Number(t.min), amount: Number(t.amount) }))
-      .filter(t => !isNaN(t.min) && !isNaN(t.amount) && t.min >= 0 && t.min <= 100 && t.amount > 0)
-      .sort((a,b) => b.min - a.min);
-  }
-    saveTradeConfig();
+  saveTradeConfig();
   console.log("[Config] Updated:", JSON.stringify(tradeConfig));
-  res.json({ ...tradeConfig, safetyBlocked, forceAutoTrade });
+  res.json({ ...tradeConfig, safetyBlocked: result.safetyBlocked, forceAutoTrade: result.forceAutoTrade });
 });
 
 
