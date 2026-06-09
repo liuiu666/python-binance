@@ -11,7 +11,18 @@ const { createApiAuth } = require("./lib/auth");
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
-app.use(express.static(path.join(__dirname, "public")));
+const PUBLIC_DIR = path.join(__dirname, "public");
+const DASHBOARD_DIR = path.join(PUBLIC_DIR, "dashboard");
+app.use("/dashboard", express.static(DASHBOARD_DIR, { index: "index.html" }));
+app.get("/", (req, res) => {
+  const dashboardIndex = path.join(DASHBOARD_DIR, "index.html");
+  if (fs.existsSync(dashboardIndex)) {
+    res.sendFile(dashboardIndex);
+    return;
+  }
+  res.status(503).send("Dashboard has not been built. Run npm run frontend:build.");
+});
+app.use(express.static(PUBLIC_DIR, { index: false }));
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const SERVER_ID = process.env.SERVER_ID || os.hostname() || "unknown";

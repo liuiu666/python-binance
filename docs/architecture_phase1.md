@@ -9,6 +9,10 @@ local and server environments.
 - `server.js`
   - API, dashboard assets, process supervision, and tablet diagnostics.
   - Starts `py/signal_btc.py` and triggers `py/update_live_data.py`.
+- `frontend/`
+  - React source for the main dashboard.
+  - Built with Vite into `public/dashboard/`.
+  - The server root `/` serves the built React dashboard.
 - `py/signal_btc.py`
   - Loads model artifacts and writes `data/live_signals.json`.
   - Writes signal snapshots to `data/signal_audit.jsonl`.
@@ -76,6 +80,33 @@ Useful environment variables:
 - `API_TOKEN`: optional write/control API token.
 - `DISABLE_MANAGED_PROCESSES=1`: start only the Node API and do not launch Python signal
   or data update jobs. This is useful for local API tests.
+
+## React Dashboard
+
+The main dashboard is now React. It still uses the same backend APIs and WebSocket feed:
+
+- `/api/signal`
+- `/api/config`
+- `/api/trade-history`
+- `/api/reports`
+- `/api/runtime`
+- `/api/tablet-diagnostics`
+- `/ws`
+
+Build the dashboard before deploying:
+
+```powershell
+Set-Location E:\codex
+npm run frontend:build
+```
+
+For local frontend development, keep `server.js` running on port `3000`, then run:
+
+```powershell
+npm run frontend:dev
+```
+
+The Vite dev server proxies `/api` and `/ws` to `127.0.0.1:3000`.
 
 ## Import Local Trade Audit To Server
 

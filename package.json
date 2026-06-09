@@ -6,12 +6,22 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "build": "npm run frontend:build",
+    "frontend:build": "vite build --config frontend/vite.config.js",
+    "frontend:dev": "vite --config frontend/vite.config.js --host 0.0.0.0",
     "reports": "python py/run_strategy_reports.py",
     "reports:full": "python py/run_strategy_reports.py --full",
     "audit:probe": "python py/audit_probe.py"
   },
   "dependencies": {
     "express": "^4.21.0",
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.2",
+    "vite": "^8.0.16"
   }
 }
