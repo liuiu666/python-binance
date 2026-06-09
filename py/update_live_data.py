@@ -72,9 +72,21 @@ def read_existing(path, time_col):
 
 def atomic_write_csv(df, path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp"
+    tmp = f"{path}.{os.getpid()}.tmp"
     df.to_csv(tmp, index=False)
-    os.replace(tmp, path)
+    last_error = None
+    for attempt in range(8):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError as e:
+            last_error = e
+            time.sleep(0.25 * (attempt + 1))
+    try:
+        os.remove(tmp)
+    except OSError:
+        pass
+    raise last_error
 
 
 def merge_and_write(existing, new_rows, path, time_col, columns):

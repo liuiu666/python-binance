@@ -1,8 +1,8 @@
 """Search interpretable bad-environment gates for the 2m 10m BTC policy.
 
 This is research-only. It tests whether weak market contexts, especially
-low-volatility UP calls, can be filtered without turning the policy into an
-after-the-fact fit.
+low-volatility directional calls, can be filtered without turning the policy
+into an after-the-fact fit.
 """
 import itertools
 import json
@@ -252,9 +252,17 @@ def gate_grid():
         base = {"atr_max": atr, "bbw_max": bbw}
         variants = [
             ("lowvol_up", {"directions": ["UP"]}),
+            ("lowvol_down", {"directions": ["DOWN"]}),
+            ("lowvol_both", {"directions": ["UP", "DOWN"]}),
             ("lowvol_up_lowdata", {"directions": ["UP"], "low_data_flow": True}),
+            ("lowvol_down_lowdata", {"directions": ["DOWN"], "low_data_flow": True}),
+            ("lowvol_both_lowdata", {"directions": ["UP", "DOWN"], "low_data_flow": True}),
             ("lowvol_transition_up", {"directions": ["UP"], "groups": ["transition"]}),
+            ("lowvol_transition_down", {"directions": ["DOWN"], "groups": ["transition"]}),
+            ("lowvol_transition_both", {"directions": ["UP", "DOWN"], "groups": ["transition"]}),
             ("lowvol_uncertain_up", {"directions": ["UP"], "groups": ["uncertain"]}),
+            ("lowvol_uncertain_down", {"directions": ["DOWN"], "groups": ["uncertain"]}),
+            ("lowvol_uncertain_both", {"directions": ["UP", "DOWN"], "groups": ["uncertain"]}),
         ]
         for label, extra in variants:
             gate = {**base, **extra}
@@ -374,7 +382,7 @@ def main():
             "cache": cache,
             "policy_count": len(policies),
             "breakeven_wr": round(BREAKEVEN_WR, 2),
-            "note": "Searches interpretable gates such as low-volatility UP filters. Services are not touched.",
+            "note": "Searches interpretable low-volatility directional gates on the cached model output. Services are not touched.",
         },
         "top_score": [compact(r) for r in top],
         "top_pnl": [compact(r) for r in sorted(rows, key=lambda r: (r["overall"]["pnl_5u"], r["overall"]["wr"]), reverse=True)[:25]],

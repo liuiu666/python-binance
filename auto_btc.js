@@ -1,17 +1,17 @@
 "auto";
 
 var PACKAGE = "com.binance.dev";
-var BASE_URL = "http://192.168.0.105:3000";
+var BASE_URL = "http://115.190.218.128:3000";
 var SIGNAL_URL = BASE_URL + "/api/signal";
 var CONFIG_URL = BASE_URL + "/api/config";
 var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
-var SCRIPT_VERSION = "2026-06-07-safety-v7";
+var SCRIPT_VERSION = "2026-06-09-server-url-v9";
 var POLL_INTERVAL = 3000;
-var SIGNAL_MAX_AGE_MS = 120000;
+var SIGNAL_MAX_AGE_MS = 60000;
 
-var tradeConfig = { amount: "5", duration: "30", autoTrade: false, minConfidence: 35, tiersEnabled: false, tiers: [], skipConflictSignals: false, queueOrderPolicy: "confidence_desc", preventOverlapOrders: true };
+var tradeConfig = { amount: "5", duration: "30", autoTrade: false, minConfidence: 35, tiersEnabled: false, tiers: [], skipConflictSignals: false, queueOrderPolicy: "confidence_desc", preventOverlapOrders: true, maxActionableLagMs: SIGNAL_MAX_AGE_MS };
 var lastTradeTime = 0;
 var lastDirection = "";
 var lastSignalKeyByStrategy = {};
@@ -70,6 +70,12 @@ function reportTradeAudit(event, order, extra) {
             previousOrderDoneClientTime: order && order.previousOrderDoneClientTime ? order.previousOrderDoneClientTime : null,
             sincePreviousDoneMs: order && order.sincePreviousDoneMs != null ? order.sincePreviousDoneMs : null,
             sinceQueueBatchStartMs: order && order.sinceQueueBatchStartMs != null ? order.sinceQueueBatchStartMs : null,
+            signalPrice: order && order.signalPrice != null ? order.signalPrice : null,
+            currentPrice: order && order.currentPrice != null ? order.currentPrice : null,
+            actionableAgeMs: order && order.localActionableAgeMs != null ? order.localActionableAgeMs : (order && order.actionableAgeMs != null ? order.actionableAgeMs : null),
+            maxActionableLagMs: order && order.maxActionableLagMs != null ? order.maxActionableLagMs : null,
+            priceChangeBps: order && order.priceChangeBps != null ? order.priceChangeBps : null,
+            directionMoveBps: order && order.directionMoveBps != null ? order.directionMoveBps : null,
             signal: order && order.raw ? order.raw : null
         };
         if (extra) {
@@ -104,6 +110,85 @@ function summarizeSignal(sig) {
     };
 }
 
+function parseSignalTimeMs(value) {
+    if (value === undefined || value === null) return 0;
+    var s = String(value).replace(/^\s+|\s+$/g, "");
+    if (!s) return 0;
+    s = s.replace(" ", "T").replace(/(\.\d{3})\d+/, "$1");
+    var ms = Date.parse(s);
+    if (!isNaN(ms)) return ms;
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?(Z|([+-])(\d{2}):?(\d{2}))?$/);
+    if (!m) return 0;
+    var year = Number(m[1]);
+    var month = Number(m[2]) - 1;
+    var day = Number(m[3]);
+    var hour = Number(m[4]);
+    var minute = Number(m[5]);
+    var second = Number(m[6] || 0);
+    var milli = Number(String(m[7] || "0").substring(0, 3));
+    var utc = Date.UTC(year, month, day, hour, minute, second, milli);
+    if (m[8] && m[8] !== "Z") {
+        var sign = m[9] === "-" ? -1 : 1;
+        var offMin = Number(m[10] || 0) * 60 + Number(m[11] || 0);
+        utc -= sign * offMin * 60000;
+    }
+    return utc;
+}
+
+function asNumberOrNull(value) {
+    var n = Number(value);
+    return isFinite(n) ? n : null;
+}
+
+function maxActionableLagMs() {
+    var lag = Number(tradeConfig.maxActionableLagMs || SIGNAL_MAX_AGE_MS);
+    if (!isFinite(lag) || lag <= 0) return SIGNAL_MAX_AGE_MS;
+    return lag;
+}
+
+function buildExecutionContext(sig) {
+    var ctx = sig && sig.execution_context ? sig.execution_context : {};
+    var actionableTime = sig ? (sig.actionable_time || sig.candle_close_time || sig.time || "") : "";
+    var actionableMs = asNumberOrNull(ctx.actionable_time_ms);
+    if (!actionableMs) actionableMs = parseSignalTimeMs(actionableTime);
+    var signalPrice = asNumberOrNull(ctx.signal_price);
+    if (signalPrice === null && sig) signalPrice = asNumberOrNull(sig.price);
+    var currentPrice = asNumberOrNull(ctx.current_price);
+    var priceChangeBps = asNumberOrNull(ctx.price_change_bps);
+    var directionMoveBps = asNumberOrNull(ctx.direction_move_bps);
+    if (priceChangeBps === null && signalPrice && currentPrice) {
+        priceChangeBps = ((currentPrice - signalPrice) / signalPrice) * 10000;
+    }
+    if (directionMoveBps === null && priceChangeBps !== null && sig && (sig.signal === "UP" || sig.signal === "DOWN")) {
+        directionMoveBps = sig.signal === "UP" ? priceChangeBps : -priceChangeBps;
+    }
+    return {
+        actionableTimeMs: actionableMs || 0,
+        actionableAgeMs: asNumberOrNull(ctx.actionable_age_ms),
+        maxActionableLagMs: asNumberOrNull(ctx.max_actionable_lag_ms) || maxActionableLagMs(),
+        signalPrice: signalPrice,
+        currentPrice: currentPrice,
+        priceChangeBps: priceChangeBps,
+        directionMoveBps: directionMoveBps
+    };
+}
+
+function updateOrderTimingAge(order) {
+    if (!order || !order.actionableTime) return { ok: true };
+    var actionableMs = order.actionableTimeMs || parseSignalTimeMs(order.actionableTime);
+    var lagMs = Number(order.maxActionableLagMs || maxActionableLagMs());
+    order.maxActionableLagMs = lagMs;
+    if (!actionableMs) {
+        return { ok: false, reason: "signal_time_parse_failed", actionableMs: 0, ageMs: null, lagMs: lagMs };
+    }
+    order.actionableTimeMs = actionableMs;
+    order.localActionableAgeMs = Date.now() - actionableMs;
+    if (order.localActionableAgeMs > lagMs) {
+        return { ok: false, reason: "stale_actionable_signal", actionableMs: actionableMs, ageMs: order.localActionableAgeMs, lagMs: lagMs };
+    }
+    return { ok: true, actionableMs: actionableMs, ageMs: order.localActionableAgeMs, lagMs: lagMs };
+}
+
 function reportHeartbeat(payload) {
     if (Date.now() - lastAuditHeartbeat < 60000) return;
     lastAuditHeartbeat = Date.now();
@@ -112,6 +197,7 @@ function reportHeartbeat(payload) {
         version: SCRIPT_VERSION,
         autoTrade: tradeConfig.autoTrade,
         minConfidence: tradeConfig.minConfidence,
+        maxActionableLagMs: maxActionableLagMs(),
         signalOk: !!payload,
         strategies: {
             BTC_10min: summarizeSignal(payload && payload.BTC_10min),
@@ -441,6 +527,7 @@ function fetchConfig() {
             if (c.skipConflictSignals !== undefined) tradeConfig.skipConflictSignals = c.skipConflictSignals;
             if (c.queueOrderPolicy !== undefined) tradeConfig.queueOrderPolicy = c.queueOrderPolicy;
             if (c.preventOverlapOrders !== undefined) tradeConfig.preventOverlapOrders = !!c.preventOverlapOrders;
+            if (c.maxActionableLagMs !== undefined) tradeConfig.maxActionableLagMs = Number(c.maxActionableLagMs);
         }
     } catch (e) {}
 }
@@ -463,6 +550,7 @@ function getSignalPayload() {
                 if (c.skipConflictSignals !== undefined) tradeConfig.skipConflictSignals = c.skipConflictSignals;
                 if (c.queueOrderPolicy !== undefined) tradeConfig.queueOrderPolicy = c.queueOrderPolicy;
                 if (c.preventOverlapOrders !== undefined) tradeConfig.preventOverlapOrders = !!c.preventOverlapOrders;
+                if (c.maxActionableLagMs !== undefined) tradeConfig.maxActionableLagMs = Number(c.maxActionableLagMs);
                 delete data._config;
             }
             return data;
@@ -506,6 +594,7 @@ function buildTradeQueue(data) {
         var sig = data[d.id];
         if (!sig) continue;
         var amount = amountForOrder(d.id, sig, amounts[d.id]);
+        var exec = buildExecutionContext(sig);
         queue.push({
             strategyId: d.id,
             signal: sig.signal,
@@ -513,6 +602,13 @@ function buildTradeQueue(data) {
             rsi_value: sig.rsi_value,
             time: sig.time || "",
             actionableTime: sig.actionable_time || sig.candle_close_time || sig.time || "",
+            actionableTimeMs: exec.actionableTimeMs,
+            actionableAgeMs: exec.actionableAgeMs,
+            maxActionableLagMs: exec.maxActionableLagMs,
+            signalPrice: exec.signalPrice,
+            currentPrice: exec.currentPrice,
+            priceChangeBps: exec.priceChangeBps,
+            directionMoveBps: exec.directionMoveBps,
             amount: String(amount),
             duration: String(sig.duration || d.duration),
             bypassMinConfidence: !!sig.bypass_min_confidence_filter,
@@ -750,6 +846,20 @@ function placeTrade(dir, order) {
         tradeConfig.duration = prevDur;
         return false;
     }
+
+    var finalTiming = updateOrderTimingAge(order);
+    if (!finalTiming.ok) {
+        log(">>> ABORT: " + finalTiming.reason + " before click ageMs=" + finalTiming.ageMs);
+        reportTradeAudit("order_abort", order, {
+            direction: dir,
+            reason: finalTiming.reason + "_before_click",
+            ageMs: finalTiming.ageMs,
+            maxActionableLagMs: finalTiming.lagMs
+        });
+        tradeConfig.amount = prevAmt;
+        tradeConfig.duration = prevDur;
+        return false;
+    }
     
     // STEP 5: click direction
     log("step5: click " + dir);
@@ -959,16 +1069,20 @@ function main() {
                     order.sincePreviousDoneMs = previousDoneAt ? Date.now() - previousDoneAt : null;
                     order.sinceQueueBatchStartMs = Date.now() - queueBatchStart;
                     var conf = order.confidence || 0;
-                    var actionableMs = order.actionableTime ? new Date(order.actionableTime).getTime() : 0;
                     if (!order.bypassMinConfidence && Number(conf) < Number(tradeConfig.minConfidence || 0)) {
                         reportTradeAudit("signal_skipped", order, { reason: "min_confidence_filter", minConfidence: tradeConfig.minConfidence });
                         continue;
                     }
-                    if (actionableMs && Date.now() - actionableMs > SIGNAL_MAX_AGE_MS) {
-                        reportTradeAudit("signal_skipped", order, { reason: "stale", ageMs: Date.now() - actionableMs });
+                    var timing = updateOrderTimingAge(order);
+                    if (!timing.ok && timing.reason == "signal_time_parse_failed") {
+                        reportTradeAudit("signal_skipped", order, { reason: "signal_time_parse_failed", actionableTime: order.actionableTime });
                         continue;
                     }
-                    if (actionableMs && actionableMs > Date.now() + 30000) continue;
+                    if (!timing.ok) {
+                        reportTradeAudit("signal_skipped", order, { reason: timing.reason, ageMs: timing.ageMs, maxActionableLagMs: timing.lagMs });
+                        continue;
+                    }
+                    if (timing.actionableMs > Date.now() + 30000) continue;
                     var key = orderKey(order);
                     var lastKey = lastSignalKeyByStrategy[order.strategyId] || "";
                     var now = Date.now();
@@ -1032,4 +1146,3 @@ function main() {
 
 events.on("exit", function() { releaseLock(); log("Stopped"); });
 main();
-

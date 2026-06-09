@@ -93,8 +93,12 @@ const LIGHT_REPORT_SCRIPTS = [
   path.join(__dirname, "py", "analyze_signal_audit.py"),
   path.join(__dirname, "py", "analyze_live_backtest_gap.py"),
   path.join(__dirname, "py", "shadow_decision_report.py"),
+  path.join(__dirname, "py", "strategy_health_report.py"),
   path.join(__dirname, "py", "strategy_decision_report.py")
 ];
+const HEAVY_REPORT_SCRIPT_NAMES = new Set([
+  "analyze_live_backtest_gap.py"
+]);
 
 let signalService = {
   pid: null,
@@ -291,6 +295,95 @@ function signalTimeMs(sig) {
   return parseCsvTimeMs(sig.actionable_time || sig.candle_close_time || sig.time);
 }
 
+function configuredMaxActionableLagMs() {
+  const value = Number(tradeConfig && tradeConfig.maxActionableLagMs);
+  return Number.isFinite(value) && value > 0 ? value : 60 * 1000;
+}
+
+function roundNullable(value, digits = 4) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const mul = 10 ** digits;
+  return Math.round(n * mul) / mul;
+}
+
+function signalReferencePrice(sig) {
+  const timing = sig && sig.entry_timing;
+  const candidates = [
+    timing && timing.reference_price,
+    sig && sig.price,
+    timing && timing.current_price
+  ];
+  for (const value of candidates) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+function signalExecutionContext(sig) {
+  if (!sig || typeof sig !== "object" || sig.shadow) return null;
+  const actionableMs = signalTimeMs(sig);
+  const maxLagMs = configuredMaxActionableLagMs();
+  const now = Date.now();
+  const referencePrice = signalReferencePrice(sig);
+  const livePrice = Number(currentPrice);
+  const priceChangeBps = (
+    Number.isFinite(livePrice) && livePrice > 0 && Number.isFinite(referencePrice) && referencePrice > 0
+  ) ? ((livePrice - referencePrice) / referencePrice) * 10000 : null;
+  let directionMoveBps = null;
+  if (priceChangeBps !== null && (sig.signal === "UP" || sig.signal === "DOWN")) {
+    directionMoveBps = sig.signal === "UP" ? priceChangeBps : -priceChangeBps;
+  }
+  return {
+    server_time: isoTime(now),
+    current_price: Number.isFinite(livePrice) ? livePrice : null,
+    signal_price: referencePrice,
+    actionable_time_ms: actionableMs,
+    actionable_age_ms: actionableMs === null ? null : now - actionableMs,
+    max_actionable_lag_ms: maxLagMs,
+    price_change_bps: roundNullable(priceChangeBps, 4),
+    direction_move_bps: roundNullable(directionMoveBps, 4)
+  };
+}
+
+function blockSignalForExecution(sig, context, reason) {
+  return {
+    ...sig,
+    signal: null,
+    confidence: null,
+    execution_blocked: true,
+    execution_block_reason: reason,
+    blocked_signal: sig.blocked_signal || sig.signal || null,
+    blocked_confidence: sig.blocked_confidence || (sig.confidence == null ? null : sig.confidence),
+    execution_context: context
+  };
+}
+
+function applyExecutionFreshnessGate(signals) {
+  const out = { ...signals };
+  for (const [strategyId, sig] of Object.entries(signals || {})) {
+    if (strategyId.startsWith("_") || !sig || typeof sig !== "object" || sig.shadow) continue;
+    const context = signalExecutionContext(sig);
+    if (!context) continue;
+    const next = { ...sig, execution_context: context };
+    if (!sig.signal) {
+      out[strategyId] = next;
+      continue;
+    }
+    if (context.actionable_time_ms === null) {
+      out[strategyId] = blockSignalForExecution(next, context, "signal_time_parse_failed");
+      continue;
+    }
+    if (context.actionable_age_ms > context.max_actionable_lag_ms) {
+      out[strategyId] = blockSignalForExecution(next, context, "stale_actionable_signal");
+      continue;
+    }
+    out[strategyId] = next;
+  }
+  return out;
+}
+
 function dataHealthGate(signals) {
   const now = Date.now();
   const files = {};
@@ -433,21 +526,29 @@ function runDataUpdate(reason = "timer") {
 
 function refreshLightReports(reason = "timer") {
   if (reportRefresh.running) return;
+  const scripts = (
+    process.env.ENABLE_HEAVY_REPORTS === "1" || String(reason).startsWith("manual")
+  ) ? LIGHT_REPORT_SCRIPTS : LIGHT_REPORT_SCRIPTS.filter(script => !HEAVY_REPORT_SCRIPT_NAMES.has(path.basename(script)));
   reportRefresh.running = true;
   reportRefresh.lastStart = Date.now();
   reportRefresh.lastError = null;
   reportRefresh.runs += 1;
-  appendJsonl(TRADE_AUDIT_FILE, { serverTime: Date.now(), event: "report_refresh_start", reason });
+  appendJsonl(TRADE_AUDIT_FILE, {
+    serverTime: Date.now(),
+    event: "report_refresh_start",
+    reason,
+    scripts: scripts.map(script => path.basename(script))
+  });
   let idx = 0;
   const next = () => {
-    if (idx >= LIGHT_REPORT_SCRIPTS.length) {
+    if (idx >= scripts.length) {
       reportRefresh.running = false;
       reportRefresh.lastFinish = Date.now();
       reportRefresh.lastExitCode = 0;
       appendJsonl(TRADE_AUDIT_FILE, { serverTime: Date.now(), event: "report_refresh_done", reason });
       return;
     }
-    const script = LIGHT_REPORT_SCRIPTS[idx++];
+    const script = scripts[idx++];
     runScript(script, (code, signal, err) => {
       if (err || code !== 0) {
         reportRefresh.running = false;
@@ -525,7 +626,7 @@ function isoTime(ms) {
 
 function signalActionableMs(sig) {
   const t = sig && (sig.actionable_time || sig.candle_close_time || sig.time);
-  const ms = t ? Date.parse(t) : NaN;
+  const ms = t ? parseCsvTimeMs(t) : NaN;
   return Number.isFinite(ms) ? ms : 0;
 }
 
@@ -773,7 +874,8 @@ function applyDataHealthGate(signals, gate) {
 function buildSignalResponse() {
   const rawSignals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {};
   const timedSignals = applyEntryTiming(rawSignals);
-  const health = applyDataHealthGate(timedSignals, dataHealthGate(timedSignals));
+  const freshSignals = applyExecutionFreshnessGate(timedSignals);
+  const health = applyDataHealthGate(freshSignals, dataHealthGate(freshSignals));
   const safety = applyAutoTradeSafetyGate(health.signals);
   const signals = safety.signals;
   const strategyAmounts = {};
@@ -789,6 +891,11 @@ function buildSignalResponse() {
     _signalAmount: legacyAmount,
     _entryTimingEnabled: ENTRY_TIMING_ENABLED,
     _entryTimingPolicies: ENTRY_TIMING_POLICIES,
+    _execution: {
+      serverTime: isoTime(Date.now()),
+      currentPrice: Number.isFinite(Number(currentPrice)) ? Number(currentPrice) : null,
+      maxActionableLagMs: configuredMaxActionableLagMs()
+    },
     _dataHealthGate: health.gate,
     _autoTradeSafetyGate: safety.gate
   };
@@ -867,7 +974,8 @@ function autoScriptVersion() {
 function runtimeInfo() {
   const urls = localHttpUrls();
   const preferred = urls.find(x => x.address.startsWith("192.168.")) || urls[0] || null;
-  const base = preferred ? preferred.url : `http://127.0.0.1:${PORT}`;
+  const publicBase = String(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+  const base = publicBase || (preferred ? preferred.url : `http://127.0.0.1:${PORT}`);
   return {
     port: Number(PORT),
     urls,
@@ -1421,9 +1529,8 @@ function checkAutoTrade() {
       if (!sig.bypass_min_confidence_filter && Number(sig.confidence) < Number(tradeConfig.minConfidence || 0)) continue;
       if (tradeConfig.preventOverlapOrders && trades.some(t => t.status === "active" && t.source === "auto:" + strategyId)) continue;
 
-      // Check if signal is fresh (within last 2 minutes)
-      const sigTime = new Date(sig.actionable_time || sig.candle_close_time || sig.time).getTime();
-      if (Date.now() - sigTime > SIGNAL_EXPIRY_MS) continue;
+      const sigTime = signalActionableMs(sig);
+      if (!sigTime || Date.now() - sigTime > configuredMaxActionableLagMs()) continue;
 
       const last = lastSignals[strategyId];
       if (last && last.signal === sig.signal && last.time === sig.time) continue;
@@ -1524,7 +1631,8 @@ const DEFAULT_TRADE_CONFIG = {
   skipConflictSignals: false,
   queueOrderPolicy: "confidence_desc",
   preventOverlapOrders: true,
-  realTradingOverride: false
+  realTradingOverride: false,
+  maxActionableLagMs: 60000
 };
 
 let tradeConfig = (() => {
@@ -1601,6 +1709,12 @@ app.post("/api/config", express.json(), (req, res) => {
     tradeConfig.realTradingOverride = req.body.realTradingOverride === true || req.body.realTradingOverride === "true";
   }
   if (req.body.minConfidence !== undefined) tradeConfig.minConfidence = Number(req.body.minConfidence);
+  if (req.body.maxActionableLagMs !== undefined) {
+    const lag = Number(req.body.maxActionableLagMs);
+    if (Number.isFinite(lag) && lag >= 5000 && lag <= 10 * 60 * 1000) {
+      tradeConfig.maxActionableLagMs = Math.round(lag);
+    }
+  }
   if (req.body.tiersEnabled !== undefined) tradeConfig.tiersEnabled = !!req.body.tiersEnabled;
   if (req.body.skipConflictSignals !== undefined) tradeConfig.skipConflictSignals = !!req.body.skipConflictSignals;
   if (req.body.preventOverlapOrders !== undefined) tradeConfig.preventOverlapOrders = !!req.body.preventOverlapOrders;

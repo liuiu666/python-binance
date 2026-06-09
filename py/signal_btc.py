@@ -4,7 +4,6 @@ Outputs independent BTC_10min and BTC_30min signals for the tablet executor.
 """
 import json
 import math
-import msvcrt
 import os
 import pickle
 import atexit
@@ -13,8 +12,15 @@ import socket
 import sys
 import time
 import warnings
+try:
+    import msvcrt
+    fcntl = None
+except ImportError:
+    msvcrt = None
+    import fcntl
 
-OUT = "E:/codex/data"
+APP_DIR = os.environ.get("APP_DIR", "E:/codex")
+OUT = os.environ.get("DATA_DIR", os.path.join(APP_DIR, "data"))
 SIGNAL_FILE = os.path.join(OUT, "live_signals.json")
 CONFIG_FILE = os.path.join(OUT, "prod_config.json")
 SIGNAL_AUDIT_FILE = os.path.join(OUT, "signal_audit.jsonl")
@@ -441,7 +447,10 @@ def acquire_singleton_lock():
     f = open(LOCK_FILE, "a+", encoding="utf-8")
     try:
         f.seek(0)
-        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        if msvcrt is not None:
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         f.truncate()
         f.write(str(os.getpid()))
         f.flush()
@@ -474,8 +483,9 @@ FUNDING_MAX_AGE = pd.Timedelta(hours=12)
 LIVE_1M_MAX_AGE = pd.Timedelta(minutes=3)
 MAX_HISTORY_LIVE_GAP = pd.Timedelta(minutes=2)
 MAX_5M_LIVE_MERGE_GAP = pd.Timedelta(minutes=7)
+ENABLE_SIGNAL_SHADOWS = os.environ.get("ENABLE_SIGNAL_SHADOWS", "0") == "1"
 
-sys.path.insert(0, "E:/codex/py")
+sys.path.insert(0, os.path.join(APP_DIR, "py"))
 from backtest_enhanced import build_features, load_symbol
 from research_2m_10min_binary import (
     SYMBOL as RESEARCH_2M_SYMBOL,
@@ -1673,43 +1683,56 @@ strategies = [
 ]
 live_two_minute_strategies = [(item, TwoMinuteRegimeShadow(item)) for item in TWO_MINUTE_LIVE_CANDIDATES]
 shadow_strategies = []
-for shadow in SHADOW_CANDIDATES:
-    if not configs.get(shadow["base"], {}).get("enabled", True):
-        continue
-    base_cfg = dict(configs[shadow["base"]])
-    base_cfg.update({
-        "threshold": shadow["threshold"],
-        "rsi_lo": shadow["rsi_lo"],
-        "rsi_hi": shadow["rsi_hi"],
-        "agree_mode": shadow["agree_mode"],
-        "vol_min_rank": shadow["vol_min_rank"],
-        "fixed_amount": 5,
-        "countertrend_max_abs_trend6": shadow.get("countertrend_max_abs_trend6"),
-        "countertrend_max_strength": shadow.get("countertrend_max_strength"),
-        "bbp_cap": shadow.get("bbp_cap"),
-        "rsi_extreme_cap": shadow.get("rsi_extreme_cap"),
-        "confidence_max": shadow.get("confidence_max"),
-        "skip_hours_utc": sorted(set(base_cfg.get("skip_hours_utc", [])) | set(shadow.get("extra_skip_hours_utc", []))),
-        "enabled": True,
-    })
-    shadow_strategies.append((shadow, Strategy(shadow["id"], base_cfg)))
+if ENABLE_SIGNAL_SHADOWS:
+    for shadow in SHADOW_CANDIDATES:
+        if not configs.get(shadow["base"], {}).get("enabled", True):
+            continue
+        base_cfg = dict(configs[shadow["base"]])
+        base_cfg.update({
+            "threshold": shadow["threshold"],
+            "rsi_lo": shadow["rsi_lo"],
+            "rsi_hi": shadow["rsi_hi"],
+            "agree_mode": shadow["agree_mode"],
+            "vol_min_rank": shadow["vol_min_rank"],
+            "fixed_amount": 5,
+            "countertrend_max_abs_trend6": shadow.get("countertrend_max_abs_trend6"),
+            "countertrend_max_strength": shadow.get("countertrend_max_strength"),
+            "bbp_cap": shadow.get("bbp_cap"),
+            "rsi_extreme_cap": shadow.get("rsi_extreme_cap"),
+            "confidence_max": shadow.get("confidence_max"),
+            "skip_hours_utc": sorted(set(base_cfg.get("skip_hours_utc", [])) | set(shadow.get("extra_skip_hours_utc", []))),
+            "enabled": True,
+        })
+        shadow_strategies.append((shadow, Strategy(shadow["id"], base_cfg)))
 rule_shadow_strategies = []
-for shadow in RULE_SHADOW_CANDIDATES:
-    if not configs.get(shadow["base"], {}).get("enabled", True):
-        continue
-    base_cfg = dict(configs[shadow["base"]])
-    rule_shadow_strategies.append((shadow, RuleShadowStrategy(shadow, base_cfg)))
-stateful_shadow_overlays = [
-    (shadow, StatefulShadowOverlay(shadow))
-    for shadow in STATEFUL_SHADOW_CANDIDATES
-    if configs.get(shadow["base"], {}).get("enabled", True)
-]
-meta_gate_shadows = [
-    (shadow, MetaGateShadow(shadow))
-    for shadow in META_GATE_SHADOW_CANDIDATES
-    if configs.get(shadow["base"], {}).get("enabled", True)
-]
-two_minute_shadow_strategies = [(shadow, TwoMinuteRegimeShadow(shadow)) for shadow in TWO_MINUTE_SHADOW_CANDIDATES]
+if ENABLE_SIGNAL_SHADOWS:
+    for shadow in RULE_SHADOW_CANDIDATES:
+        if not configs.get(shadow["base"], {}).get("enabled", True):
+            continue
+        base_cfg = dict(configs[shadow["base"]])
+        rule_shadow_strategies.append((shadow, RuleShadowStrategy(shadow, base_cfg)))
+stateful_shadow_overlays = (
+    [
+        (shadow, StatefulShadowOverlay(shadow))
+        for shadow in STATEFUL_SHADOW_CANDIDATES
+        if configs.get(shadow["base"], {}).get("enabled", True)
+    ]
+    if ENABLE_SIGNAL_SHADOWS else []
+)
+meta_gate_shadows = (
+    [
+        (shadow, MetaGateShadow(shadow))
+        for shadow in META_GATE_SHADOW_CANDIDATES
+        if configs.get(shadow["base"], {}).get("enabled", True)
+    ]
+    if ENABLE_SIGNAL_SHADOWS else []
+)
+two_minute_shadow_strategies = (
+    [(shadow, TwoMinuteRegimeShadow(shadow)) for shadow in TWO_MINUTE_SHADOW_CANDIDATES]
+    if ENABLE_SIGNAL_SHADOWS else []
+)
+if not ENABLE_SIGNAL_SHADOWS:
+    print("[Signal] Shadow strategies disabled for lower CPU usage. Set ENABLE_SIGNAL_SHADOWS=1 to collect shadow samples.")
 last_audit_keys = load_audit_keys(SIGNAL_AUDIT_FILE)
 
 print("[Signal] Loading BTC history...")

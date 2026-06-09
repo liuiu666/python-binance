@@ -26,7 +26,8 @@ except Exception:
 
 warnings.filterwarnings("ignore")
 
-OUT = "E:/codex/data"
+APP_DIR = os.environ.get("APP_DIR", "E:/codex")
+OUT = os.environ.get("DATA_DIR", os.path.join(APP_DIR, "data"))
 CACHE_DIR = os.path.join(OUT, "cache")
 REPORT_FILE = os.path.join(OUT, "research_2m_10min_binary_report.json")
 SYMBOL = "btcusdt"

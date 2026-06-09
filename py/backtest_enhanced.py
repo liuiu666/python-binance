@@ -10,7 +10,8 @@ import pandas as pd, numpy as np, json, time, warnings, os
 warnings.filterwarnings("ignore")
 from xgboost import XGBClassifier
 
-OUT = "E:/codex/data"
+APP_DIR = os.environ.get("APP_DIR", "E:/codex")
+OUT = os.environ.get("DATA_DIR", os.path.join(APP_DIR, "data"))
 FUNDING_MAX_AGE = pd.Timedelta(hours=12)
 LS_RATIO_MAX_AGE = pd.Timedelta(minutes=30)
 TAKER_MAX_AGE = pd.Timedelta(minutes=30)

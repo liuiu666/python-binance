@@ -13,7 +13,8 @@ import sys
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, "E:/codex/py")
+APP_DIR = os.environ.get("APP_DIR", "E:/codex")
+sys.path.insert(0, os.path.join(APP_DIR, "py"))
 from research_2m_10min_binary import (
     OUT,
     SYMBOL,

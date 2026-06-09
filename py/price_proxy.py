@@ -1,16 +1,23 @@
 ﻿"""Price proxy: fetches BTC price via Python requests, writes to file every 2s"""
 import json
-import msvcrt
 import os
 import atexit
 import shutil
 import socket
 import sys
 import time
+try:
+    import msvcrt
+    fcntl = None
+except ImportError:
+    msvcrt = None
+    import fcntl
 
-PRICE_FILE = "E:/codex/data/current_price.json"
-LOCK_FILE = "E:/codex/data/price_proxy.lock"
-LOCK_DIR = "E:/codex/data/price_proxy.lockdir"
+APP_DIR = os.environ.get("APP_DIR", "E:/codex")
+OUT = os.environ.get("DATA_DIR", os.path.join(APP_DIR, "data"))
+PRICE_FILE = os.path.join(OUT, "current_price.json")
+LOCK_FILE = os.path.join(OUT, "price_proxy.lock")
+LOCK_DIR = os.path.join(OUT, "price_proxy.lockdir")
 LOCK_PORT = 39870
 BASE_URLS = [
     "https://data-api.binance.vision",
@@ -47,7 +54,10 @@ def acquire_singleton_lock():
     f = open(LOCK_FILE, "a+", encoding="utf-8")
     try:
         f.seek(0)
-        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        if msvcrt is not None:
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         f.truncate()
         f.write(str(os.getpid()))
         f.flush()

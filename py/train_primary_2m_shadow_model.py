@@ -6,8 +6,8 @@ live model can:
 - 1m BTC data is aggregated to 2m bars;
 - the same 2m feature/regime pipeline is used;
 - the final model is trained on the latest 12000 labeled 2m rows;
-- the tested regime-threshold + low-volatility UP gate policy is saved beside
-  the model for signal_btc.py to consume as a shadow strategy.
+- the tested regime-threshold + transition-only low-volatility UP gate policy
+  is saved beside the model for signal_btc.py to consume as a shadow strategy.
 """
 import json
 import os
@@ -30,7 +30,7 @@ META_FILE = os.path.join(OUT, f"prod_{MODEL_ID}_meta.json")
 
 
 POLICY = {
-    "name": "regth_u65_d65_t62_r68_x65_flow_gate_raise_lowvol_up_a35_b45_m3",
+    "name": "regth_u65_d65_t62_r68_x65_flow_gate_raise_lowvol_transition_up_a35_b45_m3",
     "regime_thresholds": {
         "uptrend": 0.65,
         "downtrend": 0.65,
@@ -44,6 +44,7 @@ POLICY = {
         "min_margin": 0.03,
         "atr_max": 0.35,
         "bbw_max": 0.45,
+        "groups": ["transition"],
         "directions": ["UP"],
     },
     "interval_min": 10,
@@ -51,12 +52,12 @@ POLICY = {
     "horizon_bars": 5,
     "fixed_amount": 5,
     "validation": {
-        "full_oos_wr": 59.92,
-        "full_oos_trades": 1724,
-        "full_oos_pnl_5u": 935.25,
-        "walk_forward_wr": 59.50,
-        "walk_forward_trades": 1237,
-        "walk_forward_pnl_5u": 623.0,
+        "full_oos_wr": 59.60,
+        "full_oos_trades": 1792,
+        "full_oos_pnl_5u": 919.0,
+        "walk_forward_wr": 60.52,
+        "walk_forward_trades": 1241,
+        "walk_forward_pnl_5u": 741.75,
         "max_loss": 6,
         "source_report": "E:/codex/data/bad_environment_gates_2m_report.json",
     },
