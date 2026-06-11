@@ -31,7 +31,7 @@ test("api auth is optional when no token is configured", () => {
   const auth = createApiAuth({});
   let called = false;
   auth.middleware(req(), res(), () => { called = true; });
-  assert.equal(auth.enabled, false);
+  assert.equal(auth.publicInfo().enabled, false);
   assert.equal(called, true);
 });
 

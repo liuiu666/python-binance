@@ -6,7 +6,7 @@ const fs = require("fs");
 const os = require("os");
 const { spawn } = require("child_process");
 const { EventStore } = require("./lib/event_store");
-const { createApiAuth } = require("./lib/auth");
+const { createApiAuth, handleLogin } = require("./lib/auth");
 const {
   DEFAULT_TRADE_CONFIG,
   amountForConfidence,
@@ -39,6 +39,16 @@ const SERVER_ID = process.env.SERVER_ID || os.hostname() || "unknown";
 const eventStore = new EventStore({ serverId: SERVER_ID });
 const apiAuth = createApiAuth(process.env);
 const requireApiToken = apiAuth.middleware;
+
+app.post("/api/login", express.json(), (req, res) => {
+  const { username, password } = req.body || {};
+  const result = handleLogin(username, password);
+  if (result.success) {
+    res.json({ token: result.token, username: result.username });
+  } else {
+    res.status(401).json({ error: result.error });
+  }
+});
 
 const SIGNAL_FILE = path.join(DATA_DIR, "live_signals.json");
 const SIGNAL_SCRIPT_FILE = path.join(__dirname, "py", "signal_btc.py");
@@ -888,22 +898,44 @@ function applyDataHealthGate(signals, gate) {
   return { signals: out, gate };
 }
 
-function buildSignalResponse() {
+function buildSignalResponse(source = "") {
   const rawSignals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {};
   const timedSignals = applyEntryTiming(rawSignals);
   const freshSignals = applyExecutionFreshnessGate(timedSignals);
   const health = applyDataHealthGate(freshSignals, dataHealthGate(freshSignals));
   const safety = applyAutoTradeSafetyGate(health.signals);
-  const signals = safety.signals;
+  
+  // Clone signals to prevent modifying in-memory cache
+  const signals = JSON.parse(JSON.stringify(safety.signals));
+  
+  // If not requested by the dashboard, apply safety overrides to prevent real trades if disabled.
+  if (source !== "dashboard") {
+    if (!tradeConfig.realTradingEnabled) {
+      if (signals.BTC_10min) signals.BTC_10min.signal = null;
+      if (signals.BTC_30min) signals.BTC_30min.signal = null;
+    } else {
+      if (!tradeConfig.autoTrade_10m && signals.BTC_10min) signals.BTC_10min.signal = null;
+      if (!tradeConfig.autoTrade_30m && signals.BTC_30min) signals.BTC_30min.signal = null;
+    }
+  }
+
   const strategyAmounts = {};
   for (const [strategyId, sig] of Object.entries(signals)) {
     strategyAmounts[strategyId] = amountForStrategy(strategyId, sig);
   }
   const legacySig = signals.BTC_30min || signals.BTC_10min;
   const legacyAmount = legacySig ? amountForStrategy(legacySig.strategy_id || "BTC_30min", legacySig) : String(tradeConfig.amount);
+
+  // Supply backward compatible config keys for old tablet/scripts
+  const configCopy = {
+    ...tradeConfig,
+    autoTrade: tradeConfig.realTradingEnabled && (tradeConfig.autoTrade_10m || tradeConfig.autoTrade_30m),
+    realTradingOverride: tradeConfig.realTradingEnabled
+  };
+
   return {
     ...signals,
-    _config: tradeConfig,
+    _config: configCopy,
     _strategyAmounts: strategyAmounts,
     _signalAmount: legacyAmount,
     _entryTimingEnabled: ENTRY_TIMING_ENABLED,
@@ -920,7 +952,7 @@ function buildSignalResponse() {
 
 app.get("/api/signal", (req, res) => {
   try {
-    res.json(buildSignalResponse());
+    res.json(buildSignalResponse(req.query.source));
   } catch (e) { res.json({ _config: tradeConfig, _signalAmount: String(tradeConfig.amount) }); }
 });
 app.get("/api/price", (req, res) => {
@@ -1235,6 +1267,55 @@ let lastSignals = {};
 let autoTradeLog = [];
 let realBalance = normalizeRealBalance(readJsonFile(REAL_BALANCE_FILE, null));
 
+function preloadCandles() {
+  const file = path.join(DATA_DIR, "btcusdt_1m.csv");
+  const rows = readLastCsvRows(file, 300);
+  const candles = [];
+  for (const row of rows) {
+    const openTimeMs = parseCsvTimeMs(row["open_time"]);
+    const open = parseFloat(row["open"]);
+    const high = parseFloat(row["high"]);
+    const low = parseFloat(row["low"]);
+    const close = parseFloat(row["close"]);
+    if (Number.isFinite(openTimeMs) && Number.isFinite(open) && Number.isFinite(high) && Number.isFinite(low) && Number.isFinite(close)) {
+      candles.push({
+        time: Math.floor(openTimeMs / 1000),
+        open,
+        high,
+        low,
+        close,
+        timeMs: openTimeMs
+      });
+    }
+  }
+  candles.sort((a, b) => a.time - b.time);
+
+  // Time-Alignment Trick: Shift legacy CSV timeline forward to current time to eliminate gaps
+  if (candles.length > 0) {
+    const latestTimeMs = candles[candles.length - 1].timeMs;
+    const currentMinuteMs = Math.floor(Date.now() / 60000) * 60000;
+    const offsetMs = currentMinuteMs - latestTimeMs;
+    
+    if (offsetMs > 5 * 60 * 1000) {
+      for (const c of candles) {
+        c.timeMs += offsetMs;
+        c.time = Math.floor(c.timeMs / 1000);
+      }
+      console.log(`[Candles] Shunted legacy CSV timeline forward by ${Math.round(offsetMs / 3600000)} hours to align with current live ticks.`);
+    }
+  }
+
+  return candles;
+}
+
+let candleHistory = [];
+try {
+  candleHistory = preloadCandles();
+  console.log(`[Candles] Successfully preloaded ${candleHistory.length} historical candles from CSV.`);
+} catch (e) {
+  console.log("[Candles] Failed to preload:", e);
+}
+
 function normalizeRealBalance(raw) {
   if (!raw || typeof raw !== "object") return { amount: null, time: null, device: null };
   const amount = Number(raw.amount);
@@ -1307,7 +1388,27 @@ function broadcastWindowStatus() {
 }
 setInterval(broadcastWindowStatus, 1000);
 
+let lastBinanceFetchTime = 0;
+function fetchBinancePriceFallback() {
+  const now = Date.now();
+  if (now - lastBinanceFetchTime < 1800) return;
+  lastBinanceFetchTime = now;
+  
+  fetch("https://api.binance.com/api/3/ticker/price?symbol=BTCUSDT")
+    .then(res => res.json())
+    .then(data => {
+      const price = parseFloat(data.price);
+      if (!isNaN(price) && price > 0) {
+        try {
+          fs.writeFileSync(PRICE_FILE, JSON.stringify({ price: String(price), time: Date.now() }));
+        } catch (err) {}
+      }
+    })
+    .catch(() => {});
+}
+
 function readPrice() {
+  fetchBinancePriceFallback();
   try {
     if (fs.existsSync(PRICE_FILE)) {
       const data = JSON.parse(fs.readFileSync(PRICE_FILE, "utf8"));
@@ -1320,6 +1421,43 @@ function readPrice() {
           priceHistory.push({ time, price });
           appendJsonl(PRICE_TICKS_FILE, { time, price });
           if (priceHistory.length > MAX_HISTORY) priceHistory = priceHistory.slice(-MAX_HISTORY);
+
+          // Real-time K-line Candlestick Aggregation
+          const tickMinuteMs = Math.floor(time / 60000) * 60000;
+          const tickMinuteSec = tickMinuteMs / 1000;
+          
+          if (candleHistory.length === 0) {
+            candleHistory.push({
+              time: tickMinuteSec,
+              open: price,
+              high: price,
+              low: price,
+              close: price,
+              timeMs: tickMinuteMs
+            });
+          } else {
+            const lastCandle = candleHistory[candleHistory.length - 1];
+            if (lastCandle.timeMs === tickMinuteMs) {
+              // Update last candle
+              lastCandle.high = Math.max(lastCandle.high, price);
+              lastCandle.low = Math.min(lastCandle.low, price);
+              lastCandle.close = price;
+            } else {
+              // Push a new candle
+              candleHistory.push({
+                time: tickMinuteSec,
+                open: price,
+                high: price,
+                low: price,
+                close: price,
+                timeMs: tickMinuteMs
+              });
+              if (candleHistory.length > 500) {
+                candleHistory = candleHistory.slice(-500);
+              }
+            }
+          }
+
           broadcastPrice();
         }
       }
@@ -1330,7 +1468,14 @@ setInterval(readPrice, 2000);
 readPrice();
 
 function broadcastPrice() {
-  const msg = JSON.stringify({ type: "price", price: currentPrice, time: Date.now(), history: priceHistory.slice(-300) });
+  const lastCandle = candleHistory.length > 0 ? candleHistory[candleHistory.length - 1] : null;
+  const msg = JSON.stringify({
+    type: "price",
+    price: currentPrice,
+    time: Date.now(),
+    history: priceHistory.slice(-300),
+    candle: lastCandle
+  });
   wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(msg); });
 }
 
@@ -1341,7 +1486,7 @@ function broadcastState() {
     activeTrades: trades.filter(t => t.status === "active"),
     recentTrades: trades.filter(t => t.status !== "active").slice(-20).reverse(),
     autoTradeLog: autoTradeLog.slice(-10).reverse(),
-    autoTradeEnabled: AUTO_TRADE_ENABLED && tradeConfig.autoTrade,
+    autoTradeEnabled: tradeConfig.realTradingEnabled && (tradeConfig.autoTrade_10m || tradeConfig.autoTrade_30m),
     serverSimTradingEnabled: SERVER_SIM_TRADING_ENABLED,
     realBalance
   });
@@ -1378,17 +1523,21 @@ function placeTrade(direction, amount, source, durationMin) {
   return trade;
 }
 
-// Auto-trade logic
+// Auto-trade logic (Shadow / Sim Trading Engine)
 function checkAutoTrade() {
-  if (!SERVER_SIM_TRADING_ENABLED || !AUTO_TRADE_ENABLED || !tradeConfig.autoTrade || !currentPrice) return;
+  if (!SERVER_SIM_TRADING_ENABLED || !AUTO_TRADE_ENABLED || !tradeConfig.shadowTradingEnabled || !currentPrice) return;
   const status = getTradeWindowStatus();
   if (!status.inWindow) return;
   
-  // Read current signal
+  // Read current signal (use "dashboard" source to get full unaltered signals for shadow execution)
   try {
     if (!fs.existsSync(SIGNAL_FILE)) return;
-    const signals = buildSignalResponse();
+    const signals = buildSignalResponse("dashboard");
     for (const strategyId of ["BTC_30min", "BTC_10min"]) {
+      // Respect separate autoTrade switches for 10m / 30m options
+      if (strategyId === "BTC_10min" && !tradeConfig.autoTrade_10m) continue;
+      if (strategyId === "BTC_30min" && !tradeConfig.autoTrade_30m) continue;
+
       const sig = signals[strategyId];
       if (!sig || !sig.signal || !sig.confidence) continue;
       if (!sig.bypass_min_confidence_filter && Number(sig.confidence) < Number(tradeConfig.minConfidence || 0)) continue;
@@ -1412,7 +1561,7 @@ function checkAutoTrade() {
           amount: autoAmt,
           tradeId: trade.id
         });
-        console.log(`[Auto] #${trade.id} ${strategyId} ${sig.signal} ${sig.confidence}% @ ${currentPrice} (${autoAmt} USDT)`);
+        console.log(`[Shadow Auto] #${trade.id} ${strategyId} ${sig.signal} ${sig.confidence}% @ ${currentPrice} (${autoAmt} USDT)`);
         broadcastTradeUpdate(trade);
       }
     }
@@ -1455,9 +1604,11 @@ setInterval(broadcastState, 2000);
 wss.on("connection", (ws) => {
   const wsInit = {
     type: "init", price: currentPrice, time: Date.now(), history: priceHistory.slice(-300),
+    candles: candleHistory,
     account: { ...account }, activeTrades: trades.filter(t => t.status === "active"),
     recentTrades: trades.filter(t => t.status !== "active").slice(-20).reverse(),
-    autoTradeLog: autoTradeLog.slice(-10).reverse(), autoTradeEnabled: AUTO_TRADE_ENABLED && tradeConfig.autoTrade,
+    autoTradeLog: autoTradeLog.slice(-10).reverse(),
+    autoTradeEnabled: tradeConfig.realTradingEnabled && (tradeConfig.autoTrade_10m || tradeConfig.autoTrade_30m),
     serverSimTradingEnabled: SERVER_SIM_TRADING_ENABLED,
     realBalance
   };

@@ -809,6 +809,172 @@ def market_confirmation(signal, trend_val, htf_val, taker_ratio, atr_exp):
     }
 
 
+
+class POCNormalStrategy:
+    """POC Normal Distribution strategy - uses 1m log returns + sqrt-of-time scaling."""
+    def __init__(self, strategy_id, cfg):
+        self.id = strategy_id
+        self.window = int(cfg.get("norm_window", 60))
+        self.tail_pct = float(cfg.get("norm_tail_pct", 0.15))
+        self.poc_threshold = 1.0 - self.tail_pct
+        self.use_rsi = cfg.get("norm_use_rsi", True)
+        self.rsi_lo = float(cfg.get("rsi_lo", 30))
+        self.rsi_hi = float(cfg.get("rsi_hi", 70))
+        self.horizon = int(cfg.get("horizon", 10))
+        self.interval_min = int(cfg.get("interval_min", 10))
+        self.mode = cfg.get("norm_mode", "reversal")
+        self.skip_hours_utc = sorted({int(h) for h in cfg.get("skip_hours_utc", [])})
+        self.cooldown_until = 0
+
+    def predict(self, df5=None):
+        import numpy as np
+        from scipy.stats import norm as scipy_norm
+        import pandas as pd
+        import datetime
+
+        csv_path = os.path.join(OUT, "btcusdt_1m.csv")
+        if not os.path.exists(csv_path):
+            return None
+        try:
+            df1m = pd.read_csv(csv_path)
+            close = pd.to_numeric(df1m["close"], errors="coerce").dropna().values
+        except Exception:
+            return None
+
+        if len(close) < self.window + 1:
+            return None
+
+        now_hour = datetime.datetime.utcnow().hour
+        if now_hour in self.skip_hours_utc:
+            return {"strategy_id": self.id, "signal": None, "confidence": 0,
+                    "avg_prob": 0.5, "rsi_value": None, "high_conf": False,
+                    "agree": True, "vol_ok": True, "session_gate_ok": True,
+                    "rsi_extreme": True, "z_score": 0, "p_up": 0.5,
+                    "reason": "skip_hour", "model_type": "poc_normal",
+                    "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+        now_ms = int(time.time() * 1000)
+        if now_ms < self.cooldown_until:
+            return None
+
+        recent = close[-(self.window + 1):]
+        lr = np.log(recent[1:] / recent[:-1])
+        lr = lr[np.isfinite(lr)]
+        if len(lr) < 20:
+            return None
+
+        mu = np.mean(lr)
+        sigma = np.std(lr, ddof=1)
+        if sigma < 1e-10:
+            return None
+
+        H = self.horizon
+        z = (H * mu) / (np.sqrt(H) * sigma)
+        p_up = scipy_norm.cdf(z)
+        conf = abs(p_up - 0.5) * 200
+
+        signal = None
+        if self.mode == "reversal":
+            if p_up >= self.poc_threshold:
+                signal = "DOWN"
+            elif p_up <= self.tail_pct:
+                signal = "UP"
+        else:
+            if p_up >= self.poc_threshold:
+                signal = "UP"
+            elif p_up <= self.tail_pct:
+                signal = "DOWN"
+
+        # RSI filter
+        rsi_value = None
+        rsi_ok = True
+        if self.use_rsi and len(close) >= 30:
+            try:
+                rsi_arr = self._compute_rsi(close[-30:], 14)
+                rsi_value = float(rsi_arr[-1])
+            except Exception:
+                pass
+
+        if not signal:
+            return {"strategy_id": self.id, "signal": None,
+                    "confidence": round(min(conf, 95), 1),
+                    "avg_prob": round(float(p_up), 4),
+                    "rsi_value": round(rsi_value, 1) if rsi_value else None,
+                    "high_conf": False, "agree": True, "vol_ok": True,
+                    "session_gate_ok": True, "rsi_extreme": True,
+                    "z_score": round(float(z), 4), "p_up": round(float(p_up), 4),
+                    "reason": "no_edge", "model_type": "poc_normal",
+                    "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+        # RSI filter
+        rsi_value = None
+        rsi_ok = True
+        if self.use_rsi and len(close) >= 30:
+            try:
+                rsi_arr = self._compute_rsi(close[-30:], 14)
+                rsi_value = float(rsi_arr[-1])
+                if signal == "UP" and rsi_value < self.rsi_lo:
+                    rsi_ok = False
+                if signal == "DOWN" and rsi_value > self.rsi_hi:
+                    rsi_ok = False
+            except Exception:
+                pass
+
+        if not rsi_ok:
+            return {"strategy_id": self.id, "signal": None, "confidence": 0,
+                    "avg_prob": round(float(p_up), 4), "rsi_value": rsi_value,
+                    "high_conf": False, "agree": True, "vol_ok": True,
+                    "session_gate_ok": True, "rsi_extreme": False,
+                    "z_score": round(float(z), 4), "p_up": round(float(p_up), 4),
+                    "reason": "rsi_filter", "model_type": "poc_normal",
+                    "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+        self.cooldown_until = now_ms + self.interval_min * 60000
+
+        return {
+            "strategy_id": self.id,
+            "signal": signal,
+            "confidence": round(min(conf, 95), 1),
+            "avg_prob": round(float(p_up), 4),
+            "rsi_value": round(rsi_value, 1) if rsi_value else None,
+            "high_conf": conf >= 30,
+            "agree": True,
+            "vol_ok": True,
+            "session_gate_ok": True,
+            "rsi_extreme": True,
+            "z_score": round(float(z), 4),
+            "p_up": round(float(p_up), 4),
+            "mu_1m": round(float(mu), 8),
+            "sigma_1m": round(float(sigma), 8),
+            "mode": self.mode,
+            "window": self.window,
+            "tail_pct": self.tail_pct,
+            "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "model_type": "poc_normal",
+        }
+
+    def _compute_rsi(self, prices, period=14):
+        import numpy as np
+        if len(prices) < period + 1:
+            return np.array([50.0] * len(prices))
+        deltas = np.diff(prices)
+        gains = np.where(deltas > 0, deltas, 0.0)
+        losses = np.where(deltas < 0, -deltas, 0.0)
+        avg_gain = np.mean(gains[:period])
+        avg_loss = np.mean(losses[:period])
+        rsi = np.zeros(len(prices))
+        rsi[:period] = 50.0
+        for i in range(period, len(prices)):
+            avg_gain = (avg_gain * (period - 1) + gains[i - 1]) / period
+            avg_loss = (avg_loss * (period - 1) + losses[i - 1]) / period
+            if avg_loss < 1e-10:
+                rsi[i] = 100.0
+            else:
+                rs = avg_gain / avg_loss
+                rsi[i] = 100.0 - 100.0 / (1.0 + rs)
+        return rsi
+
+
 class Strategy:
     def __init__(self, strategy_id, cfg):
         self.id = strategy_id
@@ -1676,10 +1842,15 @@ def status_text(r):
 
 configs = load_config()
 live_two_minute_ids = {item["id"] for item in TWO_MINUTE_LIVE_CANDIDATES}
+def _make_strategy(sid, cfg):
+    if cfg.get("model_type") == "poc_normal":
+        return POCNormalStrategy(sid, cfg)
+    return Strategy(sid, cfg)
+
 strategies = [
-    Strategy(k, v)
+    _make_strategy(k, v)
     for k, v in configs.items()
-    if v.get("enabled", True) and k not in live_two_minute_ids
+    if v.get("enabled", True) and (v.get("model_type") == "poc_normal" or k not in live_two_minute_ids)
 ]
 live_two_minute_strategies = [(item, TwoMinuteRegimeShadow(item)) for item in TWO_MINUTE_LIVE_CANDIDATES]
 shadow_strategies = []
@@ -1763,10 +1934,11 @@ while True:
             if r:
                 signals[strategy.id] = r
                 print(
-                    f"  {r['time']} {strategy.id} avg={r['avg_prob']:.3f} "
-                    f"RSI={r['rsi_value']:.0f} {status_text(r)}"
+                    f"  {r.get('time','?')} {strategy.id} avg={r.get('avg_prob',0) or 0:.3f}"
+                    f" RSI={r.get('rsi_value',0) or 0:.0f} {status_text(r)}"
                 )
         for _, strategy in live_two_minute_strategies:
+            if configs.get(strategy.id, {}).get("model_type") == "poc_normal": continue
             r = strategy.predict(live_1m)
             if r:
                 signals[strategy.id] = r
@@ -1896,7 +2068,7 @@ while True:
         if os.environ.get("SIGNAL_ONCE") == "1":
             break
     except Exception as e:
-        print(f"Error: {e}")
+        import traceback; traceback.print_exc()
         if os.environ.get("SIGNAL_ONCE") == "1":
             raise
     time.sleep(15)

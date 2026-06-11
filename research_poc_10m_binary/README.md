@@ -66,8 +66,8 @@
 
 ## 4. 本地运行与验证
 
-在 `research_opc_10m_binary` 目录下运行：
+在 `research_poc_10m_binary` 目录下运行：
 ```powershell
-python research_opc_normal.py
+python research_poc_normal.py
 ```
 这将在控制台为您呈现修正后的两周期最强盈利参数大比对，并将精细的回测明细保存至 `poc_research_report.json`。

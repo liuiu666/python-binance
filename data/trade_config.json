@@ -1,7 +1,10 @@
 {
   "amount": "5",
   "duration": "30",
-  "autoTrade": true,
+  "autoTrade_10m": true,
+  "autoTrade_30m": false,
+  "realTradingEnabled": true,
+  "shadowTradingEnabled": true,
   "minConfidence": 35,
   "tiersEnabled": true,
   "tiers": [
@@ -21,6 +24,7 @@
   "skipConflictSignals": false,
   "queueOrderPolicy": "confidence_desc",
   "preventOverlapOrders": true,
-  "realTradingOverride": true,
-  "maxActionableLagMs": 60000
+  "maxActionableLagMs": 60000,
+  "autoTrade": true,
+  "realTradingOverride": true
 }

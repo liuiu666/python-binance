@@ -33,14 +33,16 @@ test("auto trade patch records blocked and forced transitions", () => {
   const blocked = applyTradeConfigPatch(DEFAULT_TRADE_CONFIG, { autoTrade: true }, {
     autoTradeSafetyGate: () => ({ blocked: true, verdict: "missing_shadow_decision" })
   });
-  assert.equal(blocked.tradeConfig.autoTrade, false);
+  assert.equal(blocked.tradeConfig.autoTrade_10m, false);
+  assert.equal(blocked.tradeConfig.autoTrade_30m, false);
   assert.equal(blocked.auditEvents[0].event, "auto_trade_safety_block");
 
   const forced = applyTradeConfigPatch(DEFAULT_TRADE_CONFIG, { autoTrade: true, forceAutoTrade: true }, {
     autoTradeSafetyGate: () => ({ blocked: true, verdict: "missing_shadow_decision" })
   });
-  assert.equal(forced.tradeConfig.autoTrade, true);
-  assert.equal(forced.tradeConfig.realTradingOverride, true);
+  assert.equal(forced.tradeConfig.autoTrade_10m, true);
+  assert.equal(forced.tradeConfig.autoTrade_30m, true);
+  assert.equal(forced.tradeConfig.realTradingEnabled, true);
   assert.equal(forced.auditEvents[0].event, "auto_trade_force_enabled");
 });
 

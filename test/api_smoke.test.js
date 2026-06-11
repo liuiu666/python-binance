@@ -139,7 +139,7 @@ test("server write APIs require token when configured", async () => {
       method: "POST",
       body: { amount: "9" }
     });
-    assert.equal(denied.status, 401);
+      assert.equal(denied.status, 401);
 
     const allowed = await requestJson(baseUrl, "/api/config", {
       method: "POST",

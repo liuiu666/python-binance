@@ -11,25 +11,28 @@ function tempDir() {
 
 test("event store normalizes trade audit events", () => {
   const dir = tempDir();
+  let store;
   try {
     const file = path.join(dir, "trade_audit.jsonl");
-    const store = new EventStore({ serverId: "server-a" });
+    store = new EventStore({ serverId: "server-a", dataDir: dir });
     const row = store.appendJsonl(file, { event: "order_done", clientTime: 1710000000000 }, { normalize: true });
     assert.equal(row.serverId, "server-a");
-    assert.equal(row.eventStoreVersion, 1);
+    assert.equal(row.eventStoreVersion, 2);
     assert.ok(row.eventId);
     assert.ok(row.receivedAt);
     assert.equal(store.readJsonl(file).length, 1);
   } finally {
+    if (store) store.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
 test("event store import dedupes rows without original serverTime", () => {
   const dir = tempDir();
+  let store;
   try {
     const file = path.join(dir, "trade_audit.jsonl");
-    const store = new EventStore({ serverId: "server-b" });
+    store = new EventStore({ serverId: "server-b", dataDir: dir });
     const rows = [
       { event: "order_done", clientTime: 1710000000000, device: "tablet", direction: "DOWN", amount: 5 },
       { event: "order_done", clientTime: 1710000001000, device: "tablet", direction: "UP", amount: 5 }
@@ -41,6 +44,7 @@ test("event store import dedupes rows without original serverTime", () => {
     assert.equal(second.imported, 0);
     assert.equal(second.skipped, 2);
   } finally {
+    if (store) store.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
