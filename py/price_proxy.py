@@ -13,7 +13,7 @@ except ImportError:
     msvcrt = None
     import fcntl
 
-APP_DIR = os.environ.get("APP_DIR", "E:/codex")
+APP_DIR = os.environ.get("APP_DIR") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.environ.get("DATA_DIR", os.path.join(APP_DIR, "data"))
 PRICE_FILE = os.path.join(OUT, "current_price.json")
 LOCK_FILE = os.path.join(OUT, "price_proxy.lock")

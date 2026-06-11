@@ -17,19 +17,33 @@ import {
   ageText,
   amountForSignal,
   activeSignalFromPayload,
-  useInterval,
-  toTierList
+  strategyName,
+  useInterval
 } from "./utils";
 
 import StrategyCard from "./components/StrategyCard";
-import ReportStrip from "./components/ReportStrip";
 import SignalBanner from "./components/SignalBanner";
-import GaugePanel from "./components/GaugePanel";
 import ConfigPanel from "./components/ConfigPanel";
 import ManualPanel from "./components/ManualPanel";
 import OpsPanel from "./components/OpsPanel";
 import LoginGate from "./components/LoginGate";
 import TradeHistory from "./components/TradeHistory";
+
+const chartTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  hour12: false,
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit"
+});
+
+function formatChartTime(time) {
+  const seconds = typeof time === "number" ? time : Number(time?.timestamp || time);
+  if (!Number.isFinite(seconds)) return "";
+  return chartTimeFormatter.format(new Date(seconds * 1000));
+}
 
 function Metric({ label, value, unit, tone }) {
   return (
@@ -62,7 +76,6 @@ export default function App() {
   const [priceHistory, setPriceHistory] = useState([]);
   const [candles, setCandles] = useState([]);
   const [signalPayload, setSignalPayload] = useState(null);
-  const [reports, setReports] = useState(null);
   const [runtime, setRuntime] = useState(null);
   const [tablet, setTablet] = useState(null);
   const [tradeHistory, setTradeHistory] = useState(null);
@@ -83,8 +96,10 @@ export default function App() {
     return amountForSignal(activeSignal.strategy_id, activeSignal, signalPayload, configDraft);
   }, [activeSignal, configDraft, signalPayload]);
 
-  const signal10Amount = useMemo(() => amountForSignal("BTC_10min", signalPayload?.BTC_10min, signalPayload, configDraft), [configDraft, signalPayload]);
-  const signal30Amount = useMemo(() => amountForSignal("BTC_30min", signalPayload?.BTC_30min, signalPayload, configDraft), [configDraft, signalPayload]);
+  const safeAmount = useMemo(() => amountForSignal("BTC_10min_SAFE", signalPayload?.BTC_10min_SAFE, signalPayload, configDraft), [configDraft, signalPayload]);
+  const takerAmount = useMemo(() => amountForSignal("BTC_10min_TAKER", signalPayload?.BTC_10min_TAKER, signalPayload, configDraft), [configDraft, signalPayload]);
+  const safeSignal = signalPayload?.BTC_10min_SAFE || null;
+  const takerSignal = signalPayload?.BTC_10min_TAKER || null;
 
   const priceChange = useMemo(() => {
     if (!currentPrice || !firstPrice) return null;
@@ -119,10 +134,6 @@ export default function App() {
       .catch(() => {});
   }, [apiFetch]);
 
-  const loadReports = useCallback(() => {
-    apiFetch("/api/reports").then(res => res.json()).then(setReports).catch(() => {});
-  }, [apiFetch]);
-
   const loadRuntime = useCallback(() => {
     apiFetch("/api/runtime").then(res => res.json()).then(setRuntime).catch(() => {});
   }, [apiFetch]);
@@ -140,7 +151,11 @@ export default function App() {
     apiFetch("/api/config")
       .then(res => res.json())
       .then(config => {
-        setConfigDraft({ ...DEFAULT_CONFIG, ...config, tiers: toTierList(config.tiers?.length ? config.tiers : DEFAULT_CONFIG.tiers) });
+        setConfigDraft({
+          ...DEFAULT_CONFIG,
+          ...config,
+          strategyAmounts: { ...DEFAULT_CONFIG.strategyAmounts, ...(config.strategyAmounts || {}) }
+        });
         dirtyRef.current = false;
         setConfigDirty(false);
       })
@@ -170,29 +185,7 @@ export default function App() {
   const toggleDraft = useCallback(key => {
     dirtyRef.current = true;
     setConfigDirty(true);
-    setConfigDraft(old => ({ ...old, [key]: key === "preventOverlapOrders" ? old.preventOverlapOrders === false : !old[key] }));
-  }, []);
-
-  const handleTierChange = useCallback((index, patch) => {
-    dirtyRef.current = true;
-    setConfigDirty(true);
-    setConfigDraft(old => {
-      const tiers = toTierList(old.tiers);
-      tiers[index] = { ...tiers[index], ...patch };
-      return { ...old, tiers: toTierList(tiers) };
-    });
-  }, []);
-
-  const handleAddTier = useCallback(() => {
-    dirtyRef.current = true;
-    setConfigDirty(true);
-    setConfigDraft(old => ({ ...old, tiers: toTierList([...(old.tiers || []), { min: 50, amount: Number(old.amount) || 5 }]) }));
-  }, []);
-
-  const handleRemoveTier = useCallback(index => {
-    dirtyRef.current = true;
-    setConfigDirty(true);
-    setConfigDraft(old => ({ ...old, tiers: toTierList(old.tiers).filter((_, i) => i !== index) }));
+    setConfigDraft(old => ({ ...old, [key]: !old[key] }));
   }, []);
 
   const handleTokenChange = useCallback(value => {
@@ -206,8 +199,7 @@ export default function App() {
       ...cleanDraft,
       amount: String(configDraft.amount || DEFAULT_CONFIG.amount),
       duration: String(configDraft.duration || DEFAULT_CONFIG.duration),
-      minConfidence: Number(configDraft.minConfidence),
-      tiers: toTierList(configDraft.tiers)
+      minConfidence: Number(configDraft.minConfidence)
     };
     apiFetch("/api/config", {
       method: "POST",
@@ -221,7 +213,11 @@ export default function App() {
         } else {
           notify("配置已保存", "success");
         }
-        setConfigDraft({ ...DEFAULT_CONFIG, ...body, tiers: toTierList(body.tiers?.length ? body.tiers : DEFAULT_CONFIG.tiers) });
+        setConfigDraft({
+          ...DEFAULT_CONFIG,
+          ...body,
+          strategyAmounts: { ...DEFAULT_CONFIG.strategyAmounts, ...(body.strategyAmounts || {}) }
+        });
         dirtyRef.current = false;
         setConfigDirty(false);
       })
@@ -268,31 +264,27 @@ export default function App() {
   }, [loadRuntime, loadSignals, triggerServerAction]);
 
   const refreshReportsNow = useCallback(() => {
-    triggerServerAction("/api/reports/refresh", "报告刷新", () => {
-      loadReports();
-    });
-  }, [loadReports, triggerServerAction]);
+    triggerServerAction("/api/reports/refresh", "报告刷新");
+  }, [triggerServerAction]);
 
   const refreshAll = useCallback(() => {
     loadSignals();
-    loadReports();
     loadRuntime();
     loadTablet();
     loadTradeHistory();
     loadConfig(true);
     loadPriceFallback();
     notify("已刷新", "success");
-  }, [loadConfig, loadPriceFallback, loadReports, loadRuntime, loadSignals, loadTablet, loadTradeHistory, notify]);
+  }, [loadConfig, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory, notify]);
 
   useEffect(() => {
     loadSignals();
-    loadReports();
     loadRuntime();
     loadTablet();
     loadTradeHistory();
     loadConfig();
     loadPriceFallback();
-  }, [loadConfig, loadPriceFallback, loadReports, loadRuntime, loadSignals, loadTablet, loadTradeHistory]);
+  }, [loadConfig, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory]);
 
   useEffect(() => {
     const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -382,6 +374,11 @@ export default function App() {
         borderColor: "rgba(255, 255, 255, 0.1)",
         timeVisible: true,
         secondsVisible: true,
+        tickMarkFormatter: formatChartTime,
+      },
+      localization: {
+        locale: "zh-CN",
+        timeFormatter: formatChartTime,
       },
       crosshair: {
         horzLine: {
@@ -427,21 +424,17 @@ export default function App() {
   useEffect(() => {
     if (!areaSeriesRef.current) return;
 
-    // Self-calibrating timezone shift to force Beijing Time (UTC+8) on the x-axis
-    const tzOffsetMinutes = new Date().getTimezoneOffset();
-    const beijingShiftSeconds = (480 + tzOffsetMinutes) * 60;
-
     const seenSeconds = new Set();
     const chartData = [];
 
     // 1. Process standard 1-minute OHLC K-line candles
     for (const item of candles || []) {
-      const shiftedTime = Number(item.time) + beijingShiftSeconds;
-      if (Number.isNaN(shiftedTime)) continue;
-      if (seenSeconds.has(shiftedTime)) continue;
-      seenSeconds.add(shiftedTime);
+      const candleTime = Number(item.time);
+      if (Number.isNaN(candleTime)) continue;
+      if (seenSeconds.has(candleTime)) continue;
+      seenSeconds.add(candleTime);
       chartData.push({
-        time: shiftedTime,
+        time: candleTime,
         open: Number(item.open),
         high: Number(item.high),
         low: Number(item.low),
@@ -454,7 +447,7 @@ export default function App() {
     const extraPoints = [];
     for (const trade of tradesToMarker) {
       if (!trade.openTime) continue;
-      const openSec = Math.floor(Number(trade.openTime) / 1000) + beijingShiftSeconds;
+      const openSec = Math.floor(Number(trade.openTime) / 1000);
       const openVal = Number(trade.openPrice);
       
       if (!Number.isNaN(openSec) && Number.isFinite(openVal) && !seenSeconds.has(openSec)) {
@@ -468,7 +461,7 @@ export default function App() {
         });
       }
       if (trade.settleTime) {
-        const settleSec = Math.floor(Number(trade.settleTime) / 1000) + beijingShiftSeconds;
+        const settleSec = Math.floor(Number(trade.settleTime) / 1000);
         const closeVal = Number(trade.closePrice);
         
         if (!Number.isNaN(settleSec) && Number.isFinite(closeVal) && !seenSeconds.has(settleSec)) {
@@ -494,7 +487,7 @@ export default function App() {
     const markers = [];
     for (const trade of tradesToMarker) {
       if (!trade.openTime) continue;
-      const openSec = Math.floor(Number(trade.openTime) / 1000) + beijingShiftSeconds;
+      const openSec = Math.floor(Number(trade.openTime) / 1000);
       if (Number.isNaN(openSec)) continue;
       
       // Open marker (CALL or PUT) with execution source prefixes
@@ -503,7 +496,7 @@ export default function App() {
       const prefix = isManual
         ? (isTablet ? "[平板手动]" : "[网页手动]")
         : (isTablet ? "[信号实盘]" : "[影子模拟]");
-      const stratName = trade.strategyId ? trade.strategyId.replace("BTC_", "") : "手动";
+      const stratName = strategyName(trade.strategyId);
 
       markers.push({
         time: openSec,
@@ -515,7 +508,7 @@ export default function App() {
 
       // Close marker (WON, LOST, TIE)
       if (trade.status && trade.status !== "pending" && trade.status !== "aborted" && trade.settleTime) {
-        const settleSec = Math.floor(Number(trade.settleTime) / 1000) + beijingShiftSeconds;
+        const settleSec = Math.floor(Number(trade.settleTime) / 1000);
         if (Number.isNaN(settleSec)) continue;
         markers.push({
           time: settleSec,
@@ -536,13 +529,12 @@ export default function App() {
   useInterval(loadSignals, 3000);
   useInterval(loadPriceFallback, 3000);
   useInterval(loadTradeHistory, 5000);
-  useInterval(loadReports, 15000);
   useInterval(loadTablet, 15000);
   useInterval(loadRuntime, 30000);
   useInterval(loadConfig, 10000);
 
-  const confidenceTone = Number(activeSignal?.confidence || 0) >= 60 ? "ok" : "";
-  const topAmount = signalAmount || configDraft.amount || DEFAULT_CONFIG.amount;
+  const safeConfidenceTone = Number(safeSignal?.confidence || 0) >= 60 ? "ok" : "";
+  const takerConfidenceTone = Number(takerSignal?.confidence || 0) >= 60 ? "ok" : "";
   const priceTone = priceChange?.diff > 0 ? "ok" : priceChange?.diff < 0 ? "fail" : "";
   const username = window.localStorage.getItem("btc_username") || "sl";
 
@@ -647,7 +639,7 @@ export default function App() {
             <BadgeCheck size={20} />
             <div>
               <strong style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                BTC 实盘仪表盘
+                BTC 实盘控制台
                 <span style={{
                   fontSize: "9px",
                   padding: "1px 6px",
@@ -665,10 +657,11 @@ export default function App() {
           </div>
           <div className="top-actions">
             <Metric label="BTC 价格" value={fmtPrice(currentPrice)} unit="USDT" tone={priceTone} />
-            <Metric label="RSI" value={activeSignal?.rsi_value !== undefined ? Number(activeSignal.rsi_value).toFixed(0) : "--"} />
-            <Metric label="信号强度" value={activeSignal?.confidence !== undefined ? fmtPct(activeSignal.confidence, 0) : "--"} tone={confidenceTone} />
+            <Metric label="稳健强度" value={safeSignal?.confidence !== undefined ? fmtPct(safeSignal.confidence, 0) : "--"} tone={safeConfidenceTone} />
+            <Metric label="资金流强度" value={takerSignal?.confidence !== undefined ? fmtPct(takerSignal.confidence, 0) : "--"} tone={takerConfidenceTone} />
             <Metric label="账户余额" value={realBalance?.amount !== undefined ? fmt(realBalance.amount, 2) : "--"} unit="USDT" tone={realBalance?.amount !== undefined ? "ok" : ""} />
-            <Metric label="下单金额" value={topAmount} unit="USDT" />
+            <Metric label="稳健投数" value={safeAmount} unit="USDT" />
+            <Metric label="资金流投数" value={takerAmount} unit="USDT" />
             <button className="icon-button" type="button" onClick={refreshAll} title="刷新">
               <RefreshCcw size={16} />
             </button>
@@ -678,11 +671,9 @@ export default function App() {
         <SignalBanner signalPayload={signalPayload} activeSignal={activeSignal} signalAmount={signalAmount} />
 
         <section className="strategy-strip">
-          <StrategyCard title="10 分钟" signal={signalPayload?.BTC_10min} amount={signal10Amount} />
-          <StrategyCard title="30 分钟" signal={signalPayload?.BTC_30min} amount={signal30Amount} />
+          <StrategyCard title="推荐稳健" signal={signalPayload?.BTC_10min_SAFE} amount={safeAmount} />
+          <StrategyCard title="资金流过滤" signal={signalPayload?.BTC_10min_TAKER} amount={takerAmount} />
         </section>
-
-        <ReportStrip reports={reports} runtime={runtime} tablet={tablet} />
 
         <main className="main-grid">
           <section className="workspace">
@@ -704,7 +695,6 @@ export default function App() {
           </section>
 
           <aside className="side-rail">
-            <GaugePanel signal={activeSignal} />
             <ConfigPanel
               draft={configDraft}
               dirty={configDirty}
@@ -712,9 +702,6 @@ export default function App() {
               onTokenChange={handleTokenChange}
               onDraftChange={markDraft}
               onToggle={toggleDraft}
-              onTierChange={handleTierChange}
-              onAddTier={handleAddTier}
-              onRemoveTier={handleRemoveTier}
               onSave={saveConfig}
             />
             <ManualPanel draft={configDraft} onManualTrade={manualTrade} onAmountPreset={val => markDraft({ amount: String(val) })} />

@@ -144,11 +144,20 @@ test("server write APIs require token when configured", async () => {
     const allowed = await requestJson(baseUrl, "/api/config", {
       method: "POST",
       headers: { "X-API-Token": "secret" },
-      body: { amount: "9", duration: "10", queueOrderPolicy: "10_then_30" }
+      body: {
+        amount: "9",
+        duration: "10",
+        strategyAmounts: {
+          BTC_10min_SAFE: "5",
+          BTC_10min_TAKER: "10"
+        }
+      }
     });
     assert.equal(allowed.status, 200);
     assert.equal(allowed.json.amount, "9");
     assert.equal(allowed.json.duration, "10");
-    assert.equal(allowed.json.queueOrderPolicy, "10_then_30");
+    assert.equal(allowed.json.strategyAmounts.BTC_10min_SAFE, "5");
+    assert.equal(allowed.json.strategyAmounts.BTC_10min_TAKER, "10");
+    assert.equal(allowed.json.queueOrderPolicy, undefined);
   });
 });

@@ -1,77 +1,94 @@
-# BTC 10m/30m Binary Options Controller & Deployer
+# BTC 10m Binary Options Controller & Deployer
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Continue"
 
 Write-Host "====================================================" -ForegroundColor Cyan
-Write-Host "   BTC Binary Options System Controller & Deployer" -ForegroundColor Cyan
+Write-Host "   BTC 10m Binary Options System Controller" -ForegroundColor Cyan
 Write-Host "====================================================" -ForegroundColor Cyan
 
-# 1. Kill any process holding port 3000 (Node Server)
-Write-Host "[1/4] Scanning and cleaning port 3000..." -ForegroundColor Yellow
-$conn = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
-if ($conn) {
-    $pids = $conn.OwningProcess | Select-Object -Unique
+function Get-PortPids {
+    param([int]$Port)
+    $lines = netstat -ano | Select-String -Pattern ":$Port\s+"
+    $pids = @()
+    foreach ($line in $lines) {
+        $parts = ($line.ToString().Trim() -split "\s+")
+        if ($parts.Length -ge 5 -and $parts[1] -match ":$Port$" -and $parts[3] -eq "LISTENING") {
+            $pids += [int]$parts[4]
+        }
+    }
+    return $pids | Select-Object -Unique
+}
+
+function Stop-PortProcess {
+    param(
+        [int]$Port,
+        [string]$Label
+    )
+    $pids = Get-PortPids -Port $Port
     foreach ($procId in $pids) {
         if ($procId -gt 0) {
-            Write-Host "  -> Terminating conflicting Node process (PID $procId)..." -ForegroundColor Gray
+            Write-Host "  -> Terminating $Label process (PID $procId)..." -ForegroundColor Gray
             Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
         }
     }
-    Start-Sleep -Seconds 1
+    if ($pids.Count -gt 0) {
+        Start-Sleep -Seconds 1
+    }
 }
 
-# 2. Kill any process holding port 39870 (Python Price Proxy)
-Write-Host "[2/4] Scanning and cleaning price proxy port 39870..." -ForegroundColor Yellow
-$proxyConn = Get-NetTCPConnection -LocalPort 39870 -ErrorAction SilentlyContinue
-if ($proxyConn) {
-    $proxyPids = $proxyConn.OwningProcess | Select-Object -Unique
-    foreach ($procId in $proxyPids) {
-        if ($procId -gt 0) {
-            Write-Host "  -> Terminating conflicting Python PriceProxy process (PID $procId)..." -ForegroundColor Gray
-            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
-        }
-    }
-    Start-Sleep -Seconds 1
-}
+Write-Host "[1/5] Cleaning Node server port 3000..." -ForegroundColor Yellow
+Stop-PortProcess -Port 3000 -Label "conflicting Node"
+
+Write-Host "[2/5] Cleaning price proxy port 39870..." -ForegroundColor Yellow
+Stop-PortProcess -Port 39870 -Label "conflicting Python PriceProxy"
+
+Write-Host "[3/5] Cleaning signal service port 39871..." -ForegroundColor Yellow
+Stop-PortProcess -Port 39871 -Label "conflicting Python Signal"
 Write-Host "  -> All ports are clean and ready." -ForegroundColor Green
 
-# 3. Recompile frontend assets to ensure latest build is active
-Write-Host "[3/4] Bundling latest React frontend with Vite..." -ForegroundColor Yellow
+Write-Host "[4/5] Bundling latest React frontend with Vite..." -ForegroundColor Yellow
 npm run frontend:build
 if ($LASTEXITCODE -ne 0) {
-    Write-Warning "Vite compilation failed. Please check frontend/src/App.jsx for errors."
+    Write-Warning "Vite compilation failed. Please check frontend/src for errors."
     exit $LASTEXITCODE
 }
 Write-Host "  -> Frontend compiled successfully." -ForegroundColor Green
 
-# 4. Start services in the background
-Write-Host "[4/4] Launching background services..." -ForegroundColor Yellow
-$env:SERVER_SIM_TRADING_ENABLED="1"
+Write-Host "[5/5] Launching background services..." -ForegroundColor Yellow
+$env:SERVER_SIM_TRADING_ENABLED = "1"
+$env:APP_DIR = (Get-Location).Path
+$env:DATA_DIR = (Join-Path (Get-Location).Path "data")
+$env:ENABLE_SIGNAL_SHADOWS = "0"
+$env:ENABLE_LEGACY_TWO_MINUTE_LIVE = "0"
 
-# Launch Python Price Proxy as a detached persistent OS process
 Write-Host "  -> Launching Python Price Feeder (py/price_proxy.py)..." -ForegroundColor Gray
-$proxyProcess = Start-Process -FilePath "python" -ArgumentList "py/price_proxy.py" -NoNewWindow -PassThru
+$proxyProcess = Start-Process -FilePath "python" `
+    -ArgumentList "py/price_proxy.py" `
+    -RedirectStandardOutput ".price.out" `
+    -RedirectStandardError ".price.err" `
+    -WindowStyle Hidden `
+    -PassThru
 
-# Launch Node server as a detached persistent OS process
 Write-Host "  -> Launching Node.js Server (server.js)..." -ForegroundColor Gray
-$process = Start-Process -FilePath "node" -ArgumentList "server.js" -NoNewWindow -PassThru
+$process = Start-Process -FilePath "node" `
+    -ArgumentList "server.js" `
+    -RedirectStandardOutput ".srv.out" `
+    -RedirectStandardError ".srv.err" `
+    -WindowStyle Hidden `
+    -PassThru
 
-# Wait a few seconds to let them bind
 Start-Sleep -Seconds 3
 
-# Verify if port 3000 is active now
-$newConn = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
-if ($newConn) {
+$newPids = Get-PortPids -Port 3000
+if ($newPids.Count -gt 0) {
     Write-Host "`n====================================================" -ForegroundColor Green
-    Write-Host " 🎉 BTC Binary Options System Started Successfully!" -ForegroundColor Green
+    Write-Host " BTC 10m Binary Options System Started Successfully!" -ForegroundColor Green
     Write-Host "====================================================" -ForegroundColor Green
     Write-Host "  * URL Address   : http://localhost:3000" -ForegroundColor Cyan
-    Write-Host "  * Shadow Trade  : Active (Background Mock Trading)" -ForegroundColor Cyan
-    Write-Host "  * Accounts & Passwords:" -ForegroundColor Cyan
-    Write-Host "    -> User: sl  | Password: sl,123321" -ForegroundColor Cyan
-    Write-Host "    -> User: lsl | Password: 123321" -ForegroundColor Cyan
+    Write-Host "  * Strategies    : BTC_10min_SAFE + BTC_10min_TAKER" -ForegroundColor Cyan
+    Write-Host "  * Research Mode : Disabled" -ForegroundColor Cyan
+    Write-Host "  * Login         : sl / sl,123321" -ForegroundColor Cyan
     Write-Host "====================================================`n" -ForegroundColor Green
-    Write-Host "Note: To stop all services later, run start.ps1 again to auto-clean ports!" -ForegroundColor Gray
 } else {
     Write-Warning "Server failed to bind to port 3000."
 }

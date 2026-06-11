@@ -1,6 +1,6 @@
 const assert = require("node:assert");
 const test = require("node:test");
-const { createApiAuth } = require("../lib/auth");
+const { createApiAuth, handleLogin } = require("../lib/auth");
 
 function req({ headerToken = "", bearer = "", queryToken = "" } = {}) {
   return {
@@ -31,8 +31,14 @@ test("api auth is optional when no token is configured", () => {
   const auth = createApiAuth({});
   let called = false;
   auth.middleware(req(), res(), () => { called = true; });
-  assert.equal(auth.publicInfo().enabled, false);
+  assert.equal(auth.publicInfo().enabled, true);
   assert.equal(called, true);
+});
+
+test("web login accepts only the configured sl account", () => {
+  assert.equal(handleLogin("sl", "sl,123321").success, true);
+  assert.equal(handleLogin("lsl", "123321").success, false);
+  assert.equal(handleLogin("sl", "123321").success, false);
 });
 
 test("api auth rejects missing token and accepts supported token locations", () => {

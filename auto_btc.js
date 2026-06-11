@@ -8,18 +8,17 @@ var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
 var API_TOKEN = "";
-var SCRIPT_VERSION = "2026-06-09-arch-v10";
+var SCRIPT_VERSION = "2026-06-12-live-two-strategy-v1";
 var POLL_INTERVAL = 3000;
 var SIGNAL_MAX_AGE_MS = 60000;
 
-var tradeConfig = { amount: "5", duration: "30", autoTrade: false, minConfidence: 35, tiersEnabled: false, tiers: [], skipConflictSignals: false, queueOrderPolicy: "confidence_desc", preventOverlapOrders: true, maxActionableLagMs: SIGNAL_MAX_AGE_MS };
+var tradeConfig = { amount: "5", strategyAmounts: { BTC_10min_SAFE: "5", BTC_10min_TAKER: "5" }, duration: "10", autoTrade: false, minConfidence: 35 };
 var lastTradeTime = 0;
 var lastDirection = "";
 var lastSignalKeyByStrategy = {};
 var lastTradeTimeByStrategy = {};
 var activeUntilByStrategy = {};
 var persistedOrderKeys = {};
-var lastConflictSkipKey = "";
 var isRunning = true;
 var durationSet = false;
 var durationSetTarget = "";
@@ -147,9 +146,7 @@ function asNumberOrNull(value) {
 }
 
 function maxActionableLagMs() {
-    var lag = Number(tradeConfig.maxActionableLagMs || SIGNAL_MAX_AGE_MS);
-    if (!isFinite(lag) || lag <= 0) return SIGNAL_MAX_AGE_MS;
-    return lag;
+    return SIGNAL_MAX_AGE_MS;
 }
 
 function buildExecutionContext(sig) {
@@ -206,8 +203,8 @@ function reportHeartbeat(payload) {
         maxActionableLagMs: maxActionableLagMs(),
         signalOk: !!payload,
         strategies: {
-            BTC_10min: summarizeSignal(payload && payload.BTC_10min),
-            BTC_30min: summarizeSignal(payload && payload.BTC_30min)
+            BTC_10min_SAFE: summarizeSignal(payload && payload.BTC_10min_SAFE),
+            BTC_10min_TAKER: summarizeSignal(payload && payload.BTC_10min_TAKER)
         },
         balance: lastBalanceValue
     });
@@ -527,13 +524,10 @@ function fetchConfig() {
         if (r.statusCode == 200) {
             var c = r.body.json();
             if (c.amount) tradeConfig.amount = c.amount;
+            if (c.strategyAmounts) tradeConfig.strategyAmounts = c.strategyAmounts;
             if (c.duration) tradeConfig.duration = c.duration;
             if (c.autoTrade !== undefined) tradeConfig.autoTrade = c.autoTrade;
             if (c.minConfidence !== undefined) tradeConfig.minConfidence = c.minConfidence;
-            if (c.skipConflictSignals !== undefined) tradeConfig.skipConflictSignals = c.skipConflictSignals;
-            if (c.queueOrderPolicy !== undefined) tradeConfig.queueOrderPolicy = c.queueOrderPolicy;
-            if (c.preventOverlapOrders !== undefined) tradeConfig.preventOverlapOrders = !!c.preventOverlapOrders;
-            if (c.maxActionableLagMs !== undefined) tradeConfig.maxActionableLagMs = Number(c.maxActionableLagMs);
         }
     } catch (e) {}
 }
@@ -548,15 +542,10 @@ function getSignalPayload() {
             if (data._config) {
                 var c = data._config;
                 if (c.amount) tradeConfig.amount = c.amount;
+                if (c.strategyAmounts) tradeConfig.strategyAmounts = c.strategyAmounts;
                 if (c.duration) tradeConfig.duration = c.duration;
                 if (c.autoTrade !== undefined) tradeConfig.autoTrade = c.autoTrade;
                 if (c.minConfidence !== undefined) tradeConfig.minConfidence = c.minConfidence;
-                if (c.tiersEnabled !== undefined) tradeConfig.tiersEnabled = c.tiersEnabled;
-                if (c.tiers && c.tiers.length !== undefined) tradeConfig.tiers = c.tiers;
-                if (c.skipConflictSignals !== undefined) tradeConfig.skipConflictSignals = c.skipConflictSignals;
-                if (c.queueOrderPolicy !== undefined) tradeConfig.queueOrderPolicy = c.queueOrderPolicy;
-                if (c.preventOverlapOrders !== undefined) tradeConfig.preventOverlapOrders = !!c.preventOverlapOrders;
-                if (c.maxActionableLagMs !== undefined) tradeConfig.maxActionableLagMs = Number(c.maxActionableLagMs);
                 delete data._config;
             }
             return data;
@@ -567,24 +556,11 @@ function getSignalPayload() {
     return null;
 }
 
-function amountForConfidence(conf) {
-    if (tradeConfig.tiersEnabled && tradeConfig.tiers && tradeConfig.tiers.length) {
-        var sorted = tradeConfig.tiers.slice().sort(function(a, b) {
-            return Number(b.min) - Number(a.min);
-        });
-        for (var i = 0; i < sorted.length; i++) {
-            var t = sorted[i];
-            if (Number(conf) >= Number(t.min)) return String(t.amount);
-        }
-    }
-    return String(tradeConfig.amount);
-}
-
 function amountForOrder(strategyId, sig, serverAmount) {
-    if (sig && sig.confidence != null) return amountForConfidence(sig.confidence);
-    if (serverAmount) return String(serverAmount);
-    if (sig && sig.amount && sig.fixed_amount !== true) return String(sig.amount);
-    return String(tradeConfig.amount);
+    if (sig && sig.amount && sig.fixed_amount === true) return String(sig.amount);
+    var baseAmount = serverAmount || (tradeConfig.strategyAmounts && tradeConfig.strategyAmounts[strategyId]) || tradeConfig.amount;
+    if (sig && sig.amount) return String(sig.amount);
+    return String(baseAmount);
 }
 
 function buildTradeQueue(data) {
@@ -592,8 +568,8 @@ function buildTradeQueue(data) {
     if (!data) return queue;
     var amounts = data._strategyAmounts || {};
     var defs = [
-        { id: "BTC_30min", duration: "30" },
-        { id: "BTC_10min", duration: "10" }
+        { id: "BTC_10min_TAKER", duration: "10" },
+        { id: "BTC_10min_SAFE", duration: "10" }
     ];
     for (var i = 0; i < defs.length; i++) {
         var d = defs[i];
@@ -625,65 +601,17 @@ function buildTradeQueue(data) {
 }
 
 function sortTradeQueue(queue) {
-    var policy = tradeConfig.queueOrderPolicy || "confidence_desc";
     queue.sort(function(a, b) {
         var ta = a.actionableTime || a.time || "";
         var tb = b.actionableTime || b.time || "";
         if (ta !== tb) return ta < tb ? -1 : 1;
-        if (policy === "10_then_30") {
-            return (a.strategyId === "BTC_10min" ? 0 : 1) - (b.strategyId === "BTC_10min" ? 0 : 1);
-        }
-        if (policy === "30_then_10") {
-            return (a.strategyId === "BTC_30min" ? 0 : 1) - (b.strategyId === "BTC_30min" ? 0 : 1);
-        }
-        var ca = Number(a.confidence || 0);
-        var cb = Number(b.confidence || 0);
-        if (cb !== ca) return cb - ca;
-        return (a.strategyId === "BTC_30min" ? 0 : 1) - (b.strategyId === "BTC_30min" ? 0 : 1);
+        return (a.strategyId === "BTC_10min_TAKER" ? 0 : 1) - (b.strategyId === "BTC_10min_TAKER" ? 0 : 1);
     });
     return queue;
 }
 
 function filterConflictQueue(queue) {
-    if (!tradeConfig.skipConflictSignals || queue.length < 2) return queue;
-    var buckets = {};
-    for (var i = 0; i < queue.length; i++) {
-        var order = queue[i];
-        if (!order || !order.signal) continue;
-        var k = order.actionableTime || order.time || "unknown";
-        if (!buckets[k]) buckets[k] = [];
-        buckets[k].push(order);
-    }
-    var skip = {};
-    for (var key in buckets) {
-        var group = buckets[key];
-        var hasUp = false, hasDown = false;
-        for (var j = 0; j < group.length; j++) {
-            if (group[j].signal == "UP") hasUp = true;
-            if (group[j].signal == "DOWN") hasDown = true;
-        }
-        if (hasUp && hasDown) {
-            var ids = [];
-            for (var n = 0; n < group.length; n++) {
-                skip[group[n].strategyId + "|" + group[n].time + "|" + group[n].signal] = true;
-                ids.push(group[n].strategyId + ":" + group[n].signal);
-            }
-            var conflictKey = key + "|" + ids.join(",");
-            if (conflictKey != lastConflictSkipKey) {
-                lastConflictSkipKey = conflictKey;
-                for (var r = 0; r < group.length; r++) {
-                    reportTradeAudit("signal_skipped", group[r], { reason: "direction_conflict_filter", group: ids.join(",") });
-                }
-            }
-            log("Conflict filter skipped " + ids.join(" + ") + " at " + key);
-        }
-    }
-    var out = [];
-    for (var q = 0; q < queue.length; q++) {
-        var o = queue[q];
-        if (!skip[o.strategyId + "|" + o.time + "|" + o.signal]) out.push(o);
-    }
-    return out;
+    return queue;
 }
 
 // ========== Duration ==========
@@ -705,7 +633,7 @@ function ensureDuration() {
     sleep(1500);
     
     var rows = id("2131439375").find();
-    // Map duration to row index: 10min=0, 30min=1, 1hour=2, 1day=3
+    // Map duration to row index. Current production strategies use 10 minutes.
     var idx = {"10": 0, "30": 1, "60": 2, "1": 3};
     var targetIdx = idx[target] !== undefined ? idx[target] : 1;
     
@@ -993,7 +921,7 @@ function setStrategyActiveUntil(order) {
 }
 
 function isStrategyOverlapping(order) {
-    if (!tradeConfig.preventOverlapOrders || !order || !order.strategyId) return false;
+    if (!order || !order.strategyId) return false;
     var until = Number(activeUntilByStrategy[order.strategyId] || 0);
     if (!until || until <= Date.now()) return false;
     return true;
@@ -1069,7 +997,7 @@ function main() {
                     order.queueBatchId = queueBatchId;
                     order.queuePosition = qi + 1;
                     order.queueLength = queue.length;
-                    order.queueOrderPolicy = tradeConfig.queueOrderPolicy || "confidence_desc";
+                    order.queueOrderPolicy = "fixed_taker_then_safe";
                     order.queueBatchStartClientTime = queueBatchStart;
                     order.previousOrderDoneClientTime = previousDoneAt || null;
                     order.sincePreviousDoneMs = previousDoneAt ? Date.now() - previousDoneAt : null;
@@ -1126,9 +1054,9 @@ function main() {
                 lastWakeLock = Date.now();
             }
                 if (!traded && Date.now() - lastLogTime > 15000) {
-                    var s10 = payload && payload.BTC_10min ? payload.BTC_10min : null;
-                    var s30 = payload && payload.BTC_30min ? payload.BTC_30min : null;
-                    log("Beat | 30m RSI=" + (s30 ? s30.rsi_value : "--") + " sig=" + (s30 && s30.signal ? s30.signal : "--") + " | 10m RSI=" + (s10 ? s10.rsi_value : "--") + " sig=" + (s10 && s10.signal ? s10.signal : "--") + " | bal=" + (lastBalanceValue || "--"));
+                    var safe = payload && payload.BTC_10min_SAFE ? payload.BTC_10min_SAFE : null;
+                    var taker = payload && payload.BTC_10min_TAKER ? payload.BTC_10min_TAKER : null;
+                    log("Beat | SAFE sig=" + (safe && safe.signal ? safe.signal : "--") + " | TAKER sig=" + (taker && taker.signal ? taker.signal : "--") + " | bal=" + (lastBalanceValue || "--"));
                     lastLogTime = Date.now();
                 }
             } else if (payload) {

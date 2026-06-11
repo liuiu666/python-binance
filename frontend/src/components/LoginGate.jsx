@@ -51,7 +51,7 @@ export default function LoginGate({ onLoginSuccess }) {
         boxShadow: "0 10px 25px rgba(0,0,0,0.5)"
       }}>
         <div style={{ textAlign: "center", marginBottom: "30px" }}>
-          <h2 style={{ color: "#27c3a5", margin: "0 0 8px 0", fontSize: "24px" }}>BTC 实盘仪表盘</h2>
+          <h2 style={{ color: "#27c3a5", margin: "0 0 8px 0", fontSize: "24px" }}>BTC 实盘控制台</h2>
           <span style={{ color: "#8b949e", fontSize: "12px" }}>登录后查看监控与操作交易</span>
         </div>
         {error ? (

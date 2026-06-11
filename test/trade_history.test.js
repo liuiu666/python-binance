@@ -29,8 +29,8 @@ test("live order history summarizes settled, pending, aborted, and server rows",
     now: 1710000000000,
     limit: 10,
     auditRows: [
-      { event: "order_done", serverTime: 1000, duration: 1, direction: "UP", amount: 10, price: 100, strategyId: "BTC_10min" },
-      { event: "order_done", serverTime: 2000, duration: 1, direction: "DOWN", amount: 5, price: 100, strategyId: "BTC_30min" },
+      { event: "order_done", serverTime: 1000, duration: 1, direction: "UP", amount: 10, price: 100, strategyId: "BTC_10min_SAFE" },
+      { event: "order_done", serverTime: 2000, duration: 1, direction: "DOWN", amount: 5, price: 100, strategyId: "BTC_10min_TAKER" },
       { event: "order_abort", serverTime: 3000, direction: "UP", amount: 5, reason: "button_not_found" }
     ],
     priceTicks: [

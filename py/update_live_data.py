@@ -24,12 +24,42 @@ BACKFILL_DAYS = max(1, int(os.environ.get("LIVE_UPDATE_BACKFILL_DAYS", "7")))
 GAP_BACKFILL_DAYS = max(1, int(os.environ.get("LIVE_UPDATE_GAP_BACKFILL_DAYS", "30")))
 HTTP_TIMEOUT = float(os.environ.get("LIVE_UPDATE_HTTP_TIMEOUT", "15"))
 SPOT_BASES = [
+    base.strip().rstrip("/")
+    for base in os.environ.get(
+        "LIVE_UPDATE_SPOT_BASES",
+        "https://data-api.binance.vision,https://api.binance.com,https://api1.binance.com,https://api2.binance.com,https://api3.binance.com",
+    ).split(",")
+    if base.strip()
+]
+FAPI_BASES = [
+    base.strip().rstrip("/")
+    for base in os.environ.get(
+        "LIVE_UPDATE_FAPI_BASES",
+        "https://fapi.binance.com,https://fapi1.binance.com,https://fapi2.binance.com,https://fapi3.binance.com",
+    ).split(",")
+    if base.strip()
+]
+if not SPOT_BASES:
+    SPOT_BASES = [
+        "https://data-api.binance.vision",
+        "https://api.binance.com",
+        "https://api1.binance.com",
+        "https://api2.binance.com",
+        "https://api3.binance.com",
+    ]
+if not FAPI_BASES:
+    FAPI_BASES = [
+        "https://fapi.binance.com",
+        "https://fapi1.binance.com",
+        "https://fapi2.binance.com",
+        "https://fapi3.binance.com",
+    ]
+LEGACY_SPOT_BASES = [
     "https://api.binance.com",
     "https://api1.binance.com",
     "https://api2.binance.com",
     "https://api3.binance.com",
 ]
-FAPI_BASE = "https://fapi.binance.com"
 
 
 def utc_now_ms():
@@ -207,7 +237,7 @@ def fetch_period_range(symbol, endpoint, start_ms, end_ms):
     cursor = int(start_ms)
     while cursor <= end_ms:
         batch = request_json(
-            FAPI_BASE + endpoint,
+            endpoint,
             {
                 "symbol": symbol.upper(),
                 "period": "5m",
@@ -215,6 +245,7 @@ def fetch_period_range(symbol, endpoint, start_ms, end_ms):
                 "endTime": end_ms,
                 "limit": 500,
             },
+            bases=FAPI_BASES,
         )
         if not batch:
             break
@@ -273,8 +304,9 @@ def fetch_funding(symbol, existing):
     rows = []
     while cursor <= end_ms:
         batch = request_json(
-            FAPI_BASE + "/fapi/v1/fundingRate",
+            "/fapi/v1/fundingRate",
             {"symbol": symbol.upper(), "startTime": cursor, "endTime": end_ms, "limit": 1000},
+            bases=FAPI_BASES,
         )
         if not batch:
             break
@@ -295,31 +327,50 @@ def fetch_funding(symbol, existing):
 
 def update_symbol(symbol):
     result = {}
+    errors = []
     kline_path = os.path.join(OUT, f"{symbol}_1m.csv")
-    result["klines_1m"] = fetch_klines(symbol, read_existing(kline_path, "open_time"))
+    try:
+        result["klines_1m"] = fetch_klines(symbol, read_existing(kline_path, "open_time"))
+    except Exception as e:
+        result["klines_1m_error"] = str(e)
+        errors.append({"dataset": "klines_1m", "error": str(e)})
 
     taker_path = os.path.join(OUT, f"{symbol}_taker.csv")
-    result["taker"] = fetch_period_data(
-        symbol,
-        read_existing(taker_path, "timestamp"),
-        "taker",
-        "/futures/data/takerlongshortRatio",
-        ["timestamp", "buySellRatio", "buyVol", "sellVol"],
-        ["timestamp", "buySellRatio", "buyVol", "sellVol"],
-    )
+    try:
+        result["taker"] = fetch_period_data(
+            symbol,
+            read_existing(taker_path, "timestamp"),
+            "taker",
+            "/futures/data/takerlongshortRatio",
+            ["timestamp", "buySellRatio", "buyVol", "sellVol"],
+            ["timestamp", "buySellRatio", "buyVol", "sellVol"],
+        )
+    except Exception as e:
+        result["taker_error"] = str(e)
+        errors.append({"dataset": "taker", "error": str(e)})
 
     ls_path = os.path.join(OUT, f"{symbol}_lsratio.csv")
-    result["lsratio"] = fetch_period_data(
-        symbol,
-        read_existing(ls_path, "timestamp"),
-        "lsratio",
-        "/futures/data/topLongShortPositionRatio",
-        ["timestamp", "longAccount", "shortAccount", "longShortRatio"],
-        ["timestamp", "longAccount", "shortAccount", "longShortRatio"],
-    )
+    try:
+        result["lsratio"] = fetch_period_data(
+            symbol,
+            read_existing(ls_path, "timestamp"),
+            "lsratio",
+            "/futures/data/topLongShortPositionRatio",
+            ["timestamp", "longAccount", "shortAccount", "longShortRatio"],
+            ["timestamp", "longAccount", "shortAccount", "longShortRatio"],
+        )
+    except Exception as e:
+        result["lsratio_error"] = str(e)
+        errors.append({"dataset": "lsratio", "error": str(e)})
 
     funding_path = os.path.join(OUT, f"{symbol}_funding.csv")
-    result["funding"] = fetch_funding(symbol, read_existing(funding_path, "fundingTime"))
+    try:
+        result["funding"] = fetch_funding(symbol, read_existing(funding_path, "fundingTime"))
+    except Exception as e:
+        result["funding_error"] = str(e)
+        errors.append({"dataset": "funding", "error": str(e)})
+    if errors:
+        result["_errors"] = errors
     return result
 
 
@@ -332,11 +383,11 @@ def main():
         "errors": [],
     }
     for symbol in SYMBOLS:
-        try:
-            status["symbols"][symbol] = update_symbol(symbol)
-        except Exception as e:
+        status["symbols"][symbol] = update_symbol(symbol)
+        symbol_errors = status["symbols"][symbol].get("_errors") or []
+        if symbol_errors:
             status["ok"] = False
-            status["errors"].append({"symbol": symbol, "error": str(e)})
+            status["errors"].extend({"symbol": symbol, **err} for err in symbol_errors)
     status["finished_at"] = iso_now()
     os.makedirs(OUT, exist_ok=True)
     with open(STATUS_FILE, "w", encoding="utf-8") as f:

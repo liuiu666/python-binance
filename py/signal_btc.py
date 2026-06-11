@@ -1,6 +1,6 @@
 """BTC dual-strategy signal service.
 
-Outputs independent BTC_10min and BTC_30min signals for the tablet executor.
+Outputs the production BTC strategy signals for the tablet executor.
 """
 import json
 import math
@@ -484,6 +484,7 @@ LIVE_1M_MAX_AGE = pd.Timedelta(minutes=3)
 MAX_HISTORY_LIVE_GAP = pd.Timedelta(minutes=2)
 MAX_5M_LIVE_MERGE_GAP = pd.Timedelta(minutes=7)
 ENABLE_SIGNAL_SHADOWS = os.environ.get("ENABLE_SIGNAL_SHADOWS", "0") == "1"
+ENABLE_LEGACY_TWO_MINUTE_LIVE = os.environ.get("ENABLE_LEGACY_TWO_MINUTE_LIVE", "0") == "1"
 
 sys.path.insert(0, os.path.join(APP_DIR, "py"))
 from backtest_enhanced import build_features, load_symbol
@@ -811,7 +812,7 @@ def market_confirmation(signal, trend_val, htf_val, taker_ratio, atr_exp):
 
 
 class POCNormalStrategy:
-    """POC Normal Distribution strategy - uses 1m log returns + sqrt-of-time scaling."""
+    """Normal-tail reversal strategy with optional 2m aggregation and taker flow gate."""
     def __init__(self, strategy_id, cfg):
         self.id = strategy_id
         self.window = int(cfg.get("norm_window", 60))
@@ -822,26 +823,111 @@ class POCNormalStrategy:
         self.rsi_hi = float(cfg.get("rsi_hi", 70))
         self.horizon = int(cfg.get("horizon", 10))
         self.interval_min = int(cfg.get("interval_min", 10))
+        self.source_minutes = max(1, int(cfg.get("norm_source_minutes", cfg.get("norm_bar_min", 1))))
+        self.min_gap_minutes = int(cfg.get("norm_min_gap_minutes", self.interval_min))
         self.mode = cfg.get("norm_mode", "reversal")
+        self.taker_filter = str(cfg.get("norm_taker_filter", "none")).lower()
+        self.taker_align_up = float(cfg.get("norm_taker_align_up", 1.05))
+        self.taker_align_down = float(cfg.get("norm_taker_align_down", 0.95))
+        self.taker_counter_up = float(cfg.get("norm_taker_counter_up", 0.85))
+        self.taker_counter_down = float(cfg.get("norm_taker_counter_down", 1.15))
+        self.taker_max_age_minutes = int(cfg.get("norm_taker_max_age_minutes", 30))
         self.skip_hours_utc = sorted({int(h) for h in cfg.get("skip_hours_utc", [])})
         self.cooldown_until = 0
+
+    def _load_price_bars(self):
+        import pandas as pd
+
+        if not os.path.exists(HISTORY_1M_FILE):
+            return None
+        df1m = pd.read_csv(HISTORY_1M_FILE)
+        if "open_time" not in df1m.columns or "close" not in df1m.columns:
+            return None
+        df1m["open_time"] = pd.to_datetime(df1m["open_time"], utc=True, errors="coerce")
+        for col in ["open", "high", "low", "close", "volume"]:
+            if col in df1m.columns:
+                df1m[col] = pd.to_numeric(df1m[col], errors="coerce")
+        df1m = df1m.dropna(subset=["open_time", "close"]).drop_duplicates("open_time").sort_values("open_time")
+        if self.source_minutes <= 1:
+            out = df1m[["open_time", "close"]].rename(columns={"open_time": "time"}).reset_index(drop=True)
+        else:
+            df1m["period"] = df1m["open_time"].dt.floor(f"{self.source_minutes}min")
+            agg = {"close": ("close", "last")}
+            if "open" in df1m.columns:
+                agg["open"] = ("open", "first")
+            if "high" in df1m.columns:
+                agg["high"] = ("high", "max")
+            if "low" in df1m.columns:
+                agg["low"] = ("low", "min")
+            if "volume" in df1m.columns:
+                agg["volume"] = ("volume", "sum")
+            out = df1m.groupby("period").agg(**agg).reset_index().rename(columns={"period": "time"})
+            latest_1m_open = df1m["open_time"].max()
+            out["close_time"] = out["time"] + pd.Timedelta(minutes=self.source_minutes)
+            out = out[out["close_time"] <= latest_1m_open].drop(columns=["close_time"]).reset_index(drop=True)
+        return out.dropna(subset=["time", "close"]).reset_index(drop=True)
+
+    def _latest_taker_ratio(self, signal_time):
+        import pandas as pd
+
+        if self.taker_filter in ("", "none", "off", "false"):
+            return None, True, "disabled"
+        if not os.path.exists(TAKER_FILE):
+            return None, False, "taker_missing"
+        try:
+            taker = pd.read_csv(TAKER_FILE)
+            if "timestamp" not in taker.columns or "buySellRatio" not in taker.columns:
+                return None, False, "taker_columns_missing"
+            taker["timestamp"] = pd.to_datetime(taker["timestamp"], utc=True, errors="coerce")
+            taker["buySellRatio"] = pd.to_numeric(taker["buySellRatio"], errors="coerce")
+            taker = taker.dropna(subset=["timestamp", "buySellRatio"]).sort_values("timestamp")
+            if taker.empty:
+                return None, False, "taker_empty"
+            signal_ts = pd.to_datetime(signal_time, utc=True)
+            rows = taker[taker["timestamp"] <= signal_ts]
+            if rows.empty:
+                return None, False, "taker_no_prior_row"
+            row = rows.iloc[-1]
+            age_min = (signal_ts - row["timestamp"]).total_seconds() / 60
+            if age_min > self.taker_max_age_minutes:
+                return float(row["buySellRatio"]), False, "taker_stale"
+            return float(row["buySellRatio"]), True, "ok"
+        except Exception:
+            return None, False, "taker_read_error"
+
+    def _taker_allows(self, signal, ratio):
+        if self.taker_filter in ("", "none", "off", "false"):
+            return True, "disabled"
+        if ratio is None or not np.isfinite(ratio):
+            return False, "taker_missing_ratio"
+        if self.taker_filter == "align":
+            if signal == "UP":
+                return ratio >= self.taker_align_up, "taker_align_up" if ratio >= self.taker_align_up else "taker_not_aligned"
+            if signal == "DOWN":
+                return ratio <= self.taker_align_down, "taker_align_down" if ratio <= self.taker_align_down else "taker_not_aligned"
+        if self.taker_filter == "not_counter":
+            if signal == "UP":
+                return ratio >= self.taker_counter_up, "taker_not_counter" if ratio >= self.taker_counter_up else "taker_counter"
+            if signal == "DOWN":
+                return ratio <= self.taker_counter_down, "taker_not_counter" if ratio <= self.taker_counter_down else "taker_counter"
+        return False, f"unknown_taker_filter_{self.taker_filter}"
 
     def predict(self, df5=None):
         import numpy as np
         from scipy.stats import norm as scipy_norm
-        import pandas as pd
         import datetime
 
-        csv_path = os.path.join(OUT, "btcusdt_1m.csv")
-        if not os.path.exists(csv_path):
-            return None
         try:
-            df1m = pd.read_csv(csv_path)
-            close = pd.to_numeric(df1m["close"], errors="coerce").dropna().values
+            bars = self._load_price_bars()
+            if bars is None:
+                return None
+            close = np.asarray(bars["close"].astype(float).values, dtype=float)
         except Exception:
             return None
 
-        if len(close) < self.window + 1:
+        window_bars = max(2, int(round(self.window / self.source_minutes)))
+        horizon_bars = max(1, int(round(self.horizon / self.source_minutes)))
+        if len(close) < window_bars + 1:
             return None
 
         now_hour = datetime.datetime.utcnow().hour
@@ -857,7 +943,7 @@ class POCNormalStrategy:
         if now_ms < self.cooldown_until:
             return None
 
-        recent = close[-(self.window + 1):]
+        recent = close[-(window_bars + 1):]
         lr = np.log(recent[1:] / recent[:-1])
         lr = lr[np.isfinite(lr)]
         if len(lr) < 20:
@@ -868,7 +954,7 @@ class POCNormalStrategy:
         if sigma < 1e-10:
             return None
 
-        H = self.horizon
+        H = horizon_bars
         z = (H * mu) / (np.sqrt(H) * sigma)
         p_up = scipy_norm.cdf(z)
         conf = abs(p_up - 0.5) * 200
@@ -903,6 +989,15 @@ class POCNormalStrategy:
                     "high_conf": False, "agree": True, "vol_ok": True,
                     "session_gate_ok": True, "rsi_extreme": True,
                     "z_score": round(float(z), 4), "p_up": round(float(p_up), 4),
+                    "mode": self.mode,
+                    "source_minutes": self.source_minutes,
+                    "window_minutes": self.window,
+                    "window_bars": window_bars,
+                    "horizon_minutes": self.horizon,
+                    "horizon_bars": horizon_bars,
+                    "min_gap_minutes": self.min_gap_minutes,
+                    "tail_pct": self.tail_pct,
+                    "taker_filter": self.taker_filter,
                     "reason": "no_edge", "model_type": "poc_normal",
                     "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
 
@@ -913,10 +1008,16 @@ class POCNormalStrategy:
             try:
                 rsi_arr = self._compute_rsi(close[-30:], 14)
                 rsi_value = float(rsi_arr[-1])
-                if signal == "UP" and rsi_value < self.rsi_lo:
-                    rsi_ok = False
-                if signal == "DOWN" and rsi_value > self.rsi_hi:
-                    rsi_ok = False
+                if self.mode == "reversal":
+                    if signal == "UP" and rsi_value > self.rsi_lo:
+                        rsi_ok = False
+                    if signal == "DOWN" and rsi_value < self.rsi_hi:
+                        rsi_ok = False
+                else:
+                    if signal == "UP" and rsi_value < self.rsi_lo:
+                        rsi_ok = False
+                    if signal == "DOWN" and rsi_value > self.rsi_hi:
+                        rsi_ok = False
             except Exception:
                 pass
 
@@ -929,7 +1030,32 @@ class POCNormalStrategy:
                     "reason": "rsi_filter", "model_type": "poc_normal",
                     "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
 
-        self.cooldown_until = now_ms + self.interval_min * 60000
+        signal_time = bars["time"].iloc[-1]
+        taker_ratio, taker_data_ok, taker_reason = self._latest_taker_ratio(signal_time)
+        taker_ok, taker_filter_reason = self._taker_allows(signal, taker_ratio)
+        if not taker_data_ok or not taker_ok:
+            return {"strategy_id": self.id, "signal": None, "confidence": 0,
+                    "avg_prob": round(float(p_up), 4), "rsi_value": rsi_value,
+                    "high_conf": False, "agree": True, "vol_ok": True,
+                    "session_gate_ok": True, "rsi_extreme": True,
+                    "z_score": round(float(z), 4), "p_up": round(float(p_up), 4),
+                    "reason": taker_reason if not taker_data_ok else taker_filter_reason,
+                    "blocked_signal": signal,
+                    "blocked_confidence": round(min(conf, 95), 1),
+                    "model_type": "poc_normal",
+                    "mode": self.mode,
+                    "source_minutes": self.source_minutes,
+                    "window_minutes": self.window,
+                    "window_bars": window_bars,
+                    "horizon_minutes": self.horizon,
+                    "horizon_bars": horizon_bars,
+                    "min_gap_minutes": self.min_gap_minutes,
+                    "taker_filter": self.taker_filter,
+                    "taker_ratio": None if taker_ratio is None else round(float(taker_ratio), 6),
+                    "taker_filter_ok": False,
+                    "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+        self.cooldown_until = now_ms + self.min_gap_minutes * 60000
 
         return {
             "strategy_id": self.id,
@@ -944,11 +1070,20 @@ class POCNormalStrategy:
             "rsi_extreme": True,
             "z_score": round(float(z), 4),
             "p_up": round(float(p_up), 4),
-            "mu_1m": round(float(mu), 8),
-            "sigma_1m": round(float(sigma), 8),
+            "mu_bar": round(float(mu), 8),
+            "sigma_bar": round(float(sigma), 8),
             "mode": self.mode,
-            "window": self.window,
+            "source_minutes": self.source_minutes,
+            "window_minutes": self.window,
+            "window_bars": window_bars,
+            "horizon_minutes": self.horizon,
+            "horizon_bars": horizon_bars,
+            "min_gap_minutes": self.min_gap_minutes,
             "tail_pct": self.tail_pct,
+            "taker_filter": self.taker_filter,
+            "taker_ratio": None if taker_ratio is None else round(float(taker_ratio), 6),
+            "taker_filter_ok": True,
+            "bypass_entry_timing": True,
             "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
             "model_type": "poc_normal",
         }
@@ -1840,6 +1975,15 @@ def status_text(r):
     return " | ".join(parts) if parts else "waiting"
 
 
+def fmt_num(value, default=0.0):
+    try:
+        if value is None:
+            return float(default)
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
 configs = load_config()
 live_two_minute_ids = {item["id"] for item in TWO_MINUTE_LIVE_CANDIDATES}
 def _make_strategy(sid, cfg):
@@ -1852,11 +1996,14 @@ strategies = [
     for k, v in configs.items()
     if v.get("enabled", True) and (v.get("model_type") == "poc_normal" or k not in live_two_minute_ids)
 ]
-live_two_minute_strategies = [(item, TwoMinuteRegimeShadow(item)) for item in TWO_MINUTE_LIVE_CANDIDATES]
+live_two_minute_strategies = (
+    [(item, TwoMinuteRegimeShadow(item)) for item in TWO_MINUTE_LIVE_CANDIDATES]
+    if ENABLE_LEGACY_TWO_MINUTE_LIVE else []
+)
 shadow_strategies = []
 if ENABLE_SIGNAL_SHADOWS:
     for shadow in SHADOW_CANDIDATES:
-        if not configs.get(shadow["base"], {}).get("enabled", True):
+        if shadow["base"] not in configs or not configs.get(shadow["base"], {}).get("enabled", True):
             continue
         base_cfg = dict(configs[shadow["base"]])
         base_cfg.update({
@@ -1878,7 +2025,7 @@ if ENABLE_SIGNAL_SHADOWS:
 rule_shadow_strategies = []
 if ENABLE_SIGNAL_SHADOWS:
     for shadow in RULE_SHADOW_CANDIDATES:
-        if not configs.get(shadow["base"], {}).get("enabled", True):
+        if shadow["base"] not in configs or not configs.get(shadow["base"], {}).get("enabled", True):
             continue
         base_cfg = dict(configs[shadow["base"]])
         rule_shadow_strategies.append((shadow, RuleShadowStrategy(shadow, base_cfg)))
@@ -1886,7 +2033,7 @@ stateful_shadow_overlays = (
     [
         (shadow, StatefulShadowOverlay(shadow))
         for shadow in STATEFUL_SHADOW_CANDIDATES
-        if configs.get(shadow["base"], {}).get("enabled", True)
+        if shadow["base"] in configs and configs.get(shadow["base"], {}).get("enabled", True)
     ]
     if ENABLE_SIGNAL_SHADOWS else []
 )
@@ -1894,7 +2041,7 @@ meta_gate_shadows = (
     [
         (shadow, MetaGateShadow(shadow))
         for shadow in META_GATE_SHADOW_CANDIDATES
-        if configs.get(shadow["base"], {}).get("enabled", True)
+        if shadow["base"] in configs and configs.get(shadow["base"], {}).get("enabled", True)
     ]
     if ENABLE_SIGNAL_SHADOWS else []
 )
@@ -1904,6 +2051,8 @@ two_minute_shadow_strategies = (
 )
 if not ENABLE_SIGNAL_SHADOWS:
     print("[Signal] Shadow strategies disabled for lower CPU usage. Set ENABLE_SIGNAL_SHADOWS=1 to collect shadow samples.")
+if not ENABLE_LEGACY_TWO_MINUTE_LIVE:
+    print("[Signal] Legacy two-minute live candidates disabled. Set ENABLE_LEGACY_TWO_MINUTE_LIVE=1 only for research.")
 last_audit_keys = load_audit_keys(SIGNAL_AUDIT_FILE)
 
 print("[Signal] Loading BTC history...")
@@ -1934,8 +2083,8 @@ while True:
             if r:
                 signals[strategy.id] = r
                 print(
-                    f"  {r.get('time','?')} {strategy.id} avg={r.get('avg_prob',0) or 0:.3f}"
-                    f" RSI={r.get('rsi_value',0) or 0:.0f} {status_text(r)}"
+                    f"  {r.get('time','?')} {strategy.id} avg={fmt_num(r.get('avg_prob')):.3f}"
+                    f" RSI={fmt_num(r.get('rsi_value')):.0f} {status_text(r)}"
                 )
         for _, strategy in live_two_minute_strategies:
             if configs.get(strategy.id, {}).get("model_type") == "poc_normal": continue

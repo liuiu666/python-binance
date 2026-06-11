@@ -1,6 +1,6 @@
 import React from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { directionClass, directionText, fmt, fmtPct, fmtPrice, statusClass, statusText, timeParts, pnlText } from "../utils";
+import { directionClass, directionText, fmt, fmtPct, fmtPrice, statusClass, statusText, strategyName, timeParts, pnlText } from "../utils";
 
 function getExecutionLabel(row) {
   const isTablet = row.source === "autojs";
@@ -30,7 +30,7 @@ function TradeRows({ rows, emptyText }) {
             <div className="history-main">
               <div className="history-strategy" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span className={`dir-pill ${dir}`}>{directionText(row.direction)}</span>
-                <strong>{row.strategyId ? row.strategyId.replace("BTC_", "") : "手动"}</strong>
+                <strong>{strategyName(row.strategyId)}</strong>
                 <span style={{
                   fontSize: "9px",
                   padding: "1px 6px",

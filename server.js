@@ -9,9 +9,10 @@ const { EventStore } = require("./lib/event_store");
 const { createApiAuth, handleLogin } = require("./lib/auth");
 const {
   DEFAULT_TRADE_CONFIG,
-  amountForConfidence,
+  amountForStrategyConfig,
   normalizeTradeConfig,
-  applyTradeConfigPatch
+  applyTradeConfigPatch,
+  publicTradeConfig
 } = require("./lib/trade_config");
 const {
   DEFAULT_PAYOUT_RATE,
@@ -79,6 +80,7 @@ const REPORT_FILES = {
   shadowDecision: path.join(DATA_DIR, "shadow_decision_report.json"),
   latency: path.join(DATA_DIR, "execution_latency_validation.json")
 };
+const LIVE_STRATEGY_IDS = ["BTC_10min_SAFE", "BTC_10min_TAKER"];
 const PYTHON_EXE = process.env.PYTHON_EXE || "python";
 const SERVER_SIM_TRADING_ENABLED = process.env.SERVER_SIM_TRADING_ENABLED === "1";
 const MANAGED_PROCESSES_ENABLED = process.env.DISABLE_MANAGED_PROCESSES !== "1";
@@ -123,6 +125,8 @@ const DATA_HEALTH_FILES = {
 const SIGNAL_SNAPSHOT_MAX_AGE_MS = Number(process.env.SIGNAL_SNAPSHOT_MAX_AGE_MS || 5 * 60 * 1000);
 const REPORT_SCRIPT_ENV = {
   PYTHONUNBUFFERED: "1",
+  APP_DIR: __dirname,
+  DATA_DIR,
   OMP_NUM_THREADS: "1",
   OPENBLAS_NUM_THREADS: "1",
   MKL_NUM_THREADS: "1",
@@ -172,7 +176,7 @@ function startSignalService(reason = "startup") {
     const child = spawn(PYTHON_EXE, [SIGNAL_SCRIPT_FILE], {
       cwd: __dirname,
       windowsHide: true,
-      env: { ...process.env, PYTHONUNBUFFERED: "1" },
+      env: { ...process.env, ...REPORT_SCRIPT_ENV },
       stdio: ["ignore", out, err]
     });
     signalService.pid = child.pid;
@@ -323,8 +327,7 @@ function signalTimeMs(sig) {
 }
 
 function configuredMaxActionableLagMs() {
-  const value = Number(tradeConfig && tradeConfig.maxActionableLagMs);
-  return Number.isFinite(value) && value > 0 ? value : 60 * 1000;
+  return 60 * 1000;
 }
 
 function roundNullable(value, digits = 4) {
@@ -417,11 +420,11 @@ function dataHealthGate(signals) {
   const reasons = [];
   for (const [name, spec] of Object.entries(DATA_HEALTH_FILES)) {
     files[name] = csvDataHealth(name, spec, now);
-    reasons.push(...files[name].reasons);
+    if (name === "klines1m") reasons.push(...files[name].reasons);
   }
 
   const updateStatus = readJsonFile(DATA_UPDATE_STATUS_FILE, null);
-  if (updateStatus && updateStatus.ok === false) reasons.push("data_update_failed");
+  const updateFailed = !!(updateStatus && updateStatus.ok === false);
 
   const realSignals = Object.entries(signals || {})
     .filter(([key, sig]) => !key.startsWith("_") && sig && typeof sig === "object" && !sig.shadow);
@@ -451,6 +454,7 @@ function dataHealthGate(signals) {
       lastExitCode: dataUpdate.lastExitCode,
       lastError: dataUpdate.lastError,
       runs: dataUpdate.runs,
+      failedButFilesFresh: updateFailed && uniqueReasons.length === 0,
       status: updateStatus
     },
     signal: {
@@ -465,7 +469,7 @@ function dataHealthGate(signals) {
 function autoTradeSafetyGate() {
   const report = readJsonFile(REPORT_FILES.shadowDecision, null);
   const verdict = report && report.safety ? report.safety.verdict : null;
-  const manualOverride = !!(tradeConfig && tradeConfig.realTradingOverride);
+  const manualOverride = !!(tradeConfig && tradeConfig.realTradingEnabled && tradeConfig.autoTrade_10m);
   const allow = verdict === "allow_real_auto_trading" || manualOverride;
   return {
     allow,
@@ -473,7 +477,7 @@ function autoTradeSafetyGate() {
     verdict: verdict || "missing_shadow_decision",
     requiredVerdict: "allow_real_auto_trading",
     manualOverride,
-    overrideSource: manualOverride ? "trade_config.realTradingOverride" : null
+    overrideSource: manualOverride ? "trade_config.realTradingEnabled" : null
   };
 }
 
@@ -621,28 +625,25 @@ function readRawJson(req, cb) {
 }
 
 function amountForStrategy(strategyId, sig) {
-  if (sig && sig.confidence != null) return amountForConfidence(sig.confidence, tradeConfig);
-  if (sig && sig.amount && sig.fixed_amount !== true) return String(sig.amount);
-  return String(tradeConfig.amount);
+  if (sig && sig.amount && sig.fixed_amount === true) return String(sig.amount);
+  const baseAmount = amountForStrategyConfig(strategyId, tradeConfig);
+  if (sig && sig.amount) return String(sig.amount);
+  return String(baseAmount);
 }
 
 const ENTRY_TIMING_ENABLED = true;
 const ENTRY_TIMING_POLICIES = {
-  BTC_10min: {
+  BTC_10min_SAFE: {
+    name: "direct_after_signal",
+    type: "none"
+  },
+  BTC_10min_TAKER: {
     name: "pullback_0bp_then_confirm_5m",
     type: "pullback_then_confirm",
     pullbackBps: 0,
     maxWaitMin: 5,
     minPullbackDelayMs: 60000,
     minConfirmDelayMs: 60000
-  },
-  BTC_30min: {
-    name: "pullback_5bp_within_3m",
-    type: "pullback_within",
-    pullbackBps: 5,
-    maxWaitMin: 3,
-    minPullbackDelayMs: 60000,
-    minConfirmDelayMs: 0
   }
 };
 const entryTimingState = {};
@@ -729,6 +730,7 @@ function applyEntryTimingForSignal(strategyId, sig) {
   const policy = ENTRY_TIMING_POLICIES[strategyId];
   if (sig && sig.bypass_entry_timing) return sig;
   if (!ENTRY_TIMING_ENABLED || !policy || !sig || !sig.signal) return sig;
+  if (policy.type === "none") return sig;
 
   const now = Date.now();
   const actionableMs = signalActionableMs(sig);
@@ -900,7 +902,12 @@ function applyDataHealthGate(signals, gate) {
 
 function buildSignalResponse(source = "") {
   const rawSignals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {};
-  const timedSignals = applyEntryTiming(rawSignals);
+  const liveRawSignals = Object.fromEntries(
+    LIVE_STRATEGY_IDS
+      .filter(strategyId => rawSignals[strategyId])
+      .map(strategyId => [strategyId, rawSignals[strategyId]])
+  );
+  const timedSignals = applyEntryTiming(liveRawSignals);
   const freshSignals = applyExecutionFreshnessGate(timedSignals);
   const health = applyDataHealthGate(freshSignals, dataHealthGate(freshSignals));
   const safety = applyAutoTradeSafetyGate(health.signals);
@@ -911,11 +918,13 @@ function buildSignalResponse(source = "") {
   // If not requested by the dashboard, apply safety overrides to prevent real trades if disabled.
   if (source !== "dashboard") {
     if (!tradeConfig.realTradingEnabled) {
-      if (signals.BTC_10min) signals.BTC_10min.signal = null;
-      if (signals.BTC_30min) signals.BTC_30min.signal = null;
-    } else {
-      if (!tradeConfig.autoTrade_10m && signals.BTC_10min) signals.BTC_10min.signal = null;
-      if (!tradeConfig.autoTrade_30m && signals.BTC_30min) signals.BTC_30min.signal = null;
+      for (const strategyId of LIVE_STRATEGY_IDS) {
+        if (signals[strategyId]) signals[strategyId].signal = null;
+      }
+    } else if (!tradeConfig.autoTrade_10m) {
+      for (const strategyId of LIVE_STRATEGY_IDS) {
+        if (signals[strategyId]) signals[strategyId].signal = null;
+      }
     }
   }
 
@@ -923,14 +932,13 @@ function buildSignalResponse(source = "") {
   for (const [strategyId, sig] of Object.entries(signals)) {
     strategyAmounts[strategyId] = amountForStrategy(strategyId, sig);
   }
-  const legacySig = signals.BTC_30min || signals.BTC_10min;
-  const legacyAmount = legacySig ? amountForStrategy(legacySig.strategy_id || "BTC_30min", legacySig) : String(tradeConfig.amount);
+  const legacySig = LIVE_STRATEGY_IDS.map(id => signals[id]).find(Boolean);
+  const legacyAmount = legacySig ? amountForStrategy(legacySig.strategy_id, legacySig) : String(tradeConfig.amount);
 
   // Supply backward compatible config keys for old tablet/scripts
   const configCopy = {
-    ...tradeConfig,
-    autoTrade: tradeConfig.realTradingEnabled && (tradeConfig.autoTrade_10m || tradeConfig.autoTrade_30m),
-    realTradingOverride: tradeConfig.realTradingEnabled
+    ...publicTradeConfig(tradeConfig),
+    autoTrade: tradeConfig.realTradingEnabled && tradeConfig.autoTrade_10m
   };
 
   return {
@@ -1289,22 +1297,6 @@ function preloadCandles() {
     }
   }
   candles.sort((a, b) => a.time - b.time);
-
-  // Time-Alignment Trick: Shift legacy CSV timeline forward to current time to eliminate gaps
-  if (candles.length > 0) {
-    const latestTimeMs = candles[candles.length - 1].timeMs;
-    const currentMinuteMs = Math.floor(Date.now() / 60000) * 60000;
-    const offsetMs = currentMinuteMs - latestTimeMs;
-    
-    if (offsetMs > 5 * 60 * 1000) {
-      for (const c of candles) {
-        c.timeMs += offsetMs;
-        c.time = Math.floor(c.timeMs / 1000);
-      }
-      console.log(`[Candles] Shunted legacy CSV timeline forward by ${Math.round(offsetMs / 3600000)} hours to align with current live ticks.`);
-    }
-  }
-
   return candles;
 }
 
@@ -1394,7 +1386,7 @@ function fetchBinancePriceFallback() {
   if (now - lastBinanceFetchTime < 1800) return;
   lastBinanceFetchTime = now;
   
-  fetch("https://api.binance.com/api/3/ticker/price?symbol=BTCUSDT")
+  fetch("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT")
     .then(res => res.json())
     .then(data => {
       const price = parseFloat(data.price);
@@ -1486,7 +1478,7 @@ function broadcastState() {
     activeTrades: trades.filter(t => t.status === "active"),
     recentTrades: trades.filter(t => t.status !== "active").slice(-20).reverse(),
     autoTradeLog: autoTradeLog.slice(-10).reverse(),
-    autoTradeEnabled: tradeConfig.realTradingEnabled && (tradeConfig.autoTrade_10m || tradeConfig.autoTrade_30m),
+    autoTradeEnabled: tradeConfig.realTradingEnabled && tradeConfig.autoTrade_10m,
     serverSimTradingEnabled: SERVER_SIM_TRADING_ENABLED,
     realBalance
   });
@@ -1533,15 +1525,12 @@ function checkAutoTrade() {
   try {
     if (!fs.existsSync(SIGNAL_FILE)) return;
     const signals = buildSignalResponse("dashboard");
-    for (const strategyId of ["BTC_30min", "BTC_10min"]) {
-      // Respect separate autoTrade switches for 10m / 30m options
-      if (strategyId === "BTC_10min" && !tradeConfig.autoTrade_10m) continue;
-      if (strategyId === "BTC_30min" && !tradeConfig.autoTrade_30m) continue;
-
+    for (const strategyId of LIVE_STRATEGY_IDS) {
+      if (!tradeConfig.autoTrade_10m) continue;
       const sig = signals[strategyId];
       if (!sig || !sig.signal || !sig.confidence) continue;
       if (!sig.bypass_min_confidence_filter && Number(sig.confidence) < Number(tradeConfig.minConfidence || 0)) continue;
-      if (tradeConfig.preventOverlapOrders && trades.some(t => t.status === "active" && t.source === "auto:" + strategyId)) continue;
+      if (trades.some(t => t.status === "active" && t.source === "auto:" + strategyId)) continue;
 
       const sigTime = signalActionableMs(sig);
       if (!sigTime || Date.now() - sigTime > configuredMaxActionableLagMs()) continue;
@@ -1608,7 +1597,7 @@ wss.on("connection", (ws) => {
     account: { ...account }, activeTrades: trades.filter(t => t.status === "active"),
     recentTrades: trades.filter(t => t.status !== "active").slice(-20).reverse(),
     autoTradeLog: autoTradeLog.slice(-10).reverse(),
-    autoTradeEnabled: tradeConfig.realTradingEnabled && (tradeConfig.autoTrade_10m || tradeConfig.autoTrade_30m),
+    autoTradeEnabled: tradeConfig.realTradingEnabled && tradeConfig.autoTrade_10m,
     serverSimTradingEnabled: SERVER_SIM_TRADING_ENABLED,
     realBalance
   };
@@ -1652,11 +1641,11 @@ let tradeConfig = (() => {
 })();
 
 function saveTradeConfig() {
-  try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(tradeConfig, null, 2)); } catch (e) {}
+  try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(publicTradeConfig(tradeConfig), null, 2)); } catch (e) {}
 }
 
 app.get("/api/config", (req, res) => {
-  res.json(tradeConfig);
+  res.json(publicTradeConfig(tradeConfig));
 });
 
 app.post("/api/config", requireApiToken, express.json(), (req, res) => {
@@ -1667,7 +1656,7 @@ app.post("/api/config", requireApiToken, express.json(), (req, res) => {
   }
   saveTradeConfig();
   console.log("[Config] Updated:", JSON.stringify(tradeConfig));
-  res.json({ ...tradeConfig, safetyBlocked: result.safetyBlocked, forceAutoTrade: result.forceAutoTrade });
+  res.json({ ...publicTradeConfig(tradeConfig), safetyBlocked: result.safetyBlocked, forceAutoTrade: result.forceAutoTrade });
 });
 
 
@@ -1771,8 +1760,3 @@ server.listen(PORT, '0.0.0.0', () => {
   }
   console.log(`BTC 二元期权 http://localhost:${PORT} | 自动交易: ${AUTO_TRADE_ENABLED}`);
 });
-
-
-
-
-

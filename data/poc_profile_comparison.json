@@ -1,0 +1,4176 @@
+{
+  "method": {
+    "type": "poc_normal_reversal_profile_comparison",
+    "payout": 0.85,
+    "stake": 5.0,
+    "breakeven_wr": 54.05,
+    "note": "All signals use causal rolling mean/std; future prices are used only for settlement labels.",
+    "confirmation_cache": "E:\\python-binance\\data\\cache\\walkforward_BTC_2m_10min_tr12000_te1000_st1000_n65572_c3671730d3c_2026-06-08_14-38-00.npz"
+  },
+  "datasets": [
+    {
+      "file": "btcusdt_1m.csv",
+      "rows_1m": 136826,
+      "start": "2026-03-08 12:24:00+00:00",
+      "end": "2026-06-11 12:49:00+00:00",
+      "results": [
+        {
+          "name": "aggressive_2m_sma60_tail20_cd6",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 3,
+          "cooldown_minutes": 6,
+          "min_gap_minutes": 6,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 651,
+          "wins": 411,
+          "losses": 240,
+          "wr": 63.13,
+          "edge_over_breakeven": 9.08,
+          "pnl_5u": 546.75,
+          "max_loss": 10,
+          "trades_per_day": 6.85,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 9,
+            "min_block_wr": 52.31,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 66,
+                "wins": 48,
+                "wr": 72.73,
+                "pnl_5u": 114.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 65,
+                "wins": 41,
+                "wr": 63.08,
+                "pnl_5u": 54.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_03",
+                "trades": 65,
+                "wins": 34,
+                "wr": 52.31,
+                "pnl_5u": -10.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_04",
+                "trades": 65,
+                "wins": 44,
+                "wr": 67.69,
+                "pnl_5u": 82.0,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_05",
+                "trades": 65,
+                "wins": 37,
+                "wr": 56.92,
+                "pnl_5u": 17.25,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_06",
+                "trades": 65,
+                "wins": 48,
+                "wr": 73.85,
+                "pnl_5u": 119.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_07",
+                "trades": 65,
+                "wins": 36,
+                "wr": 55.38,
+                "pnl_5u": 8.0,
+                "max_loss": 10
+              },
+              {
+                "slice": "block_08",
+                "trades": 65,
+                "wins": 42,
+                "wr": 64.62,
+                "pnl_5u": 63.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_09",
+                "trades": 65,
+                "wins": 38,
+                "wr": 58.46,
+                "pnl_5u": 26.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_10",
+                "trades": 65,
+                "wins": 43,
+                "wr": 66.15,
+                "pnl_5u": 72.75,
+                "max_loss": 2
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 96,
+            "active_days": 92,
+            "zero_days": 4,
+            "avg_all_days": 6.78,
+            "avg_active_days": 7.08,
+            "median_active": 6.5,
+            "p90_active": 12.9,
+            "max_day": 21
+          },
+          "note": "2m counterpart to short cooldown; rounded to 3 bars."
+        },
+        {
+          "name": "aggressive_1m_sma60_tail20_cd5",
+          "source_minutes": 1,
+          "lookback_bars": 60,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 10,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 5,
+          "min_gap_minutes": 5,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 711,
+          "wins": 429,
+          "losses": 282,
+          "wr": 60.34,
+          "edge_over_breakeven": 6.28,
+          "pnl_5u": 413.25,
+          "max_loss": 7,
+          "trades_per_day": 7.48,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 8,
+            "min_block_wr": 46.48,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 72,
+                "wins": 49,
+                "wr": 68.06,
+                "pnl_5u": 93.25,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_02",
+                "trades": 71,
+                "wins": 48,
+                "wr": 67.61,
+                "pnl_5u": 89.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_03",
+                "trades": 71,
+                "wins": 33,
+                "wr": 46.48,
+                "pnl_5u": -49.75,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_04",
+                "trades": 71,
+                "wins": 45,
+                "wr": 63.38,
+                "pnl_5u": 61.25,
+                "max_loss": 6
+              },
+              {
+                "slice": "block_05",
+                "trades": 71,
+                "wins": 37,
+                "wr": 52.11,
+                "pnl_5u": -12.75,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_06",
+                "trades": 71,
+                "wins": 40,
+                "wr": 56.34,
+                "pnl_5u": 15.0,
+                "max_loss": 7
+              },
+              {
+                "slice": "block_07",
+                "trades": 71,
+                "wins": 42,
+                "wr": 59.15,
+                "pnl_5u": 33.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_08",
+                "trades": 71,
+                "wins": 42,
+                "wr": 59.15,
+                "pnl_5u": 33.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_09",
+                "trades": 71,
+                "wins": 42,
+                "wr": 59.15,
+                "pnl_5u": 33.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_10",
+                "trades": 71,
+                "wins": 51,
+                "wr": 71.83,
+                "pnl_5u": 116.75,
+                "max_loss": 3
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 96,
+            "active_days": 95,
+            "zero_days": 1,
+            "avg_all_days": 7.41,
+            "avg_active_days": 7.48,
+            "median_active": 6.0,
+            "p90_active": 15.0,
+            "max_day": 23
+          },
+          "note": "Higher turnover; allows overlapping 10m exposure."
+        },
+        {
+          "name": "safe_2m_sma60_tail20_cd10",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 495,
+          "wins": 312,
+          "losses": 183,
+          "wr": 63.03,
+          "edge_over_breakeven": 8.98,
+          "pnl_5u": 411.0,
+          "max_loss": 5,
+          "trades_per_day": 5.21,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 9,
+            "min_block_wr": 52.0,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 50,
+                "wins": 33,
+                "wr": 66.0,
+                "pnl_5u": 55.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 50,
+                "wins": 32,
+                "wr": 64.0,
+                "pnl_5u": 46.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_03",
+                "trades": 50,
+                "wins": 26,
+                "wr": 52.0,
+                "pnl_5u": -9.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_04",
+                "trades": 50,
+                "wins": 35,
+                "wr": 70.0,
+                "pnl_5u": 73.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 50,
+                "wins": 30,
+                "wr": 60.0,
+                "pnl_5u": 27.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_06",
+                "trades": 49,
+                "wins": 36,
+                "wr": 73.47,
+                "pnl_5u": 88.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 49,
+                "wins": 29,
+                "wr": 59.18,
+                "pnl_5u": 23.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_08",
+                "trades": 49,
+                "wins": 33,
+                "wr": 67.35,
+                "pnl_5u": 60.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_09",
+                "trades": 49,
+                "wins": 27,
+                "wr": 55.1,
+                "pnl_5u": 4.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_10",
+                "trades": 49,
+                "wins": 31,
+                "wr": 63.27,
+                "pnl_5u": 41.75,
+                "max_loss": 3
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 96,
+            "active_days": 92,
+            "zero_days": 4,
+            "avg_all_days": 5.16,
+            "avg_active_days": 5.38,
+            "median_active": 5.0,
+            "p90_active": 9.0,
+            "max_day": 14
+          },
+          "note": "Same 60-minute lookback after aggregating to 2m bars."
+        },
+        {
+          "name": "safe_2m_gap30",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 30,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 332,
+          "wins": 212,
+          "losses": 120,
+          "wr": 63.86,
+          "edge_over_breakeven": 9.8,
+          "pnl_5u": 301.0,
+          "max_loss": 4,
+          "trades_per_day": 3.49,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 9,
+            "min_block_wr": 48.48,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 34,
+                "wins": 21,
+                "wr": 61.76,
+                "pnl_5u": 24.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 34,
+                "wins": 22,
+                "wr": 64.71,
+                "pnl_5u": 33.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 33,
+                "wins": 16,
+                "wr": 48.48,
+                "pnl_5u": -17.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_04",
+                "trades": 33,
+                "wins": 24,
+                "wr": 72.73,
+                "pnl_5u": 57.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_05",
+                "trades": 33,
+                "wins": 23,
+                "wr": 69.7,
+                "pnl_5u": 47.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_06",
+                "trades": 33,
+                "wins": 27,
+                "wr": 81.82,
+                "pnl_5u": 84.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 33,
+                "wins": 20,
+                "wr": 60.61,
+                "pnl_5u": 20.0,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_08",
+                "trades": 33,
+                "wins": 21,
+                "wr": 63.64,
+                "pnl_5u": 29.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_09",
+                "trades": 33,
+                "wins": 19,
+                "wr": 57.58,
+                "pnl_5u": 10.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_10",
+                "trades": 33,
+                "wins": 19,
+                "wr": 57.58,
+                "pnl_5u": 10.75,
+                "max_loss": 3
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 96,
+            "active_days": 92,
+            "zero_days": 4,
+            "avg_all_days": 3.46,
+            "avg_active_days": 3.61,
+            "median_active": 4.0,
+            "p90_active": 6.0,
+            "max_day": 8
+          },
+          "note": "Safe 2m with at least 30 minutes between selected trades."
+        },
+        {
+          "name": "safe_2m_cap6",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": 6,
+          "daily_loss_stop": null,
+          "trades": 398,
+          "wins": 246,
+          "losses": 152,
+          "wr": 61.81,
+          "edge_over_breakeven": 7.75,
+          "pnl_5u": 285.5,
+          "max_loss": 6,
+          "trades_per_day": 4.19,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 8,
+            "min_block_wr": 45.0,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 40,
+                "wins": 25,
+                "wr": 62.5,
+                "pnl_5u": 31.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 40,
+                "wins": 28,
+                "wr": 70.0,
+                "pnl_5u": 59.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 40,
+                "wins": 18,
+                "wr": 45.0,
+                "pnl_5u": -33.5,
+                "max_loss": 6
+              },
+              {
+                "slice": "block_04",
+                "trades": 40,
+                "wins": 26,
+                "wr": 65.0,
+                "pnl_5u": 40.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 40,
+                "wins": 25,
+                "wr": 62.5,
+                "pnl_5u": 31.25,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_06",
+                "trades": 40,
+                "wins": 32,
+                "wr": 80.0,
+                "pnl_5u": 96.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 40,
+                "wins": 23,
+                "wr": 57.5,
+                "pnl_5u": 12.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_08",
+                "trades": 40,
+                "wins": 25,
+                "wr": 62.5,
+                "pnl_5u": 31.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_09",
+                "trades": 39,
+                "wins": 21,
+                "wr": 53.85,
+                "pnl_5u": -0.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_10",
+                "trades": 39,
+                "wins": 23,
+                "wr": 58.97,
+                "pnl_5u": 17.75,
+                "max_loss": 4
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 96,
+            "active_days": 92,
+            "zero_days": 4,
+            "avg_all_days": 4.15,
+            "avg_active_days": 4.33,
+            "median_active": 5.0,
+            "p90_active": 6.0,
+            "max_day": 6
+          },
+          "note": "Safe 2m with a maximum of 6 trades per UTC day."
+        },
+        {
+          "name": "safe_1m_sma60_tail20_cd10",
+          "source_minutes": 1,
+          "lookback_bars": 60,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 10,
+          "horizon_minutes": 10,
+          "cooldown_bars": 10,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 489,
+          "wins": 295,
+          "losses": 194,
+          "wr": 60.33,
+          "edge_over_breakeven": 6.27,
+          "pnl_5u": 283.75,
+          "max_loss": 5,
+          "trades_per_day": 5.15,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 8,
+            "min_block_wr": 44.9,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 49,
+                "wins": 31,
+                "wr": 63.27,
+                "pnl_5u": 41.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_02",
+                "trades": 49,
+                "wins": 33,
+                "wr": 67.35,
+                "pnl_5u": 60.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 49,
+                "wins": 22,
+                "wr": 44.9,
+                "pnl_5u": -41.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_04",
+                "trades": 49,
+                "wins": 31,
+                "wr": 63.27,
+                "pnl_5u": 41.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 49,
+                "wins": 29,
+                "wr": 59.18,
+                "pnl_5u": 23.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_06",
+                "trades": 49,
+                "wins": 29,
+                "wr": 59.18,
+                "pnl_5u": 23.25,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_07",
+                "trades": 49,
+                "wins": 29,
+                "wr": 59.18,
+                "pnl_5u": 23.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_08",
+                "trades": 49,
+                "wins": 30,
+                "wr": 61.22,
+                "pnl_5u": 32.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_09",
+                "trades": 49,
+                "wins": 26,
+                "wr": 53.06,
+                "pnl_5u": -4.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_10",
+                "trades": 48,
+                "wins": 35,
+                "wr": 72.92,
+                "pnl_5u": 83.75,
+                "max_loss": 2
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 96,
+            "active_days": 95,
+            "zero_days": 1,
+            "avg_all_days": 5.09,
+            "avg_active_days": 5.15,
+            "median_active": 5.0,
+            "p90_active": 9.0,
+            "max_day": 15
+          },
+          "note": "Current recommended production profile."
+        },
+        {
+          "name": "safe_2m_gap20",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 20,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 371,
+          "wins": 231,
+          "losses": 140,
+          "wr": 62.26,
+          "edge_over_breakeven": 8.21,
+          "pnl_5u": 281.75,
+          "max_loss": 5,
+          "trades_per_day": 3.9,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 8,
+            "min_block_wr": 48.65,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 38,
+                "wins": 23,
+                "wr": 60.53,
+                "pnl_5u": 22.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 37,
+                "wins": 24,
+                "wr": 64.86,
+                "pnl_5u": 37.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 37,
+                "wins": 19,
+                "wr": 51.35,
+                "pnl_5u": -9.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_04",
+                "trades": 37,
+                "wins": 26,
+                "wr": 70.27,
+                "pnl_5u": 55.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_05",
+                "trades": 37,
+                "wins": 24,
+                "wr": 64.86,
+                "pnl_5u": 37.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_06",
+                "trades": 37,
+                "wins": 29,
+                "wr": 78.38,
+                "pnl_5u": 83.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 37,
+                "wins": 22,
+                "wr": 59.46,
+                "pnl_5u": 18.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_08",
+                "trades": 37,
+                "wins": 22,
+                "wr": 59.46,
+                "pnl_5u": 18.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_09",
+                "trades": 37,
+                "wins": 18,
+                "wr": 48.65,
+                "pnl_5u": -18.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_10",
+                "trades": 37,
+                "wins": 24,
+                "wr": 64.86,
+                "pnl_5u": 37.0,
+                "max_loss": 3
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 96,
+            "active_days": 92,
+            "zero_days": 4,
+            "avg_all_days": 3.86,
+            "avg_active_days": 4.03,
+            "median_active": 4.0,
+            "p90_active": 7.0,
+            "max_day": 10
+          },
+          "note": "Safe 2m with at least 20 minutes between selected trades."
+        },
+        {
+          "name": "confirm_2m_sma60_tail20_cd10_ml62",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": 0.62,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 203,
+          "wins": 140,
+          "losses": 63,
+          "wr": 68.97,
+          "edge_over_breakeven": 14.91,
+          "pnl_5u": 280.0,
+          "max_loss": 3,
+          "trades_per_day": 2.14,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 9,
+            "min_block_wr": 52.38,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 21,
+                "wins": 12,
+                "wr": 57.14,
+                "pnl_5u": 6.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 21,
+                "wins": 11,
+                "wr": 52.38,
+                "pnl_5u": -3.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 21,
+                "wins": 16,
+                "wr": 76.19,
+                "pnl_5u": 43.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_04",
+                "trades": 20,
+                "wins": 11,
+                "wr": 55.0,
+                "pnl_5u": 1.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 20,
+                "wins": 17,
+                "wr": 85.0,
+                "pnl_5u": 57.25,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_06",
+                "trades": 20,
+                "wins": 13,
+                "wr": 65.0,
+                "pnl_5u": 20.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_07",
+                "trades": 20,
+                "wins": 15,
+                "wr": 75.0,
+                "pnl_5u": 38.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_08",
+                "trades": 20,
+                "wins": 17,
+                "wr": 85.0,
+                "pnl_5u": 57.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_09",
+                "trades": 20,
+                "wins": 13,
+                "wr": 65.0,
+                "pnl_5u": 20.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_10",
+                "trades": 20,
+                "wins": 15,
+                "wr": 75.0,
+                "pnl_5u": 38.75,
+                "max_loss": 2
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 72,
+            "active_days": 59,
+            "zero_days": 13,
+            "avg_all_days": 2.82,
+            "avg_active_days": 3.44,
+            "median_active": 3.0,
+            "p90_active": 6.0,
+            "max_day": 9
+          },
+          "note": "2m POC signal must agree with rolling OOS 2m model at 62%."
+        },
+        {
+          "name": "confirm_2m_sma60_tail20_cd10_ml58",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": 0.58,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 277,
+          "wins": 180,
+          "losses": 97,
+          "wr": 64.98,
+          "edge_over_breakeven": 10.93,
+          "pnl_5u": 280.0,
+          "max_loss": 4,
+          "trades_per_day": 2.92,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 8,
+            "min_block_wr": 50.0,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 28,
+                "wins": 15,
+                "wr": 53.57,
+                "pnl_5u": -1.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_02",
+                "trades": 28,
+                "wins": 14,
+                "wr": 50.0,
+                "pnl_5u": -10.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_03",
+                "trades": 28,
+                "wins": 20,
+                "wr": 71.43,
+                "pnl_5u": 45.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_04",
+                "trades": 28,
+                "wins": 16,
+                "wr": 57.14,
+                "pnl_5u": 8.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 28,
+                "wins": 21,
+                "wr": 75.0,
+                "pnl_5u": 54.25,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_06",
+                "trades": 28,
+                "wins": 20,
+                "wr": 71.43,
+                "pnl_5u": 45.0,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_07",
+                "trades": 28,
+                "wins": 17,
+                "wr": 60.71,
+                "pnl_5u": 17.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_08",
+                "trades": 27,
+                "wins": 20,
+                "wr": 74.07,
+                "pnl_5u": 50.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_09",
+                "trades": 27,
+                "wins": 19,
+                "wr": 70.37,
+                "pnl_5u": 40.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_10",
+                "trades": 27,
+                "wins": 18,
+                "wr": 66.67,
+                "pnl_5u": 31.5,
+                "max_loss": 4
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 74,
+            "active_days": 69,
+            "zero_days": 5,
+            "avg_all_days": 3.74,
+            "avg_active_days": 4.01,
+            "median_active": 3.0,
+            "p90_active": 7.0,
+            "max_day": 13
+          },
+          "note": "2m POC signal must agree with rolling OOS 2m model at 58%."
+        },
+        {
+          "name": "safe_2m_gap30_ml62",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": 0.62,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 30,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 139,
+          "wins": 101,
+          "losses": 38,
+          "wr": 72.66,
+          "edge_over_breakeven": 18.61,
+          "pnl_5u": 239.25,
+          "max_loss": 2,
+          "trades_per_day": 1.46,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 10,
+            "min_block_wr": 57.14,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 14,
+                "wins": 8,
+                "wr": 57.14,
+                "pnl_5u": 4.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_02",
+                "trades": 14,
+                "wins": 8,
+                "wr": 57.14,
+                "pnl_5u": 4.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 14,
+                "wins": 11,
+                "wr": 78.57,
+                "pnl_5u": 31.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_04",
+                "trades": 14,
+                "wins": 10,
+                "wr": 71.43,
+                "pnl_5u": 22.5,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_05",
+                "trades": 14,
+                "wins": 11,
+                "wr": 78.57,
+                "pnl_5u": 31.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_06",
+                "trades": 14,
+                "wins": 10,
+                "wr": 71.43,
+                "pnl_5u": 22.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 14,
+                "wins": 11,
+                "wr": 78.57,
+                "pnl_5u": 31.75,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_08",
+                "trades": 14,
+                "wins": 12,
+                "wr": 85.71,
+                "pnl_5u": 41.0,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_09",
+                "trades": 14,
+                "wins": 10,
+                "wr": 71.43,
+                "pnl_5u": 22.5,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_10",
+                "trades": 13,
+                "wins": 10,
+                "wr": 76.92,
+                "pnl_5u": 27.5,
+                "max_loss": 1
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 72,
+            "active_days": 59,
+            "zero_days": 13,
+            "avg_all_days": 1.93,
+            "avg_active_days": 2.36,
+            "median_active": 2.0,
+            "p90_active": 4.0,
+            "max_day": 5
+          },
+          "note": "Safe 2m gap30 plus rolling OOS 2m model agreement at 62%."
+        },
+        {
+          "name": "safe_2m_gap30_ml58",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": 0.58,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 30,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 189,
+          "wins": 125,
+          "losses": 64,
+          "wr": 66.14,
+          "edge_over_breakeven": 12.08,
+          "pnl_5u": 211.25,
+          "max_loss": 4,
+          "trades_per_day": 1.99,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 8,
+            "min_block_wr": 47.37,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 19,
+                "wins": 10,
+                "wr": 52.63,
+                "pnl_5u": -2.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_02",
+                "trades": 19,
+                "wins": 9,
+                "wr": 47.37,
+                "pnl_5u": -11.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_03",
+                "trades": 19,
+                "wins": 12,
+                "wr": 63.16,
+                "pnl_5u": 16.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_04",
+                "trades": 19,
+                "wins": 13,
+                "wr": 68.42,
+                "pnl_5u": 25.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_05",
+                "trades": 19,
+                "wins": 14,
+                "wr": 73.68,
+                "pnl_5u": 34.5,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_06",
+                "trades": 19,
+                "wins": 14,
+                "wr": 73.68,
+                "pnl_5u": 34.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 19,
+                "wins": 14,
+                "wr": 73.68,
+                "pnl_5u": 34.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_08",
+                "trades": 19,
+                "wins": 14,
+                "wr": 73.68,
+                "pnl_5u": 34.5,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_09",
+                "trades": 19,
+                "wins": 13,
+                "wr": 68.42,
+                "pnl_5u": 25.25,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_10",
+                "trades": 18,
+                "wins": 12,
+                "wr": 66.67,
+                "pnl_5u": 21.0,
+                "max_loss": 3
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 74,
+            "active_days": 69,
+            "zero_days": 5,
+            "avg_all_days": 2.55,
+            "avg_active_days": 2.74,
+            "median_active": 2.0,
+            "p90_active": 5.0,
+            "max_day": 6
+          },
+          "note": "Safe 2m gap30 plus rolling OOS 2m model agreement at 58%."
+        },
+        {
+          "name": "safe_2m_cap4",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": 4,
+          "daily_loss_stop": null,
+          "trades": 309,
+          "wins": 183,
+          "losses": 126,
+          "wr": 59.22,
+          "edge_over_breakeven": 5.17,
+          "pnl_5u": 147.75,
+          "max_loss": 4,
+          "trades_per_day": 3.25,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 7,
+            "min_block_wr": 41.94,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 31,
+                "wins": 18,
+                "wr": 58.06,
+                "pnl_5u": 11.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_02",
+                "trades": 31,
+                "wins": 22,
+                "wr": 70.97,
+                "pnl_5u": 48.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 31,
+                "wins": 13,
+                "wr": 41.94,
+                "pnl_5u": -34.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_04",
+                "trades": 31,
+                "wins": 18,
+                "wr": 58.06,
+                "pnl_5u": 11.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 31,
+                "wins": 21,
+                "wr": 67.74,
+                "pnl_5u": 39.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_06",
+                "trades": 31,
+                "wins": 25,
+                "wr": 80.65,
+                "pnl_5u": 76.25,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_07",
+                "trades": 31,
+                "wins": 18,
+                "wr": 58.06,
+                "pnl_5u": 11.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_08",
+                "trades": 31,
+                "wins": 18,
+                "wr": 58.06,
+                "pnl_5u": 11.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_09",
+                "trades": 31,
+                "wins": 14,
+                "wr": 45.16,
+                "pnl_5u": -25.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_10",
+                "trades": 30,
+                "wins": 16,
+                "wr": 53.33,
+                "pnl_5u": -2.0,
+                "max_loss": 3
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 96,
+            "active_days": 92,
+            "zero_days": 4,
+            "avg_all_days": 3.22,
+            "avg_active_days": 3.36,
+            "median_active": 4.0,
+            "p90_active": 4.0,
+            "max_day": 4
+          },
+          "note": "Safe 2m with a maximum of 4 trades per UTC day."
+        },
+        {
+          "name": "safe_2m_lossstop2",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": 2,
+          "trades": 293,
+          "wins": 174,
+          "losses": 119,
+          "wr": 59.39,
+          "edge_over_breakeven": 5.33,
+          "pnl_5u": 144.5,
+          "max_loss": 10,
+          "trades_per_day": 3.08,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 7,
+            "min_block_wr": 40.0,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 30,
+                "wins": 19,
+                "wr": 63.33,
+                "pnl_5u": 25.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 30,
+                "wins": 22,
+                "wr": 73.33,
+                "pnl_5u": 53.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 30,
+                "wins": 12,
+                "wr": 40.0,
+                "pnl_5u": -39.0,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_04",
+                "trades": 29,
+                "wins": 17,
+                "wr": 58.62,
+                "pnl_5u": 12.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 29,
+                "wins": 21,
+                "wr": 72.41,
+                "pnl_5u": 49.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_06",
+                "trades": 29,
+                "wins": 22,
+                "wr": 75.86,
+                "pnl_5u": 58.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 29,
+                "wins": 18,
+                "wr": 62.07,
+                "pnl_5u": 21.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_08",
+                "trades": 29,
+                "wins": 18,
+                "wr": 62.07,
+                "pnl_5u": 21.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_09",
+                "trades": 29,
+                "wins": 12,
+                "wr": 41.38,
+                "pnl_5u": -34.0,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_10",
+                "trades": 29,
+                "wins": 13,
+                "wr": 44.83,
+                "pnl_5u": -24.75,
+                "max_loss": 10
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 96,
+            "active_days": 92,
+            "zero_days": 4,
+            "avg_all_days": 3.05,
+            "avg_active_days": 3.18,
+            "median_active": 3.0,
+            "p90_active": 5.9,
+            "max_day": 8
+          },
+          "note": "Safe 2m stops for the UTC day after 2 selected losses."
+        },
+        {
+          "name": "safe_2m_cap6_lossstop2",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": 6,
+          "daily_loss_stop": 2,
+          "trades": 287,
+          "wins": 170,
+          "losses": 117,
+          "wr": 59.23,
+          "edge_over_breakeven": 5.18,
+          "pnl_5u": 137.5,
+          "max_loss": 10,
+          "trades_per_day": 3.02,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 7,
+            "min_block_wr": 37.93,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 29,
+                "wins": 18,
+                "wr": 62.07,
+                "pnl_5u": 21.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 29,
+                "wins": 22,
+                "wr": 75.86,
+                "pnl_5u": 58.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 29,
+                "wins": 11,
+                "wr": 37.93,
+                "pnl_5u": -43.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_04",
+                "trades": 29,
+                "wins": 16,
+                "wr": 55.17,
+                "pnl_5u": 3.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 29,
+                "wins": 21,
+                "wr": 72.41,
+                "pnl_5u": 49.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_06",
+                "trades": 29,
+                "wins": 23,
+                "wr": 79.31,
+                "pnl_5u": 67.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 29,
+                "wins": 18,
+                "wr": 62.07,
+                "pnl_5u": 21.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_08",
+                "trades": 28,
+                "wins": 17,
+                "wr": 60.71,
+                "pnl_5u": 17.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_09",
+                "trades": 28,
+                "wins": 12,
+                "wr": 42.86,
+                "pnl_5u": -29.0,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_10",
+                "trades": 28,
+                "wins": 12,
+                "wr": 42.86,
+                "pnl_5u": -29.0,
+                "max_loss": 10
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 96,
+            "active_days": 92,
+            "zero_days": 4,
+            "avg_all_days": 2.99,
+            "avg_active_days": 3.12,
+            "median_active": 3.0,
+            "p90_active": 5.9,
+            "max_day": 6
+          },
+          "note": "Safe 2m with daily cap 6 and day stop after 2 selected losses."
+        },
+        {
+          "name": "confirm_2m_sma60_tail20_cd10_ml65",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": 0.65,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 143,
+          "wins": 91,
+          "losses": 52,
+          "wr": 63.64,
+          "edge_over_breakeven": 9.58,
+          "pnl_5u": 126.75,
+          "max_loss": 3,
+          "trades_per_day": 1.5,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 7,
+            "min_block_wr": 46.67,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 15,
+                "wins": 7,
+                "wr": 46.67,
+                "pnl_5u": -10.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 15,
+                "wins": 7,
+                "wr": 46.67,
+                "pnl_5u": -10.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 15,
+                "wins": 7,
+                "wr": 46.67,
+                "pnl_5u": -10.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_04",
+                "trades": 14,
+                "wins": 8,
+                "wr": 57.14,
+                "pnl_5u": 4.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_05",
+                "trades": 14,
+                "wins": 10,
+                "wr": 71.43,
+                "pnl_5u": 22.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_06",
+                "trades": 14,
+                "wins": 8,
+                "wr": 57.14,
+                "pnl_5u": 4.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_07",
+                "trades": 14,
+                "wins": 12,
+                "wr": 85.71,
+                "pnl_5u": 41.0,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_08",
+                "trades": 14,
+                "wins": 10,
+                "wr": 71.43,
+                "pnl_5u": 22.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_09",
+                "trades": 14,
+                "wins": 10,
+                "wr": 71.43,
+                "pnl_5u": 22.5,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_10",
+                "trades": 14,
+                "wins": 12,
+                "wr": 85.71,
+                "pnl_5u": 41.0,
+                "max_loss": 1
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 72,
+            "active_days": 52,
+            "zero_days": 20,
+            "avg_all_days": 1.99,
+            "avg_active_days": 2.75,
+            "median_active": 2.0,
+            "p90_active": 5.0,
+            "max_day": 9
+          },
+          "note": "2m POC signal must agree with rolling OOS 2m model at 65%."
+        },
+        {
+          "name": "sniper_1m_sma60_tail15_cd10",
+          "source_minutes": 1,
+          "lookback_bars": 60,
+          "lookback_minutes": 60,
+          "tail_pct": 0.15,
+          "threshold": 0.85,
+          "confirm_threshold": null,
+          "horizon_bars": 10,
+          "horizon_minutes": 10,
+          "cooldown_bars": 10,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 117,
+          "wins": 76,
+          "losses": 41,
+          "wr": 64.96,
+          "edge_over_breakeven": 10.9,
+          "pnl_5u": 118.0,
+          "max_loss": 4,
+          "trades_per_day": 1.23,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 8,
+            "min_block_wr": 45.45,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 12,
+                "wins": 10,
+                "wr": 83.33,
+                "pnl_5u": 32.5,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_02",
+                "trades": 12,
+                "wins": 8,
+                "wr": 66.67,
+                "pnl_5u": 14.0,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_03",
+                "trades": 12,
+                "wins": 7,
+                "wr": 58.33,
+                "pnl_5u": 4.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_04",
+                "trades": 12,
+                "wins": 9,
+                "wr": 75.0,
+                "pnl_5u": 23.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_05",
+                "trades": 12,
+                "wins": 7,
+                "wr": 58.33,
+                "pnl_5u": 4.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_06",
+                "trades": 12,
+                "wins": 7,
+                "wr": 58.33,
+                "pnl_5u": 4.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_07",
+                "trades": 12,
+                "wins": 6,
+                "wr": 50.0,
+                "pnl_5u": -4.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_08",
+                "trades": 11,
+                "wins": 7,
+                "wr": 63.64,
+                "pnl_5u": 9.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_09",
+                "trades": 11,
+                "wins": 5,
+                "wr": 45.45,
+                "pnl_5u": -8.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_10",
+                "trades": 11,
+                "wins": 10,
+                "wr": 90.91,
+                "pnl_5u": 37.5,
+                "max_loss": 1
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 93,
+            "active_days": 59,
+            "zero_days": 34,
+            "avg_all_days": 1.26,
+            "avg_active_days": 1.98,
+            "median_active": 1.0,
+            "p90_active": 4.0,
+            "max_day": 6
+          },
+          "note": "Higher win-rate, fewer trades."
+        },
+        {
+          "name": "sniper_2m_sma60_tail15_cd10",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.15,
+          "threshold": 0.85,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 129,
+          "wins": 78,
+          "losses": 51,
+          "wr": 60.47,
+          "edge_over_breakeven": 6.41,
+          "pnl_5u": 76.5,
+          "max_loss": 5,
+          "trades_per_day": 1.36,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 5,
+            "min_block_wr": 30.77,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 13,
+                "wins": 10,
+                "wr": 76.92,
+                "pnl_5u": 27.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_02",
+                "trades": 13,
+                "wins": 9,
+                "wr": 69.23,
+                "pnl_5u": 18.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_03",
+                "trades": 13,
+                "wins": 4,
+                "wr": 30.77,
+                "pnl_5u": -28.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_04",
+                "trades": 13,
+                "wins": 7,
+                "wr": 53.85,
+                "pnl_5u": -0.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 13,
+                "wins": 10,
+                "wr": 76.92,
+                "pnl_5u": 27.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_06",
+                "trades": 13,
+                "wins": 7,
+                "wr": 53.85,
+                "pnl_5u": -0.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_07",
+                "trades": 13,
+                "wins": 6,
+                "wr": 46.15,
+                "pnl_5u": -9.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_08",
+                "trades": 13,
+                "wins": 8,
+                "wr": 61.54,
+                "pnl_5u": 9.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_09",
+                "trades": 13,
+                "wins": 7,
+                "wr": 53.85,
+                "pnl_5u": -0.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_10",
+                "trades": 12,
+                "wins": 10,
+                "wr": 83.33,
+                "pnl_5u": 32.5,
+                "max_loss": 2
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 95,
+            "active_days": 62,
+            "zero_days": 33,
+            "avg_all_days": 1.36,
+            "avg_active_days": 2.08,
+            "median_active": 2.0,
+            "p90_active": 4.0,
+            "max_day": 5
+          },
+          "note": "2m aggregated high win-rate candidate."
+        }
+      ]
+    },
+    {
+      "file": "btcusdt_1m_180d.csv",
+      "rows_1m": 259207,
+      "start": "2025-12-12 15:42:00+00:00",
+      "end": "2026-06-10 15:48:00+00:00",
+      "results": [
+        {
+          "name": "aggressive_2m_sma60_tail20_cd6",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 3,
+          "cooldown_minutes": 6,
+          "min_gap_minutes": 6,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 1272,
+          "wins": 761,
+          "losses": 511,
+          "wr": 59.83,
+          "edge_over_breakeven": 5.77,
+          "pnl_5u": 679.25,
+          "max_loss": 10,
+          "trades_per_day": 7.07,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 9,
+            "min_block_wr": 49.61,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 128,
+                "wins": 77,
+                "wr": 60.16,
+                "pnl_5u": 72.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_02",
+                "trades": 128,
+                "wins": 72,
+                "wr": 56.25,
+                "pnl_5u": 26.0,
+                "max_loss": 8
+              },
+              {
+                "slice": "block_03",
+                "trades": 127,
+                "wins": 70,
+                "wr": 55.12,
+                "pnl_5u": 12.5,
+                "max_loss": 6
+              },
+              {
+                "slice": "block_04",
+                "trades": 127,
+                "wins": 78,
+                "wr": 61.42,
+                "pnl_5u": 86.5,
+                "max_loss": 6
+              },
+              {
+                "slice": "block_05",
+                "trades": 127,
+                "wins": 63,
+                "wr": 49.61,
+                "pnl_5u": -52.25,
+                "max_loss": 9
+              },
+              {
+                "slice": "block_06",
+                "trades": 127,
+                "wins": 84,
+                "wr": 66.14,
+                "pnl_5u": 142.0,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_07",
+                "trades": 127,
+                "wins": 76,
+                "wr": 59.84,
+                "pnl_5u": 68.0,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_08",
+                "trades": 127,
+                "wins": 84,
+                "wr": 66.14,
+                "pnl_5u": 142.0,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_09",
+                "trades": 127,
+                "wins": 77,
+                "wr": 60.63,
+                "pnl_5u": 77.25,
+                "max_loss": 10
+              },
+              {
+                "slice": "block_10",
+                "trades": 127,
+                "wins": 80,
+                "wr": 62.99,
+                "pnl_5u": 105.0,
+                "max_loss": 5
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 180,
+            "active_days": 174,
+            "zero_days": 6,
+            "avg_all_days": 7.07,
+            "avg_active_days": 7.31,
+            "median_active": 6.0,
+            "p90_active": 14.0,
+            "max_day": 29
+          },
+          "note": "2m counterpart to short cooldown; rounded to 3 bars."
+        },
+        {
+          "name": "safe_2m_sma60_tail20_cd10",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 960,
+          "wins": 572,
+          "losses": 388,
+          "wr": 59.58,
+          "edge_over_breakeven": 5.53,
+          "pnl_5u": 491.0,
+          "max_loss": 7,
+          "trades_per_day": 5.33,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 8,
+            "min_block_wr": 47.92,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 96,
+                "wins": 57,
+                "wr": 59.38,
+                "pnl_5u": 47.25,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_02",
+                "trades": 96,
+                "wins": 61,
+                "wr": 63.54,
+                "pnl_5u": 84.25,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_03",
+                "trades": 96,
+                "wins": 47,
+                "wr": 48.96,
+                "pnl_5u": -45.25,
+                "max_loss": 7
+              },
+              {
+                "slice": "block_04",
+                "trades": 96,
+                "wins": 57,
+                "wr": 59.38,
+                "pnl_5u": 47.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_05",
+                "trades": 96,
+                "wins": 46,
+                "wr": 47.92,
+                "pnl_5u": -54.5,
+                "max_loss": 6
+              },
+              {
+                "slice": "block_06",
+                "trades": 96,
+                "wins": 63,
+                "wr": 65.62,
+                "pnl_5u": 102.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_07",
+                "trades": 96,
+                "wins": 58,
+                "wr": 60.42,
+                "pnl_5u": 56.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_08",
+                "trades": 96,
+                "wins": 65,
+                "wr": 67.71,
+                "pnl_5u": 121.25,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_09",
+                "trades": 96,
+                "wins": 60,
+                "wr": 62.5,
+                "pnl_5u": 75.0,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_10",
+                "trades": 96,
+                "wins": 58,
+                "wr": 60.42,
+                "pnl_5u": 56.5,
+                "max_loss": 3
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 180,
+            "active_days": 174,
+            "zero_days": 6,
+            "avg_all_days": 5.33,
+            "avg_active_days": 5.52,
+            "median_active": 5.0,
+            "p90_active": 10.0,
+            "max_day": 20
+          },
+          "note": "Same 60-minute lookback after aggregating to 2m bars."
+        },
+        {
+          "name": "safe_2m_gap30",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 30,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 629,
+          "wins": 389,
+          "losses": 240,
+          "wr": 61.84,
+          "edge_over_breakeven": 7.79,
+          "pnl_5u": 453.25,
+          "max_loss": 4,
+          "trades_per_day": 3.49,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 9,
+            "min_block_wr": 49.21,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 63,
+                "wins": 36,
+                "wr": 57.14,
+                "pnl_5u": 18.0,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_02",
+                "trades": 63,
+                "wins": 44,
+                "wr": 69.84,
+                "pnl_5u": 92.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_03",
+                "trades": 63,
+                "wins": 31,
+                "wr": 49.21,
+                "pnl_5u": -28.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_04",
+                "trades": 63,
+                "wins": 40,
+                "wr": 63.49,
+                "pnl_5u": 55.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 63,
+                "wins": 36,
+                "wr": 57.14,
+                "pnl_5u": 18.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_06",
+                "trades": 63,
+                "wins": 39,
+                "wr": 61.9,
+                "pnl_5u": 45.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_07",
+                "trades": 63,
+                "wins": 41,
+                "wr": 65.08,
+                "pnl_5u": 64.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_08",
+                "trades": 63,
+                "wins": 46,
+                "wr": 73.02,
+                "pnl_5u": 110.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_09",
+                "trades": 63,
+                "wins": 39,
+                "wr": 61.9,
+                "pnl_5u": 45.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_10",
+                "trades": 62,
+                "wins": 37,
+                "wr": 59.68,
+                "pnl_5u": 32.25,
+                "max_loss": 3
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 180,
+            "active_days": 174,
+            "zero_days": 6,
+            "avg_all_days": 3.49,
+            "avg_active_days": 3.61,
+            "median_active": 3.0,
+            "p90_active": 6.0,
+            "max_day": 9
+          },
+          "note": "Safe 2m with at least 30 minutes between selected trades."
+        },
+        {
+          "name": "aggressive_1m_sma60_tail20_cd5",
+          "source_minutes": 1,
+          "lookback_bars": 60,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 10,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 5,
+          "min_gap_minutes": 5,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 1387,
+          "wins": 798,
+          "losses": 589,
+          "wr": 57.53,
+          "edge_over_breakeven": 3.48,
+          "pnl_5u": 446.5,
+          "max_loss": 10,
+          "trades_per_day": 7.71,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 7,
+            "min_block_wr": 51.8,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 139,
+                "wins": 79,
+                "wr": 56.83,
+                "pnl_5u": 35.75,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_02",
+                "trades": 139,
+                "wins": 72,
+                "wr": 51.8,
+                "pnl_5u": -29.0,
+                "max_loss": 9
+              },
+              {
+                "slice": "block_03",
+                "trades": 139,
+                "wins": 74,
+                "wr": 53.24,
+                "pnl_5u": -10.5,
+                "max_loss": 9
+              },
+              {
+                "slice": "block_04",
+                "trades": 139,
+                "wins": 80,
+                "wr": 57.55,
+                "pnl_5u": 45.0,
+                "max_loss": 7
+              },
+              {
+                "slice": "block_05",
+                "trades": 139,
+                "wins": 73,
+                "wr": 52.52,
+                "pnl_5u": -19.75,
+                "max_loss": 10
+              },
+              {
+                "slice": "block_06",
+                "trades": 139,
+                "wins": 93,
+                "wr": 66.91,
+                "pnl_5u": 165.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_07",
+                "trades": 139,
+                "wins": 78,
+                "wr": 56.12,
+                "pnl_5u": 26.5,
+                "max_loss": 6
+              },
+              {
+                "slice": "block_08",
+                "trades": 138,
+                "wins": 76,
+                "wr": 55.07,
+                "pnl_5u": 13.0,
+                "max_loss": 7
+              },
+              {
+                "slice": "block_09",
+                "trades": 138,
+                "wins": 81,
+                "wr": 58.7,
+                "pnl_5u": 59.25,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_10",
+                "trades": 138,
+                "wins": 92,
+                "wr": 66.67,
+                "pnl_5u": 161.0,
+                "max_loss": 4
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 180,
+            "active_days": 177,
+            "zero_days": 3,
+            "avg_all_days": 7.71,
+            "avg_active_days": 7.84,
+            "median_active": 6.0,
+            "p90_active": 16.0,
+            "max_day": 32
+          },
+          "note": "Higher turnover; allows overlapping 10m exposure."
+        },
+        {
+          "name": "safe_2m_gap20",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 20,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 712,
+          "wins": 428,
+          "losses": 284,
+          "wr": 60.11,
+          "edge_over_breakeven": 6.06,
+          "pnl_5u": 399.0,
+          "max_loss": 7,
+          "trades_per_day": 3.96,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 8,
+            "min_block_wr": 46.48,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 72,
+                "wins": 44,
+                "wr": 61.11,
+                "pnl_5u": 47.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 72,
+                "wins": 46,
+                "wr": 63.89,
+                "pnl_5u": 65.5,
+                "max_loss": 7
+              },
+              {
+                "slice": "block_03",
+                "trades": 71,
+                "wins": 33,
+                "wr": 46.48,
+                "pnl_5u": -49.75,
+                "max_loss": 6
+              },
+              {
+                "slice": "block_04",
+                "trades": 71,
+                "wins": 46,
+                "wr": 64.79,
+                "pnl_5u": 70.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 71,
+                "wins": 36,
+                "wr": 50.7,
+                "pnl_5u": -22.0,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_06",
+                "trades": 71,
+                "wins": 43,
+                "wr": 60.56,
+                "pnl_5u": 42.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_07",
+                "trades": 71,
+                "wins": 47,
+                "wr": 66.2,
+                "pnl_5u": 79.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_08",
+                "trades": 71,
+                "wins": 49,
+                "wr": 69.01,
+                "pnl_5u": 98.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_09",
+                "trades": 71,
+                "wins": 42,
+                "wr": 59.15,
+                "pnl_5u": 33.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_10",
+                "trades": 71,
+                "wins": 42,
+                "wr": 59.15,
+                "pnl_5u": 33.5,
+                "max_loss": 3
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 180,
+            "active_days": 174,
+            "zero_days": 6,
+            "avg_all_days": 3.96,
+            "avg_active_days": 4.09,
+            "median_active": 4.0,
+            "p90_active": 7.0,
+            "max_day": 12
+          },
+          "note": "Safe 2m with at least 20 minutes between selected trades."
+        },
+        {
+          "name": "safe_2m_cap6",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": 6,
+          "daily_loss_stop": null,
+          "trades": 755,
+          "wins": 450,
+          "losses": 305,
+          "wr": 59.6,
+          "edge_over_breakeven": 5.55,
+          "pnl_5u": 387.5,
+          "max_loss": 6,
+          "trades_per_day": 4.19,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 9,
+            "min_block_wr": 51.32,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 76,
+                "wins": 45,
+                "wr": 59.21,
+                "pnl_5u": 36.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_02",
+                "trades": 76,
+                "wins": 47,
+                "wr": 61.84,
+                "pnl_5u": 54.75,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_03",
+                "trades": 76,
+                "wins": 42,
+                "wr": 55.26,
+                "pnl_5u": 8.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_04",
+                "trades": 76,
+                "wins": 44,
+                "wr": 57.89,
+                "pnl_5u": 27.0,
+                "max_loss": 6
+              },
+              {
+                "slice": "block_05",
+                "trades": 76,
+                "wins": 39,
+                "wr": 51.32,
+                "pnl_5u": -19.25,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_06",
+                "trades": 75,
+                "wins": 48,
+                "wr": 64.0,
+                "pnl_5u": 69.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_07",
+                "trades": 75,
+                "wins": 45,
+                "wr": 60.0,
+                "pnl_5u": 41.25,
+                "max_loss": 6
+              },
+              {
+                "slice": "block_08",
+                "trades": 75,
+                "wins": 54,
+                "wr": 72.0,
+                "pnl_5u": 124.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_09",
+                "trades": 75,
+                "wins": 44,
+                "wr": 58.67,
+                "pnl_5u": 32.0,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_10",
+                "trades": 75,
+                "wins": 42,
+                "wr": 56.0,
+                "pnl_5u": 13.5,
+                "max_loss": 4
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 180,
+            "active_days": 174,
+            "zero_days": 6,
+            "avg_all_days": 4.19,
+            "avg_active_days": 4.34,
+            "median_active": 5.0,
+            "p90_active": 6.0,
+            "max_day": 6
+          },
+          "note": "Safe 2m with a maximum of 6 trades per UTC day."
+        },
+        {
+          "name": "safe_1m_sma60_tail20_cd10",
+          "source_minutes": 1,
+          "lookback_bars": 60,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 10,
+          "horizon_minutes": 10,
+          "cooldown_bars": 10,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 937,
+          "wins": 540,
+          "losses": 397,
+          "wr": 57.63,
+          "edge_over_breakeven": 3.58,
+          "pnl_5u": 310.0,
+          "max_loss": 7,
+          "trades_per_day": 5.21,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 7,
+            "min_block_wr": 50.0,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 94,
+                "wins": 57,
+                "wr": 60.64,
+                "pnl_5u": 57.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_02",
+                "trades": 94,
+                "wins": 50,
+                "wr": 53.19,
+                "pnl_5u": -7.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_03",
+                "trades": 94,
+                "wins": 48,
+                "wr": 51.06,
+                "pnl_5u": -26.0,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_04",
+                "trades": 94,
+                "wins": 54,
+                "wr": 57.45,
+                "pnl_5u": 29.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_05",
+                "trades": 94,
+                "wins": 47,
+                "wr": 50.0,
+                "pnl_5u": -35.25,
+                "max_loss": 7
+              },
+              {
+                "slice": "block_06",
+                "trades": 94,
+                "wins": 62,
+                "wr": 65.96,
+                "pnl_5u": 103.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 94,
+                "wins": 52,
+                "wr": 55.32,
+                "pnl_5u": 11.0,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_08",
+                "trades": 93,
+                "wins": 53,
+                "wr": 56.99,
+                "pnl_5u": 25.25,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_09",
+                "trades": 93,
+                "wins": 57,
+                "wr": 61.29,
+                "pnl_5u": 62.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_10",
+                "trades": 93,
+                "wins": 60,
+                "wr": 64.52,
+                "pnl_5u": 90.0,
+                "max_loss": 3
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 180,
+            "active_days": 177,
+            "zero_days": 3,
+            "avg_all_days": 5.21,
+            "avg_active_days": 5.29,
+            "median_active": 4.0,
+            "p90_active": 10.0,
+            "max_day": 18
+          },
+          "note": "Current recommended production profile."
+        },
+        {
+          "name": "confirm_2m_sma60_tail20_cd10_ml62",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": 0.62,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 203,
+          "wins": 140,
+          "losses": 63,
+          "wr": 68.97,
+          "edge_over_breakeven": 14.91,
+          "pnl_5u": 280.0,
+          "max_loss": 3,
+          "trades_per_day": 1.13,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 9,
+            "min_block_wr": 52.38,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 21,
+                "wins": 12,
+                "wr": 57.14,
+                "pnl_5u": 6.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 21,
+                "wins": 11,
+                "wr": 52.38,
+                "pnl_5u": -3.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 21,
+                "wins": 16,
+                "wr": 76.19,
+                "pnl_5u": 43.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_04",
+                "trades": 20,
+                "wins": 11,
+                "wr": 55.0,
+                "pnl_5u": 1.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 20,
+                "wins": 17,
+                "wr": 85.0,
+                "pnl_5u": 57.25,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_06",
+                "trades": 20,
+                "wins": 13,
+                "wr": 65.0,
+                "pnl_5u": 20.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_07",
+                "trades": 20,
+                "wins": 15,
+                "wr": 75.0,
+                "pnl_5u": 38.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_08",
+                "trades": 20,
+                "wins": 17,
+                "wr": 85.0,
+                "pnl_5u": 57.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_09",
+                "trades": 20,
+                "wins": 13,
+                "wr": 65.0,
+                "pnl_5u": 20.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_10",
+                "trades": 20,
+                "wins": 15,
+                "wr": 75.0,
+                "pnl_5u": 38.75,
+                "max_loss": 2
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 72,
+            "active_days": 59,
+            "zero_days": 13,
+            "avg_all_days": 2.82,
+            "avg_active_days": 3.44,
+            "median_active": 3.0,
+            "p90_active": 6.0,
+            "max_day": 9
+          },
+          "note": "2m POC signal must agree with rolling OOS 2m model at 62%."
+        },
+        {
+          "name": "confirm_2m_sma60_tail20_cd10_ml58",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": 0.58,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 277,
+          "wins": 180,
+          "losses": 97,
+          "wr": 64.98,
+          "edge_over_breakeven": 10.93,
+          "pnl_5u": 280.0,
+          "max_loss": 4,
+          "trades_per_day": 1.54,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 8,
+            "min_block_wr": 50.0,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 28,
+                "wins": 15,
+                "wr": 53.57,
+                "pnl_5u": -1.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_02",
+                "trades": 28,
+                "wins": 14,
+                "wr": 50.0,
+                "pnl_5u": -10.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_03",
+                "trades": 28,
+                "wins": 20,
+                "wr": 71.43,
+                "pnl_5u": 45.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_04",
+                "trades": 28,
+                "wins": 16,
+                "wr": 57.14,
+                "pnl_5u": 8.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 28,
+                "wins": 21,
+                "wr": 75.0,
+                "pnl_5u": 54.25,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_06",
+                "trades": 28,
+                "wins": 20,
+                "wr": 71.43,
+                "pnl_5u": 45.0,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_07",
+                "trades": 28,
+                "wins": 17,
+                "wr": 60.71,
+                "pnl_5u": 17.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_08",
+                "trades": 27,
+                "wins": 20,
+                "wr": 74.07,
+                "pnl_5u": 50.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_09",
+                "trades": 27,
+                "wins": 19,
+                "wr": 70.37,
+                "pnl_5u": 40.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_10",
+                "trades": 27,
+                "wins": 18,
+                "wr": 66.67,
+                "pnl_5u": 31.5,
+                "max_loss": 4
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 74,
+            "active_days": 69,
+            "zero_days": 5,
+            "avg_all_days": 3.74,
+            "avg_active_days": 4.01,
+            "median_active": 3.0,
+            "p90_active": 7.0,
+            "max_day": 13
+          },
+          "note": "2m POC signal must agree with rolling OOS 2m model at 58%."
+        },
+        {
+          "name": "safe_2m_lossstop2",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": 2,
+          "trades": 567,
+          "wins": 335,
+          "losses": 232,
+          "wr": 59.08,
+          "edge_over_breakeven": 5.03,
+          "pnl_5u": 263.75,
+          "max_loss": 10,
+          "trades_per_day": 3.15,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 8,
+            "min_block_wr": 44.64,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 57,
+                "wins": 33,
+                "wr": 57.89,
+                "pnl_5u": 20.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 57,
+                "wins": 33,
+                "wr": 57.89,
+                "pnl_5u": 20.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_03",
+                "trades": 57,
+                "wins": 36,
+                "wr": 63.16,
+                "pnl_5u": 48.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_04",
+                "trades": 57,
+                "wins": 33,
+                "wr": 57.89,
+                "pnl_5u": 20.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 57,
+                "wins": 31,
+                "wr": 54.39,
+                "pnl_5u": 1.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_06",
+                "trades": 57,
+                "wins": 39,
+                "wr": 68.42,
+                "pnl_5u": 75.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 57,
+                "wins": 29,
+                "wr": 50.88,
+                "pnl_5u": -16.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_08",
+                "trades": 56,
+                "wins": 42,
+                "wr": 75.0,
+                "pnl_5u": 108.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_09",
+                "trades": 56,
+                "wins": 34,
+                "wr": 60.71,
+                "pnl_5u": 34.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_10",
+                "trades": 56,
+                "wins": 25,
+                "wr": 44.64,
+                "pnl_5u": -48.75,
+                "max_loss": 10
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 180,
+            "active_days": 174,
+            "zero_days": 6,
+            "avg_all_days": 3.15,
+            "avg_active_days": 3.26,
+            "median_active": 3.0,
+            "p90_active": 6.0,
+            "max_day": 8
+          },
+          "note": "Safe 2m stops for the UTC day after 2 selected losses."
+        },
+        {
+          "name": "safe_2m_cap6_lossstop2",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": 6,
+          "daily_loss_stop": 2,
+          "trades": 555,
+          "wins": 328,
+          "losses": 227,
+          "wr": 59.1,
+          "edge_over_breakeven": 5.05,
+          "pnl_5u": 259.0,
+          "max_loss": 10,
+          "trades_per_day": 3.08,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 7,
+            "min_block_wr": 43.64,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 56,
+                "wins": 33,
+                "wr": 58.93,
+                "pnl_5u": 25.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 56,
+                "wins": 31,
+                "wr": 55.36,
+                "pnl_5u": 6.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_03",
+                "trades": 56,
+                "wins": 36,
+                "wr": 64.29,
+                "pnl_5u": 53.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_04",
+                "trades": 56,
+                "wins": 33,
+                "wr": 58.93,
+                "pnl_5u": 25.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 56,
+                "wins": 30,
+                "wr": 53.57,
+                "pnl_5u": -2.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_06",
+                "trades": 55,
+                "wins": 38,
+                "wr": 69.09,
+                "pnl_5u": 76.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 55,
+                "wins": 29,
+                "wr": 52.73,
+                "pnl_5u": -6.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_08",
+                "trades": 55,
+                "wins": 41,
+                "wr": 74.55,
+                "pnl_5u": 104.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_09",
+                "trades": 55,
+                "wins": 33,
+                "wr": 60.0,
+                "pnl_5u": 30.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_10",
+                "trades": 55,
+                "wins": 24,
+                "wr": 43.64,
+                "pnl_5u": -53.0,
+                "max_loss": 10
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 180,
+            "active_days": 174,
+            "zero_days": 6,
+            "avg_all_days": 3.08,
+            "avg_active_days": 3.19,
+            "median_active": 3.0,
+            "p90_active": 6.0,
+            "max_day": 6
+          },
+          "note": "Safe 2m with daily cap 6 and day stop after 2 selected losses."
+        },
+        {
+          "name": "safe_2m_cap4",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": 4,
+          "daily_loss_stop": null,
+          "trades": 582,
+          "wins": 341,
+          "losses": 241,
+          "wr": 58.59,
+          "edge_over_breakeven": 4.54,
+          "pnl_5u": 244.25,
+          "max_loss": 6,
+          "trades_per_day": 3.23,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 9,
+            "min_block_wr": 50.0,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 59,
+                "wins": 35,
+                "wr": 59.32,
+                "pnl_5u": 28.75,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_02",
+                "trades": 59,
+                "wins": 33,
+                "wr": 55.93,
+                "pnl_5u": 10.25,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_03",
+                "trades": 58,
+                "wins": 36,
+                "wr": 62.07,
+                "pnl_5u": 43.0,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_04",
+                "trades": 58,
+                "wins": 32,
+                "wr": 55.17,
+                "pnl_5u": 6.0,
+                "max_loss": 6
+              },
+              {
+                "slice": "block_05",
+                "trades": 58,
+                "wins": 32,
+                "wr": 55.17,
+                "pnl_5u": 6.0,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_06",
+                "trades": 58,
+                "wins": 36,
+                "wr": 62.07,
+                "pnl_5u": 43.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_07",
+                "trades": 58,
+                "wins": 32,
+                "wr": 55.17,
+                "pnl_5u": 6.0,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_08",
+                "trades": 58,
+                "wins": 44,
+                "wr": 75.86,
+                "pnl_5u": 117.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_09",
+                "trades": 58,
+                "wins": 32,
+                "wr": 55.17,
+                "pnl_5u": 6.0,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_10",
+                "trades": 58,
+                "wins": 29,
+                "wr": 50.0,
+                "pnl_5u": -21.75,
+                "max_loss": 4
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 180,
+            "active_days": 174,
+            "zero_days": 6,
+            "avg_all_days": 3.23,
+            "avg_active_days": 3.34,
+            "median_active": 4.0,
+            "p90_active": 4.0,
+            "max_day": 4
+          },
+          "note": "Safe 2m with a maximum of 4 trades per UTC day."
+        },
+        {
+          "name": "safe_2m_gap30_ml62",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": 0.62,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 30,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 139,
+          "wins": 101,
+          "losses": 38,
+          "wr": 72.66,
+          "edge_over_breakeven": 18.61,
+          "pnl_5u": 239.25,
+          "max_loss": 2,
+          "trades_per_day": 0.77,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 10,
+            "min_block_wr": 57.14,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 14,
+                "wins": 8,
+                "wr": 57.14,
+                "pnl_5u": 4.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_02",
+                "trades": 14,
+                "wins": 8,
+                "wr": 57.14,
+                "pnl_5u": 4.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 14,
+                "wins": 11,
+                "wr": 78.57,
+                "pnl_5u": 31.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_04",
+                "trades": 14,
+                "wins": 10,
+                "wr": 71.43,
+                "pnl_5u": 22.5,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_05",
+                "trades": 14,
+                "wins": 11,
+                "wr": 78.57,
+                "pnl_5u": 31.75,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_06",
+                "trades": 14,
+                "wins": 10,
+                "wr": 71.43,
+                "pnl_5u": 22.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 14,
+                "wins": 11,
+                "wr": 78.57,
+                "pnl_5u": 31.75,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_08",
+                "trades": 14,
+                "wins": 12,
+                "wr": 85.71,
+                "pnl_5u": 41.0,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_09",
+                "trades": 14,
+                "wins": 10,
+                "wr": 71.43,
+                "pnl_5u": 22.5,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_10",
+                "trades": 13,
+                "wins": 10,
+                "wr": 76.92,
+                "pnl_5u": 27.5,
+                "max_loss": 1
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 72,
+            "active_days": 59,
+            "zero_days": 13,
+            "avg_all_days": 1.93,
+            "avg_active_days": 2.36,
+            "median_active": 2.0,
+            "p90_active": 4.0,
+            "max_day": 5
+          },
+          "note": "Safe 2m gap30 plus rolling OOS 2m model agreement at 62%."
+        },
+        {
+          "name": "safe_2m_gap30_ml58",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": 0.58,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 30,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 189,
+          "wins": 125,
+          "losses": 64,
+          "wr": 66.14,
+          "edge_over_breakeven": 12.08,
+          "pnl_5u": 211.25,
+          "max_loss": 4,
+          "trades_per_day": 1.05,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 8,
+            "min_block_wr": 47.37,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 19,
+                "wins": 10,
+                "wr": 52.63,
+                "pnl_5u": -2.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_02",
+                "trades": 19,
+                "wins": 9,
+                "wr": 47.37,
+                "pnl_5u": -11.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_03",
+                "trades": 19,
+                "wins": 12,
+                "wr": 63.16,
+                "pnl_5u": 16.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_04",
+                "trades": 19,
+                "wins": 13,
+                "wr": 68.42,
+                "pnl_5u": 25.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_05",
+                "trades": 19,
+                "wins": 14,
+                "wr": 73.68,
+                "pnl_5u": 34.5,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_06",
+                "trades": 19,
+                "wins": 14,
+                "wr": 73.68,
+                "pnl_5u": 34.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_07",
+                "trades": 19,
+                "wins": 14,
+                "wr": 73.68,
+                "pnl_5u": 34.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_08",
+                "trades": 19,
+                "wins": 14,
+                "wr": 73.68,
+                "pnl_5u": 34.5,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_09",
+                "trades": 19,
+                "wins": 13,
+                "wr": 68.42,
+                "pnl_5u": 25.25,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_10",
+                "trades": 18,
+                "wins": 12,
+                "wr": 66.67,
+                "pnl_5u": 21.0,
+                "max_loss": 3
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 74,
+            "active_days": 69,
+            "zero_days": 5,
+            "avg_all_days": 2.55,
+            "avg_active_days": 2.74,
+            "median_active": 2.0,
+            "p90_active": 5.0,
+            "max_day": 6
+          },
+          "note": "Safe 2m gap30 plus rolling OOS 2m model agreement at 58%."
+        },
+        {
+          "name": "sniper_1m_sma60_tail15_cd10",
+          "source_minutes": 1,
+          "lookback_bars": 60,
+          "lookback_minutes": 60,
+          "tail_pct": 0.15,
+          "threshold": 0.85,
+          "confirm_threshold": null,
+          "horizon_bars": 10,
+          "horizon_minutes": 10,
+          "cooldown_bars": 10,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 238,
+          "wins": 145,
+          "losses": 93,
+          "wr": 60.92,
+          "edge_over_breakeven": 6.87,
+          "pnl_5u": 151.25,
+          "max_loss": 5,
+          "trades_per_day": 1.32,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 9,
+            "min_block_wr": 41.67,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 24,
+                "wins": 13,
+                "wr": 54.17,
+                "pnl_5u": 0.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 24,
+                "wins": 14,
+                "wr": 58.33,
+                "pnl_5u": 9.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_03",
+                "trades": 24,
+                "wins": 14,
+                "wr": 58.33,
+                "pnl_5u": 9.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_04",
+                "trades": 24,
+                "wins": 17,
+                "wr": 70.83,
+                "pnl_5u": 37.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_05",
+                "trades": 24,
+                "wins": 10,
+                "wr": 41.67,
+                "pnl_5u": -27.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_06",
+                "trades": 24,
+                "wins": 18,
+                "wr": 75.0,
+                "pnl_5u": 46.5,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_07",
+                "trades": 24,
+                "wins": 16,
+                "wr": 66.67,
+                "pnl_5u": 28.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_08",
+                "trades": 24,
+                "wins": 14,
+                "wr": 58.33,
+                "pnl_5u": 9.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_09",
+                "trades": 23,
+                "wins": 14,
+                "wr": 60.87,
+                "pnl_5u": 14.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_10",
+                "trades": 23,
+                "wins": 15,
+                "wr": 65.22,
+                "pnl_5u": 23.75,
+                "max_loss": 4
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 177,
+            "active_days": 108,
+            "zero_days": 69,
+            "avg_all_days": 1.34,
+            "avg_active_days": 2.2,
+            "median_active": 2.0,
+            "p90_active": 5.0,
+            "max_day": 8
+          },
+          "note": "Higher win-rate, fewer trades."
+        },
+        {
+          "name": "sniper_2m_sma60_tail15_cd10",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.15,
+          "threshold": 0.85,
+          "confirm_threshold": null,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 270,
+          "wins": 162,
+          "losses": 108,
+          "wr": 60.0,
+          "edge_over_breakeven": 5.95,
+          "pnl_5u": 148.5,
+          "max_loss": 5,
+          "trades_per_day": 1.5,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 7,
+            "min_block_wr": 48.15,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 27,
+                "wins": 20,
+                "wr": 74.07,
+                "pnl_5u": 50.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 27,
+                "wins": 17,
+                "wr": 62.96,
+                "pnl_5u": 22.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 27,
+                "wins": 14,
+                "wr": 51.85,
+                "pnl_5u": -5.5,
+                "max_loss": 4
+              },
+              {
+                "slice": "block_04",
+                "trades": 27,
+                "wins": 15,
+                "wr": 55.56,
+                "pnl_5u": 3.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_05",
+                "trades": 27,
+                "wins": 14,
+                "wr": 51.85,
+                "pnl_5u": -5.5,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_06",
+                "trades": 27,
+                "wins": 19,
+                "wr": 70.37,
+                "pnl_5u": 40.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_07",
+                "trades": 27,
+                "wins": 13,
+                "wr": 48.15,
+                "pnl_5u": -14.75,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_08",
+                "trades": 27,
+                "wins": 17,
+                "wr": 62.96,
+                "pnl_5u": 22.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_09",
+                "trades": 27,
+                "wins": 16,
+                "wr": 59.26,
+                "pnl_5u": 13.0,
+                "max_loss": 5
+              },
+              {
+                "slice": "block_10",
+                "trades": 27,
+                "wins": 17,
+                "wr": 62.96,
+                "pnl_5u": 22.25,
+                "max_loss": 4
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 179,
+            "active_days": 111,
+            "zero_days": 68,
+            "avg_all_days": 1.51,
+            "avg_active_days": 2.43,
+            "median_active": 2.0,
+            "p90_active": 5.0,
+            "max_day": 10
+          },
+          "note": "2m aggregated high win-rate candidate."
+        },
+        {
+          "name": "confirm_2m_sma60_tail20_cd10_ml65",
+          "source_minutes": 2,
+          "lookback_bars": 30,
+          "lookback_minutes": 60,
+          "tail_pct": 0.2,
+          "threshold": 0.8,
+          "confirm_threshold": 0.65,
+          "horizon_bars": 5,
+          "horizon_minutes": 10,
+          "cooldown_bars": 5,
+          "cooldown_minutes": 10,
+          "min_gap_minutes": 10,
+          "daily_trade_cap": null,
+          "daily_loss_stop": null,
+          "trades": 143,
+          "wins": 91,
+          "losses": 52,
+          "wr": 63.64,
+          "edge_over_breakeven": 9.58,
+          "pnl_5u": 126.75,
+          "max_loss": 3,
+          "trades_per_day": 0.79,
+          "block_summary": {
+            "active_blocks": 10,
+            "positive_blocks": 7,
+            "min_block_wr": 46.67,
+            "blocks": [
+              {
+                "slice": "block_01",
+                "trades": 15,
+                "wins": 7,
+                "wr": 46.67,
+                "pnl_5u": -10.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_02",
+                "trades": 15,
+                "wins": 7,
+                "wr": 46.67,
+                "pnl_5u": -10.25,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_03",
+                "trades": 15,
+                "wins": 7,
+                "wr": 46.67,
+                "pnl_5u": -10.25,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_04",
+                "trades": 14,
+                "wins": 8,
+                "wr": 57.14,
+                "pnl_5u": 4.0,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_05",
+                "trades": 14,
+                "wins": 10,
+                "wr": 71.43,
+                "pnl_5u": 22.5,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_06",
+                "trades": 14,
+                "wins": 8,
+                "wr": 57.14,
+                "pnl_5u": 4.0,
+                "max_loss": 3
+              },
+              {
+                "slice": "block_07",
+                "trades": 14,
+                "wins": 12,
+                "wr": 85.71,
+                "pnl_5u": 41.0,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_08",
+                "trades": 14,
+                "wins": 10,
+                "wr": 71.43,
+                "pnl_5u": 22.5,
+                "max_loss": 2
+              },
+              {
+                "slice": "block_09",
+                "trades": 14,
+                "wins": 10,
+                "wr": 71.43,
+                "pnl_5u": 22.5,
+                "max_loss": 1
+              },
+              {
+                "slice": "block_10",
+                "trades": 14,
+                "wins": 12,
+                "wr": 85.71,
+                "pnl_5u": 41.0,
+                "max_loss": 1
+              }
+            ]
+          },
+          "daily_distribution": {
+            "span_days": 72,
+            "active_days": 52,
+            "zero_days": 20,
+            "avg_all_days": 1.99,
+            "avg_active_days": 2.75,
+            "median_active": 2.0,
+            "p90_active": 5.0,
+            "max_day": 9
+          },
+          "note": "2m POC signal must agree with rolling OOS 2m model at 65%."
+        }
+      ]
+    }
+  ]
+}

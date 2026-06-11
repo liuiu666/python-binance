@@ -2,31 +2,47 @@ const assert = require("node:assert");
 const test = require("node:test");
 const {
   DEFAULT_TRADE_CONFIG,
-  amountForConfidence,
   applyTradeConfigPatch,
-  normalizeTradeConfig
+  amountForStrategyConfig,
+  normalizeTradeConfig,
+  publicTradeConfig
 } = require("../lib/trade_config");
 
-test("trade config normalizes tiers and preserves defaults", () => {
+test("trade config normalizes only current two-strategy fields", () => {
   const cfg = normalizeTradeConfig({
     amount: 7,
-    tiers: [{ min: 60, amount: 12 }, { min: 120, amount: 50 }, { min: 80, amount: 20 }],
+    strategyAmounts: {
+      BTC_10min_SAFE: 5,
+      BTC_10min_TAKER: 10,
+      OLD_STRATEGY: 0
+    },
+    autoTrade: true,
+    realTradingOverride: true,
+    minConfidence: "40",
+    tiersEnabled: true,
     queueOrderPolicy: "bad"
   });
   assert.equal(cfg.amount, "7");
-  assert.equal(cfg.queueOrderPolicy, DEFAULT_TRADE_CONFIG.queueOrderPolicy);
-  assert.deepEqual(cfg.tiers, [{ min: 80, amount: 20 }, { min: 60, amount: 12 }]);
-});
-
-test("tiered amount uses highest matching confidence tier", () => {
-  const cfg = normalizeTradeConfig({
-    amount: "5",
-    tiersEnabled: true,
-    tiers: [{ min: 80, amount: 25 }, { min: 60, amount: 12 }, { min: 40, amount: 6 }]
+  assert.equal(cfg.strategyAmounts.BTC_10min_SAFE, "5");
+  assert.equal(cfg.strategyAmounts.BTC_10min_TAKER, "10");
+  assert.equal(cfg.strategyAmounts.OLD_STRATEGY, undefined);
+  assert.equal(cfg.autoTrade_10m, true);
+  assert.equal(cfg.realTradingEnabled, true);
+  assert.equal(cfg.minConfidence, 40);
+  assert.equal(cfg.queueOrderPolicy, undefined);
+  assert.equal(cfg.tiersEnabled, undefined);
+  assert.deepEqual(publicTradeConfig(cfg), {
+    amount: "7",
+    strategyAmounts: {
+      BTC_10min_SAFE: "5",
+      BTC_10min_TAKER: "10"
+    },
+    duration: "10",
+    autoTrade_10m: true,
+    realTradingEnabled: true,
+    shadowTradingEnabled: true,
+    minConfidence: 40
   });
-  assert.equal(amountForConfidence(85, cfg), "25");
-  assert.equal(amountForConfidence(65, cfg), "12");
-  assert.equal(amountForConfidence(35, cfg), "5");
 });
 
 test("auto trade patch records blocked and forced transitions", () => {
@@ -34,25 +50,29 @@ test("auto trade patch records blocked and forced transitions", () => {
     autoTradeSafetyGate: () => ({ blocked: true, verdict: "missing_shadow_decision" })
   });
   assert.equal(blocked.tradeConfig.autoTrade_10m, false);
-  assert.equal(blocked.tradeConfig.autoTrade_30m, false);
   assert.equal(blocked.auditEvents[0].event, "auto_trade_safety_block");
 
   const forced = applyTradeConfigPatch(DEFAULT_TRADE_CONFIG, { autoTrade: true, forceAutoTrade: true }, {
     autoTradeSafetyGate: () => ({ blocked: true, verdict: "missing_shadow_decision" })
   });
   assert.equal(forced.tradeConfig.autoTrade_10m, true);
-  assert.equal(forced.tradeConfig.autoTrade_30m, true);
   assert.equal(forced.tradeConfig.realTradingEnabled, true);
   assert.equal(forced.auditEvents[0].event, "auto_trade_force_enabled");
 });
 
-test("trade config patch validates queue policy and actionable lag", () => {
+test("trade config ignores legacy knobs and keeps fixed strategy amounts", () => {
   const result = applyTradeConfigPatch(DEFAULT_TRADE_CONFIG, {
-    queueOrderPolicy: "10_then_30",
+    queueOrderPolicy: "taker_then_safe",
     maxActionableLagMs: 4500,
-    tiers: [{ min: 70, amount: 11 }]
+    tiers: [{ min: 70, amount: 11 }],
+    strategyAmounts: {
+      BTC_10min_SAFE: "5",
+      BTC_10min_TAKER: "10"
+    }
   });
-  assert.equal(result.tradeConfig.queueOrderPolicy, "10_then_30");
-  assert.equal(result.tradeConfig.maxActionableLagMs, DEFAULT_TRADE_CONFIG.maxActionableLagMs);
-  assert.deepEqual(result.tradeConfig.tiers, [{ min: 70, amount: 11 }]);
+  assert.equal(result.tradeConfig.queueOrderPolicy, undefined);
+  assert.equal(result.tradeConfig.maxActionableLagMs, undefined);
+  assert.equal(result.tradeConfig.tiers, undefined);
+  assert.equal(amountForStrategyConfig("BTC_10min_SAFE", result.tradeConfig), "5");
+  assert.equal(amountForStrategyConfig("BTC_10min_TAKER", result.tradeConfig), "10");
 });
