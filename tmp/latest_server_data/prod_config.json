@@ -1,0 +1,43 @@
+{
+  "BTC_10min_SAFE": {
+    "enabled": true,
+    "symbol": "btcusdt",
+    "horizon": 10,
+    "interval_min": 10,
+    "threshold": 0.8,
+    "rsi_lo": 30,
+    "rsi_hi": 70,
+    "model_type": "poc_normal",
+    "norm_window": 60,
+    "norm_tail_pct": 0.2,
+    "norm_mode": "reversal",
+    "norm_use_rsi": false,
+    "norm_source_minutes": 2,
+    "norm_min_gap_minutes": 30,
+    "norm_taker_filter": "none",
+    "skip_hours_utc": [],
+    "model_label": "BTC_10min_NormalTail_2m_Gap30_SAFE"
+  },
+  "BTC_10min_TAKER": {
+    "enabled": true,
+    "symbol": "btcusdt",
+    "horizon": 10,
+    "interval_min": 10,
+    "threshold": 0.8,
+    "rsi_lo": 30,
+    "rsi_hi": 70,
+    "model_type": "poc_normal",
+    "norm_window": 60,
+    "norm_tail_pct": 0.2,
+    "norm_mode": "reversal",
+    "norm_use_rsi": false,
+    "norm_source_minutes": 2,
+    "norm_min_gap_minutes": 30,
+    "norm_taker_filter": "align",
+    "norm_taker_align_up": 1.05,
+    "norm_taker_align_down": 0.95,
+    "norm_taker_max_age_minutes": 30,
+    "skip_hours_utc": [],
+    "model_label": "BTC_10min_NormalTail_2m_Gap30_TakerAlign"
+  }
+}

@@ -12,7 +12,19 @@ OUT = "E:/codex/data"
 AUDIT_FILE = os.path.join(OUT, "trade_audit.jsonl")
 TICKS_FILE = os.path.join(OUT, "price_ticks.jsonl")
 REPORT_FILE = os.path.join(OUT, "live_trade_audit_report.json")
-PAYOUT = 0.85
+DEFAULT_PAYOUT = 0.85
+
+
+def payout_for_duration(duration):
+    try:
+        minutes = float(duration)
+    except Exception:
+        return DEFAULT_PAYOUT
+    if minutes >= 30:
+        return 0.85
+    if minutes >= 10:
+        return 0.80
+    return DEFAULT_PAYOUT
 
 
 def read_jsonl(path):
@@ -51,7 +63,7 @@ def metrics(items):
     for x in settled:
         amount = float(x.get("amount") or 0)
         if x["status"] == "won":
-            pnl += amount * PAYOUT
+            pnl += amount * payout_for_duration(x.get("duration"))
             cur = 0
         elif x["status"] == "lost":
             pnl -= amount

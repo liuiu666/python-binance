@@ -68,7 +68,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\deploy_linux.ps1 `
 ```bash
 PORT=3000
 PYTHON_EXE=/opt/btc-binary-options/.venv/bin/python
-SERVER_SIM_TRADING_ENABLED=1
+SERVER_SIM_TRADING_ENABLED=0
 ENABLE_SIGNAL_SHADOWS=0
 ENABLE_LEGACY_TWO_MINUTE_LIVE=0
 DATA_DIR=/opt/btc-binary-options/data

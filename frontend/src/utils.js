@@ -2,17 +2,25 @@ import { useEffect, useRef } from "react";
 
 export const PAYOUT = 0.85;
 
+export function payoutForDuration(duration) {
+  const minutes = Number(duration);
+  if (Number.isFinite(minutes)) {
+    if (minutes >= 30) return 0.85;
+    if (minutes >= 10) return 0.8;
+  }
+  return PAYOUT;
+}
+
 export const DEFAULT_CONFIG = {
   amount: "5",
-  strategyAmounts: {
-    BTC_10min_SAFE: "5",
-    BTC_10min_TAKER: "5"
-  },
+  strategyVariants: [
+    { id: "BTC_10min_SAFE", base: "SAFE", label: "推荐稳健 20/80", amount: "5", tailPct: 0.2, enabled: true },
+    { id: "BTC_10min_TAKER", base: "TAKER", label: "资金流过滤 20/80", amount: "10", tailPct: 0.2, enabled: true }
+  ],
   duration: "10",
   autoTrade_10m: false,
   realTradingEnabled: false,
-  shadowTradingEnabled: true,
-  minConfidence: 35
+  shadowTradingEnabled: false
 };
 
 export function clamp(num, min, max) {
@@ -48,8 +56,9 @@ export function directionClass(direction) {
 }
 
 export function strategyName(strategyId) {
-  if (strategyId === "BTC_10min_SAFE") return "推荐稳健";
-  if (strategyId === "BTC_10min_TAKER") return "资金流过滤";
+  const id = String(strategyId || "");
+  if (id.startsWith("BTC_10min_SAFE")) return "推荐稳健";
+  if (id.startsWith("BTC_10min_TAKER")) return "资金流过滤";
   if (!strategyId || strategyId === "manual") return "手动";
   return strategyId;
 }
@@ -80,18 +89,8 @@ export function timeParts(time) {
   if (!time) return { date: "--", time: "--" };
   const d = new Date(Number(time));
   if (isNaN(d.getTime())) return { date: "--", time: "--" };
-  const dateStr = d.toLocaleDateString("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    month: "2-digit",
-    day: "2-digit"
-  });
-  const timeStr = d.toLocaleTimeString("zh-CN", {
-    hour12: false,
-    timeZone: "Asia/Shanghai",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
+  const dateStr = d.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit" });
+  const timeStr = d.toLocaleTimeString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", second: "2-digit" });
   return { date: dateStr, time: timeStr };
 }
 
@@ -111,33 +110,34 @@ export function signalLabel(signal) {
     return "策略拦截: " + reasons;
   }
   if (signal.safety_blocked) return "避险拦截: 极端趋势";
-  return "监控中";
+  return "等待极端区间";
 }
 
 export function signalTimeText(time) {
   if (!time) return "--:--:--";
-  return new Date(time).toLocaleTimeString("zh-CN", {
-    hour12: false,
-    timeZone: "Asia/Shanghai",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
+  return new Date(time).toLocaleTimeString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+export function displaySignalTime(signal) {
+  if (!signal) return "--:--:--";
+  return signal.time_shanghai || signalTimeText(signal.time);
 }
 
 export function amountForSignal(strategyId, signal, payload, config) {
   const strategyAmounts = (payload && payload._strategyAmounts) || {};
   const cfg = (payload && payload._config) || config || {};
+  const variants = (payload && payload._strategyVariants) || cfg.strategyVariants || [];
+  const variant = Array.isArray(variants) ? variants.find(item => item.id === strategyId) : null;
   const baseAmount = strategyAmounts[strategyId] || (cfg.strategyAmounts && cfg.strategyAmounts[strategyId]) || cfg.amount || DEFAULT_CONFIG.amount;
   if (signal && signal.amount && signal.fixed_amount === true) return String(signal.amount);
-  return String(baseAmount);
+  return String(variant?.amount || baseAmount);
 }
 
 export function activeSignalFromPayload(payload) {
   if (!payload) return null;
-  const taker = payload.BTC_10min_TAKER || null;
-  const safe = payload.BTC_10min_SAFE || null;
-  return (taker && taker.signal ? taker : null) || (safe && safe.signal ? safe : null) || taker || safe;
+  const variants = payload._strategyVariants || DEFAULT_CONFIG.strategyVariants;
+  const active = variants.map(v => payload[v.id]).find(sig => sig && sig.signal);
+  return active || variants.map(v => payload[v.id]).find(Boolean) || null;
 }
 
 export function useInterval(callback, delay) {

@@ -500,7 +500,34 @@ from research_regime_strategy_2m import classify_regime as classify_2m_regime
 
 def append_jsonl(path, obj):
     with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+        f.write(json.dumps(json_safe(obj), ensure_ascii=False) + "\n")
+
+
+def json_safe(value):
+    if isinstance(value, dict):
+        return {str(k): json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if hasattr(value, "item"):
+        try:
+            return json_safe(value.item())
+        except Exception:
+            pass
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            pass
+    return str(value)
+
+
+def write_json_atomic(path, obj):
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(json_safe(obj), f, ensure_ascii=False)
+    os.replace(tmp, path)
 
 
 def file_mtime(path):
@@ -619,6 +646,24 @@ def build_live_data_health(live_1m):
     }
 
 
+def signal_data_health_reasons(sig, health):
+    reasons = list(health.get("reasons", []))
+    if not reasons:
+        return []
+    taker_filter = str(sig.get("taker_filter") or "none").lower()
+    needs_taker = taker_filter not in ("", "none", "off", "false")
+    blocking = []
+    for reason in reasons:
+        if reason.startswith("taker_"):
+            if needs_taker:
+                blocking.append(reason)
+            continue
+        if reason.startswith("lsratio_") or reason.startswith("funding_"):
+            continue
+        blocking.append(reason)
+    return sorted(set(blocking))
+
+
 def apply_signal_data_health(signals, health):
     if not health.get("blocked"):
         for sig in signals.values():
@@ -630,11 +675,18 @@ def apply_signal_data_health(signals, health):
         if not isinstance(sig, dict) or sig.get("shadow"):
             out[strategy_id] = sig
             continue
+        blocking_reasons = signal_data_health_reasons(sig, health)
+        if not blocking_reasons:
+            next_sig = dict(sig)
+            next_sig["data_health_blocked"] = False
+            next_sig["data_health_warning_reasons"] = health.get("reasons", [])
+            out[strategy_id] = next_sig
+            continue
         blocked = dict(sig)
         blocked["signal"] = None
         blocked["confidence"] = None
         blocked["data_health_blocked"] = True
-        blocked["data_health_block_reasons"] = health.get("reasons", [])
+        blocked["data_health_block_reasons"] = blocking_reasons
         blocked["data_health"] = health
         blocked["blocked_signal"] = sig.get("signal")
         blocked["blocked_confidence"] = sig.get("confidence")
@@ -833,8 +885,6 @@ class POCNormalStrategy:
         self.taker_counter_down = float(cfg.get("norm_taker_counter_down", 1.15))
         self.taker_max_age_minutes = int(cfg.get("norm_taker_max_age_minutes", 30))
         self.skip_hours_utc = sorted({int(h) for h in cfg.get("skip_hours_utc", [])})
-        self.cooldown_until = 0
-
     def _load_price_bars(self):
         import pandas as pd
 
@@ -895,6 +945,15 @@ class POCNormalStrategy:
         except Exception:
             return None, False, "taker_read_error"
 
+    def _taker_flow_bias(self, ratio):
+        if ratio is None or not np.isfinite(ratio):
+            return "unknown"
+        if ratio >= self.taker_align_up:
+            return "bullish"
+        if ratio <= self.taker_align_down:
+            return "bearish"
+        return "neutral"
+
     def _taker_allows(self, signal, ratio):
         if self.taker_filter in ("", "none", "off", "false"):
             return True, "disabled"
@@ -939,10 +998,6 @@ class POCNormalStrategy:
                     "reason": "skip_hour", "model_type": "poc_normal",
                     "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
 
-        now_ms = int(time.time() * 1000)
-        if now_ms < self.cooldown_until:
-            return None
-
         recent = close[-(window_bars + 1):]
         lr = np.log(recent[1:] / recent[:-1])
         lr = lr[np.isfinite(lr)]
@@ -981,6 +1036,10 @@ class POCNormalStrategy:
             except Exception:
                 pass
 
+        signal_time = bars["time"].iloc[-1]
+        taker_ratio, taker_data_ok, taker_reason = self._latest_taker_ratio(signal_time)
+        taker_flow_bias = self._taker_flow_bias(taker_ratio)
+
         if not signal:
             return {"strategy_id": self.id, "signal": None,
                     "confidence": round(min(conf, 95), 1),
@@ -998,6 +1057,10 @@ class POCNormalStrategy:
                     "min_gap_minutes": self.min_gap_minutes,
                     "tail_pct": self.tail_pct,
                     "taker_filter": self.taker_filter,
+                    "taker_ratio": None if taker_ratio is None else round(float(taker_ratio), 6),
+                    "taker_data_ok": bool(taker_data_ok),
+                    "taker_reason": taker_reason,
+                    "taker_flow_bias": taker_flow_bias,
                     "reason": "no_edge", "model_type": "poc_normal",
                     "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
 
@@ -1030,8 +1093,6 @@ class POCNormalStrategy:
                     "reason": "rsi_filter", "model_type": "poc_normal",
                     "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
 
-        signal_time = bars["time"].iloc[-1]
-        taker_ratio, taker_data_ok, taker_reason = self._latest_taker_ratio(signal_time)
         taker_ok, taker_filter_reason = self._taker_allows(signal, taker_ratio)
         if not taker_data_ok or not taker_ok:
             return {"strategy_id": self.id, "signal": None, "confidence": 0,
@@ -1052,10 +1113,11 @@ class POCNormalStrategy:
                     "min_gap_minutes": self.min_gap_minutes,
                     "taker_filter": self.taker_filter,
                     "taker_ratio": None if taker_ratio is None else round(float(taker_ratio), 6),
+                    "taker_data_ok": bool(taker_data_ok),
+                    "taker_reason": taker_reason,
+                    "taker_flow_bias": taker_flow_bias,
                     "taker_filter_ok": False,
                     "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
-
-        self.cooldown_until = now_ms + self.min_gap_minutes * 60000
 
         return {
             "strategy_id": self.id,
@@ -1082,6 +1144,9 @@ class POCNormalStrategy:
             "tail_pct": self.tail_pct,
             "taker_filter": self.taker_filter,
             "taker_ratio": None if taker_ratio is None else round(float(taker_ratio), 6),
+            "taker_data_ok": bool(taker_data_ok),
+            "taker_reason": taker_reason,
+            "taker_flow_bias": taker_flow_bias,
             "taker_filter_ok": True,
             "bypass_entry_timing": True,
             "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -1984,18 +2049,22 @@ def fmt_num(value, default=0.0):
         return float(default)
 
 
-configs = load_config()
-live_two_minute_ids = {item["id"] for item in TWO_MINUTE_LIVE_CANDIDATES}
 def _make_strategy(sid, cfg):
     if cfg.get("model_type") == "poc_normal":
         return POCNormalStrategy(sid, cfg)
     return Strategy(sid, cfg)
 
-strategies = [
-    _make_strategy(k, v)
-    for k, v in configs.items()
-    if v.get("enabled", True) and (v.get("model_type") == "poc_normal" or k not in live_two_minute_ids)
-]
+def build_strategies(config_map):
+    live_two_minute_ids = {item["id"] for item in TWO_MINUTE_LIVE_CANDIDATES}
+    return [
+        _make_strategy(k, v)
+        for k, v in config_map.items()
+        if v.get("enabled", True) and (v.get("model_type") == "poc_normal" or k not in live_two_minute_ids)
+    ]
+
+configs = load_config()
+configs_mtime = file_mtime(CONFIG_FILE)
+strategies = build_strategies(configs)
 live_two_minute_strategies = (
     [(item, TwoMinuteRegimeShadow(item)) for item in TWO_MINUTE_LIVE_CANDIDATES]
     if ENABLE_LEGACY_TWO_MINUTE_LIVE else []
@@ -2064,6 +2133,15 @@ last_data_health_key = None
 
 while True:
     try:
+        current_config_mtime = file_mtime(CONFIG_FILE)
+        if current_config_mtime is not None and current_config_mtime != configs_mtime:
+            configs = load_config()
+            configs_mtime = current_config_mtime
+            strategies = build_strategies(configs)
+            print(
+                "[Signal] Reloaded strategy config: "
+                + ", ".join(strategy.id for strategy in strategies)
+            )
         current_history_mtime = file_mtime(HISTORY_1M_FILE)
         if current_history_mtime is not None and current_history_mtime != df5_history_mtime:
             df5 = load_symbol("btcusdt")
@@ -2097,8 +2175,7 @@ while True:
                 )
         if signals:
             signals = apply_signal_data_health(signals, data_health)
-            with open(SIGNAL_FILE, "w", encoding="utf-8") as f:
-                json.dump(signals, f, ensure_ascii=False)
+            write_json_atomic(SIGNAL_FILE, signals)
             for strategy_id, r in signals.items():
                 key = f"signal_snapshot|{strategy_id}|{r.get('time')}"
                 if key not in last_audit_keys:

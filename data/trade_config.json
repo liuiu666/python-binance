@@ -1,12 +1,67 @@
 {
   "amount": "5",
-  "strategyAmounts": {
-    "BTC_10min_SAFE": "5",
-    "BTC_10min_TAKER": "10"
-  },
+  "strategyVariants": [
+    {
+      "id": "BTC_10min_SAFE",
+      "base": "SAFE",
+      "label": "????",
+      "amount": "5",
+      "tailPct": 0.2,
+      "enabled": true,
+      "backtest": {
+        "wr": 63.39,
+        "tradesPerDay": 3.46,
+        "trades": 336,
+        "maxLoss": 5
+      }
+    },
+    {
+      "id": "BTC_10min_TAKER",
+      "base": "TAKER",
+      "label": "????? 20/80",
+      "amount": "10",
+      "tailPct": 0.2,
+      "enabled": true,
+      "backtest": {
+        "wr": 87.5,
+        "tradesPerDay": 0.94,
+        "trades": 32,
+        "maxLoss": 1
+      }
+    },
+    {
+      "id": "BTC_10min_TAKER_27",
+      "base": "TAKER",
+      "label": "资金流过滤 27/73",
+      "amount": "6",
+      "tailPct": 0.27,
+      "enabled": true,
+      "backtest": {
+        "wr": 66.07,
+        "tradesPerDay": 2.95,
+        "trades": 112,
+        "maxLoss": 4
+      }
+    }
+  ],
   "duration": "10",
   "autoTrade_10m": true,
   "realTradingEnabled": true,
-  "shadowTradingEnabled": true,
-  "minConfidence": 35
+  "shadowTradingEnabled": false,
+  "strategyAmounts": {
+    "BTC_10min_SAFE": "5",
+    "BTC_10min_TAKER": "10",
+    "BTC_10min_TAKER_27": "6"
+  },
+  "strategyParams": {
+    "BTC_10min_SAFE": {
+      "tailPct": 0.2
+    },
+    "BTC_10min_TAKER": {
+      "tailPct": 0.2
+    },
+    "BTC_10min_TAKER_27": {
+      "tailPct": 0.27
+    }
+  }
 }

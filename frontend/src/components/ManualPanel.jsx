@@ -1,9 +1,10 @@
 import React from "react";
 import { ArrowDown, ArrowUp, Activity } from "lucide-react";
-import { DEFAULT_CONFIG, fmt, PAYOUT } from "../utils";
+import { DEFAULT_CONFIG, fmt, payoutForDuration } from "../utils";
 
 export default function ManualPanel({ draft, onManualTrade, onAmountPreset }) {
   const amount = Number(draft.amount) || Number(DEFAULT_CONFIG.amount);
+  const payout = payoutForDuration(draft.duration || DEFAULT_CONFIG.duration);
   const presets = [5, 10, 20, 50, 100];
   
   return (
@@ -43,14 +44,14 @@ export default function ManualPanel({ draft, onManualTrade, onAmountPreset }) {
           <ArrowUp size={22} />
           <span>
             <strong>看涨</strong>
-            <small>+{fmt(amount * PAYOUT, 2)} USDT</small>
+            <small>+{fmt(amount * payout, 2)} USDT</small>
           </span>
         </button>
         <button className="trade-button down" type="button" onClick={() => onManualTrade("DOWN")}>
           <ArrowDown size={22} />
           <span>
             <strong>看跌</strong>
-            <small>+{fmt(amount * PAYOUT, 2)} USDT</small>
+            <small>+{fmt(amount * payout, 2)} USDT</small>
           </span>
         </button>
       </div>

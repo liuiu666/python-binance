@@ -12,7 +12,7 @@ var SCRIPT_VERSION = "2026-06-12-live-two-strategy-v1";
 var POLL_INTERVAL = 3000;
 var SIGNAL_MAX_AGE_MS = 60000;
 
-var tradeConfig = { amount: "5", strategyAmounts: { BTC_10min_SAFE: "5", BTC_10min_TAKER: "5" }, duration: "10", autoTrade: false, minConfidence: 35 };
+var tradeConfig = { amount: "5", strategyAmounts: { BTC_10min_SAFE: "5", BTC_10min_TAKER: "5" }, strategyVariants: [], duration: "10", autoTrade: false };
 var lastTradeTime = 0;
 var lastDirection = "";
 var lastSignalKeyByStrategy = {};
@@ -195,17 +195,19 @@ function updateOrderTimingAge(order) {
 function reportHeartbeat(payload) {
     if (Date.now() - lastAuditHeartbeat < 60000) return;
     lastAuditHeartbeat = Date.now();
+    var strategies = {};
+    var variants = (payload && payload._strategyVariants) || tradeConfig.strategyVariants || [];
+    for (var i = 0; i < variants.length; i++) {
+        var id = variants[i].id;
+        strategies[id] = summarizeSignal(payload && payload[id]);
+    }
     reportTradeAudit("autojs_heartbeat", null, {
         screenOn: (function(){ try { return device.isScreenOn(); } catch(e) { return null; } })(),
         version: SCRIPT_VERSION,
         autoTrade: tradeConfig.autoTrade,
-        minConfidence: tradeConfig.minConfidence,
         maxActionableLagMs: maxActionableLagMs(),
         signalOk: !!payload,
-        strategies: {
-            BTC_10min_SAFE: summarizeSignal(payload && payload.BTC_10min_SAFE),
-            BTC_10min_TAKER: summarizeSignal(payload && payload.BTC_10min_TAKER)
-        },
+        strategies: strategies,
         balance: lastBalanceValue
     });
 }
@@ -525,9 +527,9 @@ function fetchConfig() {
             var c = r.body.json();
             if (c.amount) tradeConfig.amount = c.amount;
             if (c.strategyAmounts) tradeConfig.strategyAmounts = c.strategyAmounts;
+            if (c.strategyVariants) tradeConfig.strategyVariants = c.strategyVariants;
             if (c.duration) tradeConfig.duration = c.duration;
             if (c.autoTrade !== undefined) tradeConfig.autoTrade = c.autoTrade;
-            if (c.minConfidence !== undefined) tradeConfig.minConfidence = c.minConfidence;
         }
     } catch (e) {}
 }
@@ -543,9 +545,9 @@ function getSignalPayload() {
                 var c = data._config;
                 if (c.amount) tradeConfig.amount = c.amount;
                 if (c.strategyAmounts) tradeConfig.strategyAmounts = c.strategyAmounts;
+                if (c.strategyVariants) tradeConfig.strategyVariants = c.strategyVariants;
                 if (c.duration) tradeConfig.duration = c.duration;
                 if (c.autoTrade !== undefined) tradeConfig.autoTrade = c.autoTrade;
-                if (c.minConfidence !== undefined) tradeConfig.minConfidence = c.minConfidence;
                 delete data._config;
             }
             return data;
@@ -567,12 +569,13 @@ function buildTradeQueue(data) {
     var queue = [];
     if (!data) return queue;
     var amounts = data._strategyAmounts || {};
-    var defs = [
+    var defs = data._strategyVariants || tradeConfig.strategyVariants || [
         { id: "BTC_10min_TAKER", duration: "10" },
         { id: "BTC_10min_SAFE", duration: "10" }
     ];
     for (var i = 0; i < defs.length; i++) {
         var d = defs[i];
+        if (d.enabled === false) continue;
         var sig = data[d.id];
         if (!sig) continue;
         var amount = amountForOrder(d.id, sig, amounts[d.id]);
@@ -593,7 +596,6 @@ function buildTradeQueue(data) {
             directionMoveBps: exec.directionMoveBps,
             amount: String(amount),
             duration: String(sig.duration || d.duration),
-            bypassMinConfidence: !!sig.bypass_min_confidence_filter,
             raw: sig
         });
     }
@@ -605,7 +607,9 @@ function sortTradeQueue(queue) {
         var ta = a.actionableTime || a.time || "";
         var tb = b.actionableTime || b.time || "";
         if (ta !== tb) return ta < tb ? -1 : 1;
-        return (a.strategyId === "BTC_10min_TAKER" ? 0 : 1) - (b.strategyId === "BTC_10min_TAKER" ? 0 : 1);
+        var ap = a.strategyId.indexOf("BTC_10min_TAKER") === 0 ? 0 : 1;
+        var bp = b.strategyId.indexOf("BTC_10min_TAKER") === 0 ? 0 : 1;
+        return ap - bp;
     });
     return queue;
 }
@@ -1002,11 +1006,6 @@ function main() {
                     order.previousOrderDoneClientTime = previousDoneAt || null;
                     order.sincePreviousDoneMs = previousDoneAt ? Date.now() - previousDoneAt : null;
                     order.sinceQueueBatchStartMs = Date.now() - queueBatchStart;
-                    var conf = order.confidence || 0;
-                    if (!order.bypassMinConfidence && Number(conf) < Number(tradeConfig.minConfidence || 0)) {
-                        reportTradeAudit("signal_skipped", order, { reason: "min_confidence_filter", minConfidence: tradeConfig.minConfidence });
-                        continue;
-                    }
                     var timing = updateOrderTimingAge(order);
                     if (!timing.ok && timing.reason == "signal_time_parse_failed") {
                         reportTradeAudit("signal_skipped", order, { reason: "signal_time_parse_failed", actionableTime: order.actionableTime });
@@ -1054,9 +1053,14 @@ function main() {
                 lastWakeLock = Date.now();
             }
                 if (!traded && Date.now() - lastLogTime > 15000) {
-                    var safe = payload && payload.BTC_10min_SAFE ? payload.BTC_10min_SAFE : null;
-                    var taker = payload && payload.BTC_10min_TAKER ? payload.BTC_10min_TAKER : null;
-                    log("Beat | SAFE sig=" + (safe && safe.signal ? safe.signal : "--") + " | TAKER sig=" + (taker && taker.signal ? taker.signal : "--") + " | bal=" + (lastBalanceValue || "--"));
+                    var parts = [];
+                    var variants = (payload && payload._strategyVariants) || tradeConfig.strategyVariants || [];
+                    for (var vi = 0; vi < variants.length; vi++) {
+                        var item = variants[vi];
+                        var sig = payload && payload[item.id] ? payload[item.id] : null;
+                        parts.push(item.id + "=" + (sig && sig.signal ? sig.signal : "--"));
+                    }
+                    log("Beat | " + parts.join(" | ") + " | bal=" + (lastBalanceValue || "--"));
                     lastLogTime = Date.now();
                 }
             } else if (payload) {

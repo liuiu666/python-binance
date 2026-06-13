@@ -11,11 +11,14 @@ const {
   DEFAULT_TRADE_CONFIG,
   amountForStrategyConfig,
   normalizeTradeConfig,
+  strategyVariants,
+  liveStrategyIds,
   applyTradeConfigPatch,
   publicTradeConfig
 } = require("./lib/trade_config");
 const {
   DEFAULT_PAYOUT_RATE,
+  payoutRateForDuration,
   buildLiveOrderHistory
 } = require("./lib/trade_history");
 
@@ -61,8 +64,11 @@ const DATA_UPDATE_SCRIPT_FILE = path.join(__dirname, "py", "update_live_data.py"
 const DATA_UPDATE_STATUS_FILE = path.join(DATA_DIR, "live_data_update_status.json");
 const DATA_UPDATE_STDOUT_FILE = path.join(__dirname, ".data_update.out");
 const DATA_UPDATE_STDERR_FILE = path.join(__dirname, ".data_update.err");
+const SECOND_DATA_STATUS_FILE = path.join(DATA_DIR, "second_data_status.json");
+const SECOND_DATA_FILE = path.join(DATA_DIR, "btcusdt_1s_trades.csv");
 const PRICE_FILE = path.join(DATA_DIR, "current_price.json");
 const CONFIG_FILE = path.join(DATA_DIR, "trade_config.json");
+const PROD_CONFIG_FILE = path.join(DATA_DIR, "prod_config.json");
 const TRADE_AUDIT_FILE = path.join(DATA_DIR, "trade_audit.jsonl");
 const REAL_BALANCE_FILE = path.join(DATA_DIR, "real_balance.json");
 const AUTO_SCRIPT_FILE = path.join(__dirname, "auto_btc.js");
@@ -80,7 +86,7 @@ const REPORT_FILES = {
   shadowDecision: path.join(DATA_DIR, "shadow_decision_report.json"),
   latency: path.join(DATA_DIR, "execution_latency_validation.json")
 };
-const LIVE_STRATEGY_IDS = ["BTC_10min_SAFE", "BTC_10min_TAKER"];
+const BASE_STRATEGY_IDS = ["BTC_10min_SAFE", "BTC_10min_TAKER"];
 const PYTHON_EXE = process.env.PYTHON_EXE || "python";
 const SERVER_SIM_TRADING_ENABLED = process.env.SERVER_SIM_TRADING_ENABLED === "1";
 const MANAGED_PROCESSES_ENABLED = process.env.DISABLE_MANAGED_PROCESSES !== "1";
@@ -164,7 +170,8 @@ let dataUpdate = {
   lastFinish: null,
   lastExitCode: null,
   lastError: null,
-  runs: 0
+  runs: 0,
+  pid: null
 };
 let shuttingDown = false;
 
@@ -221,6 +228,23 @@ function stopSignalService() {
   if (signalService.pid) {
     try { process.kill(signalService.pid); } catch (e) {}
   }
+}
+
+function restartSignalService(reason = "config_update") {
+  if (!MANAGED_PROCESSES_ENABLED) return;
+  clearTimeout(signalService.restartTimer);
+  if (signalService.pid) {
+    appendJsonl(TRADE_AUDIT_FILE, {
+      serverTime: Date.now(),
+      event: "signal_service_restart_requested",
+      reason,
+      pid: signalService.pid
+    });
+    try { process.kill(signalService.pid); } catch (e) {}
+    return;
+  }
+  signalService.restarts += 1;
+  signalService.restartTimer = setTimeout(() => startSignalService(reason), 1000);
 }
 
 function appendJsonl(file, obj) {
@@ -287,6 +311,20 @@ function parseCsvTimeMs(value) {
   return Number.isFinite(ms) ? ms : null;
 }
 
+function shanghaiTime(ms) {
+  if (!Number.isFinite(ms)) return null;
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  }).format(new Date(ms));
+}
+
 function csvDataHealth(name, spec, now) {
   const exists = fs.existsSync(spec.file);
   const rows = readLastCsvRows(spec.file, name === "klines1m" ? 300 : 120);
@@ -313,6 +351,9 @@ function csvDataHealth(name, spec, now) {
     ok: reasons.length === 0,
     reasons,
     lastTime: lastMs === null ? null : new Date(lastMs).toISOString(),
+    lastTimeMs: lastMs,
+    lastTimeShanghai: lastMs === null ? null : shanghaiTime(lastMs),
+    displayTimeZone: "Asia/Shanghai",
     ageMs,
     maxAgeMs: spec.maxAgeMs,
     rowsChecked: times.length,
@@ -460,6 +501,9 @@ function dataHealthGate(signals) {
     signal: {
       strategies: realSignals.map(([strategyId]) => strategyId),
       latestTime: latestSignal ? new Date(latestSignal.ms).toISOString() : null,
+      latestTimeMs: latestSignal ? latestSignal.ms : null,
+      latestTimeShanghai: latestSignal ? shanghaiTime(latestSignal.ms) : null,
+      displayTimeZone: "Asia/Shanghai",
       ageMs: signalAgeMs,
       maxAgeMs: SIGNAL_SNAPSHOT_MAX_AGE_MS
     }
@@ -521,10 +565,12 @@ function runDataUpdate(reason = "timer") {
       env: { ...process.env, ...REPORT_SCRIPT_ENV },
       stdio: ["ignore", out, err]
     });
+    dataUpdate.pid = child.pid;
     const finish = (code, signal, error) => {
       try { if (out !== null) fs.closeSync(out); } catch (e) {}
       try { if (err !== null) fs.closeSync(err); } catch (e) {}
       dataUpdate.running = false;
+      dataUpdate.pid = null;
       dataUpdate.lastFinish = Date.now();
       dataUpdate.lastExitCode = code;
       dataUpdate.lastError = error ? String(error.message || error) : (code === 0 ? null : `code=${code} signal=${signal || ""}`);
@@ -543,6 +589,7 @@ function runDataUpdate(reason = "timer") {
     try { if (out !== null) fs.closeSync(out); } catch (e2) {}
     try { if (err !== null) fs.closeSync(err); } catch (e2) {}
     dataUpdate.running = false;
+    dataUpdate.pid = null;
     dataUpdate.lastFinish = Date.now();
     dataUpdate.lastExitCode = null;
     dataUpdate.lastError = String(e && e.message ? e.message : e);
@@ -631,6 +678,14 @@ function amountForStrategy(strategyId, sig) {
   return String(baseAmount);
 }
 
+function currentStrategyVariants() {
+  return strategyVariants(tradeConfig).filter(v => v.enabled);
+}
+
+function currentLiveStrategyIds() {
+  return liveStrategyIds(tradeConfig);
+}
+
 const ENTRY_TIMING_ENABLED = true;
 const ENTRY_TIMING_POLICIES = {
   BTC_10min_SAFE: {
@@ -648,8 +703,28 @@ const ENTRY_TIMING_POLICIES = {
 };
 const entryTimingState = {};
 
+function entryTimingPolicyForStrategy(strategyId) {
+  if (String(strategyId || "").startsWith("BTC_10min_SAFE")) return ENTRY_TIMING_POLICIES.BTC_10min_SAFE;
+  if (String(strategyId || "").startsWith("BTC_10min_TAKER")) return ENTRY_TIMING_POLICIES.BTC_10min_TAKER;
+  return null;
+}
+
 function isoTime(ms) {
   return new Date(ms).toISOString();
+}
+
+function attachDisplayTimes(sig) {
+  if (!sig || typeof sig !== "object" || sig.shadow) return sig;
+  const signalMs = parseCsvTimeMs(sig.time);
+  const actionableMs = signalTimeMs(sig);
+  return {
+    ...sig,
+    time_ms: signalMs,
+    time_shanghai: signalMs === null ? null : shanghaiTime(signalMs),
+    actionable_time_ms_display: actionableMs,
+    actionable_time_shanghai: actionableMs === null ? null : shanghaiTime(actionableMs),
+    display_time_zone: "Asia/Shanghai"
+  };
 }
 
 function signalActionableMs(sig) {
@@ -727,7 +802,7 @@ function allowSignalForEntryTiming(sig, state, reason) {
 }
 
 function applyEntryTimingForSignal(strategyId, sig) {
-  const policy = ENTRY_TIMING_POLICIES[strategyId];
+  const policy = entryTimingPolicyForStrategy(strategyId);
   if (sig && sig.bypass_entry_timing) return sig;
   if (!ENTRY_TIMING_ENABLED || !policy || !sig || !sig.signal) return sig;
   if (policy.type === "none") return sig;
@@ -854,7 +929,7 @@ function applyEntryTimingForSignal(strategyId, sig) {
 
 function applyEntryTiming(signals) {
   const out = { ...signals };
-  for (const strategyId of Object.keys(ENTRY_TIMING_POLICIES)) {
+  for (const strategyId of currentLiveStrategyIds()) {
     const next = applyEntryTimingForSignal(strategyId, signals[strategyId]);
     if (next) out[strategyId] = next;
     else delete out[strategyId];
@@ -884,6 +959,8 @@ function applyAutoTradeSafetyGate(signals) {
 
 function applyDataHealthGate(signals, gate) {
   if (!gate.blocked) return { signals, gate };
+  const blanketReasons = (gate.reasons || []).filter(reason => reason !== "signal_process_data_health_blocked");
+  if (!blanketReasons.length) return { signals, gate };
   const out = { ...signals };
   for (const [strategyId, sig] of Object.entries(signals)) {
     if (!sig || typeof sig !== "object" || sig.shadow) continue;
@@ -892,7 +969,7 @@ function applyDataHealthGate(signals, gate) {
       signal: null,
       confidence: null,
       data_health_blocked: true,
-      data_health_block_reasons: gate.reasons,
+      data_health_block_reasons: blanketReasons,
       blocked_signal: sig.blocked_signal || sig.signal || null,
       blocked_confidence: sig.blocked_confidence || (sig.confidence == null ? null : sig.confidence)
     };
@@ -902,8 +979,9 @@ function applyDataHealthGate(signals, gate) {
 
 function buildSignalResponse(source = "") {
   const rawSignals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {};
+  const liveIds = currentLiveStrategyIds();
   const liveRawSignals = Object.fromEntries(
-    LIVE_STRATEGY_IDS
+    liveIds
       .filter(strategyId => rawSignals[strategyId])
       .map(strategyId => [strategyId, rawSignals[strategyId]])
   );
@@ -914,15 +992,18 @@ function buildSignalResponse(source = "") {
   
   // Clone signals to prevent modifying in-memory cache
   const signals = JSON.parse(JSON.stringify(safety.signals));
+  for (const [strategyId, sig] of Object.entries(signals)) {
+    if (!strategyId.startsWith("_")) signals[strategyId] = attachDisplayTimes(sig);
+  }
   
   // If not requested by the dashboard, apply safety overrides to prevent real trades if disabled.
   if (source !== "dashboard") {
     if (!tradeConfig.realTradingEnabled) {
-      for (const strategyId of LIVE_STRATEGY_IDS) {
+      for (const strategyId of liveIds) {
         if (signals[strategyId]) signals[strategyId].signal = null;
       }
     } else if (!tradeConfig.autoTrade_10m) {
-      for (const strategyId of LIVE_STRATEGY_IDS) {
+      for (const strategyId of liveIds) {
         if (signals[strategyId]) signals[strategyId].signal = null;
       }
     }
@@ -932,7 +1013,7 @@ function buildSignalResponse(source = "") {
   for (const [strategyId, sig] of Object.entries(signals)) {
     strategyAmounts[strategyId] = amountForStrategy(strategyId, sig);
   }
-  const legacySig = LIVE_STRATEGY_IDS.map(id => signals[id]).find(Boolean);
+  const legacySig = liveIds.map(id => signals[id]).find(Boolean);
   const legacyAmount = legacySig ? amountForStrategy(legacySig.strategy_id, legacySig) : String(tradeConfig.amount);
 
   // Supply backward compatible config keys for old tablet/scripts
@@ -944,12 +1025,16 @@ function buildSignalResponse(source = "") {
   return {
     ...signals,
     _config: configCopy,
+    _strategyVariants: currentStrategyVariants(),
     _strategyAmounts: strategyAmounts,
     _signalAmount: legacyAmount,
     _entryTimingEnabled: ENTRY_TIMING_ENABLED,
-    _entryTimingPolicies: ENTRY_TIMING_POLICIES,
+    _entryTimingPolicies: Object.fromEntries(liveIds.map(id => [id, entryTimingPolicyForStrategy(id)])),
     _execution: {
       serverTime: isoTime(Date.now()),
+      serverTimeMs: Date.now(),
+      serverTimeShanghai: shanghaiTime(Date.now()),
+      displayTimeZone: "Asia/Shanghai",
       currentPrice: Number.isFinite(Number(currentPrice)) ? Number(currentPrice) : null,
       maxActionableLagMs: configuredMaxActionableLagMs()
     },
@@ -995,6 +1080,30 @@ app.get("/api/data-health", (req, res) => {
   let signals = {};
   try { signals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {}; } catch (e) {}
   res.json(dataHealthGate(signals));
+});
+
+app.get("/api/second-data-health", (req, res) => {
+  const status = readJsonFile(SECOND_DATA_STATUS_FILE, {});
+  let file = { exists: false, size: 0, mtime: null };
+  try {
+    const stat = fs.statSync(SECOND_DATA_FILE);
+    file = { exists: true, size: stat.size, mtime: stat.mtime.toISOString() };
+  } catch (e) {}
+  const lastTs = status.last_ts ? Date.parse(status.last_ts) : null;
+  const ageMs = Number.isFinite(lastTs) ? Date.now() - lastTs : null;
+  const maxAgeMs = Number(process.env.SECOND_DATA_MAX_AGE_MS || 120000);
+  res.json({
+    ok: !!status.ok && file.exists && ageMs !== null && ageMs <= maxAgeMs,
+    ageMs,
+    maxAgeMs,
+    status: {
+      ...status,
+      last_ts_ms: status.last_ts ? Date.parse(status.last_ts) : null,
+      last_ts_shanghai: status.last_ts ? shanghaiTime(Date.parse(status.last_ts)) : null,
+      display_time_zone: "Asia/Shanghai"
+    },
+    file
+  });
 });
 
 app.post("/api/data-update/refresh", requireApiToken, (req, res) => {
@@ -1525,11 +1634,10 @@ function checkAutoTrade() {
   try {
     if (!fs.existsSync(SIGNAL_FILE)) return;
     const signals = buildSignalResponse("dashboard");
-    for (const strategyId of LIVE_STRATEGY_IDS) {
+    for (const strategyId of currentLiveStrategyIds()) {
       if (!tradeConfig.autoTrade_10m) continue;
       const sig = signals[strategyId];
-      if (!sig || !sig.signal || !sig.confidence) continue;
-      if (!sig.bypass_min_confidence_filter && Number(sig.confidence) < Number(tradeConfig.minConfidence || 0)) continue;
+      if (!sig || !sig.signal) continue;
       if (trades.some(t => t.status === "active" && t.source === "auto:" + strategyId)) continue;
 
       const sigTime = signalActionableMs(sig);
@@ -1565,7 +1673,16 @@ function settleTrades() {
     let won = t.direction === "UP" ? sp > t.strikePrice : sp < t.strikePrice;
     const tie = sp === t.strikePrice;
     if (tie) { t.status = "tie"; t.settlePrice = sp; t.payout = t.amount; account.balance += t.amount; }
-    else if (won) { t.status = "won"; t.settlePrice = sp; t.payout = t.amount + t.amount * PAYOUT_RATE; account.balance += t.payout; account.wins++; account.totalPnl += t.amount * PAYOUT_RATE; }
+    else if (won) {
+      const payoutRate = payoutRateForDuration(t.duration, PAYOUT_RATE);
+      t.status = "won";
+      t.settlePrice = sp;
+      t.payoutRate = payoutRate;
+      t.payout = t.amount + t.amount * payoutRate;
+      account.balance += t.payout;
+      account.wins++;
+      account.totalPnl += t.amount * payoutRate;
+    }
     else { t.status = "lost"; t.settlePrice = sp; t.payout = 0; account.losses++; account.totalPnl -= t.amount; }
     account.totalTrades++;
     appendJsonl(TRADE_AUDIT_FILE, {
@@ -1580,6 +1697,7 @@ function settleTrades() {
       strikePrice: t.strikePrice,
       settlePrice: sp,
       status: t.status,
+      payoutRate: payoutRateForDuration(t.duration, PAYOUT_RATE),
       payout: t.payout
     });
     console.log(`[Settle] #${t.id} ${t.status} ${t.direction} strike=${t.strikePrice} settle=${sp} pnl=${t.status === "won" ? "+" + (t.payout - t.amount).toFixed(2) : t.status === "lost" ? "-" + t.amount.toFixed(2) : "0"}`);
@@ -1644,17 +1762,86 @@ function saveTradeConfig() {
   try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(publicTradeConfig(tradeConfig), null, 2)); } catch (e) {}
 }
 
+function readProdConfig() {
+  try {
+    if (fs.existsSync(PROD_CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(PROD_CONFIG_FILE, "utf8"));
+    }
+  } catch (e) {}
+  return {};
+}
+
+function applyProdStrategyParams(baseConfig, config) {
+  const out = baseConfig && typeof baseConfig === "object" ? { ...baseConfig } : {};
+  const variants = strategyVariants(config);
+  const safeTemplate = out.BTC_10min_SAFE || {};
+  const takerTemplate = out.BTC_10min_TAKER || {};
+  for (const key of Object.keys(out)) {
+    if ((key.startsWith("BTC_10min_TAKER") || key.startsWith("BTC_10min_SAFE")) && !variants.some(v => v.id === key)) delete out[key];
+  }
+  for (const variant of variants) {
+    const current = out[variant.id] && typeof out[variant.id] === "object" ? out[variant.id] : {};
+    const template = variant.base === "SAFE" ? safeTemplate : takerTemplate;
+    out[variant.id] = {
+      ...template,
+      ...current,
+      enabled: variant.enabled,
+      model_type: "poc_normal",
+      norm_tail_pct: variant.tailPct,
+      norm_taker_filter: variant.base === "TAKER" ? "align" : "none",
+      model_label: `${variant.base}_${Math.round(variant.tailPct * 100)}_${100 - Math.round(variant.tailPct * 100)}`
+    };
+  }
+  return out;
+}
+
+function saveProdStrategyParams(config) {
+  const next = applyProdStrategyParams(readProdConfig(), config);
+  fs.writeFileSync(PROD_CONFIG_FILE, JSON.stringify(next, null, 2));
+}
+
 app.get("/api/config", (req, res) => {
-  res.json(publicTradeConfig(tradeConfig));
+  const prodConfig = readProdConfig();
+  const merged = normalizeTradeConfig({
+    ...tradeConfig,
+    strategyVariants: strategyVariants(tradeConfig).map(variant => ({
+      ...variant,
+      tailPct: Number(prodConfig[variant.id]?.norm_tail_pct ?? variant.tailPct)
+    }))
+  });
+  res.json(publicTradeConfig(merged));
 });
 
 app.post("/api/config", requireApiToken, express.json(), (req, res) => {
+  const beforeVariants = JSON.stringify(strategyVariants(tradeConfig).map(v => ({
+    id: v.id,
+    base: v.base,
+    amount: v.amount,
+    tailPct: v.tailPct,
+    enabled: v.enabled
+  })));
   const result = applyTradeConfigPatch(tradeConfig, req.body, { autoTradeSafetyGate });
   tradeConfig = result.tradeConfig;
   for (const event of result.auditEvents) {
     appendJsonl(TRADE_AUDIT_FILE, { serverTime: Date.now(), ...event });
   }
   saveTradeConfig();
+  saveProdStrategyParams(tradeConfig);
+  const afterVariants = JSON.stringify(strategyVariants(tradeConfig).map(v => ({
+    id: v.id,
+    base: v.base,
+    amount: v.amount,
+    tailPct: v.tailPct,
+    enabled: v.enabled
+  })));
+  if (afterVariants !== beforeVariants) {
+    appendJsonl(TRADE_AUDIT_FILE, {
+      serverTime: Date.now(),
+      event: "strategy_params_updated",
+      strategyVariants: strategyVariants(tradeConfig)
+    });
+    restartSignalService("strategy_params_updated");
+  }
   console.log("[Config] Updated:", JSON.stringify(tradeConfig));
   res.json({ ...publicTradeConfig(tradeConfig), safetyBlocked: result.safetyBlocked, forceAutoTrade: result.forceAutoTrade });
 });
@@ -1744,8 +1931,24 @@ app.post('/api/balance', requireApiToken, (req, res) => {
   });
 });
 
-process.on("SIGINT", stopSignalService);
-process.on("SIGTERM", stopSignalService);
+function shutdown(reason = "shutdown") {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[Server] Shutting down: ${reason}`);
+  stopSignalService();
+  if (dataUpdate.pid) {
+    try { process.kill(dataUpdate.pid); } catch (e) {}
+  }
+  for (const client of wss.clients) {
+    try { client.close(1001, "server_shutdown"); } catch (e) {}
+  }
+  try { wss.close(); } catch (e) {}
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 8000).unref();
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("exit", stopSignalService);
 
 server.listen(PORT, '0.0.0.0', () => {

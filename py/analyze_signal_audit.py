@@ -16,7 +16,7 @@ SIGNAL_AUDIT_FILE = os.path.join(OUT, "signal_audit.jsonl")
 BTC_1M_FILE = os.path.join(OUT, "btcusdt_1m.csv")
 PRICE_TICKS_FILE = os.path.join(OUT, "price_ticks.jsonl")
 REPORT_FILE = os.path.join(OUT, "signal_audit_report.json")
-PAYOUT = 0.85
+DEFAULT_PAYOUT = 0.85
 DEFAULT_STAKE = 5
 TREND_EPS = 0.00005
 DERIVED_MODEL_REPLAY_CANDIDATES = [
@@ -41,6 +41,18 @@ DERIVED_MODEL_REPLAY_CANDIDATES = [
         "countertrend_max_strength": 30,
     },
 ]
+
+
+def payout_for_duration(duration):
+    try:
+        minutes = float(duration)
+    except Exception:
+        return DEFAULT_PAYOUT
+    if minutes >= 30:
+        return 0.85
+    if minutes >= 10:
+        return 0.80
+    return DEFAULT_PAYOUT
 
 
 def read_jsonl(path):
@@ -187,7 +199,7 @@ def metrics(items):
     for x in settled:
         amount = float(x.get("amount") or DEFAULT_STAKE)
         if x["status"] == "won":
-            pnl += amount * PAYOUT
+            pnl += amount * payout_for_duration(x.get("duration"))
         elif x["status"] == "lost":
             pnl -= amount
     return {

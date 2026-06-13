@@ -39,6 +39,8 @@ const chartTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
   second: "2-digit"
 });
 
+const CHART_TIME_ZONE_LABEL = "北京时间 UTC+8";
+
 function formatChartTime(time) {
   const seconds = typeof time === "number" ? time : Number(time?.timestamp || time);
   if (!Number.isFinite(seconds)) return "";
@@ -91,15 +93,25 @@ export default function App() {
   const areaSeriesRef = useRef(null); // Used as candlestick series ref now
 
   const activeSignal = useMemo(() => activeSignalFromPayload(signalPayload), [signalPayload]);
+  const visibleVariants = useMemo(() => {
+    return (signalPayload?._strategyVariants || configDraft.strategyVariants || DEFAULT_CONFIG.strategyVariants).filter(item => item.enabled !== false);
+  }, [configDraft, signalPayload]);
   const signalAmount = useMemo(() => {
     if (!activeSignal) return String(configDraft.amount || DEFAULT_CONFIG.amount);
     return amountForSignal(activeSignal.strategy_id, activeSignal, signalPayload, configDraft);
   }, [activeSignal, configDraft, signalPayload]);
 
-  const safeAmount = useMemo(() => amountForSignal("BTC_10min_SAFE", signalPayload?.BTC_10min_SAFE, signalPayload, configDraft), [configDraft, signalPayload]);
-  const takerAmount = useMemo(() => amountForSignal("BTC_10min_TAKER", signalPayload?.BTC_10min_TAKER, signalPayload, configDraft), [configDraft, signalPayload]);
   const safeSignal = signalPayload?.BTC_10min_SAFE || null;
-  const takerSignal = signalPayload?.BTC_10min_TAKER || null;
+  const takerSignals = visibleVariants
+    .filter(item => item.base === "TAKER")
+    .map(item => signalPayload?.[item.id])
+    .filter(Boolean);
+  const takerSignal = takerSignals[0] || null;
+  const safeVariant = visibleVariants.find(item => item.base === "SAFE") || DEFAULT_CONFIG.strategyVariants[0];
+  const takerVariantText = visibleVariants
+    .filter(item => item.base === "TAKER")
+    .map(item => `${item.amount}U`)
+    .join(" / ");
 
   const priceChange = useMemo(() => {
     if (!currentPrice || !firstPrice) return null;
@@ -154,7 +166,7 @@ export default function App() {
         setConfigDraft({
           ...DEFAULT_CONFIG,
           ...config,
-          strategyAmounts: { ...DEFAULT_CONFIG.strategyAmounts, ...(config.strategyAmounts || {}) }
+          strategyVariants: config.strategyVariants || DEFAULT_CONFIG.strategyVariants
         });
         dirtyRef.current = false;
         setConfigDirty(false);
@@ -198,8 +210,7 @@ export default function App() {
     const payload = {
       ...cleanDraft,
       amount: String(configDraft.amount || DEFAULT_CONFIG.amount),
-      duration: String(configDraft.duration || DEFAULT_CONFIG.duration),
-      minConfidence: Number(configDraft.minConfidence)
+      duration: String(configDraft.duration || DEFAULT_CONFIG.duration)
     };
     apiFetch("/api/config", {
       method: "POST",
@@ -216,7 +227,7 @@ export default function App() {
         setConfigDraft({
           ...DEFAULT_CONFIG,
           ...body,
-          strategyAmounts: { ...DEFAULT_CONFIG.strategyAmounts, ...(body.strategyAmounts || {}) }
+          strategyVariants: body.strategyVariants || DEFAULT_CONFIG.strategyVariants
         });
         dirtyRef.current = false;
         setConfigDirty(false);
@@ -660,8 +671,8 @@ export default function App() {
             <Metric label="稳健强度" value={safeSignal?.confidence !== undefined ? fmtPct(safeSignal.confidence, 0) : "--"} tone={safeConfidenceTone} />
             <Metric label="资金流强度" value={takerSignal?.confidence !== undefined ? fmtPct(takerSignal.confidence, 0) : "--"} tone={takerConfidenceTone} />
             <Metric label="账户余额" value={realBalance?.amount !== undefined ? fmt(realBalance.amount, 2) : "--"} unit="USDT" tone={realBalance?.amount !== undefined ? "ok" : ""} />
-            <Metric label="稳健投数" value={safeAmount} unit="USDT" />
-            <Metric label="资金流投数" value={takerAmount} unit="USDT" />
+            <Metric label="稳健投数" value={safeVariant.amount || "--"} unit="USDT" />
+            <Metric label="资金流档位" value={takerVariantText || "--"} />
             <button className="icon-button" type="button" onClick={refreshAll} title="刷新">
               <RefreshCcw size={16} />
             </button>
@@ -671,8 +682,15 @@ export default function App() {
         <SignalBanner signalPayload={signalPayload} activeSignal={activeSignal} signalAmount={signalAmount} />
 
         <section className="strategy-strip">
-          <StrategyCard title="推荐稳健" signal={signalPayload?.BTC_10min_SAFE} amount={safeAmount} />
-          <StrategyCard title="资金流过滤" signal={signalPayload?.BTC_10min_TAKER} amount={takerAmount} />
+          {visibleVariants.map(variant => (
+            <StrategyCard
+              key={variant.id}
+              title={variant.label}
+              signal={signalPayload?.[variant.id]}
+              amount={amountForSignal(variant.id, signalPayload?.[variant.id], signalPayload, configDraft)}
+              variant={variant}
+            />
+          ))}
         </section>
 
         <main className="main-grid">
@@ -688,6 +706,9 @@ export default function App() {
                 </div>
               </header>
               <div className="chart-frame" style={{ position: "relative", width: "100%", height: "420px" }}>
+                <div style={{ position: "absolute", top: "10px", right: "12px", zIndex: 2, fontSize: "11px", color: "var(--muted)", background: "rgba(13,17,23,0.72)", border: "1px solid var(--line)", borderRadius: "4px", padding: "3px 6px", pointerEvents: "none" }}>
+                  {CHART_TIME_ZONE_LABEL}
+                </div>
                 <div ref={chartContainerRef} style={{ width: "100%", height: "100%" }} />
               </div>
             </section>

@@ -1,0 +1,12 @@
+{
+  "amount": "5",
+  "strategyAmounts": {
+    "BTC_10min_SAFE": "5",
+    "BTC_10min_TAKER": "10"
+  },
+  "duration": "10",
+  "autoTrade_10m": true,
+  "realTradingEnabled": true,
+  "shadowTradingEnabled": true,
+  "minConfidence": 35
+}

@@ -1,6 +1,6 @@
 import React from "react";
 import { Activity } from "lucide-react";
-import { directionClass, directionText, fmtPct, strategyName, signalTimeText } from "../utils";
+import { directionClass, directionText, fmtPct, strategyName, displaySignalTime } from "../utils";
 
 export default function SignalBanner({ signalPayload, activeSignal, signalAmount }) {
   const safe = signalPayload?.BTC_10min_SAFE || null;
@@ -26,7 +26,7 @@ export default function SignalBanner({ signalPayload, activeSignal, signalAmount
       </div>
       <div className="signal-side">
         <span>{signalAmount || "--"}U</span>
-        <small>{signalTimeText(activeSignal?.time)}</small>
+        <small>{displaySignalTime(activeSignal)} 北京时间</small>
       </div>
     </section>
   );

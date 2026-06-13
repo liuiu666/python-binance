@@ -67,7 +67,7 @@ import tarfile
 root = os.getcwd()
 out = os.environ["DEPLOY_ARCHIVE"]
 exclude_dirs = {".git", "node_modules", "__pycache__", ".pytest_cache"}
-exclude_names = {"codex.db-shm", "codex.db-wal", "signal_btc.lock", "price_proxy.lock"}
+exclude_names = {"codex.db", "codex.db-shm", "codex.db-wal", "signal_btc.lock", "price_proxy.lock"}
 exclude_suffixes = {".out", ".err", ".tmp", ".pyc"}
 exclude_prefixes = [
     os.path.join(root, "data", "archive"),
@@ -201,7 +201,7 @@ echo "[6/8] syntax checks"
 node --check server.js
 node --check auto_btc.js
 . .venv/bin/activate
-python -m py_compile py/signal_btc.py py/price_proxy.py py/update_live_data.py
+python -m py_compile py/signal_btc.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py
 
 echo "[7/8] write systemd services"
 NODE_BIN="$(command -v node)"
@@ -239,7 +239,7 @@ Environment=PORT=3000
 Environment=APP_DIR=$APP_DIR
 Environment=DATA_DIR=$APP_DIR/data
 Environment=PYTHON_EXE=$APP_DIR/.venv/bin/python
-Environment=SERVER_SIM_TRADING_ENABLED=1
+Environment=SERVER_SIM_TRADING_ENABLED=0
 Environment=ENABLE_SIGNAL_SHADOWS=0
 Environment=ENABLE_LEGACY_TWO_MINUTE_LIVE=0
 Environment=PYTHONUNBUFFERED=1
@@ -255,9 +255,39 @@ RestartSec=5
 WantedBy=multi-user.target
 SERVICE
 
+cat >/etc/systemd/system/btc-second-data.service <<SERVICE
+[Unit]
+Description=BTC second-level trade data collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=$APP_DIR
+Environment=APP_DIR=$APP_DIR
+Environment=DATA_DIR=$APP_DIR/data
+Environment=PYTHONUNBUFFERED=1
+Environment=SECOND_DATA_MARKET=futures
+Environment=SECOND_DATA_SYMBOL=BTCUSDT
+Environment=SECOND_DATA_INTERVAL_SEC=1
+Environment=SECOND_DATA_RETENTION_DAYS=120
+ExecStart=$APP_DIR/.venv/bin/python py/collect_second_data.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
 systemctl daemon-reload
-systemctl enable btc-price.service btc-app.service
+systemctl enable btc-price.service btc-app.service btc-second-data.service
+if [ -f /etc/systemd/system/btc-price.service.d/proxy.conf ]; then
+  mkdir -p /etc/systemd/system/btc-second-data.service.d
+  cp /etc/systemd/system/btc-price.service.d/proxy.conf /etc/systemd/system/btc-second-data.service.d/proxy.conf
+  systemctl daemon-reload
+fi
 systemctl restart btc-price.service
+systemctl restart btc-second-data.service
 sleep 2
 systemctl restart btc-app.service
 
@@ -265,12 +295,14 @@ echo "[8/8] health checks"
 sleep 10
 curl -fsS http://127.0.0.1:3000/api/config >/tmp/btc-config.json
 curl -fsS http://127.0.0.1:3000/api/data-health >/tmp/btc-data-health.json
+curl -fsS http://127.0.0.1:3000/api/second-data-health >/tmp/btc-second-data-health.json
 curl -fsS 'http://127.0.0.1:3000/api/signal?source=dashboard' >/tmp/btc-signal.json
 python3 - <<'PY'
 import json
 for name, path in [
     ("config", "/tmp/btc-config.json"),
     ("data_health", "/tmp/btc-data-health.json"),
+    ("second_data", "/tmp/btc-second-data-health.json"),
     ("signal", "/tmp/btc-signal.json"),
 ]:
     with open(path, "r", encoding="utf-8") as f:
@@ -279,6 +311,9 @@ for name, path in [
         print("config", obj)
     elif name == "data_health":
         print("data_health allow=", obj.get("allow"), "blocked=", obj.get("blocked"), "reasons=", obj.get("reasons"))
+    elif name == "second_data":
+        status = obj.get("status", {})
+        print("second_data ok=", obj.get("ok"), "ageMs=", obj.get("ageMs"), "rows=", status.get("rows"), "last=", status.get("last_ts"))
     else:
         keys = [k for k in obj.keys() if k.startswith("BTC_")]
         gate = obj.get("_autoTradeSafetyGate", {})
@@ -286,6 +321,7 @@ for name, path in [
 PY
 
 systemctl --no-pager --full status btc-price.service | sed -n '1,18p'
+systemctl --no-pager --full status btc-second-data.service | sed -n '1,18p'
 systemctl --no-pager --full status btc-app.service | sed -n '1,18p'
 rm -f "$ARCHIVE"
 echo "DEPLOY_OK http://$HOSTNAME:3000"
