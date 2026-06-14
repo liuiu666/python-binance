@@ -1329,6 +1329,179 @@ class SecondNormalStrategy:
         return {**base, "signal": signal, "reason": "second_tail_reversal"}
 
 
+class SecondChipStrategy(SecondNormalStrategy):
+    """Second-level POC chip-zone reversal for 10m binary options."""
+
+    def __init__(self, strategy_id, cfg):
+        self.id = strategy_id
+        self.lookback_sec = int(cfg.get("second_chip_lookback_sec", cfg.get("second_lookback_sec", 3600)))
+        self.horizon_sec = int(cfg.get("second_chip_horizon_sec", cfg.get("second_horizon_sec", 600)))
+        self.min_gap_sec = int(cfg.get("second_chip_min_gap_sec", cfg.get("second_min_gap_sec", self.horizon_sec)))
+        self.target_share = float(cfg.get("second_chip_target_share", 0.2))
+        self.bin_mode = str(cfg.get("second_chip_bin_mode", "fixed")).lower()
+        self.bin_pct = float(cfg.get("second_chip_bin_pct", 0.0003))
+        self.bin_size = float(cfg.get("second_chip_bin_size", 20))
+        self.break_pct = float(cfg.get("second_chip_break_pct", 0.0023))
+        self.direction_filter = str(cfg.get("second_chip_direction_filter", "breakout_up_only")).lower()
+        self.interval_min = max(1, int(round(self.horizon_sec / 60)))
+
+    def _dynamic_bin_size(self, price):
+        if self.bin_mode == "percent":
+            return max(1.0, float(price) * self.bin_pct)
+        return max(1.0, self.bin_size)
+
+    def _state_at(self, close, volume, price, bin_size):
+        zone = self._chip_zone(close, volume, bin_size)
+        if not zone:
+            return None
+        upper = zone["high"] * (1.0 + self.break_pct)
+        lower = zone["low"] * (1.0 - self.break_pct)
+        state = "inside"
+        if price > upper:
+            state = "above"
+        elif price < lower:
+            state = "below"
+        return zone, state, upper, lower
+
+    def _chip_zone(self, close, volume, bin_size):
+        import numpy as np
+
+        bins = np.rint(close / bin_size).astype(int)
+        offset = int(bins.min())
+        size = int(bins.max() - offset + 1)
+        counts = np.zeros(size, dtype=float)
+        vols = np.zeros(size, dtype=float)
+        for b0, vol in zip(bins, volume):
+            b = b0 - offset
+            counts[b] += 1
+            vols[b] += vol
+        total = counts.sum()
+        if total <= 0:
+            return None
+        total_vol = vols.sum()
+        poc = int(np.argmax(counts))
+        lo = hi = poc
+        zone_count = counts[poc]
+        while zone_count / max(total, 1e-12) < self.target_share:
+            left = counts[lo - 1] if lo > 0 else -1
+            right = counts[hi + 1] if hi + 1 < size else -1
+            if left < 0 and right < 0:
+                break
+            if right > left:
+                hi += 1
+                zone_count += counts[hi]
+            else:
+                lo -= 1
+                zone_count += counts[lo]
+        sl = slice(lo, hi + 1)
+        return {
+            "low": (lo + offset) * bin_size,
+            "high": (hi + offset) * bin_size,
+            "poc": (poc + offset) * bin_size,
+            "share": counts[sl].sum() / max(total, 1e-12),
+            "volume_share": vols[sl].sum() / max(total_vol, 1e-12) if total_vol > 0 else 0.0,
+            "width_bins": hi - lo + 1,
+        }
+
+    def _direction_allowed(self, breakout):
+        if self.direction_filter in ("", "none", "all"):
+            return True
+        if self.direction_filter == "breakout_up_only":
+            return breakout == "UP"
+        if self.direction_filter == "breakout_down_only":
+            return breakout == "DOWN"
+        return True
+
+    def predict(self, df5=None):
+        import numpy as np
+
+        bars = self._load_seconds()
+        if bars is None or len(bars) < self.lookback_sec + 2:
+            return None
+        recent = bars.tail(self.lookback_sec + 1).copy()
+        close = np.asarray(recent["close"].astype(float).values, dtype=float)
+        volume = np.asarray(recent["volume"].astype(float).values, dtype=float)
+        price = float(close[-1])
+        bin_size = self._dynamic_bin_size(price)
+        current = self._state_at(close[-self.lookback_sec:], volume[-self.lookback_sec:], price, bin_size)
+        prev = self._state_at(close[-self.lookback_sec - 1:-1], volume[-self.lookback_sec - 1:-1], float(close[-2]), bin_size)
+        if not current:
+            return None
+        zone, state, upper, lower = current
+        prev_state = prev[1] if prev else "unknown"
+        signal = None
+        breakout = None
+        distance_pct = 0.0
+        position_pct = 0.0
+        position_label = "inside"
+        if state == "above":
+            position_pct = price / max(upper, 1e-12) - 1.0
+            position_label = "above_upper_trigger"
+        elif state == "below":
+            position_pct = lower / max(price, 1e-12) - 1.0
+            position_label = "below_lower_trigger"
+        else:
+            upper_gap = upper / max(price, 1e-12) - 1.0
+            lower_gap = price / max(lower, 1e-12) - 1.0
+            position_pct = min(max(0.0, upper_gap), max(0.0, lower_gap))
+            position_label = "inside_nearest_trigger_gap"
+        if state == "above" and prev_state != "above":
+            breakout = "UP"
+            signal = "DOWN"
+            distance_pct = price / max(zone["high"], 1e-12) - 1.0
+        elif state == "below" and prev_state != "below":
+            breakout = "DOWN"
+            signal = "UP"
+            distance_pct = zone["low"] / max(price, 1e-12) - 1.0
+
+        signal_time = bars["time"].iloc[-1]
+        distance_conf = max(0.0, min(95.0, (distance_pct / max(self.break_pct, 1e-12)) * 50.0))
+        base = {
+            "strategy_id": self.id,
+            "confidence": round(distance_conf, 1),
+            "avg_prob": None,
+            "rsi_value": None,
+            "high_conf": bool(signal),
+            "agree": True,
+            "vol_ok": True,
+            "session_gate_ok": True,
+            "rsi_extreme": True,
+            "lookback_sec": self.lookback_sec,
+            "horizon_sec": self.horizon_sec,
+            "interval_min": self.interval_min,
+            "duration": self.interval_min,
+            "min_gap_sec": self.min_gap_sec,
+            "chip_target_share": round(self.target_share, 6),
+            "chip_bin_mode": self.bin_mode,
+            "chip_bin_pct": round(self.bin_pct, 8),
+            "chip_bin_size": round(float(bin_size), 4),
+            "chip_break_pct": round(self.break_pct, 8),
+            "chip_direction_filter": self.direction_filter,
+            "chip_state": state,
+            "chip_prev_state": prev_state,
+            "chip_poc": round(float(zone["poc"]), 2),
+            "chip_zone_low": round(float(zone["low"]), 2),
+            "chip_zone_high": round(float(zone["high"]), 2),
+            "chip_lower_trigger": round(float(lower), 2),
+            "chip_upper_trigger": round(float(upper), 2),
+            "chip_zone_share": round(float(zone["share"]), 4),
+            "chip_zone_volume_share": round(float(zone["volume_share"]), 4),
+            "chip_zone_width_bins": int(zone["width_bins"]),
+            "chip_distance_pct": round(float(distance_pct), 6),
+            "chip_position_pct": round(float(position_pct), 6),
+            "chip_position_label": position_label,
+            "time": signal_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "model_type": "second_chip",
+            "bypass_entry_timing": True,
+        }
+        if not signal:
+            reason = "inside_chip_zone" if state == "inside" else "already_outside_chip_zone"
+            return {**base, "signal": None, "reason": reason}
+        if not self._direction_allowed(breakout):
+            return {**base, "signal": None, "reason": "direction_filter", "blocked_signal": signal, "chip_breakout": breakout}
+        return {**base, "signal": signal, "reason": "second_chip_reversal", "chip_breakout": breakout}
+
+
 class Strategy:
     def __init__(self, strategy_id, cfg):
         self.id = strategy_id
@@ -2208,6 +2381,8 @@ def _make_strategy(sid, cfg):
         return POCNormalStrategy(sid, cfg)
     if cfg.get("model_type") == "second_normal":
         return SecondNormalStrategy(sid, cfg)
+    if cfg.get("model_type") == "second_chip":
+        return SecondChipStrategy(sid, cfg)
     return Strategy(sid, cfg)
 
 def build_strategies(config_map):
@@ -2215,7 +2390,7 @@ def build_strategies(config_map):
     return [
         _make_strategy(k, v)
         for k, v in config_map.items()
-        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal") or k not in live_two_minute_ids)
+        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal", "second_chip") or k not in live_two_minute_ids)
     ]
 
 configs = load_config()

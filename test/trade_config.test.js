@@ -58,8 +58,9 @@ test("trade config supports multiple taker variants with independent amounts", (
   });
   assert.equal(amountForStrategyConfig("BTC_10min_TAKER", result.tradeConfig), "10");
   assert.equal(amountForStrategyConfig("BTC_10min_TAKER_27", result.tradeConfig), "8");
-  assert.equal(result.tradeConfig.strategyVariants.length, 4);
+  assert.equal(result.tradeConfig.strategyVariants.length, 5);
   assert.ok(result.tradeConfig.strategyVariants.some(v => v.base === "SECOND"));
+  assert.ok(result.tradeConfig.strategyVariants.some(v => v.base === "SECOND_CHIP"));
 });
 
 test("trade config supports multiple safe variants with independent amounts", () => {
@@ -72,8 +73,9 @@ test("trade config supports multiple safe variants with independent amounts", ()
   });
   assert.equal(amountForStrategyConfig("BTC_10min_SAFE", result.tradeConfig), "5");
   assert.equal(amountForStrategyConfig("BTC_10min_SAFE_22", result.tradeConfig), "3");
-  assert.equal(result.tradeConfig.strategyVariants.length, 4);
+  assert.equal(result.tradeConfig.strategyVariants.length, 5);
   assert.ok(result.tradeConfig.strategyVariants.some(v => v.base === "SECOND"));
+  assert.ok(result.tradeConfig.strategyVariants.some(v => v.base === "SECOND_CHIP"));
 });
 
 test("trade config separates observation from real execution", () => {
@@ -84,7 +86,7 @@ test("trade config separates observation from real execution", () => {
       { id: "BTC_10min_SECOND_1800_20", base: "SECOND", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: false }
     ]
   });
-  assert.deepEqual(observedStrategyIds(cfg), ["BTC_10min_SAFE", "BTC_10min_TAKER", "BTC_10min_SECOND_1800_20"]);
+  assert.deepEqual(observedStrategyIds(cfg), ["BTC_10min_SAFE", "BTC_10min_TAKER", "BTC_10min_SECOND_1800_20", "BTC_10min_SECOND_CHIP_3600_20"]);
   assert.deepEqual(liveStrategyIds(cfg), ["BTC_10min_TAKER"]);
 });
 
@@ -122,6 +124,33 @@ test("trade config preserves custom second normal variants", () => {
   assert.equal(restored.amount, "7");
   assert.equal(restored.lookbackSec, 900);
   assert.equal(restored.secondFilter, "flow_align");
+});
+
+test("second chip default keeps the backtested fixed 20U bin", () => {
+  const cfg = normalizeTradeConfig({
+    strategyVariants: [
+      { id: "BTC_10min_SAFE", base: "SAFE", amount: "5", tailPct: 0.2 },
+      { id: "BTC_10min_TAKER", base: "TAKER", amount: "10", tailPct: 0.2 },
+      {
+        id: "BTC_10min_SECOND_CHIP_3600_20",
+        base: "SECOND_CHIP",
+        amount: "5",
+        enabled: true,
+        tradeEnabled: false,
+        lookbackSec: 3600,
+        horizonSec: 600,
+        gapSec: 600,
+        chipTargetShare: 0.2,
+        chipBinMode: "percent",
+        chipBinPct: 0.0003,
+        chipBreakPct: 0.0023,
+        chipDirectionFilter: "breakout_up_only"
+      }
+    ]
+  });
+  const chip = cfg.strategyVariants.find(v => v.base === "SECOND_CHIP");
+  assert.equal(chip.chipBinMode, "fixed");
+  assert.equal(chip.chipBinSize, 20);
 });
 
 test("auto trade patch records blocked and forced transitions", () => {

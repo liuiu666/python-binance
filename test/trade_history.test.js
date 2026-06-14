@@ -2,6 +2,7 @@ const assert = require("node:assert");
 const test = require("node:test");
 const {
   buildLiveOrderHistory,
+  fallbackSettlePrice,
   payoutRateForDuration,
   priceAtOrAfter,
   settleStatus,
@@ -13,6 +14,35 @@ test("priceAtOrAfter returns the first tick at or after target", () => {
   assert.equal(priceAtOrAfter(ticks, 1), 100);
   assert.equal(priceAtOrAfter(ticks, 20), 101);
   assert.equal(priceAtOrAfter(ticks, 30), null);
+});
+
+test("expired orders settle with current price when tick history is missing", () => {
+  assert.equal(fallbackSettlePrice([], 1000, 2000, 101), 101);
+  assert.equal(fallbackSettlePrice([], 3000, 2000, 101), null);
+  const history = buildLiveOrderHistory({
+    now: 601000,
+    currentPrice: 101,
+    auditRows: [
+      { event: "order_done", serverTime: 1000, duration: 10, direction: "UP", amount: 5, price: 100, strategyId: "BTC_10min_SAFE" },
+      {
+        event: "shadow_trade_open",
+        serverTime: 1000,
+        tradeId: 1,
+        source: "shadow:BTC_10min_SAFE",
+        strategyId: "BTC_10min_SAFE",
+        direction: "UP",
+        amount: 5,
+        duration: 10,
+        openTime: 1000,
+        strikePrice: 100
+      }
+    ],
+    priceTicks: []
+  });
+
+  assert.equal(history.summary.real.wins, 1);
+  assert.equal(history.summary.shadow.wins, 1);
+  assert.equal(history.summary.pending, 0);
 });
 
 test("settle status and pnl match binary option rules", () => {
@@ -73,7 +103,68 @@ test("live order history summarizes settled, pending, aborted, and server rows",
   assert.equal(history.summary.wins, 1);
   assert.equal(history.summary.ties, 1);
   assert.equal(history.summary.pending, 1);
+  assert.equal(history.summary.winRate, 100);
   assert.equal(history.summary.pnl, 8.5);
   assert.equal(history.active.length, 1);
   assert.equal(history.recent[0].event, "server_trade");
+});
+
+test("shadow audit rows do not merge reused trade ids after restart", () => {
+  const history = buildLiveOrderHistory({
+    now: 1710000000000,
+    limit: 10,
+    auditRows: [
+      {
+        event: "shadow_trade_open",
+        serverTime: 1000,
+        tradeId: 1,
+        source: "shadow:BTC_10min_SAFE",
+        strategyId: "BTC_10min_SAFE",
+        direction: "UP",
+        amount: 5,
+        duration: 10,
+        openTime: 1000,
+        strikePrice: 100
+      },
+      {
+        event: "shadow_trade_settle",
+        serverTime: 601000,
+        tradeId: 1,
+        source: "shadow:BTC_10min_SAFE",
+        strategyId: "BTC_10min_SAFE",
+        openTime: 1000,
+        settleTime: 601000,
+        settlePrice: 101,
+        status: "won"
+      },
+      {
+        event: "shadow_trade_open",
+        serverTime: 2000,
+        tradeId: 1,
+        source: "shadow:BTC_10min_SAFE",
+        strategyId: "BTC_10min_SAFE",
+        direction: "DOWN",
+        amount: 5,
+        duration: 10,
+        openTime: 2000,
+        strikePrice: 100
+      },
+      {
+        event: "shadow_trade_settle",
+        serverTime: 602000,
+        tradeId: 1,
+        source: "shadow:BTC_10min_SAFE",
+        strategyId: "BTC_10min_SAFE",
+        openTime: 2000,
+        settleTime: 602000,
+        settlePrice: 101,
+        status: "lost"
+      }
+    ]
+  });
+
+  assert.equal(history.summary.shadow.total, 2);
+  assert.equal(history.summary.shadow.wins, 1);
+  assert.equal(history.summary.shadow.losses, 1);
+  assert.equal(history.summary.shadow.pnl, -1);
 });

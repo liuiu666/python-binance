@@ -16,7 +16,8 @@ export const DEFAULT_CONFIG = {
   strategyVariants: [
     { id: "BTC_10min_SAFE", base: "SAFE", label: "推荐稳健 20/80", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: true },
     { id: "BTC_10min_TAKER", base: "TAKER", label: "资金流过滤 20/80", amount: "10", tailPct: 0.2, enabled: true, tradeEnabled: true },
-    { id: "BTC_10min_SECOND_1800_20", base: "SECOND", label: "秒级正态 1800s 20/80", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: false, lookbackSec: 1800, horizonSec: 600, gapSec: 600, secondFilter: "none", duration: "10" }
+    { id: "BTC_10min_SECOND_1800_20", base: "SECOND", label: "秒级正态 1800s 20/80", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: false, lookbackSec: 1800, horizonSec: 600, gapSec: 600, secondFilter: "none", duration: "10" },
+    { id: "BTC_10min_SECOND_CHIP_3600_20", base: "SECOND_CHIP", label: "秒级筹码区 60m 20% 0.23%", amount: "5", enabled: true, tradeEnabled: false, lookbackSec: 3600, horizonSec: 600, gapSec: 600, chipTargetShare: 0.2, chipBinMode: "fixed", chipBinSize: 20, chipBinPct: 0.0003, chipBreakPct: 0.0023, chipDirectionFilter: "breakout_up_only", duration: "10" }
   ],
   duration: "10",
   autoTrade_10m: false,
@@ -60,6 +61,7 @@ export function strategyName(strategyId) {
   const id = String(strategyId || "");
   if (id.startsWith("BTC_10min_SAFE")) return "推荐稳健";
   if (id.startsWith("BTC_10min_TAKER")) return "资金流过滤";
+  if (id.startsWith("BTC_10min_SECOND_CHIP")) return "秒级筹码区";
   if (id.startsWith("BTC_10min_SECOND")) return "秒级正态";
   if (!strategyId || strategyId === "manual") return "手动";
   return strategyId;
@@ -112,6 +114,16 @@ export function signalLabel(signal) {
     return "策略拦截: " + reasons;
   }
   if (signal.safety_blocked) return "避险拦截: 极端趋势";
+  if (signal.model_type === "second_chip") {
+    if (signal.reason === "already_outside_chip_zone") {
+      if (signal.chip_state === "below") return "已下破，等待重新进区";
+      if (signal.chip_state === "above") return "已上破，等待重新进区";
+      return "已在区外，等待重新进区";
+    }
+    if (signal.reason === "direction_filter") return "方向过滤，未执行";
+    if (signal.chip_state === "inside") return "区间内，等待突破";
+    return "等待筹码区突破";
+  }
   return "等待极端区间";
 }
 

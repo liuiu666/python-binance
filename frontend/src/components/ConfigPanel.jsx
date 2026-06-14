@@ -3,7 +3,7 @@ import { Plus, Save, Server, Trash2 } from "lucide-react";
 import { DEFAULT_CONFIG, fmtPct } from "../utils";
 
 const inputStyle = {
-  width: "82px",
+  width: "86px",
   height: "26px",
   background: "#0d1117",
   border: "1px solid var(--line)",
@@ -15,7 +15,7 @@ const inputStyle = {
   outline: "none"
 };
 
-const selectStyle = { ...inputStyle, width: "132px", textAlign: "left" };
+const selectStyle = { ...inputStyle, width: "136px", textAlign: "left" };
 
 function CompactToggle({ label, checked, onChange }) {
   return (
@@ -36,16 +36,30 @@ function tailDisplay(tailPct) {
   return `${lower}/${100 - lower}`;
 }
 
+function pctInput(value, digits = 2) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  return Number((n * 100).toFixed(digits));
+}
+
+function fromPctInput(value, fallback, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n / 100));
+}
+
 function variantId(base, tailPct, index, lookbackSec = 1800) {
   const lower = Math.round(Number(tailPct || 0.2) * 100);
   if (base === "SAFE") return index === 0 && lower === 20 ? "BTC_10min_SAFE" : `BTC_10min_SAFE_${lower}`;
   if (base === "TAKER") return index === 0 && lower === 20 ? "BTC_10min_TAKER" : `BTC_10min_TAKER_${lower}`;
+  if (base === "SECOND_CHIP") return `BTC_10min_SECOND_CHIP_${lookbackSec}${index > 0 ? "_" + index : ""}`;
   return `BTC_10min_SECOND_${lookbackSec}_${lower}${index > 0 ? "_" + index : ""}`;
 }
 
 function variantLabel(base, tailPct, lookbackSec = 1800) {
   if (base === "SAFE") return `推荐稳健 ${tailDisplay(tailPct)}`;
   if (base === "TAKER") return `资金流过滤 ${tailDisplay(tailPct)}`;
+  if (base === "SECOND_CHIP") return `秒级筹码区 ${Math.round((lookbackSec || 3600) / 60)}m`;
   return `秒级正态 ${lookbackSec}s ${tailDisplay(tailPct)}`;
 }
 
@@ -58,7 +72,9 @@ function updateVariant(variants, index, patch) {
       next.id = variantId(next.base, next.tailPct, sameBaseBefore, next.lookbackSec);
     }
     next.label = variantLabel(next.base, next.tailPct, next.lookbackSec);
-    if (next.base === "SECOND") next.duration = String(Math.max(1, Math.round(Number(next.horizonSec || 600) / 60)));
+    if (next.base === "SECOND" || next.base === "SECOND_CHIP") {
+      next.duration = String(Math.max(1, Math.round(Number(next.horizonSec || 600) / 60)));
+    }
     return next;
   });
 }
@@ -74,9 +90,97 @@ function BacktestBadge({ variant }) {
   );
 }
 
+function CommonControls({ variant, onChange }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+      <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+        投数 USDT
+        <input min="1" step="1" type="number" value={variant.amount} onChange={event => onChange({ amount: event.target.value })} style={inputStyle} />
+      </label>
+      {variant.base === "SECOND_CHIP" ? (
+        <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+          筹码占比 %
+          <input min="1" max="90" step="1" type="number" value={pctInput(variant.chipTargetShare ?? 0.2, 0)} onChange={event => onChange({ chipTargetShare: fromPctInput(event.target.value, 0.2, 0.01, 0.9) })} style={inputStyle} />
+        </label>
+      ) : (
+        <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+          阈值 {tailDisplay(variant.tailPct)}
+          <input min="5" max="45" step="1" type="number" value={Math.round(Number(variant.tailPct || 0.2) * 100)} onChange={event => onChange({ tailPct: Math.max(5, Math.min(45, Number(event.target.value) || 20)) / 100 })} style={inputStyle} />
+        </label>
+      )}
+    </div>
+  );
+}
+
+function SecondNormalControls({ variant, onChange }) {
+  if (variant.base !== "SECOND") return null;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+      <NumberField label="回看秒数" value={variant.lookbackSec || 1800} min="60" max="21600" step="60" onChange={value => onChange({ lookbackSec: value || 1800 })} />
+      <NumberField label="到期秒数" value={variant.horizonSec || 600} min="60" max="7200" step="60" onChange={value => onChange({ horizonSec: value || 600, duration: String(Math.max(1, Math.round((value || 600) / 60))) })} />
+      <NumberField label="去重秒数" value={variant.gapSec || 600} min="0" max="21600" step="60" onChange={value => onChange({ gapSec: value || 0 })} />
+      <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+        过滤器
+        <select value={variant.secondFilter || "none"} onChange={event => onChange({ secondFilter: event.target.value })} style={selectStyle}>
+          <option value="none">不过滤</option>
+          <option value="vol_high">高成交量</option>
+          <option value="vol_not_high">避开高成交量</option>
+          <option value="flow_align">资金流同向</option>
+          <option value="flow_strong_align">强资金流同向</option>
+          <option value="flow_align_vol_not_high">资金流同向+避开高量</option>
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function SecondChipControls({ variant, onChange }) {
+  if (variant.base !== "SECOND_CHIP") return null;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+      <NumberField label="回看秒数" value={variant.lookbackSec || 3600} min="60" max="21600" step="60" onChange={value => onChange({ lookbackSec: value || 3600 })} />
+      <NumberField label="到期秒数" value={variant.horizonSec || 600} min="60" max="7200" step="60" onChange={value => onChange({ horizonSec: value || 600, duration: String(Math.max(1, Math.round((value || 600) / 60))) })} />
+      <NumberField label="去重秒数" value={variant.gapSec || 600} min="0" max="21600" step="60" onChange={value => onChange({ gapSec: value || 0 })} />
+      <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+        档位模式
+        <select value={variant.chipBinMode || "percent"} onChange={event => onChange({ chipBinMode: event.target.value })} style={selectStyle}>
+          <option value="fixed">固定U</option>
+          <option value="percent">价格百分比</option>
+        </select>
+      </label>
+      {variant.chipBinMode === "fixed" ? (
+        <NumberField label="档位大小 U" value={variant.chipBinSize || 20} min="1" max="1000" step="1" onChange={value => onChange({ chipBinSize: value || 20 })} />
+      ) : null}
+      <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+        档位比例 %
+        <input min="0.001" max="1" step="0.001" type="number" value={pctInput(variant.chipBinPct ?? 0.0003, 3)} onChange={event => onChange({ chipBinPct: fromPctInput(event.target.value, 0.0003, 0.00001, 0.01) })} style={inputStyle} />
+      </label>
+      <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+        突破比例 %
+        <input min="0.01" max="5" step="0.01" type="number" value={pctInput(variant.chipBreakPct ?? 0.0023, 2)} onChange={event => onChange({ chipBreakPct: fromPctInput(event.target.value, 0.0023, 0.0001, 0.05) })} style={inputStyle} />
+      </label>
+      <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+        方向过滤
+        <select value={variant.chipDirectionFilter || "breakout_up_only"} onChange={event => onChange({ chipDirectionFilter: event.target.value })} style={selectStyle}>
+          <option value="breakout_up_only">只做上破回落</option>
+          <option value="breakout_down_only">只做下破回拉</option>
+          <option value="all">上下都做</option>
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function NumberField({ label, value, min, max, step, onChange }) {
+  return (
+    <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+      {label}
+      <input min={min} max={max} step={step} type="number" value={value} onChange={event => onChange(Number(event.target.value))} style={inputStyle} />
+    </label>
+  );
+}
+
 function VariantCard({ variant, canDelete, onChange, onDelete }) {
-  const lower = Math.round(Number(variant.tailPct || 0.2) * 100);
-  const isSecond = variant.base === "SECOND";
   return (
     <div style={{ border: "1px solid var(--line)", borderRadius: "6px", padding: "10px", background: "rgba(255,255,255,0.015)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", marginBottom: "8px" }}>
@@ -91,51 +195,9 @@ function VariantCard({ variant, canDelete, onChange, onDelete }) {
         ) : null}
       </div>
       <div style={{ display: "grid", gap: "8px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-          <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
-            投数 USDT
-            <input min="1" step="1" type="number" value={variant.amount} onChange={event => onChange({ amount: event.target.value })} style={inputStyle} />
-          </label>
-          <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
-            阈值 {tailDisplay(variant.tailPct)}
-            <input
-              min="5"
-              max="45"
-              step="1"
-              type="number"
-              value={lower}
-              onChange={event => onChange({ tailPct: Math.max(5, Math.min(45, Number(event.target.value) || 20)) / 100 })}
-              style={inputStyle}
-            />
-          </label>
-        </div>
-        {isSecond ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-            <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
-              回看秒数
-              <input min="60" max="21600" step="60" type="number" value={variant.lookbackSec || 1800} onChange={event => onChange({ lookbackSec: Number(event.target.value) || 1800 })} style={inputStyle} />
-            </label>
-            <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
-              到期秒数
-              <input min="60" max="7200" step="60" type="number" value={variant.horizonSec || 600} onChange={event => onChange({ horizonSec: Number(event.target.value) || 600, duration: String(Math.max(1, Math.round((Number(event.target.value) || 600) / 60))) })} style={inputStyle} />
-            </label>
-            <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
-              去重秒数
-              <input min="0" max="21600" step="60" type="number" value={variant.gapSec || 600} onChange={event => onChange({ gapSec: Number(event.target.value) || 0 })} style={inputStyle} />
-            </label>
-            <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
-              过滤器
-              <select value={variant.secondFilter || "none"} onChange={event => onChange({ secondFilter: event.target.value })} style={selectStyle}>
-                <option value="none">不过滤</option>
-                <option value="vol_high">高成交量</option>
-                <option value="vol_not_high">避开高成交量</option>
-                <option value="flow_align">资金流同向</option>
-                <option value="flow_strong_align">强资金流同向</option>
-                <option value="flow_align_vol_not_high">资金流同向+避高量</option>
-              </select>
-            </label>
-          </div>
-        ) : null}
+        <CommonControls variant={variant} onChange={onChange} />
+        <SecondNormalControls variant={variant} onChange={onChange} />
+        <SecondChipControls variant={variant} onChange={onChange} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
           <CompactToggle label="观察并记录" checked={variant.enabled !== false} onChange={() => onChange({ enabled: variant.enabled === false })} />
           <CompactToggle label="实盘执行" checked={variant.tradeEnabled !== false} onChange={() => onChange({ tradeEnabled: variant.tradeEnabled === false })} />
@@ -145,29 +207,48 @@ function VariantCard({ variant, canDelete, onChange, onDelete }) {
   );
 }
 
+function defaultsForBase(base, defaultAmount, index) {
+  if (base === "SECOND_CHIP") {
+    return {
+      id: variantId(base, 0.2, index, 3600),
+      base,
+      label: variantLabel(base, 0.2, 3600),
+      amount: defaultAmount,
+      enabled: true,
+      tradeEnabled: false,
+      duration: "10",
+      lookbackSec: 3600,
+      horizonSec: 600,
+      gapSec: 600,
+      chipTargetShare: 0.2,
+      chipBinMode: "fixed",
+      chipBinSize: 20,
+      chipBinPct: 0.0003,
+      chipBreakPct: 0.0023,
+      chipDirectionFilter: "breakout_up_only"
+    };
+  }
+  const preferred = base === "SAFE" ? [0.22, 0.23, 0.25, 0.27] : base === "TAKER" ? [0.27, 0.23, 0.22, 0.25] : [0.27, 0.2, 0.22, 0.25];
+  const tailPct = preferred[index % preferred.length] || 0.2;
+  const lookbackSec = base === "SECOND" ? 1800 : undefined;
+  return {
+    id: variantId(base, tailPct, index, lookbackSec),
+    base,
+    label: variantLabel(base, tailPct, lookbackSec),
+    amount: defaultAmount,
+    tailPct,
+    duration: "10",
+    enabled: true,
+    tradeEnabled: base !== "SECOND",
+    ...(base === "SECOND" ? { lookbackSec: 1800, horizonSec: 600, gapSec: 600, secondFilter: "none" } : {})
+  };
+}
+
 function VariantGroup({ title, base, allVariants, setVariants, defaultAmount }) {
   const rows = allVariants.map((item, index) => ({ item, index })).filter(row => row.item.base === base);
 
   function addVariant() {
-    const existing = rows.map(row => row.item);
-    const preferred = base === "SAFE" ? [0.22, 0.23, 0.25, 0.27] : base === "TAKER" ? [0.27, 0.23, 0.22, 0.25] : [0.27, 0.2, 0.22, 0.25];
-    const tailPct = preferred.find(p => !existing.some(item => Math.round(item.tailPct * 100) === Math.round(p * 100))) || 0.2;
-    const index = existing.length;
-    const lookbackSec = base === "SECOND" ? 1800 : undefined;
-    setVariants([
-      ...allVariants,
-      {
-        id: variantId(base, tailPct, index, lookbackSec),
-        base,
-        label: variantLabel(base, tailPct, lookbackSec),
-        amount: defaultAmount,
-        tailPct,
-        duration: "10",
-        enabled: true,
-        tradeEnabled: base !== "SECOND",
-        ...(base === "SECOND" ? { lookbackSec: 1800, horizonSec: 600, gapSec: 600, secondFilter: "none", duration: "10" } : {})
-      }
-    ]);
+    setVariants([...allVariants, defaultsForBase(base, defaultAmount, rows.length)]);
   }
 
   return (
@@ -225,6 +306,7 @@ export default function ConfigPanel({ draft, dirty, apiToken, onTokenChange, onD
       <VariantGroup title="推荐稳健档位" base="SAFE" allVariants={variants} setVariants={setVariants} defaultAmount="5" />
       <VariantGroup title="资金流过滤档位" base="TAKER" allVariants={variants} setVariants={setVariants} defaultAmount="8" />
       <VariantGroup title="秒级正态档位" base="SECOND" allVariants={variants} setVariants={setVariants} defaultAmount="5" />
+      <VariantGroup title="秒级筹码区档位" base="SECOND_CHIP" allVariants={variants} setVariants={setVariants} defaultAmount="5" />
 
       <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", padding: "8px 4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
         安全网密钥

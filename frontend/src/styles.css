@@ -483,6 +483,35 @@ button, input, select {
 .history-summary span strong.up { color: var(--green); }
 .history-summary span strong.down { color: var(--red); }
 
+.history-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.015);
+}
+.history-tabs button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.history-tabs button.active {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.history-tabs button span {
+  margin-left: 5px;
+  color: var(--text-2);
+}
+
 .active-ledger {
   margin-bottom: 14px;
   border: 1px solid var(--line);

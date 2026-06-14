@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { directionClass, directionText, fmt, fmtPct, fmtPrice, statusClass, statusText, strategyName, timeParts, pnlText } from "../utils";
 
 function getExecutionLabel(row) {
@@ -14,6 +14,11 @@ function getExecutionLabel(row) {
   }
   if (isTablet) return { text: "信号实盘", color: "var(--green)", bg: "var(--green-soft)" };
   return { text: "服务器模拟", color: "var(--muted)", bg: "rgba(255,255,255,0.04)" };
+}
+
+function rowKind(row) {
+  const source = String(row.source || "");
+  return source.startsWith("shadow:") || source === "shadow" || row.event === "shadow_trade" ? "shadow" : "real";
 }
 
 function StatBlock({ title, data }) {
@@ -72,27 +77,41 @@ function TradeRows({ rows, emptyText }) {
 }
 
 export default function TradeHistory({ history }) {
+  const [tab, setTab] = useState("real");
   const summary = history?.summary || {};
   const realSummary = summary.real || {};
   const shadowSummary = summary.shadow || {};
   const active = history?.active || [];
   const recent = history?.recent || [];
+  const view = tab === "shadow"
+    ? { title: "影子单", kind: "shadow", summary: shadowSummary }
+    : { title: "真实单", kind: "real", summary: realSummary };
+  const filteredActive = useMemo(() => active.filter(row => rowKind(row) === view.kind), [active, view.kind]);
+  const filteredRecent = useMemo(() => recent.filter(row => rowKind(row) === view.kind), [recent, view.kind]);
 
   return (
     <section className="history-section">
       <header className="history-header">
         <div>
           <h2>订单记录 <span>{summary.total ?? recent.length}</span></h2>
-          <p>真实单和影子模拟单分开统计，列表按开仓时间倒序</p>
+          <p>真实单和影子模拟单分开查看，列表按开仓时间倒序</p>
         </div>
         <div style={{ display: "grid", gap: "8px" }}>
           <StatBlock title="真实单" data={realSummary} />
           <StatBlock title="影子单" data={shadowSummary} />
         </div>
       </header>
+      <div className="history-tabs">
+        <button className={tab === "real" ? "active" : ""} type="button" onClick={() => setTab("real")}>
+          真实单 <span>{realSummary.total || 0}</span>
+        </button>
+        <button className={tab === "shadow" ? "active" : ""} type="button" onClick={() => setTab("shadow")}>
+          影子单 <span>{shadowSummary.total || 0}</span>
+        </button>
+      </div>
       <div className="active-ledger">
-        <div className="ledger-title">持仓中 <span>{summary.pending ?? active.length}</span></div>
-        <TradeRows rows={active} emptyText="暂无持仓订单" />
+        <div className="ledger-title">{view.title}持仓 <span>{view.summary.pending || 0}</span></div>
+        <TradeRows rows={filteredActive} emptyText={`暂无${view.title}持仓`} />
       </div>
       <div className="trade-table">
         <div className="trade-table-head">
@@ -103,7 +122,7 @@ export default function TradeHistory({ history }) {
           <span>价格</span>
           <span>盈亏</span>
         </div>
-        <TradeRows rows={recent} emptyText="暂无历史订单" />
+        <TradeRows rows={filteredRecent} emptyText={`暂无${view.title}历史订单`} />
       </div>
     </section>
   );

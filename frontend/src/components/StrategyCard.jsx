@@ -16,7 +16,7 @@ function tailText(variant, signal) {
   return `${lower}/${100 - lower}`;
 }
 
-function probabilityText(signal) {
+function normalProbability(signal) {
   const rawUp = signal?.p_up ?? signal?.avg_prob;
   const pUp = Number(rawUp);
   if (!Number.isFinite(pUp)) return { up: "--", down: "--", edge: "--", zone: "等待数据" };
@@ -33,8 +33,34 @@ function probabilityText(signal) {
   };
 }
 
+function chipInfo(signal) {
+  const positionPct = Number(signal?.chip_position_pct ?? signal?.chip_distance_pct);
+  const breakPct = Number(signal?.chip_break_pct);
+  const positionValue = Number.isFinite(positionPct) ? `${(Math.max(0, positionPct) * 100).toFixed(2)}%` : "--";
+  let position = positionValue === "--" ? "--" : `距触发线 ${positionValue}`;
+  if (signal?.chip_position_label === "below_lower_trigger" || signal?.chip_state === "below") {
+    position = `低于下破线 ${positionValue}`;
+  } else if (signal?.chip_position_label === "above_upper_trigger" || signal?.chip_state === "above") {
+    position = `高于上破线 ${positionValue}`;
+  }
+  return {
+    zoneLow: signal?.chip_zone_low ?? "--",
+    zoneHigh: signal?.chip_zone_high ?? "--",
+    lowerTrigger: signal?.chip_lower_trigger ?? "--",
+    upperTrigger: signal?.chip_upper_trigger ?? "--",
+    poc: signal?.chip_poc ?? "--",
+    share: signal?.chip_zone_share !== undefined ? `${(Number(signal.chip_zone_share) * 100).toFixed(1)}%` : "--",
+    position,
+    threshold: Number.isFinite(breakPct) ? `${(breakPct * 100).toFixed(2)}%` : "--"
+  };
+}
+
 function headlineText(signal, confidence) {
   if (!signal?.signal) return signalLabel(signal);
+  if (signal?.model_type === "second_chip") {
+    if (signal.signal === "UP") return `下破筹码区，反向看涨 ${confidence}`;
+    if (signal.signal === "DOWN") return `上破筹码区，反向看跌 ${confidence}`;
+  }
   if ((signal?.mode || "reversal") === "reversal" || signal?.model_type === "second_normal") {
     if (signal.signal === "UP") return `极端下行，反转看涨 ${confidence}`;
     if (signal.signal === "DOWN") return `极端上行，反转看跌 ${confidence}`;
@@ -82,10 +108,12 @@ export default function StrategyCard({ title, signal, amount, variant }) {
   const direction = signal?.signal;
   const duration = signal?.duration || signal?.interval_min || "10";
   const confidence = signal?.confidence !== undefined && signal?.confidence !== null ? fmtPct(signal.confidence, 0) : "--";
-  const probability = probabilityText(signal);
+  const normal = normalProbability(signal);
+  const chip = chipInfo(signal);
   const takerFlow = takerFlowText(signal);
   const headline = headlineText(signal, confidence);
   const backtest = variant?.backtest;
+  const isChip = signal?.model_type === "second_chip" || variant?.base === "SECOND_CHIP";
 
   let cardBorder = "1px solid var(--line)";
   let cardShadow = "none";
@@ -108,13 +136,28 @@ export default function StrategyCard({ title, signal, amount, variant }) {
         <div className="strategy-meta" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <span className="badge" style={baseBadgeStyle}>投数 {amount || "--"}U</span>
           <span className="badge" style={baseBadgeStyle}>周期 {duration}m</span>
-          <span className="badge" style={baseBadgeStyle}>阈值 {tailText(variant, signal)}</span>
+          {!isChip ? <span className="badge" style={baseBadgeStyle}>阈值 {tailText(variant, signal)}</span> : null}
           {backtest ? <span className="badge" style={baseBadgeStyle}>回测 {fmtPct(backtest.wr, 2)} / {backtest.tradesPerDay}笔天</span> : null}
-          <span className="badge" style={baseBadgeStyle}>策略 正态尾部反转</span>
-          <span className="badge" style={{ ...baseBadgeStyle, background: "var(--green-soft)", color: "var(--green)" }}>自然上行 {probability.up}</span>
-          <span className="badge" style={{ ...baseBadgeStyle, background: "var(--red-soft)", color: "var(--red)" }}>自然下行 {probability.down}</span>
-          <span className="badge" style={baseBadgeStyle}>触发差距 {probability.edge}</span>
-          <span className="badge" style={baseBadgeStyle}>{probability.zone}</span>
+          <span className="badge" style={baseBadgeStyle}>策略 {isChip ? "秒级筹码区反转" : "正态尾部反转"}</span>
+          {isChip ? (
+            <>
+              <span className="badge" style={baseBadgeStyle}>POC {chip.poc}</span>
+              <span className="badge" style={{ ...baseBadgeStyle, background: "var(--green-soft)", color: "var(--green)" }}>区间下沿 {chip.zoneLow}</span>
+              <span className="badge" style={{ ...baseBadgeStyle, background: "var(--red-soft)", color: "var(--red)" }}>区间上沿 {chip.zoneHigh}</span>
+              <span className="badge" style={{ ...baseBadgeStyle, background: "var(--green-soft)", color: "var(--green)" }}>下破线 {chip.lowerTrigger}</span>
+              <span className="badge" style={{ ...baseBadgeStyle, background: "var(--red-soft)", color: "var(--red)" }}>上破线 {chip.upperTrigger}</span>
+              <span className="badge" style={baseBadgeStyle}>筹码占比 {chip.share}</span>
+              <span className="badge" style={baseBadgeStyle}>位置 {chip.position}</span>
+              <span className="badge" style={baseBadgeStyle}>突破阈值 {chip.threshold}</span>
+            </>
+          ) : (
+            <>
+              <span className="badge" style={{ ...baseBadgeStyle, background: "var(--green-soft)", color: "var(--green)" }}>自然上行 {normal.up}</span>
+              <span className="badge" style={{ ...baseBadgeStyle, background: "var(--red-soft)", color: "var(--red)" }}>自然下行 {normal.down}</span>
+              <span className="badge" style={baseBadgeStyle}>触发差距 {normal.edge}</span>
+              <span className="badge" style={baseBadgeStyle}>{normal.zone}</span>
+            </>
+          )}
           {variant?.tradeEnabled === false ? <span className="badge" style={badgeStyle("warn")}>仅影子记录</span> : null}
           {takerFlow ? <span className="badge" style={badgeStyle(takerFlow.tone)}>{takerFlow.text}</span> : null}
         </div>

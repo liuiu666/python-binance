@@ -1278,6 +1278,7 @@ function liveOrderHistory(limit = 100) {
     auditRows: readJsonl(TRADE_AUDIT_FILE),
     priceTicks: readJsonl(PRICE_TICKS_FILE),
     serverTrades: trades,
+    currentPrice,
     payoutRate: PAYOUT_RATE,
     limit
   });
@@ -1986,6 +1987,27 @@ function applyProdStrategyParams(baseConfig, config) {
         second_tail_pct: variant.tailPct,
         second_filter: variant.secondFilter || "none",
         model_label: `SECOND_${variant.lookbackSec || 1800}_${Math.round(variant.tailPct * 100)}_${100 - Math.round(variant.tailPct * 100)}`
+      };
+      continue;
+    }
+    if (variant.base === "SECOND_CHIP") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        model_type: "second_chip",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        second_chip_lookback_sec: variant.lookbackSec || 3600,
+        second_chip_horizon_sec: variant.horizonSec || 600,
+        second_chip_min_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        second_chip_target_share: variant.chipTargetShare,
+        second_chip_bin_mode: variant.chipBinMode || "fixed",
+        second_chip_bin_size: variant.chipBinSize || 20,
+        second_chip_bin_pct: variant.chipBinPct,
+        second_chip_break_pct: variant.chipBreakPct,
+        second_chip_direction_filter: variant.chipDirectionFilter || "breakout_up_only",
+        model_label: `SECOND_CHIP_${variant.lookbackSec || 3600}_${Math.round(Number(variant.chipTargetShare || 0.2) * 100)}_${Math.round(Number(variant.chipBreakPct || 0.0023) * 10000)}`
       };
       continue;
     }
