@@ -678,8 +678,8 @@ export default function App() {
                   {priceChange ? `${priceChange.diff >= 0 ? "+" : ""}${fmtPrice(priceChange.diff)} (${priceChange.pct >= 0 ? "+" : ""}${priceChange.pct.toFixed(2)}%)` : "--"}
                 </div>
               </header>
-              <div className="chart-frame" style={{ position: "relative", width: "100%", height: "420px" }}>
-                <div style={{ position: "absolute", top: "10px", right: "12px", zIndex: 2, fontSize: "11px", color: "var(--muted)", background: "rgba(13,17,23,0.72)", border: "1px solid var(--line)", borderRadius: "4px", padding: "3px 6px", pointerEvents: "none" }}>
+              <div className="chart-frame" style={{ position: "relative", width: "100%", height: "clamp(260px, 42vh, 420px)" }}>
+                <div style={{ position: "absolute", top: "10px", right: "12px", zIndex: 2, fontSize: "10px", color: "var(--muted)", background: "rgba(13,17,23,0.72)", border: "1px solid var(--line)", borderRadius: "4px", padding: "3px 6px", pointerEvents: "none" }}>
                   {CHART_TIME_ZONE_LABEL}
                 </div>
                 <div ref={chartContainerRef} style={{ width: "100%", height: "100%" }} />

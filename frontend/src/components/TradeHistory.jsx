@@ -66,8 +66,8 @@ function TradeRows({ rows, emptyText }) {
               <small>强度 {row.confidence !== undefined && row.confidence !== null ? fmtPct(row.confidence, 0) : "--"} | RSI {row.rsi_value !== undefined && row.rsi_value !== null ? Number(row.rsi_value).toFixed(0) : "--"}</small>
             </div>
             <div className="history-amount"><strong>{fmt(row.amount, 0)}U</strong><small>{row.duration || "--"} 分钟</small></div>
-            <div className="history-time"><small>{tp.date}</small><strong>{tp.time}</strong></div>
-            <div className="history-price"><span>开 {fmtPrice(row.openPrice)}</span><span>收 {row.closePrice !== null && row.closePrice !== undefined ? fmtPrice(row.closePrice) : "待到期"}</span></div>
+            <div className="history-time history-detail"><small>{tp.date}</small><strong>{tp.time}</strong></div>
+            <div className="history-price history-detail"><span>开 {fmtPrice(row.openPrice)}</span><span>收 {row.closePrice !== null && row.closePrice !== undefined ? fmtPrice(row.closePrice) : "待到期"}</span></div>
             <div className={`history-pnl ${cls}`}>{pnlText(row)}</div>
           </div>
         );

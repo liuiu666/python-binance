@@ -707,3 +707,113 @@ button, input, select {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* ============================================================
+   Responsive Breakpoints
+   Desktop (>768px) is unchanged. Two mobile breakpoints below.
+   ============================================================ */
+
+/* --- Tablet: <=768px --- single column, wrap header, stack side rail */
+@media (max-width: 768px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .top-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .strategy-strip {
+    grid-template-columns: 1fr;
+    padding: 12px 12px 0;
+  }
+  .strategy-card {
+    flex: 1 1 100% !important;
+  }
+  .main-grid {
+    grid-template-columns: 1fr;
+    padding: 0 12px 12px;
+  }
+  /* side rail drops its own scroll region; whole page scrolls instead */
+  .side-rail {
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+  }
+  .report-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .link-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* order history: stack header title + stat blocks vertically */
+  .history-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+}
+
+/* --- Phone: <=480px --- compact metric grid, card-style history rows */
+@media (max-width: 480px) {
+  .topbar {
+    padding: 8px 10px;
+  }
+  .brand strong {
+    font-size: 13px;
+  }
+  .top-actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    width: 100%;
+  }
+  /* refresh button: span full row on its own line */
+  .top-actions .icon-button {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+  .metric {
+    padding: 4px 8px;
+    align-items: flex-start;
+  }
+  .metric-label {
+    font-size: 8px;
+  }
+  .metric-value {
+    font-size: 12px;
+  }
+  .strategy-strip,
+  .main-grid {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .report-strip {
+    grid-template-columns: 1fr;
+  }
+  .link-list {
+    grid-template-columns: 1fr;
+  }
+  /* history: hide the 6-col header, collapse rows to 3 visible columns */
+  .trade-table-head {
+    display: none;
+  }
+  .history-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 10px;
+  }
+  /* secondary columns (price / open time) hidden on phone via className hook */
+  .history-detail {
+    display: none;
+  }
+  .history-summary {
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 11px;
+  }
+  .history-list {
+    max-height: none;
+  }
+}
