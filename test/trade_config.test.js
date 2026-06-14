@@ -5,7 +5,9 @@ const {
   applyTradeConfigPatch,
   amountForStrategyConfig,
   normalizeTradeConfig,
-  publicTradeConfig
+  publicTradeConfig,
+  liveStrategyIds,
+  observedStrategyIds
 } = require("../lib/trade_config");
 
 test("trade config normalizes only current two-strategy fields", () => {
@@ -56,7 +58,8 @@ test("trade config supports multiple taker variants with independent amounts", (
   });
   assert.equal(amountForStrategyConfig("BTC_10min_TAKER", result.tradeConfig), "10");
   assert.equal(amountForStrategyConfig("BTC_10min_TAKER_27", result.tradeConfig), "8");
-  assert.equal(result.tradeConfig.strategyVariants.length, 3);
+  assert.equal(result.tradeConfig.strategyVariants.length, 4);
+  assert.ok(result.tradeConfig.strategyVariants.some(v => v.base === "SECOND"));
 });
 
 test("trade config supports multiple safe variants with independent amounts", () => {
@@ -69,7 +72,20 @@ test("trade config supports multiple safe variants with independent amounts", ()
   });
   assert.equal(amountForStrategyConfig("BTC_10min_SAFE", result.tradeConfig), "5");
   assert.equal(amountForStrategyConfig("BTC_10min_SAFE_22", result.tradeConfig), "3");
-  assert.equal(result.tradeConfig.strategyVariants.length, 3);
+  assert.equal(result.tradeConfig.strategyVariants.length, 4);
+  assert.ok(result.tradeConfig.strategyVariants.some(v => v.base === "SECOND"));
+});
+
+test("trade config separates observation from real execution", () => {
+  const cfg = normalizeTradeConfig({
+    strategyVariants: [
+      { id: "BTC_10min_SAFE", base: "SAFE", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: false },
+      { id: "BTC_10min_TAKER", base: "TAKER", amount: "10", tailPct: 0.2, enabled: true, tradeEnabled: true },
+      { id: "BTC_10min_SECOND_1800_20", base: "SECOND", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: false }
+    ]
+  });
+  assert.deepEqual(observedStrategyIds(cfg), ["BTC_10min_SAFE", "BTC_10min_TAKER", "BTC_10min_SECOND_1800_20"]);
+  assert.deepEqual(liveStrategyIds(cfg), ["BTC_10min_TAKER"]);
 });
 
 test("auto trade patch records blocked and forced transitions", () => {

@@ -221,6 +221,94 @@ def fetch_klines(symbol, existing):
     )
 
 
+def fetch_kline_range(symbol, start_ms, end_ms):
+    rows = []
+    cursor = int(start_ms)
+    while cursor <= end_ms:
+        batch = request_json(
+            "/api/v3/klines",
+            {
+                "symbol": symbol.upper(),
+                "interval": "1m",
+                "startTime": cursor,
+                "endTime": end_ms,
+                "limit": 1000,
+            },
+            bases=SPOT_BASES,
+        )
+        if not batch:
+            break
+        rows.extend(batch)
+        next_cursor = int(batch[-1][0]) + 60000
+        if next_cursor <= cursor:
+            break
+        cursor = next_cursor
+        time.sleep(0.08)
+    if not rows:
+        return pd.DataFrame(columns=["open_time", "open", "high", "low", "close", "volume"])
+    df = pd.DataFrame(
+        rows,
+        columns=[
+            "open_time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "close_time",
+            "quote_vol",
+            "trades",
+            "taker_buy_vol",
+            "taker_buy_qv",
+            "ignore",
+        ],
+    )
+    df = df[["open_time", "open", "high", "low", "close", "volume"]]
+    df["open_time"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
+    for col in ["open", "high", "low", "close", "volume"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+
+def backfill_kline_gaps(symbol, first_result):
+    path = os.path.join(OUT, f"{symbol}_1m.csv")
+    merged = read_existing(path, "open_time")
+    gap_rows = []
+    gap_errors = []
+    gap_skipped_old = 0
+    min_gap_ms = utc_now_ms() - GAP_BACKFILL_DAYS * 86400 * 1000
+    gaps = find_missing_ranges(merged, "open_time", 60000)
+    for start_ms, stop_ms in gaps:
+        if stop_ms < min_gap_ms:
+            gap_skipped_old += 1
+            continue
+        try:
+            gap_rows.append(fetch_kline_range(symbol, start_ms, stop_ms))
+        except Exception as e:
+            gap_errors.append({
+                "start": pd.to_datetime(start_ms, unit="ms", utc=True).isoformat(),
+                "end": pd.to_datetime(stop_ms, unit="ms", utc=True).isoformat(),
+                "error": str(e),
+            })
+    if gap_rows:
+        gap_df = pd.concat(gap_rows, ignore_index=True)
+        final = merge_and_write(
+            merged,
+            gap_df,
+            path,
+            "open_time",
+            ["open_time", "open", "high", "low", "close", "volume"],
+        )
+    else:
+        final = first_result
+    final["gap_backfill_added"] = max(0, int(final["rows"]) - int(first_result["rows"]))
+    final["gap_ranges_seen"] = len(gaps)
+    final["gap_ranges_skipped_old"] = gap_skipped_old
+    final["gap_backfill_errors"] = gap_errors[:10]
+    final["gap_ranges_remaining"] = len(find_missing_ranges(read_existing(path, "open_time"), "open_time", 60000))
+    return final
+
+
 def period_rows_to_df(rows, out_cols, api_cols):
     if rows:
         df = pd.DataFrame(rows)[api_cols].rename(columns={api_cols[0]: "timestamp"})
@@ -330,7 +418,8 @@ def update_symbol(symbol):
     errors = []
     kline_path = os.path.join(OUT, f"{symbol}_1m.csv")
     try:
-        result["klines_1m"] = fetch_klines(symbol, read_existing(kline_path, "open_time"))
+        first = fetch_klines(symbol, read_existing(kline_path, "open_time"))
+        result["klines_1m"] = backfill_kline_gaps(symbol, first)
     except Exception as e:
         result["klines_1m_error"] = str(e)
         errors.append({"dataset": "klines_1m", "error": str(e)})

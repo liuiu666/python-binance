@@ -14,8 +14,9 @@ export function payoutForDuration(duration) {
 export const DEFAULT_CONFIG = {
   amount: "5",
   strategyVariants: [
-    { id: "BTC_10min_SAFE", base: "SAFE", label: "推荐稳健 20/80", amount: "5", tailPct: 0.2, enabled: true },
-    { id: "BTC_10min_TAKER", base: "TAKER", label: "资金流过滤 20/80", amount: "10", tailPct: 0.2, enabled: true }
+    { id: "BTC_10min_SAFE", base: "SAFE", label: "推荐稳健 20/80", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: true },
+    { id: "BTC_10min_TAKER", base: "TAKER", label: "资金流过滤 20/80", amount: "10", tailPct: 0.2, enabled: true, tradeEnabled: true },
+    { id: "BTC_10min_SECOND_1800_20", base: "SECOND", label: "秒级正态 1800s 20/80", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: false, lookbackSec: 1800, horizonSec: 600, gapSec: 600, secondFilter: "none", duration: "10" }
   ],
   duration: "10",
   autoTrade_10m: false,
@@ -59,6 +60,7 @@ export function strategyName(strategyId) {
   const id = String(strategyId || "");
   if (id.startsWith("BTC_10min_SAFE")) return "推荐稳健";
   if (id.startsWith("BTC_10min_TAKER")) return "资金流过滤";
+  if (id.startsWith("BTC_10min_SECOND")) return "秒级正态";
   if (!strategyId || strategyId === "manual") return "手动";
   return strategyId;
 }

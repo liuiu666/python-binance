@@ -30,6 +30,7 @@ HISTORY_1M_FILE = os.path.join(OUT, "btcusdt_1m.csv")
 TAKER_FILE = os.path.join(OUT, "btcusdt_taker.csv")
 LS_RATIO_FILE = os.path.join(OUT, "btcusdt_lsratio.csv")
 FUNDING_FILE = os.path.join(OUT, "btcusdt_funding.csv")
+SECOND_TRADES_FILE = os.path.join(OUT, "btcusdt_1s_trades.csv")
 SHADOW_CANDIDATES = [
     {
         "id": "SHADOW_10m_strict_th58_rsi30_70_all3",
@@ -1175,6 +1176,159 @@ class POCNormalStrategy:
         return rsi
 
 
+class SecondNormalStrategy:
+    """Second-level normal-tail reversal for 10m binary options."""
+    def __init__(self, strategy_id, cfg):
+        self.id = strategy_id
+        self.lookback_sec = int(cfg.get("second_lookback_sec", 1800))
+        self.horizon_sec = int(cfg.get("second_horizon_sec", 600))
+        self.min_gap_sec = int(cfg.get("second_min_gap_sec", self.horizon_sec))
+        self.tail_pct = float(cfg.get("second_tail_pct", 0.2))
+        self.poc_threshold = 1.0 - self.tail_pct
+        self.filter = str(cfg.get("second_filter", "none")).lower()
+        self.interval_min = max(1, int(round(self.horizon_sec / 60)))
+
+    def _load_seconds(self):
+        import pandas as pd
+
+        if not os.path.exists(SECOND_TRADES_FILE):
+            return None
+        df = pd.read_csv(SECOND_TRADES_FILE)
+        if "ts" not in df.columns and "timestamp" in df.columns:
+            df = df.rename(columns={"timestamp": "ts"})
+        if "price" not in df.columns and "close" in df.columns:
+            df = df.rename(columns={"close": "price"})
+        if "price" not in df.columns or "ts" not in df.columns:
+            return None
+        df["ts"] = pd.to_datetime(df["ts"], utc=True, errors="coerce")
+        df["price"] = pd.to_numeric(df["price"], errors="coerce")
+        if "qty" in df.columns:
+            df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0.0)
+        elif "volume" in df.columns:
+            df["qty"] = pd.to_numeric(df["volume"], errors="coerce").fillna(0.0)
+        else:
+            df["qty"] = 0.0
+        if "taker_buy_volume" in df.columns or "taker_sell_volume" in df.columns:
+            buy_qty = pd.to_numeric(df.get("taker_buy_volume", 0), errors="coerce").fillna(0.0)
+            sell_qty = pd.to_numeric(df.get("taker_sell_volume", 0), errors="coerce").fillna(0.0)
+        elif "isBuyerMaker" in df.columns:
+            sell_qty = df["qty"].where(df["isBuyerMaker"].astype(str).str.lower().isin(["true", "1"]), 0.0)
+            buy_qty = df["qty"].where(~df["isBuyerMaker"].astype(str).str.lower().isin(["true", "1"]), 0.0)
+        else:
+            buy_qty = df["qty"] * 0.5
+            sell_qty = df["qty"] * 0.5
+        df["buy_qty"] = buy_qty
+        df["sell_qty"] = sell_qty
+        df = df.dropna(subset=["ts", "price"]).sort_values("ts")
+        if df.empty:
+            return None
+        df["sec"] = df["ts"].dt.floor("s")
+        sec = df.groupby("sec").agg(
+            close=("price", "last"),
+            volume=("qty", "sum"),
+            buy_qty=("buy_qty", "sum"),
+            sell_qty=("sell_qty", "sum"),
+        ).reset_index().rename(columns={"sec": "time"})
+        idx = pd.date_range(sec["time"].min(), sec["time"].max(), freq="s", tz="UTC")
+        sec = sec.set_index("time").reindex(idx)
+        sec["close"] = sec["close"].ffill()
+        for col in ["volume", "buy_qty", "sell_qty"]:
+            sec[col] = sec[col].fillna(0.0)
+        return sec.dropna(subset=["close"]).reset_index().rename(columns={"index": "time"})
+
+    def _filter_allows(self, signal, bars):
+        import numpy as np
+
+        if self.filter in ("", "none", "off", "false"):
+            return True, "disabled", None, None
+        latest_vol = float(bars["volume"].tail(60).sum())
+        volume_series = bars["volume"].rolling(60).sum().dropna()
+        vol_rank = None
+        if len(volume_series) >= 30:
+            vol_rank = float((volume_series <= latest_vol).mean())
+        buy = float(bars["buy_qty"].tail(60).sum())
+        sell = float(bars["sell_qty"].tail(60).sum())
+        flow_ratio = buy / max(sell, 1e-12)
+        if self.filter == "vol_high":
+            ok = vol_rank is not None and vol_rank >= 0.6
+            return ok, "vol_high" if ok else "vol_not_high", vol_rank, flow_ratio
+        if self.filter == "vol_not_high":
+            ok = vol_rank is None or vol_rank <= 0.8
+            return ok, "vol_not_high" if ok else "vol_too_high", vol_rank, flow_ratio
+        if self.filter in ("flow_align", "flow_strong_align", "flow_align_vol_not_high"):
+            up_min = 1.2 if self.filter == "flow_strong_align" else 1.05
+            down_max = 0.8 if self.filter == "flow_strong_align" else 0.95
+            flow_ok = flow_ratio >= up_min if signal == "UP" else flow_ratio <= down_max
+            vol_ok = True
+            if self.filter == "flow_align_vol_not_high":
+                vol_ok = vol_rank is None or vol_rank <= 0.8
+            ok = bool(flow_ok and vol_ok)
+            return ok, "flow_align" if ok else "flow_not_aligned", vol_rank, flow_ratio
+        return False, f"unknown_second_filter_{self.filter}", vol_rank, flow_ratio
+
+    def predict(self, df5=None):
+        import numpy as np
+        from scipy.stats import norm as scipy_norm
+
+        bars = self._load_seconds()
+        if bars is None or len(bars) < self.lookback_sec + 2:
+            return None
+        recent = bars.tail(self.lookback_sec + 1).copy()
+        close = np.asarray(recent["close"].astype(float).values, dtype=float)
+        lr = np.log(close[1:] / close[:-1])
+        lr = lr[np.isfinite(lr)]
+        if len(lr) < 60:
+            return None
+        mu = float(np.mean(lr))
+        sigma = float(np.std(lr, ddof=1))
+        if sigma < 1e-12:
+            return None
+        z = (self.horizon_sec * mu) / (math.sqrt(self.horizon_sec) * sigma)
+        p_up = float(scipy_norm.cdf(z))
+        conf = abs(p_up - 0.5) * 200
+        signal = None
+        if p_up >= self.poc_threshold:
+            signal = "DOWN"
+        elif p_up <= self.tail_pct:
+            signal = "UP"
+        signal_time = bars["time"].iloc[-1]
+        base = {
+            "strategy_id": self.id,
+            "confidence": round(min(conf, 95), 1),
+            "avg_prob": round(p_up, 4),
+            "rsi_value": None,
+            "high_conf": bool(signal),
+            "agree": True,
+            "vol_ok": True,
+            "session_gate_ok": True,
+            "rsi_extreme": True,
+            "z_score": round(float(z), 4),
+            "p_up": round(p_up, 4),
+            "mu_sec": round(mu, 10),
+            "sigma_sec": round(sigma, 10),
+            "lookback_sec": self.lookback_sec,
+            "horizon_sec": self.horizon_sec,
+            "interval_min": self.interval_min,
+            "duration": self.interval_min,
+            "min_gap_sec": self.min_gap_sec,
+            "tail_pct": self.tail_pct,
+            "second_filter": self.filter,
+            "time": signal_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "model_type": "second_normal",
+            "bypass_entry_timing": True,
+        }
+        if not signal:
+            return {**base, "signal": None, "reason": "no_edge"}
+        ok, reason, vol_rank, flow_ratio = self._filter_allows(signal, bars.tail(max(self.lookback_sec, 1800)))
+        if vol_rank is not None:
+            base["second_vol_rank_60s"] = round(float(vol_rank), 4)
+        if flow_ratio is not None and np.isfinite(flow_ratio):
+            base["second_flow_ratio_60s"] = round(float(flow_ratio), 6)
+        if not ok:
+            return {**base, "signal": None, "reason": reason, "blocked_signal": signal, "blocked_confidence": round(min(conf, 95), 1)}
+        return {**base, "signal": signal, "reason": "second_tail_reversal"}
+
+
 class Strategy:
     def __init__(self, strategy_id, cfg):
         self.id = strategy_id
@@ -2052,6 +2206,8 @@ def fmt_num(value, default=0.0):
 def _make_strategy(sid, cfg):
     if cfg.get("model_type") == "poc_normal":
         return POCNormalStrategy(sid, cfg)
+    if cfg.get("model_type") == "second_normal":
+        return SecondNormalStrategy(sid, cfg)
     return Strategy(sid, cfg)
 
 def build_strategies(config_map):
@@ -2059,7 +2215,7 @@ def build_strategies(config_map):
     return [
         _make_strategy(k, v)
         for k, v in config_map.items()
-        if v.get("enabled", True) and (v.get("model_type") == "poc_normal" or k not in live_two_minute_ids)
+        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal") or k not in live_two_minute_ids)
     ]
 
 configs = load_config()

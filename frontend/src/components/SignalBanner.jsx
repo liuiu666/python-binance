@@ -3,10 +3,9 @@ import { Activity } from "lucide-react";
 import { directionClass, directionText, fmtPct, strategyName, displaySignalTime } from "../utils";
 
 export default function SignalBanner({ signalPayload, activeSignal, signalAmount }) {
-  const safe = signalPayload?.BTC_10min_SAFE || null;
-  const taker = signalPayload?.BTC_10min_TAKER || null;
-  const activeItems = [taker, safe].filter(item => item?.signal);
-  
+  const variants = signalPayload?._strategyVariants || [];
+  const activeItems = variants.map(item => signalPayload?.[item.id]).filter(item => item?.signal);
+
   return (
     <section className="signal-banner">
       <div className="signal-label">
@@ -21,7 +20,7 @@ export default function SignalBanner({ signalPayload, activeSignal, signalAmount
             </span>
           ))
         ) : (
-          <span className="signal-pill neutral">推荐稳健 / 资金流过滤 监控中</span>
+          <span className="signal-pill neutral">策略监控中，等待触发区间</span>
         )}
       </div>
       <div className="signal-side">

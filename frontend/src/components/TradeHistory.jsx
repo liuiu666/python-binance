@@ -1,18 +1,32 @@
 import React from "react";
-import { ArrowDown, ArrowUp } from "lucide-react";
 import { directionClass, directionText, fmt, fmtPct, fmtPrice, statusClass, statusText, strategyName, timeParts, pnlText } from "../utils";
 
 function getExecutionLabel(row) {
-  const isTablet = row.source === "autojs";
+  const source = String(row.source || "");
+  const isTablet = source === "autojs";
+  const isShadow = source.startsWith("shadow:") || source === "shadow" || row.event === "shadow_trade";
   const isManual = !row.strategyId || row.strategyId === "manual";
-  
+
+  if (isShadow) return { text: "影子模拟", color: "var(--muted)", bg: "rgba(255,255,255,0.04)" };
   if (isManual) {
     if (isTablet) return { text: "平板手动", color: "var(--violet)", bg: "var(--violet-soft)" };
     return { text: "网页手动", color: "var(--yellow)", bg: "var(--yellow-soft)" };
-  } else {
-    if (isTablet) return { text: "信号实盘", color: "var(--green)", bg: "var(--green-soft)" };
-    return { text: "影子模拟", color: "var(--muted)", bg: "rgba(255,255,255,0.04)" };
   }
+  if (isTablet) return { text: "信号实盘", color: "var(--green)", bg: "var(--green-soft)" };
+  return { text: "服务器模拟", color: "var(--muted)", bg: "rgba(255,255,255,0.04)" };
+}
+
+function StatBlock({ title, data }) {
+  const pnl = Number(data?.pnl || 0);
+  return (
+    <div className="history-summary">
+      <span>{title}</span>
+      <span>胜率 <strong>{fmtPct(data?.winRate, 1)}</strong></span>
+      <span>盈亏 <strong className={pnl > 0 ? "up" : pnl < 0 ? "down" : ""}>{pnl > 0 ? "+" : ""}{fmt(pnl, 2)}U</strong></span>
+      <span>赢/亏 <strong>{data?.wins || 0}/{data?.losses || 0}</strong></span>
+      <span>持仓 <strong>{data?.pending || 0}</strong></span>
+    </div>
+  );
 }
 
 function TradeRows({ rows, emptyText }) {
@@ -59,21 +73,21 @@ function TradeRows({ rows, emptyText }) {
 
 export default function TradeHistory({ history }) {
   const summary = history?.summary || {};
+  const realSummary = summary.real || {};
+  const shadowSummary = summary.shadow || {};
   const active = history?.active || [];
   const recent = history?.recent || [];
-  const pnl = Number(summary.pnl || 0);
-  
+
   return (
     <section className="history-section">
       <header className="history-header">
         <div>
-          <h2>实盘订单记录 <span>{summary.total ?? recent.length}</span></h2>
-          <p>按开仓时间倒序，包含平板上报和服务器模拟记录</p>
+          <h2>订单记录 <span>{summary.total ?? recent.length}</span></h2>
+          <p>真实单和影子模拟单分开统计，列表按开仓时间倒序</p>
         </div>
-        <div className="history-summary">
-          <span>胜率 <strong>{fmtPct(summary.winRate, 1)}</strong></span>
-          <span>盈亏 <strong className={pnl > 0 ? "up" : pnl < 0 ? "down" : ""}>{pnl > 0 ? "+" : ""}{fmt(pnl, 2)}U</strong></span>
-          <span>赢/亏 <strong>{summary.wins || 0}/{summary.losses || 0}</strong></span>
+        <div style={{ display: "grid", gap: "8px" }}>
+          <StatBlock title="真实单" data={realSummary} />
+          <StatBlock title="影子单" data={shadowSummary} />
         </div>
       </header>
       <div className="active-ledger">

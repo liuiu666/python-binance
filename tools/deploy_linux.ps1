@@ -170,6 +170,7 @@ NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 
 
 echo "[1/8] prepare app directory"
 mkdir -p "$APP_DIR"
+rm -rf "$APP_DIR/public/dashboard/assets"
 tar -xzf "$ARCHIVE" -C "$APP_DIR"
 cd "$APP_DIR"
 

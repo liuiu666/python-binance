@@ -3,7 +3,7 @@ import { Plus, Save, Server, Trash2 } from "lucide-react";
 import { DEFAULT_CONFIG, fmtPct } from "../utils";
 
 const inputStyle = {
-  width: "76px",
+  width: "82px",
   height: "26px",
   background: "#0d1117",
   border: "1px solid var(--line)",
@@ -14,6 +14,8 @@ const inputStyle = {
   fontSize: "12px",
   outline: "none"
 };
+
+const selectStyle = { ...inputStyle, width: "132px", textAlign: "left" };
 
 function CompactToggle({ label, checked, onChange }) {
   return (
@@ -34,25 +36,29 @@ function tailDisplay(tailPct) {
   return `${lower}/${100 - lower}`;
 }
 
-function variantId(base, tailPct, index) {
+function variantId(base, tailPct, index, lookbackSec = 1800) {
   const lower = Math.round(Number(tailPct || 0.2) * 100);
   if (base === "SAFE") return index === 0 && lower === 20 ? "BTC_10min_SAFE" : `BTC_10min_SAFE_${lower}`;
-  return index === 0 && lower === 20 ? "BTC_10min_TAKER" : `BTC_10min_TAKER_${lower}`;
+  if (base === "TAKER") return index === 0 && lower === 20 ? "BTC_10min_TAKER" : `BTC_10min_TAKER_${lower}`;
+  return `BTC_10min_SECOND_${lookbackSec}_${lower}${index > 0 ? "_" + index : ""}`;
 }
 
-function variantLabel(base, tailPct) {
-  return base === "SAFE" ? `推荐稳健 ${tailDisplay(tailPct)}` : `资金流过滤 ${tailDisplay(tailPct)}`;
+function variantLabel(base, tailPct, lookbackSec = 1800) {
+  if (base === "SAFE") return `推荐稳健 ${tailDisplay(tailPct)}`;
+  if (base === "TAKER") return `资金流过滤 ${tailDisplay(tailPct)}`;
+  return `秒级正态 ${lookbackSec}s ${tailDisplay(tailPct)}`;
 }
 
 function updateVariant(variants, index, patch) {
   return variants.map((item, i) => {
     if (i !== index) return item;
     const next = { ...item, ...patch };
-    if (patch.tailPct !== undefined || !next.id) {
+    if (patch.tailPct !== undefined || patch.lookbackSec !== undefined || !next.id) {
       const sameBaseBefore = variants.slice(0, index).filter(v => v.base === next.base).length;
-      next.id = variantId(next.base, next.tailPct, sameBaseBefore);
+      next.id = variantId(next.base, next.tailPct, sameBaseBefore, next.lookbackSec);
     }
-    next.label = variantLabel(next.base, next.tailPct);
+    next.label = variantLabel(next.base, next.tailPct, next.lookbackSec);
+    if (next.base === "SECOND") next.duration = String(Math.max(1, Math.round(Number(next.horizonSec || 600) / 60)));
     return next;
   });
 }
@@ -62,13 +68,15 @@ function BacktestBadge({ variant }) {
   if (!bt) return <span style={{ color: "var(--muted)", fontSize: "10px" }}>无回测参考</span>;
   return (
     <span style={{ color: "var(--muted)", fontSize: "10px" }}>
-      回测 {fmtPct(bt.wr, 2)} | {bt.tradesPerDay}笔/天 | {bt.trades}笔 | 连亏{bt.maxLoss}
+      回测 {fmtPct(bt.wr, 2)} / {bt.tradesPerDay}笔天 / {bt.trades}笔 / 连亏{bt.maxLoss}
+      {bt.sampleHours ? ` / 样本${bt.sampleHours}h` : ""}
     </span>
   );
 }
 
 function VariantCard({ variant, canDelete, onChange, onDelete }) {
   const lower = Math.round(Number(variant.tailPct || 0.2) * 100);
+  const isSecond = variant.base === "SECOND";
   return (
     <div style={{ border: "1px solid var(--line)", borderRadius: "6px", padding: "10px", background: "rgba(255,255,255,0.015)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", marginBottom: "8px" }}>
@@ -82,45 +90,81 @@ function VariantCard({ variant, canDelete, onChange, onDelete }) {
           </button>
         ) : null}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-        <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
-          投数 USDT
-          <input min="1" step="1" type="number" value={variant.amount} onChange={event => onChange({ amount: event.target.value })} style={inputStyle} />
-        </label>
-        <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
-          阈值 {tailDisplay(variant.tailPct)}
-          <input
-            min="5"
-            max="45"
-            step="1"
-            type="number"
-            value={lower}
-            onChange={event => onChange({ tailPct: Math.max(5, Math.min(45, Number(event.target.value) || 20)) / 100 })}
-            style={inputStyle}
-          />
-        </label>
+      <div style={{ display: "grid", gap: "8px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+          <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+            投数 USDT
+            <input min="1" step="1" type="number" value={variant.amount} onChange={event => onChange({ amount: event.target.value })} style={inputStyle} />
+          </label>
+          <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+            阈值 {tailDisplay(variant.tailPct)}
+            <input
+              min="5"
+              max="45"
+              step="1"
+              type="number"
+              value={lower}
+              onChange={event => onChange({ tailPct: Math.max(5, Math.min(45, Number(event.target.value) || 20)) / 100 })}
+              style={inputStyle}
+            />
+          </label>
+        </div>
+        {isSecond ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+              回看秒数
+              <input min="60" max="21600" step="60" type="number" value={variant.lookbackSec || 1800} onChange={event => onChange({ lookbackSec: Number(event.target.value) || 1800 })} style={inputStyle} />
+            </label>
+            <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+              到期秒数
+              <input min="60" max="7200" step="60" type="number" value={variant.horizonSec || 600} onChange={event => onChange({ horizonSec: Number(event.target.value) || 600, duration: String(Math.max(1, Math.round((Number(event.target.value) || 600) / 60))) })} style={inputStyle} />
+            </label>
+            <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+              去重秒数
+              <input min="0" max="21600" step="60" type="number" value={variant.gapSec || 600} onChange={event => onChange({ gapSec: Number(event.target.value) || 0 })} style={inputStyle} />
+            </label>
+            <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+              过滤器
+              <select value={variant.secondFilter || "none"} onChange={event => onChange({ secondFilter: event.target.value })} style={selectStyle}>
+                <option value="none">不过滤</option>
+                <option value="vol_high">高成交量</option>
+                <option value="vol_not_high">避开高成交量</option>
+                <option value="flow_align">资金流同向</option>
+                <option value="flow_strong_align">强资金流同向</option>
+                <option value="flow_align_vol_not_high">资金流同向+避高量</option>
+              </select>
+            </label>
+          </div>
+        ) : null}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+          <CompactToggle label="观察并记录" checked={variant.enabled !== false} onChange={() => onChange({ enabled: variant.enabled === false })} />
+          <CompactToggle label="实盘执行" checked={variant.tradeEnabled !== false} onChange={() => onChange({ tradeEnabled: variant.tradeEnabled === false })} />
+        </div>
       </div>
     </div>
   );
 }
 
-function VariantGroup({ title, base, variants, allVariants, setVariants, defaultAmount }) {
+function VariantGroup({ title, base, allVariants, setVariants, defaultAmount }) {
   const rows = allVariants.map((item, index) => ({ item, index })).filter(row => row.item.base === base);
 
   function addVariant() {
     const existing = rows.map(row => row.item);
-    const preferred = base === "SAFE" ? [0.22, 0.23, 0.25, 0.27] : [0.27, 0.23, 0.22, 0.25];
+    const preferred = base === "SAFE" ? [0.22, 0.23, 0.25, 0.27] : base === "TAKER" ? [0.27, 0.23, 0.22, 0.25] : [0.27, 0.2, 0.22, 0.25];
     const tailPct = preferred.find(p => !existing.some(item => Math.round(item.tailPct * 100) === Math.round(p * 100))) || 0.2;
     const index = existing.length;
+    const lookbackSec = base === "SECOND" ? 1800 : undefined;
     setVariants([
       ...allVariants,
       {
-        id: variantId(base, tailPct, index),
+        id: variantId(base, tailPct, index, lookbackSec),
         base,
-        label: variantLabel(base, tailPct),
+        label: variantLabel(base, tailPct, lookbackSec),
         amount: defaultAmount,
         tailPct,
-        enabled: true
+        enabled: true,
+        tradeEnabled: base !== "SECOND",
+        ...(base === "SECOND" ? { lookbackSec: 1800, horizonSec: 600, gapSec: 600, secondFilter: "none", duration: "10" } : {})
       }
     ]);
   }
@@ -162,14 +206,14 @@ export default function ConfigPanel({ draft, dirty, apiToken, onTokenChange, onD
       </header>
 
       <div style={{ padding: "10px", borderRadius: "6px", fontSize: "12px", lineHeight: "1.4", border: draft.realTradingEnabled ? "1px solid rgba(228, 88, 88, 0.3)" : "1px solid rgba(39, 195, 165, 0.2)", background: draft.realTradingEnabled ? "var(--red-soft)" : "var(--green-soft)", color: draft.realTradingEnabled ? "var(--red)" : "var(--green)" }}>
-        <strong>{draft.realTradingEnabled ? "实盘模式：信号触发后由平板执行真实下单。" : "影子模式：只记录模拟交易，不消耗真实资金。"}</strong>
+        <strong>{draft.realTradingEnabled ? "实盘模式：只有开启“实盘执行”的策略会交给平板下单；其他策略仍记录影子单。" : "影子模式：全部观察策略只记录模拟交易，不消耗真实资金。"}</strong>
       </div>
 
       <div style={{ border: "1px solid var(--line)", borderRadius: "6px", padding: "10px", background: "rgba(255,255,255,0.01)" }}>
         <div style={{ fontSize: "11px", fontWeight: "bold", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>运行开关</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
           <div style={{ background: "rgba(255,255,255,0.015)", padding: "6px", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.02)" }}>
-            <CompactToggle label="全部 10m 策略" checked={draft.autoTrade_10m} onChange={() => onToggle("autoTrade_10m")} />
+            <CompactToggle label="允许策略自动下单" checked={draft.autoTrade_10m} onChange={() => onToggle("autoTrade_10m")} />
           </div>
           <div style={{ background: "rgba(255,255,255,0.015)", padding: "6px", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.02)" }}>
             <CompactToggle label="实盘资金下单" checked={draft.realTradingEnabled} onChange={() => onToggle("realTradingEnabled")} />
@@ -177,8 +221,9 @@ export default function ConfigPanel({ draft, dirty, apiToken, onTokenChange, onD
         </div>
       </div>
 
-      <VariantGroup title="推荐稳健档位" base="SAFE" variants={variants} allVariants={variants} setVariants={setVariants} defaultAmount="3" />
-      <VariantGroup title="资金流过滤档位" base="TAKER" variants={variants} allVariants={variants} setVariants={setVariants} defaultAmount="8" />
+      <VariantGroup title="推荐稳健档位" base="SAFE" allVariants={variants} setVariants={setVariants} defaultAmount="5" />
+      <VariantGroup title="资金流过滤档位" base="TAKER" allVariants={variants} setVariants={setVariants} defaultAmount="8" />
+      <VariantGroup title="秒级正态档位" base="SECOND" allVariants={variants} setVariants={setVariants} defaultAmount="5" />
 
       <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", padding: "8px 4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
         安全网密钥

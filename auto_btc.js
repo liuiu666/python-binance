@@ -2,15 +2,16 @@
 
 var PACKAGE = "com.binance.dev";
 var BASE_URL = "http://115.190.218.128:3000";
-var SIGNAL_URL = BASE_URL + "/api/signal";
+var SIGNAL_URL = BASE_URL + "/api/signal?source=autojs";
 var CONFIG_URL = BASE_URL + "/api/config";
 var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
 var API_TOKEN = "";
-var SCRIPT_VERSION = "2026-06-12-live-two-strategy-v1";
+var SCRIPT_VERSION = "2026-06-14-live-strategy-cooldown-v3";
 var POLL_INTERVAL = 3000;
 var SIGNAL_MAX_AGE_MS = 60000;
+var STRATEGY_COOLDOWN_MS = 10 * 60 * 1000;
 
 var tradeConfig = { amount: "5", strategyAmounts: { BTC_10min_SAFE: "5", BTC_10min_TAKER: "5" }, strategyVariants: [], duration: "10", autoTrade: false };
 var lastTradeTime = 0;
@@ -576,6 +577,7 @@ function buildTradeQueue(data) {
     for (var i = 0; i < defs.length; i++) {
         var d = defs[i];
         if (d.enabled === false) continue;
+        if (d.tradeEnabled === false) continue;
         var sig = data[d.id];
         if (!sig) continue;
         var amount = amountForOrder(d.id, sig, amounts[d.id]);
@@ -920,7 +922,7 @@ function rememberPersistedOrder(order) {
 function setStrategyActiveUntil(order) {
     if (!order || !order.strategyId) return;
     var dur = Math.max(1, Number(order.duration || 0) || 0);
-    activeUntilByStrategy[order.strategyId] = Date.now() + dur * 60 * 1000;
+    activeUntilByStrategy[order.strategyId] = Date.now() + Math.max(STRATEGY_COOLDOWN_MS, dur * 60 * 1000);
     saveOrderHistory();
 }
 
@@ -1030,7 +1032,7 @@ function main() {
                         continue;
                     }
                     if (now - lastTs < 60000) continue;
-                    log("SIGNAL " + order.strategyId + ": " + order.signal + " " + conf + "% RSI=" + order.rsi_value + " amt=" + order.amount + "U dur=" + order.duration + "min");
+                    log("SIGNAL " + order.strategyId + ": " + order.signal + " " + order.confidence + "% RSI=" + order.rsi_value + " amt=" + order.amount + "U dur=" + order.duration + "min");
                     reportTradeAudit("signal_tradeable", order, {});
                     var ok = placeTrade(order.signal, order);
                     if (ok) {
@@ -1077,6 +1079,10 @@ function main() {
             }
         } catch (e) {
             log("Err: " + e);
+            reportTradeAudit("runtime_loop_error", null, {
+                reason: String(e),
+                stack: e && e.stack ? String(e.stack).substring(0, 500) : null
+            });
         }
         sleep(POLL_INTERVAL);
     }

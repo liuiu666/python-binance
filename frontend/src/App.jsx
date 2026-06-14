@@ -186,6 +186,12 @@ export default function App() {
         setPriceHistory(history => [...history.slice(-599), { time: Date.now(), price }]);
       })
       .catch(() => {});
+    apiFetch("/api/candles")
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data?.candles) && data.candles.length) setCandles(data.candles);
+      })
+      .catch(() => {});
   }, [apiFetch]);
 
   const markDraft = useCallback(patch => {
@@ -326,7 +332,8 @@ export default function App() {
             lastWsPriceRef.current = Date.now();
           }
           if (Array.isArray(message.history)) setPriceHistory(message.history);
-          if (message.candle) {
+          if (Array.isArray(message.candles)) setCandles(message.candles);
+          if (!Array.isArray(message.candles) && message.candle) {
             setCandles(old => {
               const copy = [...old];
               if (copy.length === 0) {
@@ -453,42 +460,8 @@ export default function App() {
       });
     }
 
-    // 2. Add extra trade points to guarantee trade execution times exist as valid series points
     const tradesToMarker = tradeHistory?.recent || [];
-    const extraPoints = [];
-    for (const trade of tradesToMarker) {
-      if (!trade.openTime) continue;
-      const openSec = Math.floor(Number(trade.openTime) / 1000);
-      const openVal = Number(trade.openPrice);
-      
-      if (!Number.isNaN(openSec) && Number.isFinite(openVal) && !seenSeconds.has(openSec)) {
-        seenSeconds.add(openSec);
-        extraPoints.push({
-          time: openSec,
-          open: openVal,
-          high: openVal,
-          low: openVal,
-          close: openVal
-        });
-      }
-      if (trade.settleTime) {
-        const settleSec = Math.floor(Number(trade.settleTime) / 1000);
-        const closeVal = Number(trade.closePrice);
-        
-        if (!Number.isNaN(settleSec) && Number.isFinite(closeVal) && !seenSeconds.has(settleSec)) {
-          seenSeconds.add(settleSec);
-          extraPoints.push({
-            time: settleSec,
-            open: closeVal,
-            high: closeVal,
-            low: closeVal,
-            close: closeVal
-          });
-        }
-      }
-    }
-
-    const mergedData = [...chartData, ...extraPoints].sort((a, b) => a.time - b.time);
+    const mergedData = chartData.sort((a, b) => a.time - b.time);
     
     if (mergedData.length > 0) {
       areaSeriesRef.current.setData(mergedData);

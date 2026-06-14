@@ -6,15 +6,14 @@ export default function ManualPanel({ draft, onManualTrade, onAmountPreset }) {
   const amount = Number(draft.amount) || Number(DEFAULT_CONFIG.amount);
   const payout = payoutForDuration(draft.duration || DEFAULT_CONFIG.duration);
   const presets = [5, 10, 20, 50, 100];
-  
+
   return (
     <section className="panel manual-panel" style={{ background: "var(--surface)", border: "1px solid var(--line)", padding: "16px", borderRadius: "6px" }}>
       <header className="panel-header" style={{ marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
         <Activity size={15} style={{ color: "var(--yellow)" }} />
         <span>手动快捷下单</span>
       </header>
-      
-      {/* Quick Presets */}
+
       <div style={{ display: "flex", gap: "6px", marginBottom: "14px" }}>
         {presets.map(val => (
           <button

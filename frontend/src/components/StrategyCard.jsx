@@ -35,7 +35,7 @@ function probabilityText(signal) {
 
 function headlineText(signal, confidence) {
   if (!signal?.signal) return signalLabel(signal);
-  if ((signal?.mode || "reversal") === "reversal") {
+  if ((signal?.mode || "reversal") === "reversal" || signal?.model_type === "second_normal") {
     if (signal.signal === "UP") return `极端下行，反转看涨 ${confidence}`;
     if (signal.signal === "DOWN") return `极端上行，反转看跌 ${confidence}`;
   }
@@ -43,17 +43,17 @@ function headlineText(signal, confidence) {
 }
 
 function takerFlowText(signal) {
-  const filter = String(signal?.taker_filter || "none").toLowerCase();
+  const filter = String(signal?.taker_filter || signal?.second_filter || "none").toLowerCase();
   if (!filter || filter === "none" || filter === "off" || filter === "false") return null;
   if (signal?.taker_data_ok === false) return { text: "资金流延迟", tone: "warn" };
-  const ratio = Number(signal?.taker_ratio);
+  const ratio = Number(signal?.taker_ratio ?? signal?.second_flow_ratio_60s);
   const ratioText = Number.isFinite(ratio) ? ` ${ratio.toFixed(2)}` : "";
   const bias = signal?.taker_flow_bias || "unknown";
   const biasText = { bullish: "偏多", bearish: "偏空", neutral: "中性", unknown: "未知" }[bias] || "未知";
-  if (signal?.blocked_signal && signal?.reason === "taker_not_aligned") {
+  if (signal?.blocked_signal && (signal?.reason === "taker_not_aligned" || signal?.reason === "flow_not_aligned")) {
     return { text: `资金流未对齐 ${biasText}${ratioText}`, tone: "warn" };
   }
-  if (signal?.signal && signal?.taker_filter_ok) {
+  if (signal?.signal && (signal?.taker_filter_ok || filter.includes("flow"))) {
     return { text: `资金流已对齐 ${biasText}${ratioText}`, tone: bias === "bearish" ? "down" : "up" };
   }
   return { text: `资金流 ${biasText}${ratioText}`, tone: bias === "bullish" ? "up" : bias === "bearish" ? "down" : "neutral" };
@@ -111,10 +111,11 @@ export default function StrategyCard({ title, signal, amount, variant }) {
           <span className="badge" style={baseBadgeStyle}>阈值 {tailText(variant, signal)}</span>
           {backtest ? <span className="badge" style={baseBadgeStyle}>回测 {fmtPct(backtest.wr, 2)} / {backtest.tradesPerDay}笔天</span> : null}
           <span className="badge" style={baseBadgeStyle}>策略 正态尾部反转</span>
-          <span className="badge" style={{ ...baseBadgeStyle, background: "var(--green-soft)", color: "var(--green)" }}>正态自然上行 {probability.up}</span>
-          <span className="badge" style={{ ...baseBadgeStyle, background: "var(--red-soft)", color: "var(--red)" }}>正态自然下行 {probability.down}</span>
-          <span className="badge" style={baseBadgeStyle}>反转触发差距 {probability.edge}</span>
+          <span className="badge" style={{ ...baseBadgeStyle, background: "var(--green-soft)", color: "var(--green)" }}>自然上行 {probability.up}</span>
+          <span className="badge" style={{ ...baseBadgeStyle, background: "var(--red-soft)", color: "var(--red)" }}>自然下行 {probability.down}</span>
+          <span className="badge" style={baseBadgeStyle}>触发差距 {probability.edge}</span>
           <span className="badge" style={baseBadgeStyle}>{probability.zone}</span>
+          {variant?.tradeEnabled === false ? <span className="badge" style={badgeStyle("warn")}>仅影子记录</span> : null}
           {takerFlow ? <span className="badge" style={badgeStyle(takerFlow.tone)}>{takerFlow.text}</span> : null}
         </div>
       </div>

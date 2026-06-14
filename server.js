@@ -12,6 +12,7 @@ const {
   amountForStrategyConfig,
   normalizeTradeConfig,
   strategyVariants,
+  observedStrategyIds,
   liveStrategyIds,
   applyTradeConfigPatch,
   publicTradeConfig
@@ -278,7 +279,7 @@ function readCsvHeader(file) {
   }
 }
 
-function readLastCsvRows(file, limit = 200, bytes = 65536) {
+function readLastCsvRows(file, limit = 200, bytes = 512 * 1024) {
   try {
     if (!fs.existsSync(file)) return [];
     const header = readCsvHeader(file);
@@ -289,7 +290,8 @@ function readLastCsvRows(file, limit = 200, bytes = 65536) {
     const buf = Buffer.alloc(len);
     fs.readSync(fd, buf, 0, len, stat.size - len);
     fs.closeSync(fd);
-    const lines = buf.toString("utf8").split(/\r?\n/).filter(Boolean);
+    let lines = buf.toString("utf8").split(/\r?\n/).filter(Boolean);
+    if (stat.size > len && lines.length) lines = lines.slice(1);
     const dataLines = lines.filter(line => line !== header.join(",") && !line.startsWith(header[0] + ",")).slice(-limit);
     return dataLines.map(line => {
       const cells = line.split(",");
@@ -682,6 +684,10 @@ function currentStrategyVariants() {
   return strategyVariants(tradeConfig).filter(v => v.enabled);
 }
 
+function currentObservedStrategyIds() {
+  return observedStrategyIds(tradeConfig);
+}
+
 function currentLiveStrategyIds() {
   return liveStrategyIds(tradeConfig);
 }
@@ -979,9 +985,10 @@ function applyDataHealthGate(signals, gate) {
 
 function buildSignalResponse(source = "") {
   const rawSignals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {};
+  const observedIds = currentObservedStrategyIds();
   const liveIds = currentLiveStrategyIds();
   const liveRawSignals = Object.fromEntries(
-    liveIds
+    observedIds
       .filter(strategyId => rawSignals[strategyId])
       .map(strategyId => [strategyId, rawSignals[strategyId]])
   );
@@ -999,11 +1006,31 @@ function buildSignalResponse(source = "") {
   // If not requested by the dashboard, apply safety overrides to prevent real trades if disabled.
   if (source !== "dashboard") {
     if (!tradeConfig.realTradingEnabled) {
-      for (const strategyId of liveIds) {
+      for (const strategyId of observedIds) {
         if (signals[strategyId]) signals[strategyId].signal = null;
       }
     } else if (!tradeConfig.autoTrade_10m) {
-      for (const strategyId of liveIds) {
+      for (const strategyId of observedIds) {
+        if (signals[strategyId]) signals[strategyId].signal = null;
+      }
+    } else {
+      const tradeable = new Set(liveIds);
+      for (const strategyId of observedIds) {
+        if (!tradeable.has(strategyId) && signals[strategyId]) signals[strategyId].signal = null;
+      }
+    }
+  } else {
+    const tradeable = new Set(liveIds);
+    for (const strategyId of observedIds) {
+      if (signals[strategyId]) {
+        signals[strategyId].trade_enabled = tradeable.has(strategyId);
+      }
+    }
+  }
+  if (source === "autojs" || source === "tablet") {
+    const tradeable = new Set(liveIds);
+    for (const strategyId of observedIds) {
+      if (!tradeable.has(strategyId) && signals[strategyId]) {
         if (signals[strategyId]) signals[strategyId].signal = null;
       }
     }
@@ -1013,7 +1040,7 @@ function buildSignalResponse(source = "") {
   for (const [strategyId, sig] of Object.entries(signals)) {
     strategyAmounts[strategyId] = amountForStrategy(strategyId, sig);
   }
-  const legacySig = liveIds.map(id => signals[id]).find(Boolean);
+  const legacySig = observedIds.map(id => signals[id]).find(Boolean);
   const legacyAmount = legacySig ? amountForStrategy(legacySig.strategy_id, legacySig) : String(tradeConfig.amount);
 
   // Supply backward compatible config keys for old tablet/scripts
@@ -1029,7 +1056,7 @@ function buildSignalResponse(source = "") {
     _strategyAmounts: strategyAmounts,
     _signalAmount: legacyAmount,
     _entryTimingEnabled: ENTRY_TIMING_ENABLED,
-    _entryTimingPolicies: Object.fromEntries(liveIds.map(id => [id, entryTimingPolicyForStrategy(id)])),
+    _entryTimingPolicies: Object.fromEntries(observedIds.map(id => [id, entryTimingPolicyForStrategy(id)])),
     _execution: {
       serverTime: isoTime(Date.now()),
       serverTimeMs: Date.now(),
@@ -1051,6 +1078,14 @@ app.get("/api/signal", (req, res) => {
 app.get("/api/price", (req, res) => {
   try { res.json(fs.existsSync(PRICE_FILE) ? JSON.parse(fs.readFileSync(PRICE_FILE, "utf8")) : { price: null }); }
   catch (e) { res.json({ price: null }); }
+});
+
+app.get("/api/candles", (req, res) => {
+  reloadCandlesIfChanged();
+  res.json({
+    updatedAt: Date.now(),
+    candles: candleHistory.slice(-500)
+  });
 });
 
 app.get("/api/reports", (req, res) => {
@@ -1174,7 +1209,8 @@ function tabletDiagnostics() {
     "signal_skipped",
     "order_attempt",
     "order_abort",
-    "order_done"
+    "order_done",
+    "runtime_loop_error"
   ]);
   const autojsRows = rows.filter(r => autojsEventNames.has(r.event));
   const latestTabletPagePing = [...rows].reverse().find(r => (
@@ -1373,6 +1409,7 @@ const WINDOW_SEC = 60;  // 60-second trading window (wider than before)
 const AUTO_TRADE_AMOUNT = 100;  // Auto-trade 100 USDT per signal
 const AUTO_TRADE_ENABLED = SERVER_SIM_TRADING_ENABLED;
 const SIGNAL_EXPIRY_MS = 120 * 1000;  // Signal valid for 2 minutes
+const STRATEGY_COOLDOWN_MS = 10 * 60 * 1000;
 
 let currentPrice = null;
 let priceHistory = [];
@@ -1381,12 +1418,16 @@ let trades = [];
 let nextTradeId = 1;
 let account = { balance: 10000.0, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0 };
 let lastSignals = {};
+let shadowTrades = [];
+let nextShadowTradeId = 1;
+let lastShadowSignals = {};
+let lastStrategyTradeAt = {};
 let autoTradeLog = [];
 let realBalance = normalizeRealBalance(readJsonFile(REAL_BALANCE_FILE, null));
 
 function preloadCandles() {
   const file = path.join(DATA_DIR, "btcusdt_1m.csv");
-  const rows = readLastCsvRows(file, 300);
+  const rows = readLastCsvRows(file, 500);
   const candles = [];
   for (const row of rows) {
     const openTimeMs = parseCsvTimeMs(row["open_time"]);
@@ -1406,15 +1447,32 @@ function preloadCandles() {
     }
   }
   candles.sort((a, b) => a.time - b.time);
-  return candles;
+  return candles.slice(-500);
 }
 
 let candleHistory = [];
+let candleSourceMtimeMs = 0;
 try {
   candleHistory = preloadCandles();
+  const candleFile = path.join(DATA_DIR, "btcusdt_1m.csv");
+  candleSourceMtimeMs = fs.existsSync(candleFile) ? fs.statSync(candleFile).mtimeMs : 0;
   console.log(`[Candles] Successfully preloaded ${candleHistory.length} historical candles from CSV.`);
 } catch (e) {
   console.log("[Candles] Failed to preload:", e);
+}
+
+function reloadCandlesIfChanged(force = false) {
+  try {
+    const file = path.join(DATA_DIR, "btcusdt_1m.csv");
+    if (!fs.existsSync(file)) return false;
+    const mtimeMs = fs.statSync(file).mtimeMs;
+    if (!force && mtimeMs === candleSourceMtimeMs) return false;
+    candleHistory = preloadCandles();
+    candleSourceMtimeMs = mtimeMs;
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 function normalizeRealBalance(raw) {
@@ -1569,13 +1627,15 @@ setInterval(readPrice, 2000);
 readPrice();
 
 function broadcastPrice() {
+  reloadCandlesIfChanged();
   const lastCandle = candleHistory.length > 0 ? candleHistory[candleHistory.length - 1] : null;
   const msg = JSON.stringify({
     type: "price",
     price: currentPrice,
     time: Date.now(),
     history: priceHistory.slice(-300),
-    candle: lastCandle
+    candle: lastCandle,
+    candles: candleHistory.slice(-500)
   });
   wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(msg); });
 }
@@ -1624,6 +1684,96 @@ function placeTrade(direction, amount, source, durationMin) {
   return trade;
 }
 
+function placeShadowTrade(strategyId, sig, variant) {
+  if (!currentPrice || !sig || !sig.signal) return null;
+  const amount = Number(amountForStrategy(strategyId, sig));
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const dur = Math.max(1, Number(sig.duration || sig.interval_min || variant?.duration || tradeConfig.duration || 10));
+  const now = Date.now();
+  const trade = {
+    id: nextShadowTradeId++,
+    direction: sig.signal,
+    amount,
+    strikePrice: currentPrice,
+    openTime: now,
+    settleTime: now + dur * 60 * 1000,
+    duration: String(dur),
+    status: "active",
+    settlePrice: null,
+    payout: null,
+    payoutRate: payoutRateForDuration(dur, PAYOUT_RATE),
+    source: "shadow:" + strategyId,
+    confidence: sig.confidence,
+    rsi_value: sig.rsi_value,
+    avg_prob: sig.avg_prob,
+    signalTime: sig.time,
+    actionableTime: sig.actionable_time || sig.candle_close_time || sig.time || null
+  };
+  shadowTrades.push(trade);
+  appendJsonl(TRADE_AUDIT_FILE, {
+    event: "shadow_trade_open",
+    serverTime: now,
+    tradeId: trade.id,
+    source: trade.source,
+    strategyId,
+    tradeEnabled: variant ? variant.tradeEnabled !== false : null,
+    direction: trade.direction,
+    amount: trade.amount,
+    duration: trade.duration,
+    openTime: trade.openTime,
+    strikePrice: trade.strikePrice,
+    confidence: trade.confidence,
+    avg_prob: trade.avg_prob,
+    signalTime: trade.signalTime,
+    actionableTime: trade.actionableTime
+  });
+  broadcastTradeUpdate(trade);
+  return trade;
+}
+
+function hasStrategyCooldown(strategyId) {
+  const last = Number(lastStrategyTradeAt[strategyId] || 0);
+  return last && Date.now() - last < STRATEGY_COOLDOWN_MS;
+}
+
+function markStrategyCooldown(strategyId) {
+  if (strategyId) lastStrategyTradeAt[strategyId] = Date.now();
+}
+
+function checkShadowTrades() {
+  if (!currentPrice) return;
+  try {
+    const signals = buildSignalResponse("dashboard");
+    const variants = currentStrategyVariants();
+    for (const variant of variants) {
+      const strategyId = variant.id;
+      const sig = signals[strategyId];
+      if (!sig || !sig.signal) continue;
+      if (hasStrategyCooldown(strategyId)) continue;
+      if (shadowTrades.some(t => t.status === "active" && t.source === "shadow:" + strategyId)) continue;
+      const sigTime = signalActionableMs(sig);
+      if (!sigTime || Date.now() - sigTime > configuredMaxActionableLagMs()) continue;
+      const key = [sig.signal, sig.time || "", sig.actionable_time || sig.candle_close_time || ""].join("|");
+      if (lastShadowSignals[strategyId] === key) continue;
+      const trade = placeShadowTrade(strategyId, sig, variant);
+      if (trade) {
+        markStrategyCooldown(strategyId);
+        lastShadowSignals[strategyId] = key;
+        autoTradeLog.push({
+          time: new Date().toISOString(),
+          strategy: strategyId,
+          signal: sig.signal,
+          confidence: sig.confidence,
+          price: currentPrice,
+          amount: trade.amount,
+          tradeId: "shadow:" + trade.id,
+          mode: "shadow"
+        });
+      }
+    }
+  } catch (e) {}
+}
+
 // Auto-trade logic (Shadow / Sim Trading Engine)
 function checkAutoTrade() {
   if (!SERVER_SIM_TRADING_ENABLED || !AUTO_TRADE_ENABLED || !tradeConfig.shadowTradingEnabled || !currentPrice) return;
@@ -1638,6 +1788,7 @@ function checkAutoTrade() {
       if (!tradeConfig.autoTrade_10m) continue;
       const sig = signals[strategyId];
       if (!sig || !sig.signal) continue;
+      if (hasStrategyCooldown(strategyId)) continue;
       if (trades.some(t => t.status === "active" && t.source === "auto:" + strategyId)) continue;
 
       const sigTime = signalActionableMs(sig);
@@ -1648,6 +1799,7 @@ function checkAutoTrade() {
       const autoAmt = Number(amountForStrategy(strategyId, sig));
       const trade = placeTrade(sig.signal, autoAmt, "auto:" + strategyId, sig.duration || sig.interval_min);
       if (trade) {
+        markStrategyCooldown(strategyId);
         lastSignals[strategyId] = { signal: sig.signal, time: sig.time, confidence: sig.confidence };
         autoTradeLog.push({
           time: new Date().toISOString(),
@@ -1665,6 +1817,7 @@ function checkAutoTrade() {
   } catch (e) {}
 }
 setInterval(checkAutoTrade, 3000);
+setInterval(checkShadowTrades, 3000);
 
 function settleTrades() {
   const now = Date.now();
@@ -1703,7 +1856,44 @@ function settleTrades() {
     console.log(`[Settle] #${t.id} ${t.status} ${t.direction} strike=${t.strikePrice} settle=${sp} pnl=${t.status === "won" ? "+" + (t.payout - t.amount).toFixed(2) : t.status === "lost" ? "-" + t.amount.toFixed(2) : "0"}`);
     broadcastTradeUpdate(t);
   });
+  shadowTrades.filter(t => t.status === "active" && now >= t.settleTime).forEach(t => {
+    const sp = currentPrice || t.strikePrice;
+    const tie = sp === t.strikePrice;
+    const won = t.direction === "UP" ? sp > t.strikePrice : sp < t.strikePrice;
+    if (tie) {
+      t.status = "tie";
+      t.settlePrice = sp;
+      t.payout = t.amount;
+    } else if (won) {
+      t.status = "won";
+      t.settlePrice = sp;
+      t.payout = t.amount + t.amount * payoutRateForDuration(t.duration, PAYOUT_RATE);
+    } else {
+      t.status = "lost";
+      t.settlePrice = sp;
+      t.payout = 0;
+    }
+    appendJsonl(TRADE_AUDIT_FILE, {
+      event: "shadow_trade_settle",
+      serverTime: now,
+      tradeId: t.id,
+      source: t.source,
+      strategyId: String(t.source || "").replace(/^shadow:/, ""),
+      direction: t.direction,
+      amount: t.amount,
+      duration: t.duration,
+      openTime: t.openTime,
+      settleTime: now,
+      strikePrice: t.strikePrice,
+      settlePrice: sp,
+      status: t.status,
+      payoutRate: payoutRateForDuration(t.duration, PAYOUT_RATE),
+      payout: t.payout
+    });
+    broadcastTradeUpdate(t);
+  });
   if (trades.length > 200) trades = trades.filter(t => t.status === "active" || trades.indexOf(t) > trades.length - 101);
+  if (shadowTrades.length > 500) shadowTrades = shadowTrades.filter(t => t.status === "active" || shadowTrades.indexOf(t) > shadowTrades.length - 301);
 }
 setInterval(settleTrades, 1000);
 setInterval(broadcastState, 2000);
@@ -1777,11 +1967,28 @@ function applyProdStrategyParams(baseConfig, config) {
   const safeTemplate = out.BTC_10min_SAFE || {};
   const takerTemplate = out.BTC_10min_TAKER || {};
   for (const key of Object.keys(out)) {
-    if ((key.startsWith("BTC_10min_TAKER") || key.startsWith("BTC_10min_SAFE")) && !variants.some(v => v.id === key)) delete out[key];
+    if ((key.startsWith("BTC_10min_TAKER") || key.startsWith("BTC_10min_SAFE") || key.startsWith("BTC_10min_SECOND")) && !variants.some(v => v.id === key)) delete out[key];
   }
   for (const variant of variants) {
     const current = out[variant.id] && typeof out[variant.id] === "object" ? out[variant.id] : {};
     const template = variant.base === "SAFE" ? safeTemplate : takerTemplate;
+    if (variant.base === "SECOND") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        model_type: "second_normal",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        second_lookback_sec: variant.lookbackSec || 1800,
+        second_horizon_sec: variant.horizonSec || 600,
+        second_min_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        second_tail_pct: variant.tailPct,
+        second_filter: variant.secondFilter || "none",
+        model_label: `SECOND_${variant.lookbackSec || 1800}_${Math.round(variant.tailPct * 100)}_${100 - Math.round(variant.tailPct * 100)}`
+      };
+      continue;
+    }
     out[variant.id] = {
       ...template,
       ...current,
@@ -1952,6 +2159,12 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("exit", stopSignalService);
 
 server.listen(PORT, '0.0.0.0', () => {
+  try {
+    saveTradeConfig();
+    saveProdStrategyParams(tradeConfig);
+  } catch (e) {
+    console.warn("[Config] startup sync failed:", e.message);
+  }
   if (MANAGED_PROCESSES_ENABLED) {
     runDataUpdate("server_listen");
     startSignalService("server_listen");
