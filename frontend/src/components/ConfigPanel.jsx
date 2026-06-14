@@ -143,7 +143,7 @@ function SecondChipControls({ variant, onChange }) {
       <NumberField label="去重秒数" value={variant.gapSec || 600} min="0" max="21600" step="60" onChange={value => onChange({ gapSec: value || 0 })} />
       <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
         档位模式
-        <select value={variant.chipBinMode || "percent"} onChange={event => onChange({ chipBinMode: event.target.value })} style={selectStyle}>
+        <select value={variant.chipBinMode || "fixed"} onChange={event => onChange({ chipBinMode: event.target.value })} style={selectStyle}>
           <option value="fixed">固定U</option>
           <option value="percent">价格百分比</option>
         </select>

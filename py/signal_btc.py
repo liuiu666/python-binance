@@ -1333,7 +1333,7 @@ class SecondChipStrategy(SecondNormalStrategy):
     """Second-level POC chip-zone reversal for 10m binary options."""
 
     def __init__(self, strategy_id, cfg):
-        self.id = strategy_id
+        super().__init__(strategy_id, cfg)
         self.lookback_sec = int(cfg.get("second_chip_lookback_sec", cfg.get("second_lookback_sec", 3600)))
         self.horizon_sec = int(cfg.get("second_chip_horizon_sec", cfg.get("second_horizon_sec", 600)))
         self.min_gap_sec = int(cfg.get("second_chip_min_gap_sec", cfg.get("second_min_gap_sec", self.horizon_sec)))
