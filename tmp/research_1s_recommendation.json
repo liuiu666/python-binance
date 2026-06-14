@@ -1,0 +1,52 @@
+{
+  "strategy": {
+    "PAYOUT": 0.8,
+    "BE": 55.55555555555556,
+    "expiry_sec": 600,
+    "cooldown_sec": 600,
+    "params_A": {
+      "W": 120,
+      "H_p_up": 900,
+      "tail": 0.05,
+      "WR_range": "71.4-76.9%",
+      "signals_per_hour": 5.6,
+      "P_WR_above_BE": 99.3,
+      "bootstrap_CI": [
+        61.5,
+        92.3
+      ]
+    },
+    "params_B": {
+      "W": 600,
+      "H_p_up": 300,
+      "tail": 0.2,
+      "WR_range": "73.7-75.0%",
+      "signals_per_hour": 4.0,
+      "minFold_WR": 71.4,
+      "bootstrap_CI": [
+        52.6,
+        89.5
+      ]
+    },
+    "optional_filter": {
+      "trend_300s_max": 10,
+      "effect": "+5-10% WR, -30% signals"
+    },
+    "position_size": {
+      "kelly": 0.44,
+      "half_kelly": 0.22,
+      "recommended": "5-10%"
+    }
+  },
+  "data": {
+    "rows": 47969,
+    "hours": 13.324722222222222
+  },
+  "risks": [
+    "\u4ec55\u5c0f\u65f6\u6570\u636e,\u7edf\u8ba1\u53ef\u4fe1\u5ea6\u6709\u9650",
+    "Bootstrap 95%CI\u4e0b\u965051-62%",
+    "\u65b9\u5411\u4e0d\u5bf9\u79f015-26%",
+    "\u53c2\u6570\u5bf9W\u9ad8\u5ea6\u654f\u611f",
+    "\u65f6\u6bb5\u6548\u679c\u53ef\u80fd\u5076\u7136"
+  ]
+}
