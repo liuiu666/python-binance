@@ -162,6 +162,7 @@ function VariantGroup({ title, base, allVariants, setVariants, defaultAmount }) 
         label: variantLabel(base, tailPct, lookbackSec),
         amount: defaultAmount,
         tailPct,
+        duration: "10",
         enabled: true,
         tradeEnabled: base !== "SECOND",
         ...(base === "SECOND" ? { lookbackSec: 1800, horizonSec: 600, gapSec: 600, secondFilter: "none", duration: "10" } : {})

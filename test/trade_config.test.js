@@ -88,6 +88,42 @@ test("trade config separates observation from real execution", () => {
   assert.deepEqual(liveStrategyIds(cfg), ["BTC_10min_TAKER"]);
 });
 
+test("trade config preserves custom second normal variants", () => {
+  const cfg = normalizeTradeConfig({
+    strategyVariants: [
+      { id: "BTC_10min_SAFE", base: "SAFE", amount: "5", tailPct: 0.2 },
+      { id: "BTC_10min_TAKER", base: "TAKER", amount: "10", tailPct: 0.2 },
+      {
+        id: "BTC_10min_SECOND_900_27",
+        base: "SECOND",
+        amount: "7",
+        tailPct: 0.27,
+        enabled: false,
+        tradeEnabled: true,
+        lookbackSec: 900,
+        horizonSec: 600,
+        gapSec: 300,
+        secondFilter: "flow_align"
+      }
+    ]
+  });
+  const second = cfg.strategyVariants.find(v => v.id === "BTC_10min_SECOND_900_27");
+  assert.equal(second.amount, "7");
+  assert.equal(second.enabled, false);
+  assert.equal(second.tradeEnabled, true);
+  assert.equal(second.lookbackSec, 900);
+  assert.equal(second.gapSec, 300);
+  assert.equal(second.secondFilter, "flow_align");
+  assert.equal(second.duration, "10");
+
+  const pub = publicTradeConfig(cfg);
+  const saved = normalizeTradeConfig(pub);
+  const restored = saved.strategyVariants.find(v => v.id === "BTC_10min_SECOND_900_27");
+  assert.equal(restored.amount, "7");
+  assert.equal(restored.lookbackSec, 900);
+  assert.equal(restored.secondFilter, "flow_align");
+});
+
 test("auto trade patch records blocked and forced transitions", () => {
   const blocked = applyTradeConfigPatch(DEFAULT_TRADE_CONFIG, { autoTrade: true }, {
     autoTradeSafetyGate: () => ({ blocked: true, verdict: "missing_shadow_decision" })

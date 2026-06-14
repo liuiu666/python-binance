@@ -8,7 +8,7 @@ var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
 var API_TOKEN = "";
-var SCRIPT_VERSION = "2026-06-14-live-strategy-cooldown-v3";
+var SCRIPT_VERSION = "2026-06-14-duration-default-v5";
 var POLL_INTERVAL = 3000;
 var SIGNAL_MAX_AGE_MS = 60000;
 var STRATEGY_COOLDOWN_MS = 10 * 60 * 1000;
@@ -597,7 +597,7 @@ function buildTradeQueue(data) {
             priceChangeBps: exec.priceChangeBps,
             directionMoveBps: exec.directionMoveBps,
             amount: String(amount),
-            duration: String(sig.duration || d.duration),
+            duration: String(sig.duration || d.duration || tradeConfig.duration || "10"),
             raw: sig
         });
     }
@@ -658,6 +658,16 @@ function ensureDuration() {
         durationSetTarget = target;
         return true;
     }
+    var texts = [];
+    for (var i = 0; i < rows.length; i++) {
+        try { texts.push(rows[i].text ? rows[i].text() : ""); } catch (e) {}
+    }
+    reportTradeAudit("duration_select_failed", null, {
+        targetDuration: target,
+        currentText: current,
+        rowCount: rows.length,
+        rowTexts: texts.join("|")
+    });
     return false;
 }
 
@@ -819,8 +829,6 @@ function placeTrade(dir, order) {
     if (order) {
         tradeConfig.amount = prevAmt;
         tradeConfig.duration = prevDur;
-        durationSet = false;
-        durationSetTarget = "";
     }
     return true;
 }
@@ -843,8 +851,6 @@ function checkManualTrade() {
                 placeTrade(cmd.direction);
                 tradeConfig.amount = prevAmt;
                 tradeConfig.duration = prevDur;
-                durationSet = false;
-                durationSetTarget = "";
                 http.request(authUrl(MANUAL_URL), { method: "DELETE", timeout: 3000 });
                 return true;
             }

@@ -67,7 +67,13 @@ import tarfile
 root = os.getcwd()
 out = os.environ["DEPLOY_ARCHIVE"]
 exclude_dirs = {".git", "node_modules", "__pycache__", ".pytest_cache"}
-exclude_names = {"codex.db", "codex.db-shm", "codex.db-wal", "signal_btc.lock", "price_proxy.lock"}
+exclude_names = {
+    "codex.db", "codex.db-shm", "codex.db-wal",
+    "signal_btc.lock", "price_proxy.lock",
+    "trade_config.json", "prod_config.json", "real_balance.json",
+    "current_price.json", "live_signals.json", "live_data_update_status.json",
+    "second_data_status.json"
+}
 exclude_suffixes = {".out", ".err", ".tmp", ".pyc"}
 exclude_prefixes = [
     os.path.join(root, "data", "archive"),
@@ -170,8 +176,21 @@ NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 
 
 echo "[1/8] prepare app directory"
 mkdir -p "$APP_DIR"
+CONFIG_BACKUP="$(mktemp -d)"
+for f in trade_config.json prod_config.json real_balance.json; do
+  if [ -f "$APP_DIR/data/$f" ]; then
+    cp "$APP_DIR/data/$f" "$CONFIG_BACKUP/$f"
+  fi
+done
 rm -rf "$APP_DIR/public/dashboard/assets"
 tar -xzf "$ARCHIVE" -C "$APP_DIR"
+mkdir -p "$APP_DIR/data"
+for f in trade_config.json prod_config.json real_balance.json; do
+  if [ -f "$CONFIG_BACKUP/$f" ]; then
+    cp "$CONFIG_BACKUP/$f" "$APP_DIR/data/$f"
+  fi
+done
+rm -rf "$CONFIG_BACKUP"
 cd "$APP_DIR"
 
 echo "[2/8] ensure system packages"
