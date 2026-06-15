@@ -3,12 +3,12 @@
   "symbol": "BTCUSDT",
   "market": "futures",
   "file": "/opt/btc-binary-options/data/btcusdt_1s_trades.csv",
-  "updated_at": "2026-06-14T09:23:01.746889+00:00",
+  "updated_at": "2026-06-15T14:02:43.739697+00:00",
   "error": null,
-  "last_agg_trade_id": 3339544642,
-  "fetched_trades": 9,
-  "rows": 66923,
-  "added": 1,
-  "last_ts": "2026-06-14T09:22:59+00:00",
+  "last_agg_trade_id": 3341076316,
+  "fetched_trades": 123,
+  "rows": 167561,
+  "added": 3,
+  "last_ts": "2026-06-15T14:02:41+00:00",
   "pending_seconds": 1
 }

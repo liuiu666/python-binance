@@ -1,0 +1,352 @@
+{
+  "sampleHours": 20.37,
+  "rawCandidates": {
+    "trades": 2196,
+    "winRate": 71.72,
+    "wins": 1575,
+    "losses": 621
+  },
+  "gap600": {
+    "trades": 9,
+    "winRate": 88.89,
+    "wins": 8,
+    "losses": 1
+  },
+  "gap900": {
+    "trades": 8,
+    "winRate": 87.5,
+    "wins": 7,
+    "losses": 1
+  },
+  "gap1800": {
+    "trades": 7,
+    "winRate": 100.0,
+    "wins": 7,
+    "losses": 0
+  },
+  "candidateBurstCount": 10,
+  "candidateBursts": [
+    {
+      "signal": "DOWN",
+      "count": 853,
+      "start": "2026-06-14T08:07:28+00:00",
+      "end": "2026-06-14T08:23:48+00:00",
+      "wonCount": 360,
+      "lossCount": 493,
+      "firstPup": 0.773677,
+      "lastPup": 0.770304
+    },
+    {
+      "signal": "UP",
+      "count": 489,
+      "start": "2026-06-14T07:07:33+00:00",
+      "end": "2026-06-14T07:16:21+00:00",
+      "wonCount": 489,
+      "lossCount": 0,
+      "firstPup": 0.229514,
+      "lastPup": 0.227358
+    },
+    {
+      "signal": "UP",
+      "count": 358,
+      "start": "2026-06-14T04:53:05+00:00",
+      "end": "2026-06-14T05:00:49+00:00",
+      "wonCount": 287,
+      "lossCount": 71,
+      "firstPup": 0.228325,
+      "lastPup": 0.224851
+    },
+    {
+      "signal": "DOWN",
+      "count": 200,
+      "start": "2026-06-14T08:38:02+00:00",
+      "end": "2026-06-14T08:44:57+00:00",
+      "wonCount": 200,
+      "lossCount": 0,
+      "firstPup": 0.775134,
+      "lastPup": 0.770104
+    },
+    {
+      "signal": "UP",
+      "count": 115,
+      "start": "2026-06-14T09:18:21+00:00",
+      "end": "2026-06-14T09:20:56+00:00",
+      "wonCount": 115,
+      "lossCount": 0,
+      "firstPup": 0.227569,
+      "lastPup": 0.229784
+    },
+    {
+      "signal": "DOWN",
+      "count": 96,
+      "start": "2026-06-14T01:11:01+00:00",
+      "end": "2026-06-14T01:13:18+00:00",
+      "wonCount": 39,
+      "lossCount": 57,
+      "firstPup": 0.77037,
+      "lastPup": 0.771476
+    },
+    {
+      "signal": "DOWN",
+      "count": 50,
+      "start": "2026-06-13T21:41:22+00:00",
+      "end": "2026-06-13T21:43:10+00:00",
+      "wonCount": 50,
+      "lossCount": 0,
+      "firstPup": 0.773952,
+      "lastPup": 0.77428
+    },
+    {
+      "signal": "DOWN",
+      "count": 23,
+      "start": "2026-06-14T01:16:54+00:00",
+      "end": "2026-06-14T01:20:00+00:00",
+      "wonCount": 23,
+      "lossCount": 0,
+      "firstPup": 0.771447,
+      "lastPup": 0.770068
+    },
+    {
+      "signal": "DOWN",
+      "count": 7,
+      "start": "2026-06-14T07:56:09+00:00",
+      "end": "2026-06-14T07:56:15+00:00",
+      "wonCount": 7,
+      "lossCount": 0,
+      "firstPup": 0.773252,
+      "lastPup": 0.772413
+    },
+    {
+      "signal": "UP",
+      "count": 5,
+      "start": "2026-06-14T09:24:56+00:00",
+      "end": "2026-06-14T09:25:02+00:00",
+      "wonCount": 5,
+      "lossCount": 0,
+      "firstPup": 0.226968,
+      "lastPup": 0.227632
+    }
+  ],
+  "gap600Signals": [
+    {
+      "idx": 29257,
+      "time": "2026-06-13T21:41:22+00:00",
+      "signal": "DOWN",
+      "p_up": 0.773952,
+      "entry": 64542.2,
+      "settle": 64443.6,
+      "won": true
+    },
+    {
+      "idx": 41836,
+      "time": "2026-06-14T01:11:01+00:00",
+      "signal": "DOWN",
+      "p_up": 0.77037,
+      "entry": 64630.2,
+      "settle": 64612.1,
+      "won": true
+    },
+    {
+      "idx": 55160,
+      "time": "2026-06-14T04:53:05+00:00",
+      "signal": "UP",
+      "p_up": 0.228325,
+      "entry": 64320.8,
+      "settle": 64340.0,
+      "won": true
+    },
+    {
+      "idx": 63228,
+      "time": "2026-06-14T07:07:33+00:00",
+      "signal": "UP",
+      "p_up": 0.229514,
+      "entry": 64213.2,
+      "settle": 64257.8,
+      "won": true
+    },
+    {
+      "idx": 66144,
+      "time": "2026-06-14T07:56:09+00:00",
+      "signal": "DOWN",
+      "p_up": 0.773252,
+      "entry": 64412.6,
+      "settle": 64364.7,
+      "won": true
+    },
+    {
+      "idx": 66823,
+      "time": "2026-06-14T08:07:28+00:00",
+      "signal": "DOWN",
+      "p_up": 0.773677,
+      "entry": 64379.2,
+      "settle": 64462.2,
+      "won": false
+    },
+    {
+      "idx": 67423,
+      "time": "2026-06-14T08:17:28+00:00",
+      "signal": "DOWN",
+      "p_up": 0.818131,
+      "entry": 64462.2,
+      "settle": 64442.9,
+      "won": true
+    },
+    {
+      "idx": 68657,
+      "time": "2026-06-14T08:38:02+00:00",
+      "signal": "DOWN",
+      "p_up": 0.775134,
+      "entry": 64459.9,
+      "settle": 64450.0,
+      "won": true
+    },
+    {
+      "idx": 71076,
+      "time": "2026-06-14T09:18:21+00:00",
+      "signal": "UP",
+      "p_up": 0.227569,
+      "entry": 64311.7,
+      "settle": 64316.2,
+      "won": true
+    }
+  ],
+  "gap900Signals": [
+    {
+      "idx": 29257,
+      "time": "2026-06-13T21:41:22+00:00",
+      "signal": "DOWN",
+      "p_up": 0.773952,
+      "entry": 64542.2,
+      "settle": 64443.6,
+      "won": true
+    },
+    {
+      "idx": 41836,
+      "time": "2026-06-14T01:11:01+00:00",
+      "signal": "DOWN",
+      "p_up": 0.77037,
+      "entry": 64630.2,
+      "settle": 64612.1,
+      "won": true
+    },
+    {
+      "idx": 55160,
+      "time": "2026-06-14T04:53:05+00:00",
+      "signal": "UP",
+      "p_up": 0.228325,
+      "entry": 64320.8,
+      "settle": 64340.0,
+      "won": true
+    },
+    {
+      "idx": 63228,
+      "time": "2026-06-14T07:07:33+00:00",
+      "signal": "UP",
+      "p_up": 0.229514,
+      "entry": 64213.2,
+      "settle": 64257.8,
+      "won": true
+    },
+    {
+      "idx": 66144,
+      "time": "2026-06-14T07:56:09+00:00",
+      "signal": "DOWN",
+      "p_up": 0.773252,
+      "entry": 64412.6,
+      "settle": 64364.7,
+      "won": true
+    },
+    {
+      "idx": 67044,
+      "time": "2026-06-14T08:11:09+00:00",
+      "signal": "DOWN",
+      "p_up": 0.809325,
+      "entry": 64402.9,
+      "settle": 64471.6,
+      "won": false
+    },
+    {
+      "idx": 68657,
+      "time": "2026-06-14T08:38:02+00:00",
+      "signal": "DOWN",
+      "p_up": 0.775134,
+      "entry": 64459.9,
+      "settle": 64450.0,
+      "won": true
+    },
+    {
+      "idx": 71076,
+      "time": "2026-06-14T09:18:21+00:00",
+      "signal": "UP",
+      "p_up": 0.227569,
+      "entry": 64311.7,
+      "settle": 64316.2,
+      "won": true
+    }
+  ],
+  "gap1800Signals": [
+    {
+      "idx": 29257,
+      "time": "2026-06-13T21:41:22+00:00",
+      "signal": "DOWN",
+      "p_up": 0.773952,
+      "entry": 64542.2,
+      "settle": 64443.6,
+      "won": true
+    },
+    {
+      "idx": 41836,
+      "time": "2026-06-14T01:11:01+00:00",
+      "signal": "DOWN",
+      "p_up": 0.77037,
+      "entry": 64630.2,
+      "settle": 64612.1,
+      "won": true
+    },
+    {
+      "idx": 55160,
+      "time": "2026-06-14T04:53:05+00:00",
+      "signal": "UP",
+      "p_up": 0.228325,
+      "entry": 64320.8,
+      "settle": 64340.0,
+      "won": true
+    },
+    {
+      "idx": 63228,
+      "time": "2026-06-14T07:07:33+00:00",
+      "signal": "UP",
+      "p_up": 0.229514,
+      "entry": 64213.2,
+      "settle": 64257.8,
+      "won": true
+    },
+    {
+      "idx": 66144,
+      "time": "2026-06-14T07:56:09+00:00",
+      "signal": "DOWN",
+      "p_up": 0.773252,
+      "entry": 64412.6,
+      "settle": 64364.7,
+      "won": true
+    },
+    {
+      "idx": 68657,
+      "time": "2026-06-14T08:38:02+00:00",
+      "signal": "DOWN",
+      "p_up": 0.775134,
+      "entry": 64459.9,
+      "settle": 64450.0,
+      "won": true
+    },
+    {
+      "idx": 71076,
+      "time": "2026-06-14T09:18:21+00:00",
+      "signal": "UP",
+      "p_up": 0.227569,
+      "entry": 64311.7,
+      "settle": 64316.2,
+      "won": true
+    }
+  ]
+}

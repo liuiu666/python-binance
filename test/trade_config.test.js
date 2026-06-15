@@ -58,7 +58,7 @@ test("trade config supports multiple taker variants with independent amounts", (
   });
   assert.equal(amountForStrategyConfig("BTC_10min_TAKER", result.tradeConfig), "10");
   assert.equal(amountForStrategyConfig("BTC_10min_TAKER_27", result.tradeConfig), "8");
-  assert.equal(result.tradeConfig.strategyVariants.length, 5);
+  assert.equal(result.tradeConfig.strategyVariants.length, 6);
   assert.ok(result.tradeConfig.strategyVariants.some(v => v.base === "SECOND"));
   assert.ok(result.tradeConfig.strategyVariants.some(v => v.base === "SECOND_CHIP"));
 });
@@ -73,7 +73,7 @@ test("trade config supports multiple safe variants with independent amounts", ()
   });
   assert.equal(amountForStrategyConfig("BTC_10min_SAFE", result.tradeConfig), "5");
   assert.equal(amountForStrategyConfig("BTC_10min_SAFE_22", result.tradeConfig), "3");
-  assert.equal(result.tradeConfig.strategyVariants.length, 5);
+  assert.equal(result.tradeConfig.strategyVariants.length, 6);
   assert.ok(result.tradeConfig.strategyVariants.some(v => v.base === "SECOND"));
   assert.ok(result.tradeConfig.strategyVariants.some(v => v.base === "SECOND_CHIP"));
 });
@@ -86,8 +86,8 @@ test("trade config separates observation from real execution", () => {
       { id: "BTC_10min_SECOND_1800_20", base: "SECOND", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: false }
     ]
   });
-  assert.deepEqual(observedStrategyIds(cfg), ["BTC_10min_SAFE", "BTC_10min_TAKER", "BTC_10min_SECOND_1800_20", "BTC_10min_SECOND_CHIP_3600_20"]);
-  assert.deepEqual(liveStrategyIds(cfg), ["BTC_10min_TAKER"]);
+  assert.deepEqual(observedStrategyIds(cfg), ["BTC_10min_SAFE", "BTC_10min_TAKER", "BTC_10min_SECOND_1800_20", "BTC_10min_SECOND_CHIP_1800_OPT", "BTC_10min_SECOND_CHIP_3600_FLOW"]);
+  assert.deepEqual(liveStrategyIds(cfg), ["BTC_10min_TAKER", "BTC_10min_SECOND_CHIP_3600_FLOW"]);
 });
 
 test("trade config preserves custom second normal variants", () => {
@@ -151,6 +151,70 @@ test("second chip default keeps the backtested fixed 20U bin", () => {
   const chip = cfg.strategyVariants.find(v => v.base === "SECOND_CHIP");
   assert.equal(chip.chipBinMode, "fixed");
   assert.equal(chip.chipBinSize, 20);
+});
+
+test("second chip optimized variant keeps width filter and matching backtest", () => {
+  const cfg = normalizeTradeConfig({
+    strategyVariants: [
+      { id: "BTC_10min_SAFE", base: "SAFE", amount: "5", tailPct: 0.2 },
+      { id: "BTC_10min_TAKER", base: "TAKER", amount: "10", tailPct: 0.2 },
+      {
+        id: "BTC_10min_SECOND_CHIP_1800_OPT",
+        base: "SECOND_CHIP",
+        amount: "5",
+        enabled: true,
+        tradeEnabled: false,
+        lookbackSec: 1800,
+        horizonSec: 600,
+        gapSec: 300,
+        chipTargetShare: 0.2,
+        chipBinMode: "fixed",
+        chipBinSize: 20,
+        chipBreakPct: 0.004,
+        chipDirectionFilter: "all",
+        chipFilter: "width_lte_3"
+      }
+    ]
+  });
+  const chip = cfg.strategyVariants.find(v => v.id === "BTC_10min_SECOND_CHIP_1800_OPT");
+  assert.equal(chip.chipFilter, "width_lte_3");
+  assert.equal(chip.backtest.wr, 73.91);
+  const pub = publicTradeConfig(cfg);
+  assert.equal(pub.strategyParams.BTC_10min_SECOND_CHIP_1800_OPT.chipFilter, "width_lte_3");
+});
+
+test("second chip flow variant keeps matching latest backtest and 10U amount", () => {
+  const cfg = normalizeTradeConfig({
+    strategyVariants: [
+      { id: "BTC_10min_SAFE", base: "SAFE", amount: "5", tailPct: 0.2 },
+      { id: "BTC_10min_TAKER", base: "TAKER", amount: "10", tailPct: 0.2 },
+      {
+        id: "BTC_10min_SECOND_CHIP_3600_FLOW",
+        base: "SECOND_CHIP",
+        label: "秒级筹码区 60m 资金流",
+        amount: "10",
+        enabled: true,
+        tradeEnabled: true,
+        lookbackSec: 3600,
+        horizonSec: 600,
+        gapSec: 1800,
+        chipTargetShare: 0.5,
+        chipBinMode: "fixed",
+        chipBinSize: 50,
+        chipBreakPct: 0.003,
+        chipDirectionFilter: "all",
+        chipFilter: "flow_reversal"
+      }
+    ]
+  });
+  const chip = cfg.strategyVariants.find(v => v.id === "BTC_10min_SECOND_CHIP_3600_FLOW");
+  assert.equal(chip.amount, "10");
+  assert.equal(chip.tradeEnabled, true);
+  assert.equal(chip.backtest.wr, 84.21);
+  assert.equal(chip.backtest.tradesPerDay, 9.41);
+  const pub = publicTradeConfig(cfg);
+  assert.equal(pub.strategyAmounts.BTC_10min_SECOND_CHIP_3600_FLOW, "10");
+  assert.equal(pub.strategyParams.BTC_10min_SECOND_CHIP_3600_FLOW.chipFilter, "flow_reversal");
 });
 
 test("auto trade patch records blocked and forced transitions", () => {

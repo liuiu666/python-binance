@@ -167,6 +167,15 @@ function SecondChipControls({ variant, onChange }) {
           <option value="all">上下都做</option>
         </select>
       </label>
+      <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
+        筹码过滤
+        <select value={variant.chipFilter || "none"} onChange={event => onChange({ chipFilter: event.target.value })} style={selectStyle}>
+          <option value="none">不过滤</option>
+          <option value="width_lte_3">宽度≤3档</option>
+          <option value="width_lte_5">宽度≤5档</option>
+          <option value="flow_reversal">资金流反转</option>
+        </select>
+      </label>
     </div>
   );
 }
@@ -210,22 +219,23 @@ function VariantCard({ variant, canDelete, onChange, onDelete }) {
 function defaultsForBase(base, defaultAmount, index) {
   if (base === "SECOND_CHIP") {
     return {
-      id: variantId(base, 0.2, index, 3600),
+      id: index === 0 ? "BTC_10min_SECOND_CHIP_1800_OPT" : variantId(base, 0.2, index, 1800),
       base,
-      label: variantLabel(base, 0.2, 3600),
+      label: index === 0 ? "秒级筹码区 30m 优化" : variantLabel(base, 0.2, 1800),
       amount: defaultAmount,
       enabled: true,
       tradeEnabled: false,
       duration: "10",
-      lookbackSec: 3600,
+      lookbackSec: 1800,
       horizonSec: 600,
-      gapSec: 600,
+      gapSec: 300,
       chipTargetShare: 0.2,
       chipBinMode: "fixed",
       chipBinSize: 20,
       chipBinPct: 0.0003,
-      chipBreakPct: 0.0023,
-      chipDirectionFilter: "breakout_up_only"
+      chipBreakPct: 0.004,
+      chipDirectionFilter: "all",
+      chipFilter: "width_lte_3"
     };
   }
   const preferred = base === "SAFE" ? [0.22, 0.23, 0.25, 0.27] : base === "TAKER" ? [0.27, 0.23, 0.22, 0.25] : [0.27, 0.2, 0.22, 0.25];

@@ -51,7 +51,14 @@ function chipInfo(signal) {
     poc: signal?.chip_poc ?? "--",
     share: signal?.chip_zone_share !== undefined ? `${(Number(signal.chip_zone_share) * 100).toFixed(1)}%` : "--",
     position,
-    threshold: Number.isFinite(breakPct) ? `${(breakPct * 100).toFixed(2)}%` : "--"
+    threshold: Number.isFinite(breakPct) ? `${(breakPct * 100).toFixed(2)}%` : "--",
+    filter: ({
+      width_lte_3: "宽度≤3档",
+      width_lte_5: "宽度≤5档",
+      flow_reversal: "资金流反转",
+      none: "不过滤"
+    })[String(signal?.chip_filter || "none")] || String(signal?.chip_filter || "--"),
+    width: signal?.chip_zone_width_bins ?? "--"
   };
 }
 
@@ -147,6 +154,8 @@ export default function StrategyCard({ title, signal, amount, variant }) {
               <span className="badge" style={{ ...baseBadgeStyle, background: "var(--green-soft)", color: "var(--green)" }}>下破线 {chip.lowerTrigger}</span>
               <span className="badge" style={{ ...baseBadgeStyle, background: "var(--red-soft)", color: "var(--red)" }}>上破线 {chip.upperTrigger}</span>
               <span className="badge" style={baseBadgeStyle}>筹码占比 {chip.share}</span>
+              <span className="badge" style={baseBadgeStyle}>区宽 {chip.width}档</span>
+              <span className="badge" style={baseBadgeStyle}>筹码过滤 {chip.filter}</span>
               <span className="badge" style={baseBadgeStyle}>位置 {chip.position}</span>
               <span className="badge" style={baseBadgeStyle}>突破阈值 {chip.threshold}</span>
             </>

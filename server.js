@@ -2007,6 +2007,7 @@ function applyProdStrategyParams(baseConfig, config) {
         second_chip_bin_pct: variant.chipBinPct,
         second_chip_break_pct: variant.chipBreakPct,
         second_chip_direction_filter: variant.chipDirectionFilter || "breakout_up_only",
+        second_chip_filter: variant.chipFilter || "none",
         model_label: `SECOND_CHIP_${variant.lookbackSec || 3600}_${Math.round(Number(variant.chipTargetShare || 0.2) * 100)}_${Math.round(Number(variant.chipBreakPct || 0.0023) * 10000)}`
       };
       continue;
@@ -2029,6 +2030,28 @@ function saveProdStrategyParams(config) {
   fs.writeFileSync(PROD_CONFIG_FILE, JSON.stringify(next, null, 2));
 }
 
+function strategyRestartFingerprint(config) {
+  return JSON.stringify(strategyVariants(config).map(v => ({
+    id: v.id,
+    base: v.base,
+    amount: v.amount,
+    tailPct: v.tailPct,
+    enabled: v.enabled,
+    tradeEnabled: v.tradeEnabled,
+    lookbackSec: v.lookbackSec,
+    horizonSec: v.horizonSec,
+    gapSec: v.gapSec,
+    secondFilter: v.secondFilter,
+    chipTargetShare: v.chipTargetShare,
+    chipBinMode: v.chipBinMode,
+    chipBinSize: v.chipBinSize,
+    chipBinPct: v.chipBinPct,
+    chipBreakPct: v.chipBreakPct,
+    chipDirectionFilter: v.chipDirectionFilter,
+    chipFilter: v.chipFilter
+  })));
+}
+
 app.get("/api/config", (req, res) => {
   const prodConfig = readProdConfig();
   const merged = normalizeTradeConfig({
@@ -2042,13 +2065,7 @@ app.get("/api/config", (req, res) => {
 });
 
 app.post("/api/config", requireApiToken, express.json(), (req, res) => {
-  const beforeVariants = JSON.stringify(strategyVariants(tradeConfig).map(v => ({
-    id: v.id,
-    base: v.base,
-    amount: v.amount,
-    tailPct: v.tailPct,
-    enabled: v.enabled
-  })));
+  const beforeVariants = strategyRestartFingerprint(tradeConfig);
   const result = applyTradeConfigPatch(tradeConfig, req.body, { autoTradeSafetyGate });
   tradeConfig = result.tradeConfig;
   for (const event of result.auditEvents) {
@@ -2056,13 +2073,7 @@ app.post("/api/config", requireApiToken, express.json(), (req, res) => {
   }
   saveTradeConfig();
   saveProdStrategyParams(tradeConfig);
-  const afterVariants = JSON.stringify(strategyVariants(tradeConfig).map(v => ({
-    id: v.id,
-    base: v.base,
-    amount: v.amount,
-    tailPct: v.tailPct,
-    enabled: v.enabled
-  })));
+  const afterVariants = strategyRestartFingerprint(tradeConfig);
   if (afterVariants !== beforeVariants) {
     appendJsonl(TRADE_AUDIT_FILE, {
       serverTime: Date.now(),

@@ -1,0 +1,221 @@
+{
+  "sampleHours": 20.37,
+  "combined": {
+    "trades": 17,
+    "winRate": 88.24,
+    "wins": 15,
+    "losses": 2,
+    "tradesPerDay": 20.03
+  },
+  "normal": {
+    "trades": 7,
+    "winRate": 100.0,
+    "wins": 7,
+    "losses": 0,
+    "tradesPerDay": 8.25
+  },
+  "chip": {
+    "trades": 10,
+    "winRate": 80.0,
+    "wins": 8,
+    "losses": 2,
+    "tradesPerDay": 11.78,
+    "params": {
+      "lookbackSec": 3600,
+      "binSize": 50,
+      "targetShare": 0.07,
+      "breakDistanceUsdt": 150,
+      "gapSec": 900,
+      "mode": "revert"
+    }
+  },
+  "nearOverlapWithin10m": [
+    {
+      "normalTime": "2026-06-13T21:41:22+00:00",
+      "chipTime": "2026-06-13T21:41:21+00:00",
+      "deltaSec": 1.0,
+      "sameSignal": true,
+      "normalWon": true,
+      "chipWon": true
+    },
+    {
+      "normalTime": "2026-06-14T01:11:01+00:00",
+      "chipTime": "2026-06-14T01:11:33+00:00",
+      "deltaSec": 32.0,
+      "sameSignal": true,
+      "normalWon": true,
+      "chipWon": true
+    },
+    {
+      "normalTime": "2026-06-14T04:53:05+00:00",
+      "chipTime": "2026-06-14T04:47:03+00:00",
+      "deltaSec": 362.0,
+      "sameSignal": true,
+      "normalWon": true,
+      "chipWon": true
+    },
+    {
+      "normalTime": "2026-06-14T09:18:21+00:00",
+      "chipTime": "2026-06-14T09:19:08+00:00",
+      "deltaSec": 47.0,
+      "sameSignal": true,
+      "normalWon": true,
+      "chipWon": true
+    }
+  ],
+  "orders": [
+    {
+      "strategy": "CHIP_POC_7_BREAK150_GAP900",
+      "time": "2026-06-13T16:03:50+00:00",
+      "ts": "2026-06-13T16:03:50+00:00",
+      "signal": "UP",
+      "entry": 64099.9,
+      "settle": 64051.8,
+      "won": false
+    },
+    {
+      "strategy": "CHIP_POC_7_BREAK150_GAP900",
+      "time": "2026-06-13T18:37:24+00:00",
+      "ts": "2026-06-13T18:37:24+00:00",
+      "signal": "DOWN",
+      "entry": 64210.2,
+      "settle": 64201.4,
+      "won": true
+    },
+    {
+      "strategy": "CHIP_POC_7_BREAK150_GAP900",
+      "time": "2026-06-13T21:41:21+00:00",
+      "ts": "2026-06-13T21:41:21+00:00",
+      "signal": "DOWN",
+      "entry": 64454.5,
+      "settle": 64443.6,
+      "won": true
+    },
+    {
+      "strategy": "SECOND_NORMAL_3600_23_GAP1800",
+      "time": "2026-06-13T21:41:22+00:00",
+      "ts": "2026-06-13T21:41:22+00:00",
+      "signal": "DOWN",
+      "entry": 64542.2,
+      "settle": 64443.6,
+      "won": true
+    },
+    {
+      "strategy": "CHIP_POC_7_BREAK150_GAP900",
+      "time": "2026-06-13T22:01:50+00:00",
+      "ts": "2026-06-13T22:01:50+00:00",
+      "signal": "DOWN",
+      "entry": 64403.7,
+      "settle": 64363.1,
+      "won": true
+    },
+    {
+      "strategy": "SECOND_NORMAL_3600_23_GAP1800",
+      "time": "2026-06-14T01:11:01+00:00",
+      "ts": "2026-06-14T01:11:01+00:00",
+      "signal": "DOWN",
+      "entry": 64630.2,
+      "settle": 64612.1,
+      "won": true
+    },
+    {
+      "strategy": "CHIP_POC_7_BREAK150_GAP900",
+      "time": "2026-06-14T01:11:33+00:00",
+      "ts": "2026-06-14T01:11:33+00:00",
+      "signal": "DOWN",
+      "entry": 64654.7,
+      "settle": 64634.9,
+      "won": true
+    },
+    {
+      "strategy": "CHIP_POC_7_BREAK150_GAP900",
+      "time": "2026-06-14T04:47:03+00:00",
+      "ts": "2026-06-14T04:47:03+00:00",
+      "signal": "UP",
+      "entry": 64296.8,
+      "settle": 64336.2,
+      "won": true
+    },
+    {
+      "strategy": "SECOND_NORMAL_3600_23_GAP1800",
+      "time": "2026-06-14T04:53:05+00:00",
+      "ts": "2026-06-14T04:53:05+00:00",
+      "signal": "UP",
+      "entry": 64320.8,
+      "settle": 64340.0,
+      "won": true
+    },
+    {
+      "strategy": "CHIP_POC_7_BREAK150_GAP900",
+      "time": "2026-06-14T06:11:46+00:00",
+      "ts": "2026-06-14T06:11:46+00:00",
+      "signal": "DOWN",
+      "entry": 64450.1,
+      "settle": 64397.8,
+      "won": true
+    },
+    {
+      "strategy": "CHIP_POC_7_BREAK150_GAP900",
+      "time": "2026-06-14T06:47:06+00:00",
+      "ts": "2026-06-14T06:47:06+00:00",
+      "signal": "UP",
+      "entry": 64233.9,
+      "settle": 64253.9,
+      "won": true
+    },
+    {
+      "strategy": "SECOND_NORMAL_3600_23_GAP1800",
+      "time": "2026-06-14T07:07:33+00:00",
+      "ts": "2026-06-14T07:07:33+00:00",
+      "signal": "UP",
+      "entry": 64213.2,
+      "settle": 64257.8,
+      "won": true
+    },
+    {
+      "strategy": "SECOND_NORMAL_3600_23_GAP1800",
+      "time": "2026-06-14T07:56:09+00:00",
+      "ts": "2026-06-14T07:56:09+00:00",
+      "signal": "DOWN",
+      "entry": 64412.6,
+      "settle": 64364.7,
+      "won": true
+    },
+    {
+      "strategy": "SECOND_NORMAL_3600_23_GAP1800",
+      "time": "2026-06-14T08:38:02+00:00",
+      "ts": "2026-06-14T08:38:02+00:00",
+      "signal": "DOWN",
+      "entry": 64459.9,
+      "settle": 64450.0,
+      "won": true
+    },
+    {
+      "strategy": "SECOND_NORMAL_3600_23_GAP1800",
+      "time": "2026-06-14T09:18:21+00:00",
+      "ts": "2026-06-14T09:18:21+00:00",
+      "signal": "UP",
+      "entry": 64311.7,
+      "settle": 64316.2,
+      "won": true
+    },
+    {
+      "strategy": "CHIP_POC_7_BREAK150_GAP900",
+      "time": "2026-06-14T09:19:08+00:00",
+      "ts": "2026-06-14T09:19:08+00:00",
+      "signal": "UP",
+      "entry": 64294.3,
+      "settle": 64327.7,
+      "won": true
+    },
+    {
+      "strategy": "CHIP_POC_7_BREAK150_GAP900",
+      "time": "2026-06-14T09:41:41+00:00",
+      "ts": "2026-06-14T09:41:41+00:00",
+      "signal": "DOWN",
+      "entry": 64552.3,
+      "settle": 64582.0,
+      "won": false
+    }
+  ]
+}

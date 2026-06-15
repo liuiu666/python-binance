@@ -16,8 +16,9 @@ export const DEFAULT_CONFIG = {
   strategyVariants: [
     { id: "BTC_10min_SAFE", base: "SAFE", label: "推荐稳健 20/80", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: true },
     { id: "BTC_10min_TAKER", base: "TAKER", label: "资金流过滤 20/80", amount: "10", tailPct: 0.2, enabled: true, tradeEnabled: true },
-    { id: "BTC_10min_SECOND_1800_20", base: "SECOND", label: "秒级正态 1800s 20/80", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: false, lookbackSec: 1800, horizonSec: 600, gapSec: 600, secondFilter: "none", duration: "10" },
-    { id: "BTC_10min_SECOND_CHIP_3600_20", base: "SECOND_CHIP", label: "秒级筹码区 60m 20% 0.23%", amount: "5", enabled: true, tradeEnabled: false, lookbackSec: 3600, horizonSec: 600, gapSec: 600, chipTargetShare: 0.2, chipBinMode: "fixed", chipBinSize: 20, chipBinPct: 0.0003, chipBreakPct: 0.0023, chipDirectionFilter: "breakout_up_only", duration: "10" }
+    { id: "BTC_10min_SECOND_3600_20", base: "SECOND", label: "秒级正态 3600s 20/80", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: false, lookbackSec: 3600, horizonSec: 600, gapSec: 1800, secondFilter: "none", duration: "10" },
+    { id: "BTC_10min_SECOND_CHIP_1800_OPT", base: "SECOND_CHIP", label: "秒级筹码区 30m 优化", amount: "5", enabled: true, tradeEnabled: false, lookbackSec: 1800, horizonSec: 600, gapSec: 300, chipTargetShare: 0.2, chipBinMode: "fixed", chipBinSize: 20, chipBinPct: 0.0003, chipBreakPct: 0.004, chipDirectionFilter: "all", chipFilter: "width_lte_3", duration: "10" },
+    { id: "BTC_10min_SECOND_CHIP_3600_FLOW", base: "SECOND_CHIP", label: "秒级筹码区 60m 资金流", amount: "10", enabled: true, tradeEnabled: true, lookbackSec: 3600, horizonSec: 600, gapSec: 1800, chipTargetShare: 0.5, chipBinMode: "fixed", chipBinSize: 50, chipBinPct: 0.0003, chipBreakPct: 0.003, chipDirectionFilter: "all", chipFilter: "flow_reversal", duration: "10" }
   ],
   duration: "10",
   autoTrade_10m: false,

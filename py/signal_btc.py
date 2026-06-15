@@ -1343,6 +1343,8 @@ class SecondChipStrategy(SecondNormalStrategy):
         self.bin_size = float(cfg.get("second_chip_bin_size", 20))
         self.break_pct = float(cfg.get("second_chip_break_pct", 0.0023))
         self.direction_filter = str(cfg.get("second_chip_direction_filter", "breakout_up_only")).lower()
+        self.chip_filter = str(cfg.get("second_chip_filter", "none")).lower()
+        self.signal_hold_sec = int(cfg.get("second_chip_signal_hold_sec", cfg.get("second_signal_hold_sec", 60)))
         self.interval_min = max(1, int(round(self.horizon_sec / 60)))
 
     def _dynamic_bin_size(self, price):
@@ -1412,15 +1414,48 @@ class SecondChipStrategy(SecondNormalStrategy):
             return breakout == "DOWN"
         return True
 
+    def _chip_filter_allows(self, signal, zone, flow300):
+        if self.chip_filter in ("", "none", "off", "false"):
+            return True, "disabled"
+        if self.chip_filter == "width_lte_3":
+            return int(zone.get("width_bins", 999999)) <= 3, "width_lte_3"
+        if self.chip_filter == "width_lte_5":
+            return int(zone.get("width_bins", 999999)) <= 5, "width_lte_5"
+        if self.chip_filter == "flow_reversal":
+            if flow300 is None or not np.isfinite(flow300):
+                return False, "flow_missing"
+            ok = (signal == "UP" and flow300 < 0) or (signal == "DOWN" and flow300 > 0)
+            return ok, "flow_reversal"
+        return False, f"unknown_chip_filter_{self.chip_filter}"
+
+    def _position(self, price, state, upper, lower):
+        if state == "above":
+            return price / max(upper, 1e-12) - 1.0, "above_upper_trigger"
+        if state == "below":
+            return lower / max(price, 1e-12) - 1.0, "below_lower_trigger"
+        upper_gap = upper / max(price, 1e-12) - 1.0
+        lower_gap = price / max(lower, 1e-12) - 1.0
+        return min(max(0.0, upper_gap), max(0.0, lower_gap)), "inside_nearest_trigger_gap"
+
+    def _transition_signal(self, state, prev_state, price, zone):
+        if state == "above" and prev_state != "above":
+            return "DOWN", "UP", price / max(zone["high"], 1e-12) - 1.0
+        if state == "below" and prev_state != "below":
+            return "UP", "DOWN", zone["low"] / max(price, 1e-12) - 1.0
+        return None, None, 0.0
+
     def predict(self, df5=None):
         import numpy as np
 
         bars = self._load_seconds()
         if bars is None or len(bars) < self.lookback_sec + 2:
             return None
-        recent = bars.tail(self.lookback_sec + 1).copy()
+        scan_sec = max(1, min(int(self.signal_hold_sec), max(1, len(bars) - self.lookback_sec - 1)))
+        recent = bars.tail(self.lookback_sec + scan_sec + 1).copy()
         close = np.asarray(recent["close"].astype(float).values, dtype=float)
         volume = np.asarray(recent["volume"].astype(float).values, dtype=float)
+        buy_qty = np.asarray(recent["buy_qty"].astype(float).values, dtype=float)
+        sell_qty = np.asarray(recent["sell_qty"].astype(float).values, dtype=float)
         price = float(close[-1])
         bin_size = self._dynamic_bin_size(price)
         current = self._state_at(close[-self.lookback_sec:], volume[-self.lookback_sec:], price, bin_size)
@@ -1432,29 +1467,66 @@ class SecondChipStrategy(SecondNormalStrategy):
         signal = None
         breakout = None
         distance_pct = 0.0
-        position_pct = 0.0
-        position_label = "inside"
-        if state == "above":
-            position_pct = price / max(upper, 1e-12) - 1.0
-            position_label = "above_upper_trigger"
-        elif state == "below":
-            position_pct = lower / max(price, 1e-12) - 1.0
-            position_label = "below_lower_trigger"
-        else:
-            upper_gap = upper / max(price, 1e-12) - 1.0
-            lower_gap = price / max(lower, 1e-12) - 1.0
-            position_pct = min(max(0.0, upper_gap), max(0.0, lower_gap))
-            position_label = "inside_nearest_trigger_gap"
-        if state == "above" and prev_state != "above":
-            breakout = "UP"
-            signal = "DOWN"
-            distance_pct = price / max(zone["high"], 1e-12) - 1.0
-        elif state == "below" and prev_state != "below":
-            breakout = "DOWN"
-            signal = "UP"
-            distance_pct = zone["low"] / max(price, 1e-12) - 1.0
-
         signal_time = bars["time"].iloc[-1]
+        signal_zone = zone
+        signal_state = state
+        signal_prev_state = prev_state
+        signal_price = price
+        signal_upper = upper
+        signal_lower = lower
+        transition_index = None
+        signal_flow300 = None
+        for i in range(len(close) - 1, self.lookback_sec - 1, -1):
+            scan_price = float(close[i])
+            scan_bin_size = self._dynamic_bin_size(scan_price)
+            scan_current = self._state_at(close[i - self.lookback_sec + 1:i + 1], volume[i - self.lookback_sec + 1:i + 1], scan_price, scan_bin_size)
+            scan_prev = self._state_at(close[i - self.lookback_sec:i], volume[i - self.lookback_sec:i], float(close[i - 1]), scan_bin_size)
+            if not scan_current:
+                continue
+            scan_zone, scan_state, scan_upper, scan_lower = scan_current
+            scan_prev_state = scan_prev[1] if scan_prev else "unknown"
+            scan_signal, scan_breakout, scan_distance = self._transition_signal(scan_state, scan_prev_state, scan_price, scan_zone)
+            flow_start = max(0, i - 299)
+            scan_flow300 = float(np.sum(buy_qty[flow_start:i + 1] - sell_qty[flow_start:i + 1]))
+            if scan_signal and self._direction_allowed(scan_breakout):
+                signal = scan_signal
+                breakout = scan_breakout
+                distance_pct = scan_distance
+                signal_flow300 = scan_flow300
+                signal_time = recent["time"].iloc[i]
+                signal_zone = scan_zone
+                signal_state = scan_state
+                signal_prev_state = scan_prev_state
+                signal_price = scan_price
+                signal_upper = scan_upper
+                signal_lower = scan_lower
+                transition_index = i
+                break
+            if scan_signal and not self._direction_allowed(scan_breakout):
+                signal_time = recent["time"].iloc[i]
+                signal_zone = scan_zone
+                signal_state = scan_state
+                signal_prev_state = scan_prev_state
+                signal_price = scan_price
+                signal_upper = scan_upper
+                signal_lower = scan_lower
+                transition_index = i
+                breakout = scan_breakout
+                distance_pct = scan_distance
+                signal_flow300 = scan_flow300
+                break
+
+        has_transition = transition_index is not None
+        display_zone = signal_zone if has_transition else zone
+        display_state = signal_state if has_transition else state
+        display_prev_state = signal_prev_state if has_transition else prev_state
+        display_lower = signal_lower if has_transition else lower
+        display_upper = signal_upper if has_transition else upper
+        display_price = signal_price if has_transition else price
+        if has_transition:
+            position_pct, position_label = self._position(display_price, display_state, display_upper, display_lower)
+        else:
+            position_pct, position_label = self._position(price, state, upper, lower)
         distance_conf = max(0.0, min(95.0, (distance_pct / max(self.break_pct, 1e-12)) * 50.0))
         base = {
             "strategy_id": self.id,
@@ -1477,16 +1549,26 @@ class SecondChipStrategy(SecondNormalStrategy):
             "chip_bin_size": round(float(bin_size), 4),
             "chip_break_pct": round(self.break_pct, 8),
             "chip_direction_filter": self.direction_filter,
-            "chip_state": state,
-            "chip_prev_state": prev_state,
-            "chip_poc": round(float(zone["poc"]), 2),
-            "chip_zone_low": round(float(zone["low"]), 2),
-            "chip_zone_high": round(float(zone["high"]), 2),
-            "chip_lower_trigger": round(float(lower), 2),
-            "chip_upper_trigger": round(float(upper), 2),
-            "chip_zone_share": round(float(zone["share"]), 4),
-            "chip_zone_volume_share": round(float(zone["volume_share"]), 4),
-            "chip_zone_width_bins": int(zone["width_bins"]),
+            "chip_filter": self.chip_filter,
+            "chip_flow300": round(float(signal_flow300), 6) if signal_flow300 is not None and np.isfinite(signal_flow300) else None,
+            "chip_signal_hold_sec": self.signal_hold_sec,
+            "chip_state": display_state,
+            "chip_prev_state": display_prev_state,
+            "chip_current_state": state,
+            "chip_current_prev_state": prev_state,
+            "chip_poc": round(float(display_zone["poc"]), 2),
+            "chip_zone_low": round(float(display_zone["low"]), 2),
+            "chip_zone_high": round(float(display_zone["high"]), 2),
+            "chip_lower_trigger": round(float(display_lower), 2),
+            "chip_upper_trigger": round(float(display_upper), 2),
+            "chip_zone_share": round(float(display_zone["share"]), 4),
+            "chip_zone_volume_share": round(float(display_zone["volume_share"]), 4),
+            "chip_zone_width_bins": int(display_zone["width_bins"]),
+            "chip_current_poc": round(float(zone["poc"]), 2),
+            "chip_current_zone_low": round(float(zone["low"]), 2),
+            "chip_current_zone_high": round(float(zone["high"]), 2),
+            "chip_current_lower_trigger": round(float(lower), 2),
+            "chip_current_upper_trigger": round(float(upper), 2),
             "chip_distance_pct": round(float(distance_pct), 6),
             "chip_position_pct": round(float(position_pct), 6),
             "chip_position_label": position_label,
@@ -1494,11 +1576,26 @@ class SecondChipStrategy(SecondNormalStrategy):
             "model_type": "second_chip",
             "bypass_entry_timing": True,
         }
+        if transition_index is not None:
+            base.update({
+                "chip_signal_price": round(float(signal_price), 2),
+                "chip_signal_state": signal_state,
+                "chip_signal_prev_state": signal_prev_state,
+                "chip_signal_poc": round(float(signal_zone["poc"]), 2),
+                "chip_signal_zone_low": round(float(signal_zone["low"]), 2),
+                "chip_signal_zone_high": round(float(signal_zone["high"]), 2),
+                "chip_signal_lower_trigger": round(float(signal_lower), 2),
+                "chip_signal_upper_trigger": round(float(signal_upper), 2),
+                "chip_signal_age_sec": int(max(0, len(close) - 1 - transition_index)),
+            })
         if not signal:
             reason = "inside_chip_zone" if state == "inside" else "already_outside_chip_zone"
+            if transition_index is not None:
+                return {**base, "signal": None, "reason": "direction_filter", "blocked_signal": "DOWN" if breakout == "UP" else "UP", "chip_breakout": breakout}
             return {**base, "signal": None, "reason": reason}
-        if not self._direction_allowed(breakout):
-            return {**base, "signal": None, "reason": "direction_filter", "blocked_signal": signal, "chip_breakout": breakout}
+        filter_ok, filter_reason = self._chip_filter_allows(signal, signal_zone, signal_flow300)
+        if not filter_ok:
+            return {**base, "signal": None, "reason": "chip_filter", "blocked_signal": signal, "chip_breakout": breakout, "chip_filter_reason": filter_reason}
         return {**base, "signal": signal, "reason": "second_chip_reversal", "chip_breakout": breakout}
 
 

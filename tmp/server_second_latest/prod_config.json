@@ -1,6 +1,6 @@
 {
   "BTC_10min_SAFE": {
-    "enabled": true,
+    "enabled": false,
     "symbol": "btcusdt",
     "horizon": 10,
     "interval_min": 10,
@@ -62,17 +62,35 @@
     "skip_hours_utc": [],
     "model_label": "TAKER_27_73"
   },
-  "BTC_10min_SECOND_1800_20": {
+  "BTC_10min_SECOND_3600_20": {
     "enabled": true,
     "model_type": "second_normal",
     "symbol": "btcusdt",
     "interval_min": 10,
     "horizon": 10,
-    "second_lookback_sec": 1800,
+    "second_lookback_sec": 3600,
     "second_horizon_sec": 600,
-    "second_min_gap_sec": 600,
+    "second_min_gap_sec": 1800,
     "second_tail_pct": 0.2,
     "second_filter": "none",
-    "model_label": "SECOND_1800_20_80"
+    "model_label": "SECOND_3600_20_80"
+  },
+  "BTC_10min_SECOND_CHIP_1800_OPT": {
+    "enabled": true,
+    "model_type": "second_chip",
+    "symbol": "btcusdt",
+    "interval_min": 10,
+    "horizon": 10,
+    "second_chip_lookback_sec": 1800,
+    "second_chip_horizon_sec": 600,
+    "second_chip_min_gap_sec": 300,
+    "second_chip_target_share": 0.2,
+    "second_chip_bin_mode": "fixed",
+    "second_chip_bin_size": 20,
+    "second_chip_bin_pct": 0.0003,
+    "second_chip_break_pct": 0.004,
+    "second_chip_direction_filter": "all",
+    "second_chip_filter": "width_lte_3",
+    "model_label": "SECOND_CHIP_1800_20_40"
   }
 }

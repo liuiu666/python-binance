@@ -1,0 +1,233 @@
+{
+  "sampleHours": 20.37,
+  "independent": {
+    "trades": 17,
+    "winRate": 88.24,
+    "wins": 15,
+    "losses": 2,
+    "tradesPerDay": 20.03
+  },
+  "mergeSameDirectionWithin10m": {
+    "trades": 13,
+    "wins": 11,
+    "losses": 2,
+    "winRate": 84.62,
+    "maxLoss": 1,
+    "tradesPerDay": 15.32
+  },
+  "consensusSameDirectionWithin10m": {
+    "trades": 4,
+    "wins": 4,
+    "losses": 0,
+    "winRate": 100.0,
+    "maxLoss": 0,
+    "tradesPerDay": 4.71
+  },
+  "mergedOrders": [
+    {
+      "time": "2026-06-13T16:03:50+00:00",
+      "signal": "UP",
+      "strategies": [
+        "CHIP_POC_7_BREAK150_GAP900"
+      ],
+      "won": false,
+      "allWon": [
+        false
+      ]
+    },
+    {
+      "time": "2026-06-13T18:37:24+00:00",
+      "signal": "DOWN",
+      "strategies": [
+        "CHIP_POC_7_BREAK150_GAP900"
+      ],
+      "won": true,
+      "allWon": [
+        true
+      ]
+    },
+    {
+      "time": "2026-06-13T21:41:21+00:00",
+      "signal": "DOWN",
+      "strategies": [
+        "CHIP_POC_7_BREAK150_GAP900",
+        "SECOND_NORMAL_3600_23_GAP1800"
+      ],
+      "won": true,
+      "allWon": [
+        true,
+        true
+      ]
+    },
+    {
+      "time": "2026-06-13T22:01:50+00:00",
+      "signal": "DOWN",
+      "strategies": [
+        "CHIP_POC_7_BREAK150_GAP900"
+      ],
+      "won": true,
+      "allWon": [
+        true
+      ]
+    },
+    {
+      "time": "2026-06-14T01:11:01+00:00",
+      "signal": "DOWN",
+      "strategies": [
+        "SECOND_NORMAL_3600_23_GAP1800",
+        "CHIP_POC_7_BREAK150_GAP900"
+      ],
+      "won": true,
+      "allWon": [
+        true,
+        true
+      ]
+    },
+    {
+      "time": "2026-06-14T04:47:03+00:00",
+      "signal": "UP",
+      "strategies": [
+        "CHIP_POC_7_BREAK150_GAP900",
+        "SECOND_NORMAL_3600_23_GAP1800"
+      ],
+      "won": true,
+      "allWon": [
+        true,
+        true
+      ]
+    },
+    {
+      "time": "2026-06-14T06:11:46+00:00",
+      "signal": "DOWN",
+      "strategies": [
+        "CHIP_POC_7_BREAK150_GAP900"
+      ],
+      "won": true,
+      "allWon": [
+        true
+      ]
+    },
+    {
+      "time": "2026-06-14T06:47:06+00:00",
+      "signal": "UP",
+      "strategies": [
+        "CHIP_POC_7_BREAK150_GAP900"
+      ],
+      "won": true,
+      "allWon": [
+        true
+      ]
+    },
+    {
+      "time": "2026-06-14T07:07:33+00:00",
+      "signal": "UP",
+      "strategies": [
+        "SECOND_NORMAL_3600_23_GAP1800"
+      ],
+      "won": true,
+      "allWon": [
+        true
+      ]
+    },
+    {
+      "time": "2026-06-14T07:56:09+00:00",
+      "signal": "DOWN",
+      "strategies": [
+        "SECOND_NORMAL_3600_23_GAP1800"
+      ],
+      "won": true,
+      "allWon": [
+        true
+      ]
+    },
+    {
+      "time": "2026-06-14T08:38:02+00:00",
+      "signal": "DOWN",
+      "strategies": [
+        "SECOND_NORMAL_3600_23_GAP1800"
+      ],
+      "won": true,
+      "allWon": [
+        true
+      ]
+    },
+    {
+      "time": "2026-06-14T09:18:21+00:00",
+      "signal": "UP",
+      "strategies": [
+        "SECOND_NORMAL_3600_23_GAP1800",
+        "CHIP_POC_7_BREAK150_GAP900"
+      ],
+      "won": true,
+      "allWon": [
+        true,
+        true
+      ]
+    },
+    {
+      "time": "2026-06-14T09:41:41+00:00",
+      "signal": "DOWN",
+      "strategies": [
+        "CHIP_POC_7_BREAK150_GAP900"
+      ],
+      "won": false,
+      "allWon": [
+        false
+      ]
+    }
+  ],
+  "consensusOrders": [
+    {
+      "time": "2026-06-13T21:41:21+00:00",
+      "signal": "DOWN",
+      "strategies": [
+        "CHIP_POC_7_BREAK150_GAP900",
+        "SECOND_NORMAL_3600_23_GAP1800"
+      ],
+      "won": true,
+      "allWon": [
+        true,
+        true
+      ]
+    },
+    {
+      "time": "2026-06-14T01:11:01+00:00",
+      "signal": "DOWN",
+      "strategies": [
+        "SECOND_NORMAL_3600_23_GAP1800",
+        "CHIP_POC_7_BREAK150_GAP900"
+      ],
+      "won": true,
+      "allWon": [
+        true,
+        true
+      ]
+    },
+    {
+      "time": "2026-06-14T04:47:03+00:00",
+      "signal": "UP",
+      "strategies": [
+        "CHIP_POC_7_BREAK150_GAP900",
+        "SECOND_NORMAL_3600_23_GAP1800"
+      ],
+      "won": true,
+      "allWon": [
+        true,
+        true
+      ]
+    },
+    {
+      "time": "2026-06-14T09:18:21+00:00",
+      "signal": "UP",
+      "strategies": [
+        "SECOND_NORMAL_3600_23_GAP1800",
+        "CHIP_POC_7_BREAK150_GAP900"
+      ],
+      "won": true,
+      "allWon": [
+        true,
+        true
+      ]
+    }
+  ]
+}
