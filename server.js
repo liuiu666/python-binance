@@ -1209,6 +1209,7 @@ function tabletDiagnostics() {
     "signal_skipped",
     "order_attempt",
     "order_abort",
+    "order_unverified",
     "order_done",
     "runtime_loop_error"
   ]);

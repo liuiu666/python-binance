@@ -7,6 +7,7 @@ function getExecutionLabel(row) {
   const isShadow = source.startsWith("shadow:") || source === "shadow" || row.event === "shadow_trade";
   const isManual = !row.strategyId || row.strategyId === "manual";
 
+  if (row.status === "unverified") return { text: "未成交", color: "var(--yellow)", bg: "var(--yellow-soft)" };
   if (isShadow) return { text: "影子模拟", color: "var(--muted)", bg: "rgba(255,255,255,0.04)" };
   if (isManual) {
     if (isTablet) return { text: "平板手动", color: "var(--violet)", bg: "var(--violet-soft)" };

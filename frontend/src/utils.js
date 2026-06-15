@@ -72,10 +72,12 @@ export function statusClass(status) {
   if (status === "won") return "won";
   if (status === "lost") return "lost";
   if (status === "tie") return "tie";
+  if (status === "unverified") return "pending";
   return "pending";
 }
 
 export function statusText(status) {
+  if (status === "unverified") return "未成交";
   if (status === "won") return "赢";
   if (status === "lost") return "输";
   if (status === "tie") return "平";
@@ -85,6 +87,7 @@ export function statusText(status) {
 
 export function pnlText(row) {
   const pnl = Number(row.pnl || 0);
+  if (row.status === "unverified") return "未扣款";
   if (row.status === "pending") return "待结算";
   if (row.status === "aborted") return "已取消";
   return (pnl > 0 ? "+" : "") + fmt(pnl, 2) + "U";

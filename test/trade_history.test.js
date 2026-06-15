@@ -109,6 +109,41 @@ test("live order history summarizes settled, pending, aborted, and server rows",
   assert.equal(history.recent[0].event, "server_trade");
 });
 
+test("unverified autojs orders are visible but excluded from win rate and pnl", () => {
+  const history = buildLiveOrderHistory({
+    now: 1710000000000,
+    limit: 10,
+    auditRows: [
+      { event: "order_done", serverTime: 1000, duration: 10, direction: "UP", amount: 10, price: 100, strategyId: "BTC_10min_SAFE" },
+      {
+        event: "order_unverified",
+        serverTime: 2000,
+        duration: 10,
+        direction: "UP",
+        amount: 15,
+        reason: "balance_not_decreased",
+        beforeBalance: 110.58,
+        afterBalance: 110.58,
+        balanceDelta: 0,
+        strategyId: "BTC_10min_SECOND_CHIP_3600_FLOW"
+      }
+    ],
+    priceTicks: [
+      { time: 601000, price: 101 }
+    ]
+  });
+
+  assert.equal(history.summary.total, 2);
+  assert.equal(history.summary.settled, 1);
+  assert.equal(history.summary.wins, 1);
+  assert.equal(history.summary.pending, 0);
+  assert.equal(history.summary.pnl, 8);
+  const unverified = history.recent.find(row => row.event === "order_unverified");
+  assert.equal(unverified.status, "unverified");
+  assert.equal(unverified.pnl, 0);
+  assert.equal(unverified.balanceDelta, 0);
+});
+
 test("shadow audit rows do not merge reused trade ids after restart", () => {
   const history = buildLiveOrderHistory({
     now: 1710000000000,

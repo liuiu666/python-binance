@@ -8,10 +8,12 @@ var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
 var API_TOKEN = "";
-var SCRIPT_VERSION = "2026-06-14-duration-default-v5";
+var SCRIPT_VERSION = "2026-06-16-verified-order-v6";
 var POLL_INTERVAL = 3000;
 var SIGNAL_MAX_AGE_MS = 60000;
 var STRATEGY_COOLDOWN_MS = 10 * 60 * 1000;
+var ORDER_VERIFY_TIMEOUT_MS = 12000;
+var ORDER_BALANCE_TOLERANCE_USDT = 0.25;
 
 var tradeConfig = { amount: "5", strategyAmounts: { BTC_10min_SAFE: "5", BTC_10min_TAKER: "5" }, strategyVariants: [], duration: "10", autoTrade: false };
 var lastTradeTime = 0;
@@ -694,11 +696,81 @@ function clickDown() {
 
 // ========== Confirm ==========
 function handleConfirm() {
+    return handleConfirmStrict();
+}
+
+function handleConfirmStrict() {
+    var start = Date.now();
+    sleep(800);
+    while (Date.now() - start < 6000) {
+        var btn = id("2131448374").findOne(800);
+        if (btn) {
+            btn.click();
+            log("Confirmed by id");
+            return true;
+        }
+        var btns = selector().textMatches(/.*Confirm.*|.*OK.*|.*Place.*|.*Order.*|.*\u786e\u8ba4.*|.*\u786e\u5b9a.*/i).clickable(true).find();
+        for (var i = 0; i < btns.length; i++) {
+            btns[i].click();
+            log("Confirmed by text");
+            return true;
+        }
+        sleep(300);
+    }
+    log("Confirm button not found");
+    return false;
+}
+
+function handleConfirmLegacy() {
     sleep(1500);
     var btn = id("2131448374").findOne(3000);
     if (btn) { btn.click(); log("Confirmed"); return; }
     var btns = selector().textMatches(".*确认.*|.*确定.*").clickable(true).find();
     for (var i = 0; i < btns.length; i++) { btns[i].click(); return; }
+}
+
+function readBalanceForOrder(label) {
+    var amt = scanBalance();
+    if (amt == null || isNaN(amt)) {
+        log("[OrderVerify] " + label + " balance unavailable");
+        return null;
+    }
+    log("[OrderVerify] " + label + " balance=" + amt);
+    return Number(amt);
+}
+
+function balanceDropMatches(beforeBalance, afterBalance, amount) {
+    var stake = Number(amount);
+    if (!isFinite(stake) || stake <= 0) return false;
+    if (!isFinite(beforeBalance) || !isFinite(afterBalance)) return false;
+    var drop = beforeBalance - afterBalance;
+    var tolerance = Math.max(ORDER_BALANCE_TOLERANCE_USDT, stake * 0.03);
+    return drop >= stake - tolerance && drop <= stake + Math.max(1.0, stake * 0.12);
+}
+
+function waitForBalanceDrop(beforeBalance, amount) {
+    var start = Date.now();
+    var latest = null;
+    while (Date.now() - start < ORDER_VERIFY_TIMEOUT_MS) {
+        sleep(1000);
+        latest = readBalanceForOrder("after");
+        if (latest != null && balanceDropMatches(beforeBalance, latest, amount)) {
+            return {
+                ok: true,
+                beforeBalance: beforeBalance,
+                afterBalance: latest,
+                balanceDelta: Number((latest - beforeBalance).toFixed(4)),
+                waitedMs: Date.now() - start
+            };
+        }
+    }
+    return {
+        ok: false,
+        beforeBalance: beforeBalance,
+        afterBalance: latest,
+        balanceDelta: latest == null ? null : Number((latest - beforeBalance).toFixed(4)),
+        waitedMs: Date.now() - start
+    };
 }
 
 // ========== Trade ==========
@@ -797,6 +869,15 @@ function placeTrade(dir, order) {
         return false;
     }
 
+    var beforeBalance = readBalanceForOrder("before");
+    if (beforeBalance == null) {
+        log(">>> ABORT: balance before click unavailable");
+        reportTradeAudit("order_abort", order, { direction: dir, reason: "balance_before_unavailable" });
+        tradeConfig.amount = prevAmt;
+        tradeConfig.duration = prevDur;
+        return false;
+    }
+
     var finalTiming = updateOrderTimingAge(order);
     if (!finalTiming.ok) {
         log(">>> ABORT: " + finalTiming.reason + " before click ageMs=" + finalTiming.ageMs);
@@ -817,14 +898,54 @@ function placeTrade(dir, order) {
     
     // STEP 6: confirm
     log("step6: confirm");
-    handleConfirm();
-    log(">>> ORDER DONE");
-    reportTradeAudit("order_done", order, { direction: dir });
+    var executionTime = Date.now();
+    if (!handleConfirm()) {
+        log(">>> ABORT: confirm failed");
+        reportTradeAudit("order_abort", order, {
+            direction: dir,
+            reason: "confirm_not_found",
+            beforeBalance: beforeBalance,
+            executionTime: executionTime
+        });
+        tradeConfig.amount = prevAmt;
+        tradeConfig.duration = prevDur;
+        return false;
+    }
+
+    var verify = waitForBalanceDrop(beforeBalance, tradeConfig.amount);
+    if (!verify.ok) {
+        log(">>> ORDER UNVERIFIED balanceDelta=" + verify.balanceDelta);
+        reportTradeAudit("order_unverified", order, {
+            direction: dir,
+            reason: "balance_not_decreased",
+            beforeBalance: verify.beforeBalance,
+            afterBalance: verify.afterBalance,
+            balanceDelta: verify.balanceDelta,
+            verifyWaitMs: verify.waitedMs,
+            executionTime: executionTime
+        });
+        reportBalance();
+        if (order) {
+            tradeConfig.amount = prevAmt;
+            tradeConfig.duration = prevDur;
+        }
+        return "unverified";
+    }
+
+    log(">>> ORDER DONE verified balanceDelta=" + verify.balanceDelta);
+    reportBalance();
+    reportTradeAudit("order_done", order, {
+        direction: dir,
+        verifiedBy: "balance_decrease",
+        beforeBalance: verify.beforeBalance,
+        afterBalance: verify.afterBalance,
+        balanceDelta: verify.balanceDelta,
+        verifyWaitMs: verify.waitedMs,
+        executionTime: executionTime
+    });
     
     // STEP 7: refresh balance
-    sleep(2000);
-    log("step7: refresh balance");
-    reportBalance();
+    log("step7: balance verified");
 
     if (order) {
         tradeConfig.amount = prevAmt;
@@ -1041,7 +1162,7 @@ function main() {
                     log("SIGNAL " + order.strategyId + ": " + order.signal + " " + order.confidence + "% RSI=" + order.rsi_value + " amt=" + order.amount + "U dur=" + order.duration + "min");
                     reportTradeAudit("signal_tradeable", order, {});
                     var ok = placeTrade(order.signal, order);
-                    if (ok) {
+                    if (ok === true) {
                         previousDoneAt = Date.now();
                         lastSignalKeyByStrategy[order.strategyId] = key;
                         lastTradeTimeByStrategy[order.strategyId] = now;
@@ -1050,8 +1171,12 @@ function main() {
                         lastTradeTime = now;
                         lastDirection = order.signal;
                         traded = true;
+                    } else if (ok === "unverified") {
+                        lastSignalKeyByStrategy[order.strategyId] = key;
+                        lastTradeTimeByStrategy[order.strategyId] = now;
+                        traded = true;
                     }
-                    if (ok && qi < queue.length - 1) {
+                    if (ok === true && qi < queue.length - 1) {
                         log("queue: wait before next strategy order");
                         sleep(5000);
                     }
