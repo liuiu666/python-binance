@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "symbol": "BTCUSDT",
+  "market": "futures",
+  "file": "/opt/btc-binary-options/data/btcusdt_1s_trades.csv",
+  "updated_at": "2026-06-16T05:37:10.940277+00:00",
+  "error": null,
+  "last_agg_trade_id": 3341903852,
+  "fetched_trades": 7,
+  "rows": 222668,
+  "added": 2,
+  "last_ts": "2026-06-16T05:37:08+00:00",
+  "pending_seconds": 2
+}

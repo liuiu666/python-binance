@@ -1,0 +1,1587 @@
+{
+  "pullDir": "E:\\python-binance\\tmp\\latest_pull_20260616_133235",
+  "dataQuality": {
+    "secondStart": "2026-06-13T13:33:45+00:00",
+    "secondEnd": "2026-06-16T05:36:20+00:00",
+    "sampleHours": 64.04,
+    "rawRows": 222621,
+    "filledSecondRows": 230556,
+    "missingSecondRowsFilled": 9882,
+    "rawGapGt5s": 11,
+    "rawGapGt60s": 0,
+    "maxRawGapSec": 9.0,
+    "oneMinuteStart": "2026-03-08T12:24:00+00:00",
+    "oneMinuteEnd": "2026-06-16T05:34:00+00:00",
+    "takerStart": "2026-05-06T11:15:00+00:00",
+    "takerEnd": "2026-06-16T05:30:00+00:00",
+    "returnsPct": {
+      "6h": -0.167,
+      "12h": -1.08,
+      "24h": 0.422,
+      "allSecond": 2.946
+    }
+  },
+  "offlineBacktest": {
+    "BTC_10min_TAKER": {
+      "config": {
+        "enabled": true,
+        "symbol": "btcusdt",
+        "horizon": 10,
+        "interval_min": 10,
+        "threshold": 0.8,
+        "rsi_lo": 30,
+        "rsi_hi": 70,
+        "model_type": "poc_normal",
+        "norm_window": 60,
+        "norm_tail_pct": 0.2,
+        "norm_mode": "reversal",
+        "norm_use_rsi": false,
+        "norm_source_minutes": 2,
+        "norm_min_gap_minutes": 30,
+        "norm_taker_filter": "align",
+        "norm_taker_align_up": 1.05,
+        "norm_taker_align_down": 0.95,
+        "norm_taker_max_age_minutes": 30,
+        "skip_hours_utc": [],
+        "model_label": "TAKER_20_80"
+      },
+      "byWindow": {
+        "last6h": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "winRate": null,
+          "tradesPerDay": 0.0,
+          "maxLoss": 0,
+          "pnl_5u_80pct": 0,
+          "first": null,
+          "last": null,
+          "lastSignals": []
+        },
+        "last12h": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "winRate": null,
+          "tradesPerDay": 0.0,
+          "maxLoss": 0,
+          "pnl_5u_80pct": 0,
+          "first": null,
+          "last": null,
+          "lastSignals": []
+        },
+        "last24h": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "winRate": null,
+          "tradesPerDay": 0.0,
+          "maxLoss": 0,
+          "pnl_5u_80pct": 0,
+          "first": null,
+          "last": null,
+          "lastSignals": []
+        },
+        "allSecondData": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "winRate": null,
+          "tradesPerDay": 0.0,
+          "maxLoss": 0,
+          "pnl_5u_80pct": 0,
+          "first": null,
+          "last": null,
+          "lastSignals": []
+        }
+      }
+    },
+    "BTC_10min_SECOND_3600_20": {
+      "config": {
+        "enabled": true,
+        "model_type": "second_normal",
+        "symbol": "btcusdt",
+        "interval_min": 10,
+        "horizon": 10,
+        "second_lookback_sec": 3600,
+        "second_horizon_sec": 600,
+        "second_min_gap_sec": 1800,
+        "second_tail_pct": 0.2,
+        "second_filter": "none",
+        "model_label": "SECOND_3600_20_80"
+      },
+      "byWindow": {
+        "last6h": {
+          "trades": 3,
+          "wins": 1,
+          "losses": 2,
+          "winRate": 33.33,
+          "tradesPerDay": 12.0,
+          "maxLoss": 1,
+          "pnl_5u_80pct": -6,
+          "first": "2026-06-16T02:27:16+00:00",
+          "last": "2026-06-16T03:58:44+00:00",
+          "lastSignals": [
+            {
+              "time": "2026-06-16T02:27:16+00:00",
+              "dir": "UP",
+              "entry": 65942.8,
+              "settle": 65866.1,
+              "won": false,
+              "p_up": 0.1986
+            },
+            {
+              "time": "2026-06-16T02:57:16+00:00",
+              "dir": "UP",
+              "entry": 65729.1,
+              "settle": 65770.6,
+              "won": true,
+              "p_up": 0.1731
+            },
+            {
+              "time": "2026-06-16T03:58:44+00:00",
+              "dir": "DOWN",
+              "entry": 66115.1,
+              "settle": 66153.9,
+              "won": false,
+              "p_up": 0.8079
+            }
+          ]
+        },
+        "last12h": {
+          "trades": 3,
+          "wins": 1,
+          "losses": 2,
+          "winRate": 33.33,
+          "tradesPerDay": 6.0,
+          "maxLoss": 1,
+          "pnl_5u_80pct": -6,
+          "first": "2026-06-16T02:27:16+00:00",
+          "last": "2026-06-16T03:58:44+00:00",
+          "lastSignals": [
+            {
+              "time": "2026-06-16T02:27:16+00:00",
+              "dir": "UP",
+              "entry": 65942.8,
+              "settle": 65866.1,
+              "won": false,
+              "p_up": 0.1986
+            },
+            {
+              "time": "2026-06-16T02:57:16+00:00",
+              "dir": "UP",
+              "entry": 65729.1,
+              "settle": 65770.6,
+              "won": true,
+              "p_up": 0.1731
+            },
+            {
+              "time": "2026-06-16T03:58:44+00:00",
+              "dir": "DOWN",
+              "entry": 66115.1,
+              "settle": 66153.9,
+              "won": false,
+              "p_up": 0.8079
+            }
+          ]
+        },
+        "last24h": {
+          "trades": 10,
+          "wins": 6,
+          "losses": 4,
+          "winRate": 60.0,
+          "tradesPerDay": 10.0,
+          "maxLoss": 1,
+          "pnl_5u_80pct": 4,
+          "first": "2026-06-15T08:24:48+00:00",
+          "last": "2026-06-16T03:58:44+00:00",
+          "lastSignals": [
+            {
+              "time": "2026-06-15T11:19:55+00:00",
+              "dir": "DOWN",
+              "entry": 66241.2,
+              "settle": 66220.0,
+              "won": true,
+              "p_up": 0.8016
+            },
+            {
+              "time": "2026-06-15T13:20:43+00:00",
+              "dir": "DOWN",
+              "entry": 66811.7,
+              "settle": 66688.2,
+              "won": true,
+              "p_up": 0.8018
+            },
+            {
+              "time": "2026-06-15T15:47:10+00:00",
+              "dir": "DOWN",
+              "entry": 67090.0,
+              "settle": 67153.6,
+              "won": false,
+              "p_up": 0.8044
+            },
+            {
+              "time": "2026-06-15T16:32:45+00:00",
+              "dir": "DOWN",
+              "entry": 67226.1,
+              "settle": 67187.7,
+              "won": true,
+              "p_up": 0.8015
+            },
+            {
+              "time": "2026-06-15T17:32:31+00:00",
+              "dir": "UP",
+              "entry": 66700.0,
+              "settle": 66820.0,
+              "won": true,
+              "p_up": 0.1981
+            },
+            {
+              "time": "2026-06-16T02:27:16+00:00",
+              "dir": "UP",
+              "entry": 65942.8,
+              "settle": 65866.1,
+              "won": false,
+              "p_up": 0.1986
+            },
+            {
+              "time": "2026-06-16T02:57:16+00:00",
+              "dir": "UP",
+              "entry": 65729.1,
+              "settle": 65770.6,
+              "won": true,
+              "p_up": 0.1731
+            },
+            {
+              "time": "2026-06-16T03:58:44+00:00",
+              "dir": "DOWN",
+              "entry": 66115.1,
+              "settle": 66153.9,
+              "won": false,
+              "p_up": 0.8079
+            }
+          ]
+        },
+        "allSecondData": {
+          "trades": 24,
+          "wins": 17,
+          "losses": 7,
+          "winRate": 70.83,
+          "tradesPerDay": 10.3,
+          "maxLoss": 1,
+          "pnl_5u_80pct": 33,
+          "first": "2026-06-13T21:41:24+00:00",
+          "last": "2026-06-16T03:58:44+00:00",
+          "lastSignals": [
+            {
+              "time": "2026-06-15T11:19:55+00:00",
+              "dir": "DOWN",
+              "entry": 66241.2,
+              "settle": 66220.0,
+              "won": true,
+              "p_up": 0.8016
+            },
+            {
+              "time": "2026-06-15T13:20:43+00:00",
+              "dir": "DOWN",
+              "entry": 66811.7,
+              "settle": 66688.2,
+              "won": true,
+              "p_up": 0.8018
+            },
+            {
+              "time": "2026-06-15T15:47:10+00:00",
+              "dir": "DOWN",
+              "entry": 67090.0,
+              "settle": 67153.6,
+              "won": false,
+              "p_up": 0.8044
+            },
+            {
+              "time": "2026-06-15T16:32:45+00:00",
+              "dir": "DOWN",
+              "entry": 67226.1,
+              "settle": 67187.7,
+              "won": true,
+              "p_up": 0.8015
+            },
+            {
+              "time": "2026-06-15T17:32:31+00:00",
+              "dir": "UP",
+              "entry": 66700.0,
+              "settle": 66820.0,
+              "won": true,
+              "p_up": 0.1981
+            },
+            {
+              "time": "2026-06-16T02:27:16+00:00",
+              "dir": "UP",
+              "entry": 65942.8,
+              "settle": 65866.1,
+              "won": false,
+              "p_up": 0.1986
+            },
+            {
+              "time": "2026-06-16T02:57:16+00:00",
+              "dir": "UP",
+              "entry": 65729.1,
+              "settle": 65770.6,
+              "won": true,
+              "p_up": 0.1731
+            },
+            {
+              "time": "2026-06-16T03:58:44+00:00",
+              "dir": "DOWN",
+              "entry": 66115.1,
+              "settle": 66153.9,
+              "won": false,
+              "p_up": 0.8079
+            }
+          ]
+        }
+      }
+    },
+    "BTC_10min_SECOND_CHIP_1800_OPT": {
+      "config": {
+        "enabled": true,
+        "model_type": "second_chip",
+        "symbol": "btcusdt",
+        "interval_min": 10,
+        "horizon": 10,
+        "second_chip_lookback_sec": 1800,
+        "second_chip_horizon_sec": 600,
+        "second_chip_min_gap_sec": 300,
+        "second_chip_target_share": 0.2,
+        "second_chip_bin_mode": "fixed",
+        "second_chip_bin_size": 20,
+        "second_chip_bin_pct": 0.0003,
+        "second_chip_break_pct": 0.004,
+        "second_chip_direction_filter": "all",
+        "second_chip_filter": "width_lte_3",
+        "model_label": "SECOND_CHIP_1800_20_40"
+      },
+      "byWindow": {
+        "last6h": {
+          "trades": 8,
+          "wins": 3,
+          "losses": 5,
+          "winRate": 37.5,
+          "tradesPerDay": 32.0,
+          "maxLoss": 3,
+          "pnl_5u_80pct": -13,
+          "first": "2026-06-16T02:12:35+00:00",
+          "last": "2026-06-16T04:36:26+00:00",
+          "lastSignals": [
+            {
+              "time": "2026-06-16T02:12:35+00:00",
+              "dir": "UP",
+              "entry": 66046.5,
+              "settle": 66015.0,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -553.669,
+              "width": 1,
+              "zoneShare": 0.2461
+            },
+            {
+              "time": "2026-06-16T02:18:23+00:00",
+              "dir": "UP",
+              "entry": 66030.6,
+              "settle": 65746.1,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -137.462,
+              "width": 1,
+              "zoneShare": 0.2211
+            },
+            {
+              "time": "2026-06-16T02:29:09+00:00",
+              "dir": "UP",
+              "entry": 65745.8,
+              "settle": 65862.7,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -891.975,
+              "width": 2,
+              "zoneShare": 0.2272
+            },
+            {
+              "time": "2026-06-16T02:35:30+00:00",
+              "dir": "UP",
+              "entry": 65745.4,
+              "settle": 65843.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": 194.644,
+              "width": 2,
+              "zoneShare": 0.2272
+            },
+            {
+              "time": "2026-06-16T03:33:26+00:00",
+              "dir": "DOWN",
+              "entry": 66024.2,
+              "settle": 66062.2,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 163.489,
+              "width": 1,
+              "zoneShare": 0.2033
+            },
+            {
+              "time": "2026-06-16T03:39:03+00:00",
+              "dir": "DOWN",
+              "entry": 66026.5,
+              "settle": 66121.6,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 23.491,
+              "width": 2,
+              "zoneShare": 0.2739
+            },
+            {
+              "time": "2026-06-16T04:30:50+00:00",
+              "dir": "UP",
+              "entry": 65890.5,
+              "settle": 65860.0,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -473.159,
+              "width": 2,
+              "zoneShare": 0.2511
+            },
+            {
+              "time": "2026-06-16T04:36:26+00:00",
+              "dir": "UP",
+              "entry": 65809.1,
+              "settle": 65843.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -171.548,
+              "width": 2,
+              "zoneShare": 0.2306
+            }
+          ]
+        },
+        "last12h": {
+          "trades": 12,
+          "wins": 7,
+          "losses": 5,
+          "winRate": 58.33,
+          "tradesPerDay": 24.0,
+          "maxLoss": 3,
+          "pnl_5u_80pct": 3,
+          "first": "2026-06-15T19:18:52+00:00",
+          "last": "2026-06-16T04:36:26+00:00",
+          "lastSignals": [
+            {
+              "time": "2026-06-16T02:12:35+00:00",
+              "dir": "UP",
+              "entry": 66046.5,
+              "settle": 66015.0,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -553.669,
+              "width": 1,
+              "zoneShare": 0.2461
+            },
+            {
+              "time": "2026-06-16T02:18:23+00:00",
+              "dir": "UP",
+              "entry": 66030.6,
+              "settle": 65746.1,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -137.462,
+              "width": 1,
+              "zoneShare": 0.2211
+            },
+            {
+              "time": "2026-06-16T02:29:09+00:00",
+              "dir": "UP",
+              "entry": 65745.8,
+              "settle": 65862.7,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -891.975,
+              "width": 2,
+              "zoneShare": 0.2272
+            },
+            {
+              "time": "2026-06-16T02:35:30+00:00",
+              "dir": "UP",
+              "entry": 65745.4,
+              "settle": 65843.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": 194.644,
+              "width": 2,
+              "zoneShare": 0.2272
+            },
+            {
+              "time": "2026-06-16T03:33:26+00:00",
+              "dir": "DOWN",
+              "entry": 66024.2,
+              "settle": 66062.2,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 163.489,
+              "width": 1,
+              "zoneShare": 0.2033
+            },
+            {
+              "time": "2026-06-16T03:39:03+00:00",
+              "dir": "DOWN",
+              "entry": 66026.5,
+              "settle": 66121.6,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 23.491,
+              "width": 2,
+              "zoneShare": 0.2739
+            },
+            {
+              "time": "2026-06-16T04:30:50+00:00",
+              "dir": "UP",
+              "entry": 65890.5,
+              "settle": 65860.0,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -473.159,
+              "width": 2,
+              "zoneShare": 0.2511
+            },
+            {
+              "time": "2026-06-16T04:36:26+00:00",
+              "dir": "UP",
+              "entry": 65809.1,
+              "settle": 65843.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -171.548,
+              "width": 2,
+              "zoneShare": 0.2306
+            }
+          ]
+        },
+        "last24h": {
+          "trades": 23,
+          "wins": 12,
+          "losses": 11,
+          "winRate": 52.17,
+          "tradesPerDay": 23.0,
+          "maxLoss": 4,
+          "pnl_5u_80pct": -7,
+          "first": "2026-06-15T11:19:55+00:00",
+          "last": "2026-06-16T04:36:26+00:00",
+          "lastSignals": [
+            {
+              "time": "2026-06-16T02:12:35+00:00",
+              "dir": "UP",
+              "entry": 66046.5,
+              "settle": 66015.0,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -553.669,
+              "width": 1,
+              "zoneShare": 0.2461
+            },
+            {
+              "time": "2026-06-16T02:18:23+00:00",
+              "dir": "UP",
+              "entry": 66030.6,
+              "settle": 65746.1,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -137.462,
+              "width": 1,
+              "zoneShare": 0.2211
+            },
+            {
+              "time": "2026-06-16T02:29:09+00:00",
+              "dir": "UP",
+              "entry": 65745.8,
+              "settle": 65862.7,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -891.975,
+              "width": 2,
+              "zoneShare": 0.2272
+            },
+            {
+              "time": "2026-06-16T02:35:30+00:00",
+              "dir": "UP",
+              "entry": 65745.4,
+              "settle": 65843.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": 194.644,
+              "width": 2,
+              "zoneShare": 0.2272
+            },
+            {
+              "time": "2026-06-16T03:33:26+00:00",
+              "dir": "DOWN",
+              "entry": 66024.2,
+              "settle": 66062.2,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 163.489,
+              "width": 1,
+              "zoneShare": 0.2033
+            },
+            {
+              "time": "2026-06-16T03:39:03+00:00",
+              "dir": "DOWN",
+              "entry": 66026.5,
+              "settle": 66121.6,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 23.491,
+              "width": 2,
+              "zoneShare": 0.2739
+            },
+            {
+              "time": "2026-06-16T04:30:50+00:00",
+              "dir": "UP",
+              "entry": 65890.5,
+              "settle": 65860.0,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -473.159,
+              "width": 2,
+              "zoneShare": 0.2511
+            },
+            {
+              "time": "2026-06-16T04:36:26+00:00",
+              "dir": "UP",
+              "entry": 65809.1,
+              "settle": 65843.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -171.548,
+              "width": 2,
+              "zoneShare": 0.2306
+            }
+          ]
+        },
+        "allSecondData": {
+          "trades": 43,
+          "wins": 28,
+          "losses": 15,
+          "winRate": 65.12,
+          "tradesPerDay": 16.77,
+          "maxLoss": 4,
+          "pnl_5u_80pct": 37,
+          "first": "2026-06-13T16:04:48+00:00",
+          "last": "2026-06-16T04:36:26+00:00",
+          "lastSignals": [
+            {
+              "time": "2026-06-16T02:12:35+00:00",
+              "dir": "UP",
+              "entry": 66046.5,
+              "settle": 66015.0,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -553.669,
+              "width": 1,
+              "zoneShare": 0.2461
+            },
+            {
+              "time": "2026-06-16T02:18:23+00:00",
+              "dir": "UP",
+              "entry": 66030.6,
+              "settle": 65746.1,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -137.462,
+              "width": 1,
+              "zoneShare": 0.2211
+            },
+            {
+              "time": "2026-06-16T02:29:09+00:00",
+              "dir": "UP",
+              "entry": 65745.8,
+              "settle": 65862.7,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -891.975,
+              "width": 2,
+              "zoneShare": 0.2272
+            },
+            {
+              "time": "2026-06-16T02:35:30+00:00",
+              "dir": "UP",
+              "entry": 65745.4,
+              "settle": 65843.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": 194.644,
+              "width": 2,
+              "zoneShare": 0.2272
+            },
+            {
+              "time": "2026-06-16T03:33:26+00:00",
+              "dir": "DOWN",
+              "entry": 66024.2,
+              "settle": 66062.2,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 163.489,
+              "width": 1,
+              "zoneShare": 0.2033
+            },
+            {
+              "time": "2026-06-16T03:39:03+00:00",
+              "dir": "DOWN",
+              "entry": 66026.5,
+              "settle": 66121.6,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 23.491,
+              "width": 2,
+              "zoneShare": 0.2739
+            },
+            {
+              "time": "2026-06-16T04:30:50+00:00",
+              "dir": "UP",
+              "entry": 65890.5,
+              "settle": 65860.0,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -473.159,
+              "width": 2,
+              "zoneShare": 0.2511
+            },
+            {
+              "time": "2026-06-16T04:36:26+00:00",
+              "dir": "UP",
+              "entry": 65809.1,
+              "settle": 65843.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -171.548,
+              "width": 2,
+              "zoneShare": 0.2306
+            }
+          ]
+        }
+      }
+    },
+    "BTC_10min_SECOND_CHIP_3600_FLOW": {
+      "config": {
+        "enabled": true,
+        "model_type": "second_chip",
+        "symbol": "btcusdt",
+        "interval_min": 10,
+        "horizon": 10,
+        "second_chip_lookback_sec": 3600,
+        "second_chip_horizon_sec": 600,
+        "second_chip_min_gap_sec": 1800,
+        "second_chip_target_share": 0.5,
+        "second_chip_bin_mode": "fixed",
+        "second_chip_bin_size": 50,
+        "second_chip_bin_pct": 0.0003,
+        "second_chip_break_pct": 0.003,
+        "second_chip_direction_filter": "all",
+        "second_chip_filter": "flow_reversal",
+        "model_label": "SECOND_CHIP_3600_50_30"
+      },
+      "byWindow": {
+        "last6h": {
+          "trades": 5,
+          "wins": 0,
+          "losses": 5,
+          "winRate": 0.0,
+          "tradesPerDay": 20.0,
+          "maxLoss": 5,
+          "pnl_5u_80pct": -25,
+          "first": "2026-06-16T02:12:14+00:00",
+          "last": "2026-06-16T05:20:16+00:00",
+          "lastSignals": [
+            {
+              "time": "2026-06-16T02:12:14+00:00",
+              "dir": "UP",
+              "entry": 66090.2,
+              "settle": 66025.3,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -410.95,
+              "width": 2,
+              "zoneShare": 0.7958
+            },
+            {
+              "time": "2026-06-16T02:45:16+00:00",
+              "dir": "UP",
+              "entry": 65849.6,
+              "settle": 65744.6,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -10.013,
+              "width": 8,
+              "zoneShare": 0.6053
+            },
+            {
+              "time": "2026-06-16T03:41:29+00:00",
+              "dir": "DOWN",
+              "entry": 66048.3,
+              "settle": 66099.1,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 3.459,
+              "width": 3,
+              "zoneShare": 0.575
+            },
+            {
+              "time": "2026-06-16T04:31:04+00:00",
+              "dir": "UP",
+              "entry": 65850.1,
+              "settle": 65850.1,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -531.035,
+              "width": 2,
+              "zoneShare": 0.5606
+            },
+            {
+              "time": "2026-06-16T05:20:16+00:00",
+              "dir": "DOWN",
+              "entry": 66048.4,
+              "settle": 66050.9,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 47.605,
+              "width": 2,
+              "zoneShare": 0.5139
+            }
+          ]
+        },
+        "last12h": {
+          "trades": 7,
+          "wins": 1,
+          "losses": 6,
+          "winRate": 14.29,
+          "tradesPerDay": 14.0,
+          "maxLoss": 5,
+          "pnl_5u_80pct": -26,
+          "first": "2026-06-15T19:18:43+00:00",
+          "last": "2026-06-16T05:20:16+00:00",
+          "lastSignals": [
+            {
+              "time": "2026-06-15T19:18:43+00:00",
+              "dir": "UP",
+              "entry": 66591.9,
+              "settle": 66545.5,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -313.268,
+              "width": 1,
+              "zoneShare": 0.6581
+            },
+            {
+              "time": "2026-06-15T22:26:05+00:00",
+              "dir": "UP",
+              "entry": 66131.3,
+              "settle": 66250.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -498.639,
+              "width": 2,
+              "zoneShare": 0.7853
+            },
+            {
+              "time": "2026-06-16T02:12:14+00:00",
+              "dir": "UP",
+              "entry": 66090.2,
+              "settle": 66025.3,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -410.95,
+              "width": 2,
+              "zoneShare": 0.7958
+            },
+            {
+              "time": "2026-06-16T02:45:16+00:00",
+              "dir": "UP",
+              "entry": 65849.6,
+              "settle": 65744.6,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -10.013,
+              "width": 8,
+              "zoneShare": 0.6053
+            },
+            {
+              "time": "2026-06-16T03:41:29+00:00",
+              "dir": "DOWN",
+              "entry": 66048.3,
+              "settle": 66099.1,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 3.459,
+              "width": 3,
+              "zoneShare": 0.575
+            },
+            {
+              "time": "2026-06-16T04:31:04+00:00",
+              "dir": "UP",
+              "entry": 65850.1,
+              "settle": 65850.1,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -531.035,
+              "width": 2,
+              "zoneShare": 0.5606
+            },
+            {
+              "time": "2026-06-16T05:20:16+00:00",
+              "dir": "DOWN",
+              "entry": 66048.4,
+              "settle": 66050.9,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 47.605,
+              "width": 2,
+              "zoneShare": 0.5139
+            }
+          ]
+        },
+        "last24h": {
+          "trades": 14,
+          "wins": 5,
+          "losses": 9,
+          "winRate": 35.71,
+          "tradesPerDay": 14.0,
+          "maxLoss": 5,
+          "pnl_5u_80pct": -25,
+          "first": "2026-06-15T10:54:43+00:00",
+          "last": "2026-06-16T05:20:16+00:00",
+          "lastSignals": [
+            {
+              "time": "2026-06-15T17:34:16+00:00",
+              "dir": "UP",
+              "entry": 66697.5,
+              "settle": 66887.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -132.157,
+              "width": 7,
+              "zoneShare": 0.555
+            },
+            {
+              "time": "2026-06-15T19:18:43+00:00",
+              "dir": "UP",
+              "entry": 66591.9,
+              "settle": 66545.5,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -313.268,
+              "width": 1,
+              "zoneShare": 0.6581
+            },
+            {
+              "time": "2026-06-15T22:26:05+00:00",
+              "dir": "UP",
+              "entry": 66131.3,
+              "settle": 66250.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -498.639,
+              "width": 2,
+              "zoneShare": 0.7853
+            },
+            {
+              "time": "2026-06-16T02:12:14+00:00",
+              "dir": "UP",
+              "entry": 66090.2,
+              "settle": 66025.3,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -410.95,
+              "width": 2,
+              "zoneShare": 0.7958
+            },
+            {
+              "time": "2026-06-16T02:45:16+00:00",
+              "dir": "UP",
+              "entry": 65849.6,
+              "settle": 65744.6,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -10.013,
+              "width": 8,
+              "zoneShare": 0.6053
+            },
+            {
+              "time": "2026-06-16T03:41:29+00:00",
+              "dir": "DOWN",
+              "entry": 66048.3,
+              "settle": 66099.1,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 3.459,
+              "width": 3,
+              "zoneShare": 0.575
+            },
+            {
+              "time": "2026-06-16T04:31:04+00:00",
+              "dir": "UP",
+              "entry": 65850.1,
+              "settle": 65850.1,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -531.035,
+              "width": 2,
+              "zoneShare": 0.5606
+            },
+            {
+              "time": "2026-06-16T05:20:16+00:00",
+              "dir": "DOWN",
+              "entry": 66048.4,
+              "settle": 66050.9,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 47.605,
+              "width": 2,
+              "zoneShare": 0.5139
+            }
+          ]
+        },
+        "allSecondData": {
+          "trades": 30,
+          "wins": 19,
+          "losses": 11,
+          "winRate": 63.33,
+          "tradesPerDay": 11.7,
+          "maxLoss": 5,
+          "pnl_5u_80pct": 21,
+          "first": "2026-06-13T16:04:48+00:00",
+          "last": "2026-06-16T05:20:16+00:00",
+          "lastSignals": [
+            {
+              "time": "2026-06-15T17:34:16+00:00",
+              "dir": "UP",
+              "entry": 66697.5,
+              "settle": 66887.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -132.157,
+              "width": 7,
+              "zoneShare": 0.555
+            },
+            {
+              "time": "2026-06-15T19:18:43+00:00",
+              "dir": "UP",
+              "entry": 66591.9,
+              "settle": 66545.5,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -313.268,
+              "width": 1,
+              "zoneShare": 0.6581
+            },
+            {
+              "time": "2026-06-15T22:26:05+00:00",
+              "dir": "UP",
+              "entry": 66131.3,
+              "settle": 66250.1,
+              "won": true,
+              "breakout": "DOWN",
+              "flow300": -498.639,
+              "width": 2,
+              "zoneShare": 0.7853
+            },
+            {
+              "time": "2026-06-16T02:12:14+00:00",
+              "dir": "UP",
+              "entry": 66090.2,
+              "settle": 66025.3,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -410.95,
+              "width": 2,
+              "zoneShare": 0.7958
+            },
+            {
+              "time": "2026-06-16T02:45:16+00:00",
+              "dir": "UP",
+              "entry": 65849.6,
+              "settle": 65744.6,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -10.013,
+              "width": 8,
+              "zoneShare": 0.6053
+            },
+            {
+              "time": "2026-06-16T03:41:29+00:00",
+              "dir": "DOWN",
+              "entry": 66048.3,
+              "settle": 66099.1,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 3.459,
+              "width": 3,
+              "zoneShare": 0.575
+            },
+            {
+              "time": "2026-06-16T04:31:04+00:00",
+              "dir": "UP",
+              "entry": 65850.1,
+              "settle": 65850.1,
+              "won": false,
+              "breakout": "DOWN",
+              "flow300": -531.035,
+              "width": 2,
+              "zoneShare": 0.5606
+            },
+            {
+              "time": "2026-06-16T05:20:16+00:00",
+              "dir": "DOWN",
+              "entry": 66048.4,
+              "settle": 66050.9,
+              "won": false,
+              "breakout": "UP",
+              "flow300": 47.605,
+              "width": 2,
+              "zoneShare": 0.5139
+            }
+          ]
+        }
+      }
+    }
+  },
+  "actualRealOrders": {
+    "BTC_10min_SAFE": {
+      "last6h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "last12h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "last24h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "allPulledHistory": {
+        "trades": 1,
+        "wins": 1,
+        "losses": 0,
+        "winRate": 100.0,
+        "tradesPerDay": 0.26,
+        "pnlU": 4.0,
+        "first": "2026-06-12T09:47:26.044000+00:00",
+        "last": "2026-06-12T09:47:26.044000+00:00"
+      }
+    },
+    "BTC_10min_SECOND_1800_20": {
+      "last6h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "last12h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "last24h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "allPulledHistory": {
+        "trades": 13,
+        "wins": 6,
+        "losses": 7,
+        "winRate": 46.15,
+        "tradesPerDay": 6.6,
+        "pnlU": -11.0,
+        "first": "2026-06-14T06:02:22.640000+00:00",
+        "last": "2026-06-14T10:02:26.014000+00:00"
+      }
+    },
+    "BTC_10min_SECOND_3600_20": {
+      "last6h": {
+        "trades": 5,
+        "wins": 2,
+        "losses": 3,
+        "winRate": 40.0,
+        "tradesPerDay": 20.0,
+        "pnlU": -13.0,
+        "first": "2026-06-16T02:27:41.732000+00:00",
+        "last": "2026-06-16T04:20:59.779000+00:00"
+      },
+      "last12h": {
+        "trades": 6,
+        "wins": 3,
+        "losses": 3,
+        "winRate": 50.0,
+        "tradesPerDay": 12.0,
+        "pnlU": -5.0,
+        "first": "2026-06-15T17:32:47.558000+00:00",
+        "last": "2026-06-16T04:20:59.779000+00:00"
+      },
+      "last24h": {
+        "trades": 9,
+        "wins": 5,
+        "losses": 4,
+        "winRate": 55.56,
+        "tradesPerDay": 9.0,
+        "pnlU": -2.0,
+        "first": "2026-06-15T15:47:31.252000+00:00",
+        "last": "2026-06-16T04:20:59.779000+00:00"
+      },
+      "allPulledHistory": {
+        "trades": 9,
+        "wins": 5,
+        "losses": 4,
+        "winRate": 55.56,
+        "tradesPerDay": 15.94,
+        "pnlU": -2.0,
+        "first": "2026-06-15T15:47:31.252000+00:00",
+        "last": "2026-06-16T04:20:59.779000+00:00"
+      }
+    },
+    "BTC_10min_SECOND_3600_23": {
+      "last6h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "last12h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "last24h": {
+        "trades": 6,
+        "wins": 3,
+        "losses": 3,
+        "winRate": 50.0,
+        "tradesPerDay": 6.0,
+        "pnlU": -4.0,
+        "first": "2026-06-15T08:24:46.112000+00:00",
+        "last": "2026-06-15T13:33:07.157000+00:00"
+      },
+      "allPulledHistory": {
+        "trades": 21,
+        "wins": 11,
+        "losses": 10,
+        "winRate": 52.38,
+        "tradesPerDay": 11.71,
+        "pnlU": -7.0,
+        "first": "2026-06-14T10:19:14.266000+00:00",
+        "last": "2026-06-15T13:33:07.157000+00:00"
+      }
+    },
+    "BTC_10min_SECOND_CHIP_1800_OPT": {
+      "last6h": {
+        "trades": 4,
+        "wins": 2,
+        "losses": 2,
+        "winRate": 50.0,
+        "tradesPerDay": 16.0,
+        "pnlU": -5.0,
+        "first": "2026-06-16T02:13:01.931000+00:00",
+        "last": "2026-06-16T04:31:17.256000+00:00"
+      },
+      "last12h": {
+        "trades": 7,
+        "wins": 4,
+        "losses": 3,
+        "winRate": 57.14,
+        "tradesPerDay": 14.0,
+        "pnlU": 1.0,
+        "first": "2026-06-15T19:19:10.961000+00:00",
+        "last": "2026-06-16T04:31:17.256000+00:00"
+      },
+      "last24h": {
+        "trades": 9,
+        "wins": 4,
+        "losses": 5,
+        "winRate": 44.44,
+        "tradesPerDay": 9.0,
+        "pnlU": -14.0,
+        "first": "2026-06-15T13:45:07.441000+00:00",
+        "last": "2026-06-16T04:31:17.256000+00:00"
+      },
+      "allPulledHistory": {
+        "trades": 9,
+        "wins": 4,
+        "losses": 5,
+        "winRate": 44.44,
+        "tradesPerDay": 13.85,
+        "pnlU": -14.0,
+        "first": "2026-06-15T13:45:07.441000+00:00",
+        "last": "2026-06-16T04:31:17.256000+00:00"
+      }
+    },
+    "BTC_10min_SECOND_CHIP_3600_20": {
+      "last6h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "last12h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "last24h": {
+        "trades": 8,
+        "wins": 5,
+        "losses": 3,
+        "winRate": 62.5,
+        "tradesPerDay": 8.0,
+        "pnlU": 3.6,
+        "first": "2026-06-15T09:39:14.301000+00:00",
+        "last": "2026-06-15T13:30:32.152000+00:00"
+      },
+      "allPulledHistory": {
+        "trades": 16,
+        "wins": 10,
+        "losses": 6,
+        "winRate": 62.5,
+        "tradesPerDay": 10.76,
+        "pnlU": 11.6,
+        "first": "2026-06-14T17:38:26.743000+00:00",
+        "last": "2026-06-15T13:30:32.152000+00:00"
+      }
+    },
+    "BTC_10min_SECOND_CHIP_3600_FLOW": {
+      "last6h": {
+        "trades": 5,
+        "wins": 1,
+        "losses": 4,
+        "winRate": 20.0,
+        "tradesPerDay": 20.0,
+        "pnlU": -48.0,
+        "first": "2026-06-16T02:12:20.800000+00:00",
+        "last": "2026-06-16T05:20:38.506000+00:00"
+      },
+      "last12h": {
+        "trades": 8,
+        "wins": 3,
+        "losses": 5,
+        "winRate": 37.5,
+        "tradesPerDay": 16.0,
+        "pnlU": -39.0,
+        "first": "2026-06-15T17:34:31.477000+00:00",
+        "last": "2026-06-16T05:20:38.506000+00:00"
+      },
+      "last24h": {
+        "trades": 10,
+        "wins": 4,
+        "losses": 6,
+        "winRate": 40.0,
+        "tradesPerDay": 10.0,
+        "pnlU": -42.0,
+        "first": "2026-06-15T15:39:19.779000+00:00",
+        "last": "2026-06-16T05:20:38.506000+00:00"
+      },
+      "allPulledHistory": {
+        "trades": 10,
+        "wins": 4,
+        "losses": 6,
+        "winRate": 40.0,
+        "tradesPerDay": 17.53,
+        "pnlU": -42.0,
+        "first": "2026-06-15T15:39:19.779000+00:00",
+        "last": "2026-06-16T05:20:38.506000+00:00"
+      }
+    },
+    "BTC_10min_TAKER": {
+      "last6h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "last12h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "last24h": {
+        "trades": 2,
+        "wins": 2,
+        "losses": 0,
+        "winRate": 100.0,
+        "tradesPerDay": 2.0,
+        "pnlU": 16.0,
+        "first": "2026-06-15T13:20:27.722000+00:00",
+        "last": "2026-06-15T13:35:27.111000+00:00"
+      },
+      "allPulledHistory": {
+        "trades": 6,
+        "wins": 5,
+        "losses": 1,
+        "winRate": 83.33,
+        "tradesPerDay": 1.57,
+        "pnlU": 30.0,
+        "first": "2026-06-12T09:47:36.041000+00:00",
+        "last": "2026-06-15T13:35:27.111000+00:00"
+      }
+    },
+    "BTC_10min_TAKER_27": {
+      "last6h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "last12h": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "tradesPerDay": 0.0,
+        "pnlU": 0,
+        "first": null,
+        "last": null
+      },
+      "last24h": {
+        "trades": 3,
+        "wins": 3,
+        "losses": 0,
+        "winRate": 100.0,
+        "tradesPerDay": 3.0,
+        "pnlU": 14.4,
+        "first": "2026-06-15T09:50:24.075000+00:00",
+        "last": "2026-06-15T13:35:36.823000+00:00"
+      },
+      "allPulledHistory": {
+        "trades": 9,
+        "wins": 7,
+        "losses": 2,
+        "winRate": 77.78,
+        "tradesPerDay": 5.33,
+        "pnlU": 21.6,
+        "first": "2026-06-14T12:49:46.368000+00:00",
+        "last": "2026-06-15T13:35:36.823000+00:00"
+      }
+    }
+  },
+  "audit": {
+    "eventCountsLastApiLimit": {
+      "unknown": {
+        "data_update_done": 29,
+        "report_refresh_start": 14,
+        "data_update_start": 28,
+        "report_refresh_error": 14,
+        "strategy_params_updated": 4,
+        "signal_service_restart_requested": 4,
+        "signal_service_exit": 4,
+        "signal_service_start": 4
+      },
+      "manual": {
+        "autojs_heartbeat": 142
+      },
+      "BTC_10min_SECOND_CHIP_1800_OPT": {
+        "shadow_trade_open": 2,
+        "signal_tradeable": 2,
+        "order_attempt": 2,
+        "order_done": 2,
+        "signal_skipped": 90,
+        "shadow_trade_settle": 2
+      },
+      "BTC_10min_SECOND_CHIP_3600_FLOW": {
+        "signal_tradeable": 3,
+        "order_attempt": 3,
+        "shadow_trade_open": 3,
+        "order_done": 3,
+        "signal_skipped": 41,
+        "shadow_trade_settle": 3
+      },
+      "BTC_10min_SECOND_3600_20": {
+        "shadow_trade_open": 3,
+        "signal_tradeable": 2,
+        "order_attempt": 2,
+        "order_done": 2,
+        "signal_skipped": 89,
+        "shadow_trade_settle": 3
+      }
+    },
+    "skipReasonsLastApiLimit": {
+      "BTC_10min_SECOND_CHIP_1800_OPT": {
+        "stale_actionable_signal": 4,
+        "strategy_overlap_guard": 86
+      },
+      "BTC_10min_SECOND_CHIP_3600_FLOW": {
+        "stale_actionable_signal": 3,
+        "strategy_overlap_guard": 38
+      },
+      "BTC_10min_SECOND_3600_20": {
+        "strategy_overlap_guard": 89
+      }
+    }
+  }
+}

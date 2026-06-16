@@ -10,9 +10,8 @@
     "frontend:build": "vite build --config frontend/vite.config.js",
     "frontend:dev": "vite --config frontend/vite.config.js --host 0.0.0.0",
     "test": "node --test test/*.test.js",
-    "reports": "python py/run_strategy_reports.py",
-    "reports:full": "python py/run_strategy_reports.py --full",
-    "audit:probe": "python py/audit_probe.py"
+    "backtest:second": "python py/run_second_backtest.py",
+    "backtest:second:defaults": "python py/run_second_backtest.py --defaults"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",

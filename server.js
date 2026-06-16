@@ -74,19 +74,7 @@ const TRADE_AUDIT_FILE = path.join(DATA_DIR, "trade_audit.jsonl");
 const REAL_BALANCE_FILE = path.join(DATA_DIR, "real_balance.json");
 const AUTO_SCRIPT_FILE = path.join(__dirname, "auto_btc.js");
 const PRICE_TICKS_FILE = path.join(DATA_DIR, "price_ticks.jsonl");
-const REPORT_FILES = {
-  decision: path.join(DATA_DIR, "strategy_decision_report.json"),
-  health: path.join(DATA_DIR, "strategy_health_report.json"),
-  signalAudit: path.join(DATA_DIR, "signal_audit_report.json"),
-  liveBacktestGap: path.join(DATA_DIR, "live_backtest_gap_report.json"),
-  tenMinRegimeFilter: path.join(DATA_DIR, "ten_min_regime_filter_search.json"),
-  tenMinStatefulPolicyFilter: path.join(DATA_DIR, "ten_min_stateful_policy_filter_search.json"),
-  thirtyMinRegimeFilter: path.join(DATA_DIR, "thirty_min_regime_filter_search.json"),
-  regimePattern: path.join(DATA_DIR, "regime_pattern_report.json"),
-  liveAudit: path.join(DATA_DIR, "live_trade_audit_report.json"),
-  shadowDecision: path.join(DATA_DIR, "shadow_decision_report.json"),
-  latency: path.join(DATA_DIR, "execution_latency_validation.json")
-};
+const SECOND_BACKTEST_REPORT_FILE = path.join(DATA_DIR, "second_backtest_report_latest.json");
 const BASE_STRATEGY_IDS = ["BTC_10min_SAFE", "BTC_10min_TAKER"];
 const PYTHON_EXE = process.env.PYTHON_EXE || "python";
 const SERVER_SIM_TRADING_ENABLED = process.env.SERVER_SIM_TRADING_ENABLED === "1";
@@ -94,10 +82,6 @@ const MANAGED_PROCESSES_ENABLED = process.env.DISABLE_MANAGED_PROCESSES !== "1";
 const DATA_UPDATE_INTERVAL_MS = Math.max(
   60 * 1000,
   Number(process.env.DATA_UPDATE_INTERVAL_MS || 5 * 60 * 1000)
-);
-const REPORT_REFRESH_INTERVAL_MS = Math.max(
-  60 * 1000,
-  Number(process.env.REPORT_REFRESH_INTERVAL_MS || 10 * 60 * 1000)
 );
 const DATA_HEALTH_FILES = {
   klines1m: {
@@ -139,16 +123,7 @@ const REPORT_SCRIPT_ENV = {
   MKL_NUM_THREADS: "1",
   NUMEXPR_NUM_THREADS: "1"
 };
-const LIGHT_REPORT_SCRIPTS = [
-  path.join(__dirname, "py", "analyze_signal_audit.py"),
-  path.join(__dirname, "py", "analyze_live_backtest_gap.py"),
-  path.join(__dirname, "py", "shadow_decision_report.py"),
-  path.join(__dirname, "py", "strategy_health_report.py"),
-  path.join(__dirname, "py", "strategy_decision_report.py")
-];
-const HEAVY_REPORT_SCRIPT_NAMES = new Set([
-  "analyze_live_backtest_gap.py"
-]);
+const SECOND_BACKTEST_SCRIPT_FILE = path.join(__dirname, "py", "run_second_backtest.py");
 
 let signalService = {
   pid: null,
@@ -513,21 +488,18 @@ function dataHealthGate(signals) {
 }
 
 function autoTradeSafetyGate() {
-  const report = readJsonFile(REPORT_FILES.shadowDecision, null);
-  const verdict = report && report.safety ? report.safety.verdict : null;
-  const manualOverride = !!(tradeConfig && tradeConfig.realTradingEnabled && tradeConfig.autoTrade_10m);
-  const allow = verdict === "allow_real_auto_trading" || manualOverride;
+  const allow = !!(tradeConfig && tradeConfig.realTradingEnabled && tradeConfig.autoTrade_10m);
   return {
     allow,
     blocked: !allow,
-    verdict: verdict || "missing_shadow_decision",
-    requiredVerdict: "allow_real_auto_trading",
-    manualOverride,
-    overrideSource: manualOverride ? "trade_config.realTradingEnabled" : null
+    verdict: allow ? "manual_real_trading_enabled" : "manual_real_trading_disabled",
+    requiredVerdict: "trade_config.realTradingEnabled",
+    manualOverride: allow,
+    overrideSource: allow ? "trade_config.realTradingEnabled" : null
   };
 }
 
-function runScript(script, cb) {
+function runScript(script, cb, args = []) {
   const out = fs.openSync(REPORT_STDOUT_FILE, "a");
   const err = fs.openSync(REPORT_STDERR_FILE, "a");
   let done = false;
@@ -538,7 +510,7 @@ function runScript(script, cb) {
     try { fs.closeSync(err); } catch (e) {}
     cb(code, signal, error);
   };
-  const child = spawn(PYTHON_EXE, [script], {
+  const child = spawn(PYTHON_EXE, [script, ...args], {
     cwd: __dirname,
     windowsHide: true,
     env: { ...process.env, ...REPORT_SCRIPT_ENV },
@@ -606,9 +578,6 @@ function runDataUpdate(reason = "timer") {
 
 function refreshLightReports(reason = "timer") {
   if (reportRefresh.running) return;
-  const scripts = (
-    process.env.ENABLE_HEAVY_REPORTS === "1" || String(reason).startsWith("manual")
-  ) ? LIGHT_REPORT_SCRIPTS : LIGHT_REPORT_SCRIPTS.filter(script => !HEAVY_REPORT_SCRIPT_NAMES.has(path.basename(script)));
   reportRefresh.running = true;
   reportRefresh.lastStart = Date.now();
   reportRefresh.lastError = null;
@@ -617,37 +586,21 @@ function refreshLightReports(reason = "timer") {
     serverTime: Date.now(),
     event: "report_refresh_start",
     reason,
-    scripts: scripts.map(script => path.basename(script))
+    scripts: [path.basename(SECOND_BACKTEST_SCRIPT_FILE)]
   });
-  let idx = 0;
-  const next = () => {
-    if (idx >= scripts.length) {
-      reportRefresh.running = false;
-      reportRefresh.lastFinish = Date.now();
-      reportRefresh.lastExitCode = 0;
-      appendJsonl(TRADE_AUDIT_FILE, { serverTime: Date.now(), event: "report_refresh_done", reason });
-      return;
-    }
-    const script = scripts[idx++];
-    runScript(script, (code, signal, err) => {
-      if (err || code !== 0) {
-        reportRefresh.running = false;
-        reportRefresh.lastFinish = Date.now();
-        reportRefresh.lastExitCode = code;
-        reportRefresh.lastError = err ? String(err.message || err) : `code=${code} signal=${signal || ""}`;
-        appendJsonl(TRADE_AUDIT_FILE, {
-          serverTime: Date.now(),
-          event: "report_refresh_error",
-          reason,
-          script,
-          error: reportRefresh.lastError
-        });
-        return;
-      }
-      next();
+  runScript(SECOND_BACKTEST_SCRIPT_FILE, (code, signal, err) => {
+    reportRefresh.running = false;
+    reportRefresh.lastFinish = Date.now();
+    reportRefresh.lastExitCode = code;
+    reportRefresh.lastError = err ? String(err.message || err) : (code === 0 ? null : `code=${code} signal=${signal || ""}`);
+    appendJsonl(TRADE_AUDIT_FILE, {
+      serverTime: Date.now(),
+      event: reportRefresh.lastError ? "report_refresh_error" : "report_refresh_done",
+      reason,
+      script: SECOND_BACKTEST_SCRIPT_FILE,
+      error: reportRefresh.lastError
     });
-  };
-  next();
+  }, ["--csv", SECOND_DATA_FILE, "--out", SECOND_BACKTEST_REPORT_FILE]);
 }
 
 function readRawJson(req, cb) {
@@ -1090,17 +1043,7 @@ app.get("/api/candles", (req, res) => {
 
 app.get("/api/reports", (req, res) => {
   res.json({
-    decision: readJsonFile(REPORT_FILES.decision),
-    health: readJsonFile(REPORT_FILES.health),
-    signalAudit: readJsonFile(REPORT_FILES.signalAudit),
-    liveBacktestGap: readJsonFile(REPORT_FILES.liveBacktestGap),
-    tenMinRegimeFilter: readJsonFile(REPORT_FILES.tenMinRegimeFilter),
-    tenMinStatefulPolicyFilter: readJsonFile(REPORT_FILES.tenMinStatefulPolicyFilter),
-    thirtyMinRegimeFilter: readJsonFile(REPORT_FILES.thirtyMinRegimeFilter),
-    regimePattern: readJsonFile(REPORT_FILES.regimePattern),
-    liveAudit: readJsonFile(REPORT_FILES.liveAudit),
-    shadowDecision: readJsonFile(REPORT_FILES.shadowDecision),
-    latency: readJsonFile(REPORT_FILES.latency),
+    secondBacktest: readJsonFile(SECOND_BACKTEST_REPORT_FILE),
     dataUpdate,
     reportRefresh
   });
@@ -2204,7 +2147,6 @@ server.listen(PORT, '0.0.0.0', () => {
     startSignalService("server_listen");
     setInterval(() => runDataUpdate("timer"), DATA_UPDATE_INTERVAL_MS);
     refreshLightReports("server_listen");
-    setInterval(() => refreshLightReports("timer"), REPORT_REFRESH_INTERVAL_MS);
   } else {
     console.log("[Server] Managed Python processes disabled by DISABLE_MANAGED_PROCESSES=1");
   }

@@ -50,6 +50,7 @@ Run-Step "check local Python paramiko" {
 
 if (-not $SkipTests) {
     Run-Step "npm test" { npm test }
+    Run-Step "python second backtest tests" { python -m unittest test_second_backtest.py }
 }
 
 if (-not $SkipBuild) {
@@ -81,7 +82,7 @@ exclude_prefixes = [
 ]
 include_top = {
     "data", "docs", "frontend", "lib", "public", "py",
-    "research_poc_10m_binary", "test", "tools"
+    "test", "tools"
 }
 include_files = {
     "auto_btc.js", "package.json", "package-lock.json",
@@ -221,7 +222,7 @@ echo "[6/8] syntax checks"
 node --check server.js
 node --check auto_btc.js
 . .venv/bin/activate
-python -m py_compile py/signal_btc.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py
+python -m py_compile py/signal_btc.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/backtest_enhanced.py py/run_second_backtest.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/execution.py py/second_backtest/metrics.py py/second_backtest/strategies.py
 
 echo "[7/8] write systemd services"
 NODE_BIN="$(command -v node)"
