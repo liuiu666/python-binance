@@ -46,9 +46,9 @@ function TradeRows({ rows, emptyText }) {
         const exe = getExecutionLabel(row);
         return (
           <div className={`history-row ${cls}`} key={row.id || `${row.openTime}-${row.strategyId}-${row.direction}`}>
-            <div><span className={`status-pill ${cls}`}>{statusText(row.status)}</span></div>
+            <div className="history-status"><span className={`status-pill ${cls}`}>{statusText(row.status)}</span></div>
             <div className="history-main">
-              <div className="history-strategy" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div className="history-strategy">
                 <span className={`dir-pill ${dir}`}>{directionText(row.direction)}</span>
                 <strong>{strategyName(row.strategyId)}</strong>
                 <span style={{
@@ -65,6 +65,7 @@ function TradeRows({ rows, emptyText }) {
                 </span>
               </div>
               <small>强度 {row.confidence !== undefined && row.confidence !== null ? fmtPct(row.confidence, 0) : "--"} | RSI {row.rsi_value !== undefined && row.rsi_value !== null ? Number(row.rsi_value).toFixed(0) : "--"}</small>
+              <small className="strategy-id-mini">{row.strategyId || "manual"}</small>
             </div>
             <div className="history-amount"><strong>{fmt(row.amount, 0)}U</strong><small>{row.duration || "--"} 分钟</small></div>
             <div className="history-time history-detail"><small>{tp.date}</small><strong>{tp.time}</strong></div>

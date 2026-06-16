@@ -20,6 +20,7 @@
 | 1 秒 K 线采集 | `py/collect_second_data.py` |
 | 当前价格代理 | `py/price_proxy.py` |
 | 秒级回测 CLI | `py/run_second_backtest.py` |
+| 秒级算法研究 CLI | `py/run_second_research.py` / `npm run research:second` |
 | 秒级回测框架 | `py/second_backtest/` |
 | 部署脚本 | `tools/deploy_linux.ps1` |
 
@@ -54,9 +55,9 @@ flowchart LR
 
 当前策略类型：
 
-- `poc_normal`：旧 POC/正态分钟级策略仍在 `py/signal_btc.py` 内支持，用于兼容当前页面配置。
-- `second_normal`：秒级正态尾部反转。
-- `second_chip`：秒级筹码区突破反转。
+- `second_normal`：秒级正态尾部反转。当前主参数：`lookbackSec=4200`、`tailPct=0.22`、`horizonSec=600`、`gapSec=1200`、默认实盘 `10U`。
+- `second_chip`：秒级筹码区突破反转。当前主参数：`lookbackSec=3600`、`chipTargetShare=0.2`、`chipBinSize=100`、`chipBreakPct=0.005`、`chipFilter=flow_reversal`、`gapSec=600`、默认实盘 `15U`。
+- `poc_normal`：旧 POC/正态分钟级策略仍在 `py/signal_btc.py` 内支持，但默认不开启，只用于兼容旧配置。
 
 策略金额在前端配置里按策略单独设置。实盘执行时，`auto_btc.js` 根据 `_strategyVariants` 和 `/api/signal` 返回的策略 ID 匹配金额。
 
@@ -68,7 +69,9 @@ Pad 执行规则在 `auto_btc.js`：
 - 信号必须未过期，默认最大延迟 60 秒。
 - 同一策略下单后锁到到期时间，当前 10 分钟周期就是锁 10 分钟。
 - 不同策略不互相全局去重。
+- 多个策略同一时间有信号时，按信号可执行时间和页面策略配置顺序排队下单，并在审计里记录具体 `strategyId`。
 - 下单成功后记录到 `trade_audit.jsonl`，服务端再用于展示和结算。
+- Pad 每分钟上报保活状态：屏幕是否亮、是否有修改系统设置权限、系统熄屏时间、是否忽略电池优化。黑屏优先查 `/api/tablet-diagnostics`。
 
 服务端影子单/模拟结算在 `server.js`：
 
@@ -97,6 +100,14 @@ python py\run_second_backtest.py --csv data\btcusdt_1s_trades.csv --out data\sec
 ```powershell
 npm run backtest:second:defaults
 ```
+
+算法研究扫描：
+
+```powershell
+npm run research:second
+```
+
+研究报告默认输出：`tmp/second_algorithm_research_latest.json`。它只读 1 秒 K 线数据，不会修改线上配置；用于比较正态尾部、方向型正态、筹码区、VWAP 偏离、资金流背离等候选算法。
 
 指定 CSV：
 
@@ -127,7 +138,7 @@ python py\run_second_backtest.py --csv data\btcusdt_1s_trades.csv --out data\sec
 
 - 生产：`signal_btc.py`、`update_live_data.py`、`collect_second_data.py`、`price_proxy.py`
 - 兼容依赖：`backtest_enhanced.py`，当前 `signal_btc.py` 仍用它构建旧 POC 特征
-- 研究：`run_second_backtest.py`、`second_backtest/`
+- 研究：`run_second_backtest.py`、`run_second_research.py`、`second_backtest/`
 
 不要再新增：
 
@@ -141,7 +152,7 @@ python py\run_second_backtest.py --csv data\btcusdt_1s_trades.csv --out data\sec
 ## 部署前检查
 
 ```powershell
-python -m py_compile py\signal_btc.py py\update_live_data.py py\collect_second_data.py py\price_proxy.py py\backtest_enhanced.py py\run_second_backtest.py py\second_backtest\__init__.py py\second_backtest\data.py py\second_backtest\execution.py py\second_backtest\metrics.py py\second_backtest\strategies.py
+python -m py_compile py\signal_btc.py py\update_live_data.py py\collect_second_data.py py\price_proxy.py py\backtest_enhanced.py py\run_second_backtest.py py\run_second_research.py py\second_backtest\__init__.py py\second_backtest\data.py py\second_backtest\execution.py py\second_backtest\metrics.py py\second_backtest\strategies.py py\second_backtest\research.py
 python -m unittest test_second_backtest.py
 npm test
 npm run frontend:build

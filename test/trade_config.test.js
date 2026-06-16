@@ -86,8 +86,8 @@ test("trade config separates observation from real execution", () => {
       { id: "BTC_10min_SECOND_1800_20", base: "SECOND", amount: "5", tailPct: 0.2, enabled: true, tradeEnabled: false }
     ]
   });
-  assert.deepEqual(observedStrategyIds(cfg), ["BTC_10min_SAFE", "BTC_10min_TAKER", "BTC_10min_SECOND_1800_20", "BTC_10min_SECOND_CHIP_1800_OPT", "BTC_10min_SECOND_CHIP_3600_FLOW"]);
-  assert.deepEqual(liveStrategyIds(cfg), ["BTC_10min_TAKER", "BTC_10min_SECOND_CHIP_3600_FLOW"]);
+  assert.deepEqual(observedStrategyIds(cfg), ["BTC_10min_SAFE", "BTC_10min_TAKER", "BTC_10min_SECOND_1800_20", "BTC_10min_SECOND_CHIP_1800_OPT", "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW"]);
+  assert.deepEqual(liveStrategyIds(cfg), ["BTC_10min_TAKER", "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW"]);
 });
 
 test("trade config preserves custom second normal variants", () => {
@@ -246,5 +246,5 @@ test("trade config ignores legacy knobs and keeps fixed strategy amounts", () =>
   assert.equal(result.tradeConfig.maxActionableLagMs, undefined);
   assert.equal(result.tradeConfig.tiers, undefined);
   assert.equal(amountForStrategyConfig("BTC_10min_SAFE", result.tradeConfig), "5");
-  assert.equal(amountForStrategyConfig("BTC_10min_TAKER", result.tradeConfig), "10");
+  assert.equal(amountForStrategyConfig("BTC_10min_TAKER", result.tradeConfig), "5");
 });

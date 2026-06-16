@@ -1147,7 +1147,11 @@ function tabletDiagnostics() {
     "autojs_loader_exec",
     "autojs_loader_error",
     "autojs_start",
+    "autojs_keepalive_status",
     "autojs_heartbeat",
+    "runtime_screen_wake",
+    "runtime_relaunch_app",
+    "runtime_keepalive_failed",
     "signal_tradeable",
     "signal_skipped",
     "order_attempt",
@@ -1162,10 +1166,21 @@ function tabletDiagnostics() {
   )) || null;
   const latestEvent = autojsRows.length ? autojsRows[autojsRows.length - 1] : null;
   const latestHeartbeat = [...autojsRows].reverse().find(r => r.event === "autojs_heartbeat") || null;
+  const latestKeepAliveStatus = [...autojsRows].reverse().find(r => (
+    r.event === "autojs_keepalive_status" ||
+    r.event === "runtime_screen_wake" ||
+    r.event === "runtime_relaunch_app" ||
+    r.event === "runtime_keepalive_failed" ||
+    (r.event === "autojs_heartbeat" && r.keepAlive)
+  )) || null;
+  const latestKeepAliveFailure = [...autojsRows].reverse().find(r => r.event === "runtime_keepalive_failed") || null;
   const latestOrderDone = [...autojsRows].reverse().find(r => r.event === "order_done") || null;
+  const keepAliveStatus = latestKeepAliveStatus?.keepAlive || latestHeartbeat?.keepAlive || null;
   const now = Date.now();
   const ageOf = row => row && row.serverTime ? now - Number(row.serverTime) : null;
   const heartbeatAgeMs = ageOf(latestHeartbeat);
+  const keepAliveStatusAgeMs = ageOf(latestKeepAliveStatus);
+  const keepAliveFailureAgeMs = ageOf(latestKeepAliveFailure);
   const eventAgeMs = ageOf(latestEvent);
   const tabletPagePingAgeMs = ageOf(latestTabletPagePing);
   const balanceAgeMs = realBalance && realBalance.time ? now - Number(realBalance.time) : null;
@@ -1182,6 +1197,12 @@ function tabletDiagnostics() {
     loaderError: autojsRows.some(r => r.event === "autojs_loader_error"),
     autojsStarted: autojsRows.some(r => r.event === "autojs_start"),
     heartbeatOnline: heartbeatAgeMs != null && heartbeatAgeMs <= 120000,
+    keepAliveReported: !!keepAliveStatus,
+    writeSettingsGranted: keepAliveStatus?.writeSettingsGranted === true,
+    screenTimeoutNever: Number(keepAliveStatus?.screenOffTimeoutMs) >= 2147483000,
+    batteryOptimizationIgnored: keepAliveStatus?.batteryOptimizationIgnored === true,
+    screenOn: keepAliveStatus?.screenOn === true,
+    keepAliveFailureRecent: keepAliveFailureAgeMs != null && keepAliveFailureAgeMs <= 600000,
     balanceRecent: balanceAgeMs != null && balanceAgeMs <= 120000,
     orderDoneSeen: !!latestOrderDone
   };
@@ -1195,6 +1216,12 @@ function tabletDiagnostics() {
       ? `Loader ran; wait for autojs_start or run latest auto_btc.js from ${runtime.scriptUrl} directly.`
     : !checks.heartbeatOnline
       ? "AutoJS was seen but heartbeat is stale; restart the tablet script and confirm it can POST /api/trade-audit."
+      : checks.keepAliveFailureRecent
+        ? "AutoJS recently reported a keepalive failure; check tablet screen, lock state, and battery/background permissions."
+      : keepAliveStatus && keepAliveStatus.writeSettingsGranted === false
+        ? "AutoJS is online but lacks WRITE_SETTINGS; grant Modify system settings so screen timeout can be set to never."
+      : keepAliveStatus && keepAliveStatus.batteryOptimizationIgnored === false
+        ? "AutoJS is online but battery optimization may still stop it; allow unrestricted/background running on the tablet."
       : !checks.orderDoneSeen
         ? "Tablet is online; wait for the next tradeable signal or place a small manual test order."
         : "Live order audit is active; collect settled trades before raising stake.";
@@ -1210,6 +1237,11 @@ function tabletDiagnostics() {
     latestTabletPagePingAgeMs: tabletPagePingAgeMs,
     latestHeartbeat,
     latestHeartbeatAgeMs: heartbeatAgeMs,
+    latestKeepAliveStatus,
+    latestKeepAliveStatusAgeMs: keepAliveStatusAgeMs,
+    latestKeepAliveFailure,
+    latestKeepAliveFailureAgeMs: keepAliveFailureAgeMs,
+    keepAliveStatus,
     latestOrderDone,
     balance: realBalance,
     balanceAgeMs,

@@ -157,7 +157,7 @@ test("server write APIs require token when configured", async () => {
     assert.equal(allowed.json.amount, "9");
     assert.equal(allowed.json.duration, "10");
     assert.equal(allowed.json.strategyAmounts.BTC_10min_SAFE, "5");
-    assert.equal(allowed.json.strategyAmounts.BTC_10min_TAKER, "10");
+    assert.equal(allowed.json.strategyAmounts.BTC_10min_TAKER, "5");
     assert.equal(allowed.json.queueOrderPolicy, undefined);
   });
 });

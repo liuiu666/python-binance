@@ -59,11 +59,11 @@
       "enabled": true,
       "tradeEnabled": true,
       "backtest": {
-        "wr": 70.59,
-        "tradesPerDay": 8.57,
-        "trades": 17,
+        "wr": 66.67,
+        "tradesPerDay": 8.5,
+        "trades": 27,
         "maxLoss": 2,
-        "sampleHours": 47.58
+        "sampleHours": 76.23
       },
       "lookbackSec": 3600,
       "horizonSec": 600,
@@ -123,6 +123,33 @@
       "chipBreakPct": 0.003,
       "chipDirectionFilter": "all",
       "chipFilter": "flow_reversal"
+    },
+    {
+      "id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+      "base": "SECOND_CHIP",
+      "label": "秒级筹码区 WIDE_FLOW 60m",
+      "amount": "15",
+      "tailPct": 0.2,
+      "duration": "10",
+      "enabled": true,
+      "tradeEnabled": true,
+      "backtest": {
+        "wr": 76.67,
+        "tradesPerDay": 9.45,
+        "trades": 30,
+        "maxLoss": 2,
+        "sampleHours": 76.23
+      },
+      "lookbackSec": 3600,
+      "horizonSec": 600,
+      "gapSec": 600,
+      "chipTargetShare": 0.2,
+      "chipBinMode": "fixed",
+      "chipBinSize": 100,
+      "chipBinPct": 0.0003,
+      "chipBreakPct": 0.005,
+      "chipDirectionFilter": "all",
+      "chipFilter": "flow_reversal"
     }
   ],
   "duration": "10",
@@ -135,7 +162,8 @@
     "BTC_10min_TAKER_27": "6",
     "BTC_10min_SECOND_3600_20": "5",
     "BTC_10min_SECOND_CHIP_1800_OPT": "5",
-    "BTC_10min_SECOND_CHIP_3600_FLOW": "10"
+    "BTC_10min_SECOND_CHIP_3600_FLOW": "10",
+    "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW": "15"
   },
   "strategyParams": {
     "BTC_10min_SAFE": {
@@ -183,6 +211,20 @@
       "chipBinSize": 50,
       "chipBinPct": 0.0003,
       "chipBreakPct": 0.003,
+      "chipDirectionFilter": "all",
+      "chipFilter": "flow_reversal"
+    },
+    "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW": {
+      "tailPct": 0.2,
+      "tradeEnabled": true,
+      "lookbackSec": 3600,
+      "horizonSec": 600,
+      "gapSec": 600,
+      "chipTargetShare": 0.2,
+      "chipBinMode": "fixed",
+      "chipBinSize": 100,
+      "chipBinPct": 0.0003,
+      "chipBreakPct": 0.005,
       "chipDirectionFilter": "all",
       "chipFilter": "flow_reversal"
     }

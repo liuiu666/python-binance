@@ -584,6 +584,11 @@ button, input, select {
 .history-row.tie { border-left: 3px solid var(--yellow); }
 .history-row.pending { border-left: 3px solid var(--muted); }
 
+.history-status {
+  display: flex;
+  align-items: center;
+}
+
 .status-pill {
   display: inline-block;
   font-size: 10px;
@@ -614,14 +619,19 @@ button, input, select {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 .history-strategy strong {
   font-size: 12px;
+  line-height: 1.25;
 }
 .history-main small {
   color: var(--muted);
   font-size: 10px;
   margin-top: 1px;
+}
+.strategy-id-mini {
+  word-break: break-all;
 }
 .history-amount {
   display: flex;
@@ -795,18 +805,73 @@ button, input, select {
   .link-list {
     grid-template-columns: 1fr;
   }
-  /* history: hide the 6-col header, collapse rows to 3 visible columns */
+  /* history: card rows with all order details visible */
   .trade-table-head {
     display: none;
   }
   .history-row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: 1fr;
     gap: 8px;
+    align-items: stretch;
     padding: 10px;
+    border: 1px solid var(--line-soft);
+    border-left-width: 3px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    background: rgba(255,255,255,0.012);
   }
-  /* secondary columns (price / open time) hidden on phone via className hook */
+  .history-status {
+    justify-content: flex-start;
+  }
+  .history-strategy {
+    gap: 6px;
+  }
+  .history-strategy strong {
+    flex-basis: 100%;
+    font-size: 12px;
+  }
   .history-detail {
-    display: none;
+    display: flex;
+  }
+  .history-amount,
+  .history-time,
+  .history-price,
+  .history-pnl {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding-top: 6px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .history-amount::before {
+    content: "金额";
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+  }
+  .history-time::before {
+    content: "下单时间";
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+  }
+  .history-price::before {
+    content: "价格";
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+  }
+  .history-pnl::before {
+    content: "盈亏";
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+  }
+  .history-time,
+  .history-price {
+    font-size: 11px;
   }
   .history-summary {
     flex-wrap: wrap;

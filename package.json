@@ -11,7 +11,8 @@
     "frontend:dev": "vite --config frontend/vite.config.js --host 0.0.0.0",
     "test": "node --test test/*.test.js",
     "backtest:second": "python py/run_second_backtest.py",
-    "backtest:second:defaults": "python py/run_second_backtest.py --defaults"
+    "backtest:second:defaults": "python py/run_second_backtest.py --defaults",
+    "research:second": "python py/run_second_research.py"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",

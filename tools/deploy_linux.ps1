@@ -222,7 +222,7 @@ echo "[6/8] syntax checks"
 node --check server.js
 node --check auto_btc.js
 . .venv/bin/activate
-python -m py_compile py/signal_btc.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/backtest_enhanced.py py/run_second_backtest.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/execution.py py/second_backtest/metrics.py py/second_backtest/strategies.py
+python -m py_compile py/signal_btc.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/backtest_enhanced.py py/run_second_backtest.py py/run_second_research.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/execution.py py/second_backtest/metrics.py py/second_backtest/strategies.py py/second_backtest/research.py
 
 echo "[7/8] write systemd services"
 NODE_BIN="$(command -v node)"

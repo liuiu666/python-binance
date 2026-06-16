@@ -8,7 +8,7 @@ var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
 var API_TOKEN = "";
-var SCRIPT_VERSION = "2026-06-16-verified-order-v6";
+var SCRIPT_VERSION = "2026-06-17-keepalive-diagnostics-v1";
 var POLL_INTERVAL = 3000;
 var SIGNAL_MAX_AGE_MS = 60000;
 var STRATEGY_COOLDOWN_MS = 10 * 60 * 1000;
@@ -37,8 +37,9 @@ var balanceFailCount = 0;
 var lastBalanceValue = null;
 var BALANCE_INTERVAL_MS = 30000;
 var RUNTIME_ALIVE_INTERVAL_MS = 10000;
-var SCREEN_NUDGE_INTERVAL_MS = 180000;
+var SCREEN_NUDGE_INTERVAL_MS = 60000;
 var deviceId = (device.brand + "_" + (device.model || "").replace(/\s+/g, ""));
+var lastKeepAliveStatus = {};
 
 device.keepScreenOn();
 
@@ -211,8 +212,62 @@ function reportHeartbeat(payload) {
         maxActionableLagMs: maxActionableLagMs(),
         signalOk: !!payload,
         strategies: strategies,
+        keepAlive: readKeepAliveStatus(),
         balance: lastBalanceValue
     });
+}
+
+function readKeepAliveStatus() {
+    var out = {
+        version: SCRIPT_VERSION,
+        packageName: null,
+        foregroundPackage: null,
+        screenOn: null,
+        writeSettingsGranted: null,
+        screenOffTimeoutMs: null,
+        batteryOptimizationIgnored: null,
+        nudgeIntervalMs: SCREEN_NUDGE_INTERVAL_MS,
+        runtimeCheckIntervalMs: RUNTIME_ALIVE_INTERVAL_MS
+    };
+    try { out.packageName = context.getPackageName(); } catch (e0) {}
+    try { out.foregroundPackage = currentPackage(); } catch (e1) {}
+    try { out.screenOn = device.isScreenOn(); } catch (e2) {}
+
+    try {
+        importClass(android.provider.Settings);
+        try { out.writeSettingsGranted = Settings.System.canWrite(context); } catch (e3) {}
+        try {
+            out.screenOffTimeoutMs = Settings.System.getInt(
+                context.getContentResolver(),
+                Settings.System.SCREEN_OFF_TIMEOUT,
+                -1
+            );
+        } catch (e4) {}
+    } catch (e5) {
+        out.settingsError = String(e5);
+    }
+
+    try {
+        var pm = context.getSystemService(android.content.Context.POWER_SERVICE);
+        if (pm && pm.isIgnoringBatteryOptimizations) {
+            out.batteryOptimizationIgnored = pm.isIgnoringBatteryOptimizations(context.getPackageName());
+        }
+    } catch (e6) {
+        out.batteryOptimizationError = String(e6);
+    }
+
+    lastKeepAliveStatus = out;
+    return out;
+}
+
+function reportKeepAliveStatus(event, extra) {
+    var status = readKeepAliveStatus();
+    var payload = { keepAlive: status };
+    if (extra) {
+        for (var k in extra) payload[k] = extra[k];
+    }
+    reportTradeAudit(event || "autojs_keepalive_status", null, payload);
+    return status;
 }
 // ========== Keep device awake ==========
 function ensureAwake() {
@@ -258,11 +313,13 @@ function verifyAwake() {
 
 function keepScreenAlwaysOn() {
     var dayMs = 24 * 60 * 60 * 1000;
+    var wakeLockRequested = false;
 
     // AutoJS wake lock. This helps, but some OPPO/ColorOS builds may still
     // obey the system screen timeout unless we also change SCREEN_OFF_TIMEOUT.
     try {
         device.keepScreenOn(dayMs);
+        wakeLockRequested = true;
         log("[Screen] keepScreenOn(" + dayMs + "ms)");
     } catch (e) {
         log("[Screen] keepScreenOn err: " + e);
@@ -282,6 +339,7 @@ function keepScreenAlwaysOn() {
                 2147483647
             );
             log("[Screen] screen_off_timeout set to never");
+            readKeepAliveStatus();
             return true;
         }
 
@@ -302,12 +360,14 @@ function keepScreenAlwaysOn() {
     try {
         var r = shell("settings put system screen_off_timeout 2147483647", true);
         log("[Screen] shell screen_off_timeout code=" + (r ? r.code : "null"));
+        readKeepAliveStatus();
         return r && r.code === 0;
     } catch (e3) {
         log("[Screen] shell screen_off_timeout err: " + e3);
     }
 
-    return false;
+    readKeepAliveStatus();
+    return wakeLockRequested;
 }
 
 function ensureRuntimeAlive(force) {
@@ -331,9 +391,10 @@ function ensureRuntimeAlive(force) {
     if (!screenOn) {
         log("[KeepAlive] screen off, waking");
         if (!forceWakeForTrade()) {
-            reportTradeAudit("runtime_keepalive_failed", null, { reason: "screen_off_wake_failed" });
+            reportKeepAliveStatus("runtime_keepalive_failed", { reason: "screen_off_wake_failed" });
             return false;
         }
+        reportKeepAliveStatus("runtime_screen_wake", { reason: "screen_was_off" });
     }
 
     var pkg = "";
@@ -345,10 +406,10 @@ function ensureRuntimeAlive(force) {
             sleep(3000);
             durationSet = false;
             durationSetTarget = "";
-            reportTradeAudit("runtime_relaunch_app", null, { fromPackage: pkg || null, toPackage: PACKAGE });
+            reportKeepAliveStatus("runtime_relaunch_app", { fromPackage: pkg || null, toPackage: PACKAGE });
         } catch (e3) {
             log("[KeepAlive] launch err: " + e3);
-            reportTradeAudit("runtime_keepalive_failed", null, { reason: "launch_failed", fromPackage: pkg || null });
+            reportKeepAliveStatus("runtime_keepalive_failed", { reason: "launch_failed", fromPackage: pkg || null });
             return false;
         }
     }
@@ -586,6 +647,7 @@ function buildTradeQueue(data) {
         var exec = buildExecutionContext(sig);
         queue.push({
             strategyId: d.id,
+            configIndex: i,
             signal: sig.signal,
             confidence: sig.confidence || 0,
             rsi_value: sig.rsi_value,
@@ -613,7 +675,8 @@ function sortTradeQueue(queue) {
         if (ta !== tb) return ta < tb ? -1 : 1;
         var ap = a.strategyId.indexOf("BTC_10min_TAKER") === 0 ? 0 : 1;
         var bp = b.strategyId.indexOf("BTC_10min_TAKER") === 0 ? 0 : 1;
-        return ap - bp;
+        if (ap !== bp) return ap - bp;
+        return Number(a.configIndex || 0) - Number(b.configIndex || 0);
     });
     return queue;
 }
@@ -1091,10 +1154,12 @@ function main() {
     log("screen w=" + device.width + " h=" + device.height);
     var auditOk = reportTradeAudit("autojs_start", null, {
         version: SCRIPT_VERSION,
-        screenOn: (function(){ try { return device.isScreenOn(); } catch(e) { return null; } })()
+        screenOn: (function(){ try { return device.isScreenOn(); } catch(e) { return null; } })(),
+        keepAlive: readKeepAliveStatus()
     });
     log("[Audit] start event " + (auditOk ? "posted" : "FAILED") + " -> " + AUDIT_URL);
-    keepScreenAlwaysOn();
+    var keepAliveOk = keepScreenAlwaysOn();
+    reportKeepAliveStatus("autojs_keepalive_status", { phase: "after_start", keepScreenAlwaysOnOk: keepAliveOk });
     setInterval(function(){
         try { device.keepScreenOn(24 * 60 * 60 * 1000); } catch (e) {}
     }, 30000);
@@ -1130,7 +1195,7 @@ function main() {
                     order.queueBatchId = queueBatchId;
                     order.queuePosition = qi + 1;
                     order.queueLength = queue.length;
-                    order.queueOrderPolicy = "fixed_taker_then_safe";
+                    order.queueOrderPolicy = "actionable_time_config_order";
                     order.queueBatchStartClientTime = queueBatchStart;
                     order.previousOrderDoneClientTime = previousDoneAt || null;
                     order.sincePreviousDoneMs = previousDoneAt ? Date.now() - previousDoneAt : null;

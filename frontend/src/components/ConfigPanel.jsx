@@ -218,10 +218,31 @@ function VariantCard({ variant, canDelete, onChange, onDelete }) {
 
 function defaultsForBase(base, defaultAmount, index) {
   if (base === "SECOND_CHIP") {
+    if (index === 0) {
+      return {
+        id: "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+        base,
+        label: "秒级筹码区 WIDE_FLOW 60m",
+        amount: "15",
+        enabled: true,
+        tradeEnabled: true,
+        duration: "10",
+        lookbackSec: 3600,
+        horizonSec: 600,
+        gapSec: 600,
+        chipTargetShare: 0.2,
+        chipBinMode: "fixed",
+        chipBinSize: 100,
+        chipBinPct: 0.0003,
+        chipBreakPct: 0.005,
+        chipDirectionFilter: "all",
+        chipFilter: "flow_reversal"
+      };
+    }
     return {
-      id: index === 0 ? "BTC_10min_SECOND_CHIP_1800_OPT" : variantId(base, 0.2, index, 1800),
+      id: variantId(base, 0.2, index, 1800),
       base,
-      label: index === 0 ? "秒级筹码区 30m 优化" : variantLabel(base, 0.2, 1800),
+      label: variantLabel(base, 0.2, 1800),
       amount: defaultAmount,
       enabled: true,
       tradeEnabled: false,
@@ -238,19 +259,19 @@ function defaultsForBase(base, defaultAmount, index) {
       chipFilter: "width_lte_3"
     };
   }
-  const preferred = base === "SAFE" ? [0.22, 0.23, 0.25, 0.27] : base === "TAKER" ? [0.27, 0.23, 0.22, 0.25] : [0.27, 0.2, 0.22, 0.25];
+  const preferred = base === "SAFE" ? [0.22, 0.23, 0.25, 0.27] : base === "TAKER" ? [0.27, 0.23, 0.22, 0.25] : [0.22, 0.23, 0.25, 0.2];
   const tailPct = preferred[index % preferred.length] || 0.2;
-  const lookbackSec = base === "SECOND" ? 1800 : undefined;
+  const lookbackSec = base === "SECOND" ? 4200 : undefined;
   return {
-    id: variantId(base, tailPct, index, lookbackSec),
+    id: base === "SECOND" && index === 0 ? "BTC_10min_SECOND_4200_22" : variantId(base, tailPct, index, lookbackSec),
     base,
-    label: variantLabel(base, tailPct, lookbackSec),
-    amount: defaultAmount,
+    label: base === "SECOND" && index === 0 ? "秒级正态 70m 22/78" : variantLabel(base, tailPct, lookbackSec),
+    amount: base === "SECOND" && index === 0 ? "10" : defaultAmount,
     tailPct,
     duration: "10",
     enabled: true,
-    tradeEnabled: base !== "SECOND",
-    ...(base === "SECOND" ? { lookbackSec: 1800, horizonSec: 600, gapSec: 600, secondFilter: "none" } : {})
+    tradeEnabled: base !== "SECOND" || index === 0,
+    ...(base === "SECOND" ? { lookbackSec, horizonSec: 600, gapSec: index === 0 ? 1200 : 600, secondFilter: "none" } : {})
   };
 }
 
