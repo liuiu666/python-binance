@@ -8,7 +8,7 @@ var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
 var API_TOKEN = "";
-var SCRIPT_VERSION = "2026-06-17-keepalive-diagnostics-v1";
+var SCRIPT_VERSION = "2026-06-17-keepalive-diagnostics-v2";
 var POLL_INTERVAL = 3000;
 var SIGNAL_MAX_AGE_MS = 60000;
 var STRATEGY_COOLDOWN_MS = 10 * 60 * 1000;
@@ -38,8 +38,11 @@ var lastBalanceValue = null;
 var BALANCE_INTERVAL_MS = 30000;
 var RUNTIME_ALIVE_INTERVAL_MS = 10000;
 var SCREEN_NUDGE_INTERVAL_MS = 60000;
+var SCREEN_TIMEOUT_NEVER_MS = 2147483647;
+var SCREEN_TIMEOUT_ENSURE_INTERVAL_MS = 60000;
 var deviceId = (device.brand + "_" + (device.model || "").replace(/\s+/g, ""));
 var lastKeepAliveStatus = {};
+var lastScreenTimeoutEnsure = 0;
 
 device.keepScreenOn();
 
@@ -260,6 +263,86 @@ function readKeepAliveStatus() {
     return out;
 }
 
+function ensureSystemScreenTimeoutNever(force, openPermissionPage) {
+    var now = Date.now();
+    if (!force && now - lastScreenTimeoutEnsure < SCREEN_TIMEOUT_ENSURE_INTERVAL_MS) {
+        return { skipped: true, status: lastKeepAliveStatus };
+    }
+    lastScreenTimeoutEnsure = now;
+
+    var result = { ok: false, changed: false, canWrite: null, before: null, after: null, method: null };
+    try {
+        importClass(android.provider.Settings);
+        try { result.canWrite = Settings.System.canWrite(context); } catch (e1) {}
+        try {
+            result.before = Settings.System.getInt(
+                context.getContentResolver(),
+                Settings.System.SCREEN_OFF_TIMEOUT,
+                -1
+            );
+        } catch (e2) {}
+
+        if (result.canWrite) {
+            if (Number(result.before) < 2147483000) {
+                Settings.System.putInt(
+                    context.getContentResolver(),
+                    Settings.System.SCREEN_OFF_TIMEOUT,
+                    SCREEN_TIMEOUT_NEVER_MS
+                );
+                result.changed = true;
+            }
+            try {
+                result.after = Settings.System.getInt(
+                    context.getContentResolver(),
+                    Settings.System.SCREEN_OFF_TIMEOUT,
+                    -1
+                );
+            } catch (e3) {}
+            result.ok = Number(result.after) >= 2147483000;
+            result.method = "Settings.System";
+            readKeepAliveStatus();
+            return result;
+        }
+
+        if (openPermissionPage) {
+            log("[Screen] WRITE_SETTINGS not granted; opening permission page");
+            try {
+                app.startActivity({
+                    action: "android.settings.action.MANAGE_WRITE_SETTINGS",
+                    data: "package:" + context.getPackageName()
+                });
+            } catch (e4) {
+                result.permissionPageError = String(e4);
+                log("[Screen] open WRITE_SETTINGS page err: " + e4);
+            }
+        }
+    } catch (e5) {
+        result.settingsError = String(e5);
+        log("[Screen] Settings.System err: " + e5);
+    }
+
+    try {
+        var r = shell("settings put system screen_off_timeout " + SCREEN_TIMEOUT_NEVER_MS, true);
+        result.shellCode = r ? r.code : null;
+        log("[Screen] shell screen_off_timeout code=" + (r ? r.code : "null"));
+        if (r && r.code === 0) {
+            result.changed = true;
+            result.method = "shell";
+            readKeepAliveStatus();
+            var latest = readKeepAliveStatus();
+            result.after = latest.screenOffTimeoutMs;
+            result.ok = Number(result.after) >= 2147483000;
+            return result;
+        }
+    } catch (e6) {
+        result.shellError = String(e6);
+        log("[Screen] shell screen_off_timeout err: " + e6);
+    }
+
+    readKeepAliveStatus();
+    return result;
+}
+
 function reportKeepAliveStatus(event, extra) {
     var status = readKeepAliveStatus();
     var payload = { keepAlive: status };
@@ -325,49 +408,9 @@ function keepScreenAlwaysOn() {
         log("[Screen] keepScreenOn err: " + e);
     }
 
-    try {
-        importClass(android.provider.Settings);
-        var canWrite = true;
-        try {
-            canWrite = Settings.System.canWrite(context);
-        } catch (e1) {}
-
-        if (canWrite) {
-            Settings.System.putInt(
-                context.getContentResolver(),
-                Settings.System.SCREEN_OFF_TIMEOUT,
-                2147483647
-            );
-            log("[Screen] screen_off_timeout set to never");
-            readKeepAliveStatus();
-            return true;
-        }
-
-        log("[Screen] WRITE_SETTINGS not granted; opening permission page");
-        try {
-            app.startActivity({
-                action: "android.settings.action.MANAGE_WRITE_SETTINGS",
-                data: "package:" + context.getPackageName()
-            });
-        } catch (e2) {
-            log("[Screen] open WRITE_SETTINGS page err: " + e2);
-        }
-    } catch (e) {
-        log("[Screen] Settings.System err: " + e);
-    }
-
-    // Last-resort fallback. Works only if AutoJS has shell/root/ADB privilege.
-    try {
-        var r = shell("settings put system screen_off_timeout 2147483647", true);
-        log("[Screen] shell screen_off_timeout code=" + (r ? r.code : "null"));
-        readKeepAliveStatus();
-        return r && r.code === 0;
-    } catch (e3) {
-        log("[Screen] shell screen_off_timeout err: " + e3);
-    }
-
-    readKeepAliveStatus();
-    return wakeLockRequested;
+    var timeoutResult = ensureSystemScreenTimeoutNever(true, true);
+    if (timeoutResult.ok) log("[Screen] screen_off_timeout set to never");
+    return wakeLockRequested || timeoutResult.ok;
 }
 
 function ensureRuntimeAlive(force) {
@@ -379,6 +422,17 @@ function ensureRuntimeAlive(force) {
         device.keepScreenOn(24 * 60 * 60 * 1000);
     } catch (e0) {
         log("[KeepAlive] keepScreenOn err: " + e0);
+    }
+
+    var timeoutResult = ensureSystemScreenTimeoutNever(false, false);
+    if (timeoutResult && timeoutResult.changed) {
+        reportKeepAliveStatus("autojs_keepalive_status", {
+            phase: "reapply_screen_timeout",
+            screenTimeoutBeforeMs: timeoutResult.before,
+            screenTimeoutAfterMs: timeoutResult.after,
+            screenTimeoutMethod: timeoutResult.method,
+            screenTimeoutOk: timeoutResult.ok
+        });
     }
 
     var screenOn = true;
