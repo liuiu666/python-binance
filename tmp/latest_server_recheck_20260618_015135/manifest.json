@@ -1,0 +1,78 @@
+{
+  "remote_root": "/opt/btc-binary-options",
+  "files": [
+    {
+      "rel": "data/trade_config.json",
+      "local": "tmp\\latest_server_recheck_20260618_015135\\trade_config.json",
+      "size": 2981,
+      "mtime": 1781714752
+    },
+    {
+      "rel": "data/prod_config.json",
+      "local": "tmp\\latest_server_recheck_20260618_015135\\prod_config.json",
+      "size": 1984,
+      "mtime": 1781714752
+    },
+    {
+      "rel": "data/live_signals.json",
+      "local": "tmp\\latest_server_recheck_20260618_015135\\live_signals.json",
+      "size": 1998,
+      "mtime": 1781718703
+    },
+    {
+      "rel": "data/second_data_status.json",
+      "local": "tmp\\latest_server_recheck_20260618_015135\\second_data_status.json",
+      "size": 4285,
+      "mtime": 1781718705
+    },
+    {
+      "rel": "data/trade_audit.jsonl",
+      "error": "FileNotFoundError(2, 'No such file')"
+    },
+    {
+      "rel": "data/signal_audit.jsonl",
+      "local": "tmp\\latest_server_recheck_20260618_015135\\signal_audit.jsonl",
+      "size": 6053868,
+      "mtime": 1781718660
+    },
+    {
+      "rel": "data/btcusdt_1s_trades.csv",
+      "local": "tmp\\latest_server_recheck_20260618_015135\\btcusdt_1s_trades.csv",
+      "size": 80185607,
+      "mtime": 1781718706
+    },
+    {
+      "rel": "data/btcusdt_taker.csv",
+      "local": "tmp\\latest_server_recheck_20260618_015135\\btcusdt_taker.csv",
+      "size": 584625,
+      "mtime": 1781718904
+    }
+  ],
+  "shards": [
+    {
+      "name": "2026-06-17.csv",
+      "size": 9506310,
+      "mtime": 1781719148
+    }
+  ],
+  "cmd_0": {
+    "cmd": "date -u",
+    "stdout": "Wed Jun 17 06:00:26 PM UTC 2026\n",
+    "stderr": ""
+  },
+  "cmd_1": {
+    "cmd": "cd /opt/btc-binary-options && jq -r \".\" data/second_data_status.json 2>/dev/null | head -80 || cat data/second_data_status.json 2>/dev/null",
+    "stdout": "{\n  \"ok\": true,\n  \"symbol\": \"BTCUSDT\",\n  \"market\": \"futures\",\n  \"file\": \"/opt/btc-binary-options/data/btcusdt_1s_trades.csv\",\n  \"updated_at\": \"2026-06-17T18:00:05.349694+00:00\",\n  \"error\": null,\n  \"last_agg_trade_id\": 3343890267,\n  \"fetched_trades\": 1159,\n  \"rows\": 348781,\n  \"added\": 53,\n  \"last_ts\": \"2026-06-17T17:59:09+00:00\",\n  \"pending_seconds\": 1,\n  \"shards\": {\n    \"enabled\": true,\n    \"dir\": \"/opt/btc-binary-options/data/second/BTCUSDT/futures\",\n    \"last_write\": {\n      \"enabled\": true,\n      \"dir\": \"/opt/btc-binary-options/data/second/BTCUSDT/futures\",\n      \"written_files\": [\n        {\n          \"file\": \"/opt/btc-binary-options/data/second/BTCUSDT/futures/2026-06-17.csv\",\n          \"rows\": 42052\n        }\n      ],\n      \"rows\": 42052\n    }\n  },\n  \"node_selection\": {\n    \"active_node\": \"https://fapi.binance.com\",\n    \"active_proxy\": null,\n    \"active_node_key\": \"https://fapi.binance.com\",\n    \"circuit_failures\": 3,\n    \"circuit_seconds\": 60,\n    \"proxy_nodes\": 1\n  },\n  \"node_health\": {\n    \"https://fapi.binance.com\": {\n      \"successes\": 3025,\n      \"failures\": 1,\n      \"consecutive_failures\": 0,\n      \"avg_latency_ms\": 1550.26,\n      \"last_success_at\": \"2026-06-17T17:59:11.521158+00:00\",\n      \"last_error_at\": \"2026-06-17T10:52:54.643889+00:00\",\n      \"last_error\": null,\n      \"circuit_open_until\": null\n    },\n    \"https://fapi1.binance.com\": {\n      \"successes\": 0,\n      \"failures\": 1,\n      \"consecutive_failures\": 1,\n      \"avg_latency_ms\": null,\n      \"last_success_at\": null,\n      \"last_error_at\": \"2026-06-17T10:53:03.364197+00:00\",\n      \"last_error\": \"Expecting value: line 1 column 1 (char 0)\",\n      \"circuit_open_until\": null\n    },\n    \"https://fapi2.binance.com\": {\n      \"successes\": 0,\n      \"failures\": 1,\n      \"consecutive_failures\": 1,\n      \"avg_latency_ms\": null,\n      \"last_success_at\": null,\n      \"last_error_at\": \"2026-06-17T10:53:12.059295+00:00\",\n      \"last_error\": \"Expecting value: line 1 column 1 (char 0)\",\n      \"circuit_open_until\": null\n    },\n    \"https://fapi3.binance.com\": {\n      \"successes\": 0,\n      \"failures\": 1,\n      \"consecutive_failures\": 1,\n      \"avg_latency_ms\": null,\n      \"last_success_at\": null,\n      \"last_error_at\": \"2026-06-17T10:53:23.448304+00:00\",\n      \"last_error\": \"Expecting value: line 1 column 1 (char 0)\",\n      \"circuit_open_until\": null\n    },\n    \"https://fapi.binance.com|proxy=http://127.0.0.1:7890\": {\n      \"base\": \"https://fapi.binance.com\",\n      \"proxy\": \"http://127.0.0.1:7890\",\n",
+    "stderr": ""
+  },
+  "cmd_2": {
+    "cmd": "cd /opt/btc-binary-options && tail -n 5 data/btcusdt_1s_trades.csv 2>/dev/null",
+    "stdout": "2026-06-17T17:59:59.000000Z,BTCUSDT,futures,66055.9,66074.2,66055.9,66073.1,10.624999999999998,701897.5019,132,10.584,0.041,699189.1704,2708.3315,258.1463414634146,2026-06-17T17:59:59.166000Z,2026-06-17T17:59:59.977000Z,3343891174,3343891305\n2026-06-17T18:00:00.000000Z,BTCUSDT,futures,66073.0,66073.1,66056.5,66069.1,23.344,1542142.4213,180,12.8,10.544,845568.2897000001,696574.1316,1.2139605462822458,2026-06-17T18:00:00.030000Z,2026-06-17T18:00:00.999000Z,3343891306,3343891485\n2026-06-17T18:00:01.000000Z,BTCUSDT,futures,66075.2,66085.3,65870.6,65883.3,422.465,27857008.3735,1845,21.003,401.462,1385844.072,26471164.3015,0.052316283982045624,2026-06-17T18:00:01.051000Z,2026-06-17T18:00:01.976000Z,3343891486,3343893330\n2026-06-17T18:00:02.000000Z,BTCUSDT,futures,65881.9,65886.4,65865.6,65881.2,51.727,3407369.4934,287,36.097,15.629999999999999,2377761.2711,1029608.2223,2.3094689699296227,2026-06-17T18:00:02.008000Z,2026-06-17T18:00:02.993000Z,3343893331,3343893617\n2026-06-17T18:00:03.000000Z,BTCUSDT,futures,65887.7,65904.3,65883.8,65904.0,8.968,590931.1783,140,6.901,2.067,454726.40660000005,136204.77169999998,3.3386550556361874,2026-06-17T18:00:03.004000Z,2026-06-17T18:00:03.244000Z,3343893618,3343893757\n",
+    "stderr": ""
+  },
+  "cmd_3": {
+    "cmd": "cd /opt/btc-binary-options && cat data/trade_config.json 2>/dev/null",
+    "stdout": "{\n  \"amount\": \"5\",\n  \"strategyVariants\": [\n    {\n      \"id\": \"BTC_10min_SAFE\",\n      \"base\": \"SAFE\",\n      \"label\": \"推荐稳健 20/80\",\n      \"amount\": \"5\",\n      \"tailPct\": 0.2,\n      \"duration\": \"10\",\n      \"enabled\": false,\n      \"tradeEnabled\": false,\n      \"backtest\": {\n        \"wr\": 63.39,\n        \"tradesPerDay\": 3.46,\n        \"trades\": 336,\n        \"maxLoss\": 5\n      }\n    },\n    {\n      \"id\": \"BTC_10min_SECOND_4200_22\",\n      \"base\": \"SECOND\",\n      \"label\": \"秒级正态 4200s 22/78\",\n      \"amount\": \"15\",\n      \"tailPct\": 0.22,\n      \"duration\": \"10\",\n      \"enabled\": true,\n      \"tradeEnabled\": true,\n      \"backtest\": {\n        \"wr\": 71.43,\n        \"tradesPerDay\": 8.82,\n        \"trades\": 28,\n        \"maxLoss\": 2,\n        \"sampleHours\": 76.23\n      },\n      \"lookbackSec\": 4200,\n      \"horizonSec\": 600,\n      \"gapSec\": 1200,\n      \"secondFilter\": \"none\"\n    },\n    {\n      \"id\": \"BTC_10min_SECOND_CHIP_3600_WIDE_FLOW\",\n      \"base\": \"SECOND_CHIP\",\n      \"label\": \"秒级筹码区 60m\",\n      \"amount\": \"15\",\n      \"tailPct\": 0.2,\n      \"duration\": \"10\",\n      \"enabled\": true,\n      \"tradeEnabled\": true,\n      \"backtest\": {\n        \"wr\": 76.67,\n        \"tradesPerDay\": 9.45,\n        \"trades\": 30,\n        \"maxLoss\": 2,\n        \"sampleHours\": 76.23\n      },\n      \"lookbackSec\": 3600,\n      \"horizonSec\": 600,\n      \"gapSec\": 600,\n      \"chipTargetShare\": 0.2,\n      \"chipBinMode\": \"fixed\",\n      \"chipBinSize\": 100,\n      \"chipBinPct\": 0.0003,\n      \"chipBreakPct\": 0.005,\n      \"chipDirectionFilter\": \"all\",\n      \"chipFilter\": \"flow_reversal\"\n    },\n    {\n      \"id\": \"BTC_10min_TAKER\",\n      \"base\": \"TAKER\",\n      \"label\": \"资金流过滤 20/80\",\n      \"amount\": \"5\",\n      \"tailPct\": 0.2,\n      \"duration\": \"10\",\n      \"enabled\": false,\n      \"tradeEnabled\": false,\n      \"backtest\": {\n        \"wr\": 87.5,\n        \"tradesPerDay\": 0.94,\n        \"trades\": 32,\n        \"maxLoss\": 1\n      }\n    }\n  ],\n  \"duration\": \"10\",\n  \"autoTrade_10m\": true,\n  \"realTradingEnabled\": true,\n  \"shadowTradingEnabled\": false,\n  \"strategyAmounts\": {\n    \"BTC_10min_SAFE\": \"5\",\n    \"BTC_10min_SECOND_4200_22\": \"15\",\n    \"BTC_10min_SECOND_CHIP_3600_WIDE_FLOW\": \"15\",\n    \"BTC_10min_TAKER\": \"5\"\n  },\n  \"strategyParams\": {\n    \"BTC_10min_SAFE\": {\n      \"tailPct\": 0.2,\n      \"tradeEnabled\": false\n    },\n    \"BTC_10min_SECOND_4200_22\": {\n      \"tailPct\": 0.22,\n      \"tradeEnabled\": true,\n      \"lookbackSec\": 4200,\n      \"horizonSec\": 600,\n      \"gapSec\": 1200,\n      \"secondFilter\": \"none\"\n    },\n    \"BTC_10min_SECOND_CHIP_3600_WIDE_FLOW\": {\n      \"tailPct\": 0.2,\n      \"tradeEnabled\": true,\n      \"lookbackSec\": 3600,\n      \"horizonSec\": 600,\n      \"gapSec\": 600,\n      \"chipTargetShare\": 0.2,\n      \"chipBinMode\": \"fixed\",\n      \"chipBinSize\": 100,\n      \"chipBinPct\": 0.0003,\n      \"chipBreakPct\": 0.005,\n      \"chipDirectionFilter\": \"all\",\n      \"chipFilter\": \"flow_reversal\"\n    },\n    \"BTC_10min_TAKER\": {\n      \"tailPct\": 0.2,\n      \"tradeEnabled\": false\n    }\n  }\n}",
+    "stderr": ""
+  }
+}

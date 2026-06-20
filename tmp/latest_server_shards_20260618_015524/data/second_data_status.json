@@ -1,0 +1,135 @@
+{
+  "ok": true,
+  "symbol": "BTCUSDT",
+  "market": "futures",
+  "file": "/opt/btc-binary-options/data/btcusdt_1s_trades.csv",
+  "updated_at": "2026-06-17T17:55:29.441696+00:00",
+  "error": null,
+  "last_agg_trade_id": 3343881248,
+  "fetched_trades": 1750,
+  "rows": 348508,
+  "added": 55,
+  "last_ts": "2026-06-17T17:54:36+00:00",
+  "pending_seconds": 0,
+  "shards": {
+    "enabled": true,
+    "dir": "/opt/btc-binary-options/data/second/BTCUSDT/futures",
+    "last_write": {
+      "enabled": true,
+      "dir": "/opt/btc-binary-options/data/second/BTCUSDT/futures",
+      "written_files": [
+        {
+          "file": "/opt/btc-binary-options/data/second/BTCUSDT/futures/2026-06-17.csv",
+          "rows": 41780
+        }
+      ],
+      "rows": 41780
+    }
+  },
+  "node_selection": {
+    "active_node": "https://fapi.binance.com",
+    "active_proxy": null,
+    "active_node_key": "https://fapi.binance.com",
+    "circuit_failures": 3,
+    "circuit_seconds": 60,
+    "proxy_nodes": 1
+  },
+  "node_health": {
+    "https://fapi.binance.com": {
+      "successes": 3013,
+      "failures": 1,
+      "consecutive_failures": 0,
+      "avg_latency_ms": 1825.87,
+      "last_success_at": "2026-06-17T17:54:37.868299+00:00",
+      "last_error_at": "2026-06-17T10:52:54.643889+00:00",
+      "last_error": null,
+      "circuit_open_until": null
+    },
+    "https://fapi1.binance.com": {
+      "successes": 0,
+      "failures": 1,
+      "consecutive_failures": 1,
+      "avg_latency_ms": null,
+      "last_success_at": null,
+      "last_error_at": "2026-06-17T10:53:03.364197+00:00",
+      "last_error": "Expecting value: line 1 column 1 (char 0)",
+      "circuit_open_until": null
+    },
+    "https://fapi2.binance.com": {
+      "successes": 0,
+      "failures": 1,
+      "consecutive_failures": 1,
+      "avg_latency_ms": null,
+      "last_success_at": null,
+      "last_error_at": "2026-06-17T10:53:12.059295+00:00",
+      "last_error": "Expecting value: line 1 column 1 (char 0)",
+      "circuit_open_until": null
+    },
+    "https://fapi3.binance.com": {
+      "successes": 0,
+      "failures": 1,
+      "consecutive_failures": 1,
+      "avg_latency_ms": null,
+      "last_success_at": null,
+      "last_error_at": "2026-06-17T10:53:23.448304+00:00",
+      "last_error": "Expecting value: line 1 column 1 (char 0)",
+      "circuit_open_until": null
+    },
+    "https://fapi.binance.com|proxy=http://127.0.0.1:7890": {
+      "base": "https://fapi.binance.com",
+      "proxy": "http://127.0.0.1:7890",
+      "label": "https://fapi.binance.com via http://127.0.0.1:7890",
+      "successes": 0,
+      "failures": 0,
+      "consecutive_failures": 0,
+      "avg_latency_ms": null,
+      "last_success_at": null,
+      "last_error_at": null,
+      "last_error": null,
+      "circuit_open_until": null
+    },
+    "https://fapi1.binance.com|proxy=http://127.0.0.1:7890": {
+      "base": "https://fapi1.binance.com",
+      "proxy": "http://127.0.0.1:7890",
+      "label": "https://fapi1.binance.com via http://127.0.0.1:7890",
+      "successes": 0,
+      "failures": 0,
+      "consecutive_failures": 0,
+      "avg_latency_ms": null,
+      "last_success_at": null,
+      "last_error_at": null,
+      "last_error": null,
+      "circuit_open_until": null
+    },
+    "https://fapi2.binance.com|proxy=http://127.0.0.1:7890": {
+      "base": "https://fapi2.binance.com",
+      "proxy": "http://127.0.0.1:7890",
+      "label": "https://fapi2.binance.com via http://127.0.0.1:7890",
+      "successes": 0,
+      "failures": 0,
+      "consecutive_failures": 0,
+      "avg_latency_ms": null,
+      "last_success_at": null,
+      "last_error_at": null,
+      "last_error": null,
+      "circuit_open_until": null
+    },
+    "https://fapi3.binance.com|proxy=http://127.0.0.1:7890": {
+      "base": "https://fapi3.binance.com",
+      "proxy": "http://127.0.0.1:7890",
+      "label": "https://fapi3.binance.com via http://127.0.0.1:7890",
+      "successes": 0,
+      "failures": 0,
+      "consecutive_failures": 0,
+      "avg_latency_ms": null,
+      "last_success_at": null,
+      "last_error_at": null,
+      "last_error": null,
+      "circuit_open_until": null
+    }
+  },
+  "active_node": "https://fapi.binance.com",
+  "active_proxy": null,
+  "active_node_key": "https://fapi.binance.com",
+  "max_pages_per_loop": 8
+}

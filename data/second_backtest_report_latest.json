@@ -1,0 +1,2887 @@
+{
+  "generatedAt": "2026-06-17T17:13:14.158682+00:00",
+  "source": "E:\\python-binance\\data\\btcusdt_1s_trades.csv",
+  "method": {
+    "data": "1-second BTC bars only; missing seconds are forward-filled close with zero volume.",
+    "causal": "Each signal uses data at or before its signal second and settles horizon_sec later.",
+    "execution": "Reports liveExecution and configuredGapExecution; no global dedupe unless requested."
+  },
+  "dataQuality": {
+    "exists": true,
+    "file": "data\\btcusdt_1s_trades.csv",
+    "rows": 339567,
+    "uniqueSlots": 336205,
+    "start": "2026-06-13T13:33:45+00:00",
+    "end": "2026-06-17T17:12:08+00:00",
+    "missingSlots": 22499,
+    "missingPct": 6.2723,
+    "duplicateSlots": 3362,
+    "maxGapSec": 6512
+  },
+  "sample": {
+    "start": "2026-06-13T13:33:45+00:00",
+    "end": "2026-06-17T17:12:08+00:00",
+    "hours": 99.64,
+    "rows": 358704,
+    "observedRows": 336205,
+    "filledRows": 22499
+  },
+  "strategies": [
+    {
+      "strategyId": "BTC_10min_SECOND_3600_20",
+      "label": "SECOND_3600_20_80",
+      "modelType": "second_normal",
+      "params": {
+        "strategy_id": "BTC_10min_SECOND_3600_20",
+        "lookback_sec": 3600,
+        "horizon_sec": 600,
+        "signal_gap_sec": 1800,
+        "tail_pct": 0.2,
+        "second_filter": "none",
+        "amount": 5.0,
+        "label": "SECOND_3600_20_80"
+      },
+      "score": 64.1117,
+      "rawSignals": {
+        "all": {
+          "trades": 11159,
+          "wins": 6829,
+          "losses": 4330,
+          "winRate": 61.2,
+          "tradesPerDay": 2687.84,
+          "maxLoss": 712,
+          "amount": 5.0,
+          "payoutRate": 0.8,
+          "pnl": 5666.0,
+          "first": "2026-06-13T21:41:24+00:00",
+          "last": "2026-06-17T09:07:25+00:00"
+        },
+        "beforeLast24h": {
+          "trades": 9505,
+          "wins": 5508,
+          "losses": 3997,
+          "winRate": 57.95,
+          "tradesPerDay": 3015.88,
+          "maxLoss": 712,
+          "amount": 5.0,
+          "payoutRate": 0.8,
+          "pnl": 2047.0,
+          "first": "2026-06-13T21:41:24+00:00",
+          "last": "2026-06-16T13:37:18+00:00"
+        },
+        "last24h": {
+          "trades": 1654,
+          "wins": 1321,
+          "losses": 333,
+          "winRate": 79.87,
+          "tradesPerDay": 1654.0,
+          "maxLoss": 171,
+          "amount": 5.0,
+          "payoutRate": 0.8,
+          "pnl": 3619.0,
+          "first": "2026-06-16T19:02:33+00:00",
+          "last": "2026-06-17T09:07:25+00:00"
+        },
+        "thirds": [
+          {
+            "trades": 5704,
+            "winRate": 42.92,
+            "tradesPerDay": 4121.73,
+            "maxLoss": 712,
+            "pnl": -6488.0
+          },
+          {
+            "trades": 3408,
+            "winRate": 78.26,
+            "tradesPerDay": 2462.63,
+            "maxLoss": 210,
+            "pnl": 6963.0
+          },
+          {
+            "trades": 2047,
+            "winRate": 83.73,
+            "tradesPerDay": 1479.17,
+            "maxLoss": 171,
+            "pnl": 5191.0
+          }
+        ],
+        "byUtcDay": [
+          {
+            "day": "2026-06-13",
+            "trades": 17,
+            "winRate": 100.0,
+            "maxLoss": 0,
+            "pnl": 68.0
+          },
+          {
+            "day": "2026-06-14",
+            "trades": 5687,
+            "winRate": 42.75,
+            "maxLoss": 712,
+            "pnl": -6556.0
+          },
+          {
+            "day": "2026-06-15",
+            "trades": 971,
+            "winRate": 77.24,
+            "maxLoss": 84,
+            "pnl": 1895.0
+          },
+          {
+            "day": "2026-06-16",
+            "trades": 3411,
+            "winRate": 78.72,
+            "maxLoss": 210,
+            "pnl": 7110.0
+          },
+          {
+            "day": "2026-06-17",
+            "trades": 1073,
+            "winRate": 88.16,
+            "maxLoss": 34,
+            "pnl": 3149.0
+          }
+        ]
+      },
+      "liveExecution": {
+        "metrics": {
+          "all": {
+            "trades": 53,
+            "wins": 35,
+            "losses": 18,
+            "winRate": 66.04,
+            "tradesPerDay": 12.77,
+            "maxLoss": 4,
+            "amount": 5.0,
+            "payoutRate": 0.8,
+            "pnl": 50.0,
+            "first": "2026-06-13T21:41:24+00:00",
+            "last": "2026-06-17T08:58:07+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 43,
+            "wins": 28,
+            "losses": 15,
+            "winRate": 65.12,
+            "tradesPerDay": 13.64,
+            "maxLoss": 4,
+            "amount": 5.0,
+            "payoutRate": 0.8,
+            "pnl": 37.0,
+            "first": "2026-06-13T21:41:24+00:00",
+            "last": "2026-06-16T13:33:46+00:00"
+          },
+          "last24h": {
+            "trades": 10,
+            "wins": 7,
+            "losses": 3,
+            "winRate": 70.0,
+            "tradesPerDay": 10.0,
+            "maxLoss": 2,
+            "amount": 5.0,
+            "payoutRate": 0.8,
+            "pnl": 13.0,
+            "first": "2026-06-16T19:02:33+00:00",
+            "last": "2026-06-17T08:58:07+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 19,
+              "winRate": 57.89,
+              "tradesPerDay": 13.73,
+              "maxLoss": 4,
+              "pnl": 4.0
+            },
+            {
+              "trades": 22,
+              "winRate": 68.18,
+              "tradesPerDay": 15.9,
+              "maxLoss": 3,
+              "pnl": 25.0
+            },
+            {
+              "trades": 12,
+              "winRate": 75.0,
+              "tradesPerDay": 8.67,
+              "maxLoss": 2,
+              "pnl": 21.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 1,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 4.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 18,
+              "winRate": 55.56,
+              "maxLoss": 4,
+              "pnl": 0.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 12,
+              "winRate": 83.33,
+              "maxLoss": 1,
+              "pnl": 30.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 15,
+              "winRate": 66.67,
+              "maxLoss": 3,
+              "pnl": 15.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 7,
+              "winRate": 57.14,
+              "maxLoss": 2,
+              "pnl": 1.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 53,
+          "rejectedByStrategyLock": 11106,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSecIgnored": 1800
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-16T19:02:33+00:00",
+            "signal": "UP",
+            "entry": 65683.8,
+            "settle_time": "2026-06-16T19:12:33+00:00",
+            "settle": 65684.3,
+            "won": true,
+            "p_up": 0.196601
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-16T19:13:11+00:00",
+            "signal": "UP",
+            "entry": 65654.4,
+            "settle_time": "2026-06-16T19:23:11+00:00",
+            "settle": 65670.0,
+            "won": true,
+            "p_up": 0.199963
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-16T21:08:00+00:00",
+            "signal": "DOWN",
+            "entry": 65864.2,
+            "settle_time": "2026-06-16T21:18:00+00:00",
+            "settle": 65720.9,
+            "won": true,
+            "p_up": 0.801816
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-17T02:22:20+00:00",
+            "signal": "DOWN",
+            "entry": 65895.7,
+            "settle_time": "2026-06-17T02:32:20+00:00",
+            "settle": 65970.6,
+            "won": false,
+            "p_up": 0.801389
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-17T02:32:20+00:00",
+            "signal": "DOWN",
+            "entry": 65970.6,
+            "settle_time": "2026-06-17T02:42:20+00:00",
+            "settle": 65808.9,
+            "won": true,
+            "p_up": 0.829964
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-17T03:23:46+00:00",
+            "signal": "UP",
+            "entry": 65687.4,
+            "settle_time": "2026-06-17T03:33:46+00:00",
+            "settle": 65824.2,
+            "won": true,
+            "p_up": 0.191611
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-17T06:41:26+00:00",
+            "signal": "UP",
+            "entry": 65554.9,
+            "settle_time": "2026-06-17T06:51:26+00:00",
+            "settle": 65615.5,
+            "won": true,
+            "p_up": 0.193903
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-17T07:20:33+00:00",
+            "signal": "UP",
+            "entry": 65475.3,
+            "settle_time": "2026-06-17T07:30:33+00:00",
+            "settle": 65501.8,
+            "won": true,
+            "p_up": 0.198014
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-17T08:44:29+00:00",
+            "signal": "UP",
+            "entry": 64899.5,
+            "settle_time": "2026-06-17T08:54:29+00:00",
+            "settle": 64891.8,
+            "won": false,
+            "p_up": 0.194863
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-17T08:58:07+00:00",
+            "signal": "UP",
+            "entry": 64950.1,
+            "settle_time": "2026-06-17T09:08:07+00:00",
+            "settle": 64926.0,
+            "won": false,
+            "p_up": 0.199127
+          }
+        ]
+      },
+      "configuredGapExecution": {
+        "metrics": {
+          "all": {
+            "trades": 35,
+            "wins": 24,
+            "losses": 11,
+            "winRate": 68.57,
+            "tradesPerDay": 8.43,
+            "maxLoss": 2,
+            "amount": 5.0,
+            "payoutRate": 0.8,
+            "pnl": 41.0,
+            "first": "2026-06-13T21:41:24+00:00",
+            "last": "2026-06-17T08:44:29+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 28,
+            "wins": 19,
+            "losses": 9,
+            "winRate": 67.86,
+            "tradesPerDay": 8.88,
+            "maxLoss": 2,
+            "amount": 5.0,
+            "payoutRate": 0.8,
+            "pnl": 31.0,
+            "first": "2026-06-13T21:41:24+00:00",
+            "last": "2026-06-16T13:33:46+00:00"
+          },
+          "last24h": {
+            "trades": 7,
+            "wins": 5,
+            "losses": 2,
+            "winRate": 71.43,
+            "tradesPerDay": 7.0,
+            "maxLoss": 1,
+            "amount": 5.0,
+            "payoutRate": 0.8,
+            "pnl": 10.0,
+            "first": "2026-06-16T19:02:33+00:00",
+            "last": "2026-06-17T08:44:29+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 12,
+              "winRate": 66.67,
+              "tradesPerDay": 8.67,
+              "maxLoss": 2,
+              "pnl": 12.0
+            },
+            {
+              "trades": 14,
+              "winRate": 64.29,
+              "tradesPerDay": 10.12,
+              "maxLoss": 2,
+              "pnl": 11.0
+            },
+            {
+              "trades": 9,
+              "winRate": 77.78,
+              "tradesPerDay": 6.5,
+              "maxLoss": 1,
+              "pnl": 18.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 1,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 4.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 11,
+              "winRate": 63.64,
+              "maxLoss": 2,
+              "pnl": 8.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 9,
+              "winRate": 77.78,
+              "maxLoss": 1,
+              "pnl": 18.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 9,
+              "winRate": 66.67,
+              "maxLoss": 2,
+              "pnl": 9.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 5,
+              "winRate": 60.0,
+              "maxLoss": 1,
+              "pnl": 2.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 35,
+          "rejectedByStrategyLock": 0,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSec": 1800
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-16T07:08:35+00:00",
+            "signal": "DOWN",
+            "entry": 66466.0,
+            "settle_time": "2026-06-16T07:18:35+00:00",
+            "settle": 66413.6,
+            "won": true,
+            "p_up": 0.800884
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-16T08:54:41+00:00",
+            "signal": "DOWN",
+            "entry": 66829.6,
+            "settle_time": "2026-06-16T09:04:41+00:00",
+            "settle": 66811.8,
+            "won": true,
+            "p_up": 0.800203
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-16T13:33:46+00:00",
+            "signal": "UP",
+            "entry": 66029.8,
+            "settle_time": "2026-06-16T13:43:46+00:00",
+            "settle": 66102.2,
+            "won": true,
+            "p_up": 0.187552
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-16T19:02:33+00:00",
+            "signal": "UP",
+            "entry": 65683.8,
+            "settle_time": "2026-06-16T19:12:33+00:00",
+            "settle": 65684.3,
+            "won": true,
+            "p_up": 0.196601
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-16T21:08:00+00:00",
+            "signal": "DOWN",
+            "entry": 65864.2,
+            "settle_time": "2026-06-16T21:18:00+00:00",
+            "settle": 65720.9,
+            "won": true,
+            "p_up": 0.801816
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-17T02:22:20+00:00",
+            "signal": "DOWN",
+            "entry": 65895.7,
+            "settle_time": "2026-06-17T02:32:20+00:00",
+            "settle": 65970.6,
+            "won": false,
+            "p_up": 0.801389
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-17T03:23:46+00:00",
+            "signal": "UP",
+            "entry": 65687.4,
+            "settle_time": "2026-06-17T03:33:46+00:00",
+            "settle": 65824.2,
+            "won": true,
+            "p_up": 0.191611
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-17T06:41:26+00:00",
+            "signal": "UP",
+            "entry": 65554.9,
+            "settle_time": "2026-06-17T06:51:26+00:00",
+            "settle": 65615.5,
+            "won": true,
+            "p_up": 0.193903
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-17T07:20:33+00:00",
+            "signal": "UP",
+            "entry": 65475.3,
+            "settle_time": "2026-06-17T07:30:33+00:00",
+            "settle": 65501.8,
+            "won": true,
+            "p_up": 0.198014
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_3600_20",
+            "model_type": "second_normal",
+            "time": "2026-06-17T08:44:29+00:00",
+            "signal": "UP",
+            "entry": 64899.5,
+            "settle_time": "2026-06-17T08:54:29+00:00",
+            "settle": 64891.8,
+            "won": false,
+            "p_up": 0.194863
+          }
+        ]
+      }
+    },
+    {
+      "strategyId": "BTC_10min_SECOND_CHIP_1800_OPT",
+      "label": "SECOND_CHIP_1800_20_40",
+      "modelType": "second_chip",
+      "params": {
+        "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+        "lookback_sec": 1800,
+        "horizon_sec": 600,
+        "signal_gap_sec": 300,
+        "target_share": 0.2,
+        "bin_mode": "fixed",
+        "bin_size": 20.0,
+        "bin_pct": 0.0003,
+        "break_pct": 0.004,
+        "direction_filter": "all",
+        "chip_filter": "width_lte_3",
+        "signal_hold_sec": 60,
+        "amount": 5.0,
+        "label": "SECOND_CHIP_1800_20_40"
+      },
+      "score": 55.778,
+      "rawSignals": {
+        "all": {
+          "trades": 223,
+          "wins": 135,
+          "losses": 88,
+          "winRate": 60.54,
+          "tradesPerDay": 53.71,
+          "maxLoss": 14,
+          "amount": 5.0,
+          "payoutRate": 0.8,
+          "pnl": 100.0,
+          "first": "2026-06-13T16:04:48+00:00",
+          "last": "2026-06-17T16:59:08+00:00"
+        },
+        "beforeLast24h": {
+          "trades": 167,
+          "wins": 108,
+          "losses": 59,
+          "winRate": 64.67,
+          "tradesPerDay": 52.99,
+          "maxLoss": 10,
+          "amount": 5.0,
+          "payoutRate": 0.8,
+          "pnl": 137.0,
+          "first": "2026-06-13T16:04:48+00:00",
+          "last": "2026-06-16T14:20:26+00:00"
+        },
+        "last24h": {
+          "trades": 56,
+          "wins": 27,
+          "losses": 29,
+          "winRate": 48.21,
+          "tradesPerDay": 56.0,
+          "maxLoss": 14,
+          "amount": 5.0,
+          "payoutRate": 0.8,
+          "pnl": -37.0,
+          "first": "2026-06-16T17:52:30+00:00",
+          "last": "2026-06-17T16:59:08+00:00"
+        },
+        "thirds": [
+          {
+            "trades": 44,
+            "winRate": 77.27,
+            "tradesPerDay": 31.79,
+            "maxLoss": 3,
+            "pnl": 86.0
+          },
+          {
+            "trades": 96,
+            "winRate": 62.5,
+            "tradesPerDay": 69.37,
+            "maxLoss": 10,
+            "pnl": 60.0
+          },
+          {
+            "trades": 83,
+            "winRate": 49.4,
+            "tradesPerDay": 59.98,
+            "maxLoss": 14,
+            "pnl": -46.0
+          }
+        ],
+        "byUtcDay": [
+          {
+            "day": "2026-06-13",
+            "trades": 24,
+            "winRate": 83.33,
+            "maxLoss": 3,
+            "pnl": 60.0
+          },
+          {
+            "day": "2026-06-14",
+            "trades": 22,
+            "winRate": 72.73,
+            "maxLoss": 3,
+            "pnl": 34.0
+          },
+          {
+            "day": "2026-06-15",
+            "trades": 63,
+            "winRate": 65.08,
+            "maxLoss": 10,
+            "pnl": 54.0
+          },
+          {
+            "day": "2026-06-16",
+            "trades": 72,
+            "winRate": 55.56,
+            "maxLoss": 13,
+            "pnl": 0.0
+          },
+          {
+            "day": "2026-06-17",
+            "trades": 42,
+            "winRate": 42.86,
+            "maxLoss": 14,
+            "pnl": -48.0
+          }
+        ]
+      },
+      "liveExecution": {
+        "metrics": {
+          "all": {
+            "trades": 49,
+            "wins": 32,
+            "losses": 17,
+            "winRate": 65.31,
+            "tradesPerDay": 11.8,
+            "maxLoss": 3,
+            "amount": 5.0,
+            "payoutRate": 0.8,
+            "pnl": 43.0,
+            "first": "2026-06-13T16:04:48+00:00",
+            "last": "2026-06-17T16:59:08+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 35,
+            "wins": 23,
+            "losses": 12,
+            "winRate": 65.71,
+            "tradesPerDay": 11.11,
+            "maxLoss": 3,
+            "amount": 5.0,
+            "payoutRate": 0.8,
+            "pnl": 32.0,
+            "first": "2026-06-13T16:04:48+00:00",
+            "last": "2026-06-16T14:16:46+00:00"
+          },
+          "last24h": {
+            "trades": 14,
+            "wins": 9,
+            "losses": 5,
+            "winRate": 64.29,
+            "tradesPerDay": 14.0,
+            "maxLoss": 2,
+            "amount": 5.0,
+            "payoutRate": 0.8,
+            "pnl": 11.0,
+            "first": "2026-06-16T17:52:30+00:00",
+            "last": "2026-06-17T16:59:08+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 11,
+              "winRate": 72.73,
+              "tradesPerDay": 7.95,
+              "maxLoss": 2,
+              "pnl": 17.0
+            },
+            {
+              "trades": 20,
+              "winRate": 60.0,
+              "tradesPerDay": 14.45,
+              "maxLoss": 3,
+              "pnl": 8.0
+            },
+            {
+              "trades": 18,
+              "winRate": 66.67,
+              "tradesPerDay": 13.01,
+              "maxLoss": 2,
+              "pnl": 18.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 4,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 16.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 7,
+              "winRate": 57.14,
+              "maxLoss": 2,
+              "pnl": 1.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 15,
+              "winRate": 66.67,
+              "maxLoss": 3,
+              "pnl": 15.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 12,
+              "winRate": 58.33,
+              "maxLoss": 2,
+              "pnl": 3.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 11,
+              "winRate": 63.64,
+              "maxLoss": 2,
+              "pnl": 8.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 49,
+          "rejectedByStrategyLock": 174,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSecIgnored": 300
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T01:49:51+00:00",
+            "signal": "DOWN",
+            "entry": 65823.9,
+            "settle_time": "2026-06-17T01:59:51+00:00",
+            "settle": 65908.1,
+            "won": false,
+            "breakout": "UP",
+            "poc": 65560.0,
+            "zone_low": 65540.0,
+            "zone_high": 65560.0,
+            "flow300": 49.747
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T06:41:28+00:00",
+            "signal": "UP",
+            "entry": 65550.0,
+            "settle_time": "2026-06-17T06:51:28+00:00",
+            "settle": 65615.6,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65820.0,
+            "zone_low": 65820.0,
+            "zone_high": 65840.0,
+            "flow300": -255.954
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T07:53:59+00:00",
+            "signal": "UP",
+            "entry": 65232.4,
+            "settle_time": "2026-06-17T08:03:59+00:00",
+            "settle": 65437.9,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65520.0,
+            "zone_low": 65520.0,
+            "zone_high": 65520.0,
+            "flow300": -846.211
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T08:38:34+00:00",
+            "signal": "UP",
+            "entry": 65037.6,
+            "settle_time": "2026-06-17T08:48:34+00:00",
+            "settle": 64883.4,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 65320.0,
+            "zone_low": 65300.0,
+            "zone_high": 65320.0,
+            "flow300": -514.874
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T11:05:23+00:00",
+            "signal": "UP",
+            "entry": 64614.7,
+            "settle_time": "2026-06-17T11:15:23+00:00",
+            "settle": 64557.4,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 64880.0,
+            "zone_low": 64880.0,
+            "zone_high": 64900.0,
+            "flow300": -506.075
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T12:30:26+00:00",
+            "signal": "UP",
+            "entry": 64560.4,
+            "settle_time": "2026-06-17T12:40:26+00:00",
+            "settle": 64763.8,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 64820.0,
+            "zone_low": 64820.0,
+            "zone_high": 64820.0,
+            "flow300": -116.45
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T12:48:27+00:00",
+            "signal": "DOWN",
+            "entry": 65075.9,
+            "settle_time": "2026-06-17T12:58:27+00:00",
+            "settle": 64977.4,
+            "won": true,
+            "breakout": "UP",
+            "poc": 64780.0,
+            "zone_low": 64780.0,
+            "zone_high": 64800.0,
+            "flow300": 539.982
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T13:41:51+00:00",
+            "signal": "DOWN",
+            "entry": 65267.5,
+            "settle_time": "2026-06-17T13:51:51+00:00",
+            "settle": 65249.8,
+            "won": true,
+            "breakout": "UP",
+            "poc": 65000.0,
+            "zone_low": 65000.0,
+            "zone_high": 65000.0,
+            "flow300": 805.487
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T14:47:20+00:00",
+            "signal": "UP",
+            "entry": 64896.3,
+            "settle_time": "2026-06-17T14:57:20+00:00",
+            "settle": 65117.3,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65160.0,
+            "zone_low": 65160.0,
+            "zone_high": 65180.0,
+            "flow300": -177.925
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T16:59:08+00:00",
+            "signal": "DOWN",
+            "entry": 65826.2,
+            "settle_time": "2026-06-17T17:09:08+00:00",
+            "settle": 65835.8,
+            "won": false,
+            "breakout": "UP",
+            "poc": 65020.0,
+            "zone_low": 65020.0,
+            "zone_high": 65020.0,
+            "flow300": -0.04
+          }
+        ]
+      },
+      "configuredGapExecution": {
+        "metrics": {
+          "all": {
+            "trades": 47,
+            "wins": 30,
+            "losses": 17,
+            "winRate": 63.83,
+            "tradesPerDay": 11.32,
+            "maxLoss": 3,
+            "amount": 5.0,
+            "payoutRate": 0.8,
+            "pnl": 35.0,
+            "first": "2026-06-13T16:04:48+00:00",
+            "last": "2026-06-17T16:59:08+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 33,
+            "wins": 21,
+            "losses": 12,
+            "winRate": 63.64,
+            "tradesPerDay": 10.47,
+            "maxLoss": 3,
+            "amount": 5.0,
+            "payoutRate": 0.8,
+            "pnl": 24.0,
+            "first": "2026-06-13T16:04:48+00:00",
+            "last": "2026-06-16T14:16:46+00:00"
+          },
+          "last24h": {
+            "trades": 14,
+            "wins": 9,
+            "losses": 5,
+            "winRate": 64.29,
+            "tradesPerDay": 14.0,
+            "maxLoss": 2,
+            "amount": 5.0,
+            "payoutRate": 0.8,
+            "pnl": 11.0,
+            "first": "2026-06-16T17:52:30+00:00",
+            "last": "2026-06-17T16:59:08+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 11,
+              "winRate": 72.73,
+              "tradesPerDay": 7.95,
+              "maxLoss": 2,
+              "pnl": 17.0
+            },
+            {
+              "trades": 18,
+              "winRate": 55.56,
+              "tradesPerDay": 13.01,
+              "maxLoss": 3,
+              "pnl": 0.0
+            },
+            {
+              "trades": 18,
+              "winRate": 66.67,
+              "tradesPerDay": 13.01,
+              "maxLoss": 2,
+              "pnl": 18.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 4,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 16.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 7,
+              "winRate": 57.14,
+              "maxLoss": 2,
+              "pnl": 1.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 13,
+              "winRate": 61.54,
+              "maxLoss": 3,
+              "pnl": 7.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 12,
+              "winRate": 58.33,
+              "maxLoss": 2,
+              "pnl": 3.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 11,
+              "winRate": 63.64,
+              "maxLoss": 2,
+              "pnl": 8.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 47,
+          "rejectedByStrategyLock": 19,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSec": 300
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T01:49:51+00:00",
+            "signal": "DOWN",
+            "entry": 65823.9,
+            "settle_time": "2026-06-17T01:59:51+00:00",
+            "settle": 65908.1,
+            "won": false,
+            "breakout": "UP",
+            "poc": 65560.0,
+            "zone_low": 65540.0,
+            "zone_high": 65560.0,
+            "flow300": 49.747
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T06:41:28+00:00",
+            "signal": "UP",
+            "entry": 65550.0,
+            "settle_time": "2026-06-17T06:51:28+00:00",
+            "settle": 65615.6,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65820.0,
+            "zone_low": 65820.0,
+            "zone_high": 65840.0,
+            "flow300": -255.954
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T07:53:59+00:00",
+            "signal": "UP",
+            "entry": 65232.4,
+            "settle_time": "2026-06-17T08:03:59+00:00",
+            "settle": 65437.9,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65520.0,
+            "zone_low": 65520.0,
+            "zone_high": 65520.0,
+            "flow300": -846.211
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T08:38:34+00:00",
+            "signal": "UP",
+            "entry": 65037.6,
+            "settle_time": "2026-06-17T08:48:34+00:00",
+            "settle": 64883.4,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 65320.0,
+            "zone_low": 65300.0,
+            "zone_high": 65320.0,
+            "flow300": -514.874
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T11:05:23+00:00",
+            "signal": "UP",
+            "entry": 64614.7,
+            "settle_time": "2026-06-17T11:15:23+00:00",
+            "settle": 64557.4,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 64880.0,
+            "zone_low": 64880.0,
+            "zone_high": 64900.0,
+            "flow300": -506.075
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T12:30:26+00:00",
+            "signal": "UP",
+            "entry": 64560.4,
+            "settle_time": "2026-06-17T12:40:26+00:00",
+            "settle": 64763.8,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 64820.0,
+            "zone_low": 64820.0,
+            "zone_high": 64820.0,
+            "flow300": -116.45
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T12:48:27+00:00",
+            "signal": "DOWN",
+            "entry": 65075.9,
+            "settle_time": "2026-06-17T12:58:27+00:00",
+            "settle": 64977.4,
+            "won": true,
+            "breakout": "UP",
+            "poc": 64780.0,
+            "zone_low": 64780.0,
+            "zone_high": 64800.0,
+            "flow300": 539.982
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T13:41:51+00:00",
+            "signal": "DOWN",
+            "entry": 65267.5,
+            "settle_time": "2026-06-17T13:51:51+00:00",
+            "settle": 65249.8,
+            "won": true,
+            "breakout": "UP",
+            "poc": 65000.0,
+            "zone_low": 65000.0,
+            "zone_high": 65000.0,
+            "flow300": 805.487
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T14:47:20+00:00",
+            "signal": "UP",
+            "entry": 64896.3,
+            "settle_time": "2026-06-17T14:57:20+00:00",
+            "settle": 65117.3,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65160.0,
+            "zone_low": 65160.0,
+            "zone_high": 65180.0,
+            "flow300": -177.925
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+            "model_type": "second_chip",
+            "time": "2026-06-17T16:59:08+00:00",
+            "signal": "DOWN",
+            "entry": 65826.2,
+            "settle_time": "2026-06-17T17:09:08+00:00",
+            "settle": 65835.8,
+            "won": false,
+            "breakout": "UP",
+            "poc": 65020.0,
+            "zone_low": 65020.0,
+            "zone_high": 65020.0,
+            "flow300": -0.04
+          }
+        ]
+      }
+    },
+    {
+      "strategyId": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+      "label": "SECOND_CHIP_3600_20_50",
+      "modelType": "second_chip",
+      "params": {
+        "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+        "lookback_sec": 3600,
+        "horizon_sec": 600,
+        "signal_gap_sec": 600,
+        "target_share": 0.2,
+        "bin_mode": "fixed",
+        "bin_size": 100.0,
+        "bin_pct": 0.0003,
+        "break_pct": 0.005,
+        "direction_filter": "all",
+        "chip_filter": "flow_reversal",
+        "signal_hold_sec": 60,
+        "amount": 15.0,
+        "label": "SECOND_CHIP_3600_20_50"
+      },
+      "score": 43.6617,
+      "rawSignals": {
+        "all": {
+          "trades": 125,
+          "wins": 79,
+          "losses": 46,
+          "winRate": 63.2,
+          "tradesPerDay": 30.11,
+          "maxLoss": 14,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 258.0,
+          "first": "2026-06-13T16:06:53+00:00",
+          "last": "2026-06-17T14:48:42+00:00"
+        },
+        "beforeLast24h": {
+          "trades": 105,
+          "wins": 69,
+          "losses": 36,
+          "winRate": 65.71,
+          "tradesPerDay": 33.32,
+          "maxLoss": 8,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 288.0,
+          "first": "2026-06-13T16:06:53+00:00",
+          "last": "2026-06-16T14:19:10+00:00"
+        },
+        "last24h": {
+          "trades": 20,
+          "wins": 10,
+          "losses": 10,
+          "winRate": 50.0,
+          "tradesPerDay": 20.0,
+          "maxLoss": 10,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": -30.0,
+          "first": "2026-06-16T18:02:23+00:00",
+          "last": "2026-06-17T14:48:42+00:00"
+        },
+        "thirds": [
+          {
+            "trades": 22,
+            "winRate": 86.36,
+            "tradesPerDay": 15.9,
+            "maxLoss": 3,
+            "pnl": 183.0
+          },
+          {
+            "trades": 68,
+            "winRate": 61.76,
+            "tradesPerDay": 49.14,
+            "maxLoss": 8,
+            "pnl": 114.0
+          },
+          {
+            "trades": 35,
+            "winRate": 51.43,
+            "tradesPerDay": 25.29,
+            "maxLoss": 14,
+            "pnl": -39.0
+          }
+        ],
+        "byUtcDay": [
+          {
+            "day": "2026-06-13",
+            "trades": 10,
+            "winRate": 100.0,
+            "maxLoss": 0,
+            "pnl": 120.0
+          },
+          {
+            "day": "2026-06-14",
+            "trades": 12,
+            "winRate": 75.0,
+            "maxLoss": 3,
+            "pnl": 63.0
+          },
+          {
+            "day": "2026-06-15",
+            "trades": 50,
+            "winRate": 60.0,
+            "maxLoss": 8,
+            "pnl": 60.0
+          },
+          {
+            "day": "2026-06-16",
+            "trades": 34,
+            "winRate": 58.82,
+            "maxLoss": 5,
+            "pnl": 30.0
+          },
+          {
+            "day": "2026-06-17",
+            "trades": 19,
+            "winRate": 52.63,
+            "maxLoss": 9,
+            "pnl": -15.0
+          }
+        ]
+      },
+      "liveExecution": {
+        "metrics": {
+          "all": {
+            "trades": 37,
+            "wins": 26,
+            "losses": 11,
+            "winRate": 70.27,
+            "tradesPerDay": 8.91,
+            "maxLoss": 5,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 147.0,
+            "first": "2026-06-13T16:06:53+00:00",
+            "last": "2026-06-17T14:47:28+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 30,
+            "wins": 23,
+            "losses": 7,
+            "winRate": 76.67,
+            "tradesPerDay": 9.52,
+            "maxLoss": 2,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 171.0,
+            "first": "2026-06-13T16:06:53+00:00",
+            "last": "2026-06-16T14:18:41+00:00"
+          },
+          "last24h": {
+            "trades": 7,
+            "wins": 3,
+            "losses": 4,
+            "winRate": 42.86,
+            "tradesPerDay": 7.0,
+            "maxLoss": 4,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": -24.0,
+            "first": "2026-06-16T18:02:23+00:00",
+            "last": "2026-06-17T14:47:28+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 7,
+              "winRate": 71.43,
+              "tradesPerDay": 5.06,
+              "maxLoss": 2,
+              "pnl": 30.0
+            },
+            {
+              "trades": 17,
+              "winRate": 76.47,
+              "tradesPerDay": 12.28,
+              "maxLoss": 1,
+              "pnl": 96.0
+            },
+            {
+              "trades": 13,
+              "winRate": 61.54,
+              "tradesPerDay": 9.39,
+              "maxLoss": 5,
+              "pnl": 21.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 3,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 36.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 4,
+              "winRate": 50.0,
+              "maxLoss": 2,
+              "pnl": -6.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 12,
+              "winRate": 83.33,
+              "maxLoss": 1,
+              "pnl": 90.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 12,
+              "winRate": 66.67,
+              "maxLoss": 2,
+              "pnl": 36.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 6,
+              "winRate": 50.0,
+              "maxLoss": 3,
+              "pnl": -9.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 37,
+          "rejectedByStrategyLock": 88,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSecIgnored": 600
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-16T13:23:22+00:00",
+            "signal": "UP",
+            "entry": 66067.1,
+            "settle_time": "2026-06-16T13:33:22+00:00",
+            "settle": 66112.2,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 66400.0,
+            "zone_low": 66400.0,
+            "zone_high": 66400.0,
+            "flow300": -65.096
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-16T13:41:04+00:00",
+            "signal": "UP",
+            "entry": 66063.5,
+            "settle_time": "2026-06-16T13:51:04+00:00",
+            "settle": 66117.5,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 66400.0,
+            "zone_low": 66400.0,
+            "zone_high": 66400.0,
+            "flow300": -55.575
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-16T14:18:41+00:00",
+            "signal": "UP",
+            "entry": 65755.7,
+            "settle_time": "2026-06-16T14:28:41+00:00",
+            "settle": 65641.0,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 66100.0,
+            "zone_low": 66100.0,
+            "zone_high": 66100.0,
+            "flow300": -488.671
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-16T18:02:23+00:00",
+            "signal": "DOWN",
+            "entry": 66050.1,
+            "settle_time": "2026-06-16T18:12:23+00:00",
+            "settle": 66073.8,
+            "won": false,
+            "breakout": "UP",
+            "poc": 65700.0,
+            "zone_low": 65700.0,
+            "zone_high": 65700.0,
+            "flow300": 526.11
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T08:31:20+00:00",
+            "signal": "UP",
+            "entry": 65169.1,
+            "settle_time": "2026-06-17T08:41:20+00:00",
+            "settle": 64989.9,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 65500.0,
+            "zone_low": 65500.0,
+            "zone_high": 65500.0,
+            "flow300": -271.23
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T08:42:57+00:00",
+            "signal": "UP",
+            "entry": 64972.4,
+            "settle_time": "2026-06-17T08:52:57+00:00",
+            "settle": 64870.8,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 65300.0,
+            "zone_low": 65300.0,
+            "zone_high": 65300.0,
+            "flow300": -759.811
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T11:05:29+00:00",
+            "signal": "UP",
+            "entry": 64575.4,
+            "settle_time": "2026-06-17T11:15:29+00:00",
+            "settle": 64552.0,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 64900.0,
+            "zone_low": 64900.0,
+            "zone_high": 64900.0,
+            "flow300": -626.338
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T11:16:18+00:00",
+            "signal": "UP",
+            "entry": 64575.1,
+            "settle_time": "2026-06-17T11:26:18+00:00",
+            "settle": 64667.3,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 64900.0,
+            "zone_low": 64900.0,
+            "zone_high": 64900.0,
+            "flow300": -15.078
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T13:46:46+00:00",
+            "signal": "DOWN",
+            "entry": 65331.2,
+            "settle_time": "2026-06-17T13:56:46+00:00",
+            "settle": 65270.1,
+            "won": true,
+            "breakout": "UP",
+            "poc": 65000.0,
+            "zone_low": 65000.0,
+            "zone_high": 65000.0,
+            "flow300": 224.306
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T14:47:28+00:00",
+            "signal": "UP",
+            "entry": 64853.4,
+            "settle_time": "2026-06-17T14:57:28+00:00",
+            "settle": 65112.7,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65200.0,
+            "zone_low": 65200.0,
+            "zone_high": 65200.0,
+            "flow300": -298.807
+          }
+        ]
+      },
+      "configuredGapExecution": {
+        "metrics": {
+          "all": {
+            "trades": 37,
+            "wins": 26,
+            "losses": 11,
+            "winRate": 70.27,
+            "tradesPerDay": 8.91,
+            "maxLoss": 5,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 147.0,
+            "first": "2026-06-13T16:06:53+00:00",
+            "last": "2026-06-17T14:47:28+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 30,
+            "wins": 23,
+            "losses": 7,
+            "winRate": 76.67,
+            "tradesPerDay": 9.52,
+            "maxLoss": 2,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 171.0,
+            "first": "2026-06-13T16:06:53+00:00",
+            "last": "2026-06-16T14:18:41+00:00"
+          },
+          "last24h": {
+            "trades": 7,
+            "wins": 3,
+            "losses": 4,
+            "winRate": 42.86,
+            "tradesPerDay": 7.0,
+            "maxLoss": 4,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": -24.0,
+            "first": "2026-06-16T18:02:23+00:00",
+            "last": "2026-06-17T14:47:28+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 7,
+              "winRate": 71.43,
+              "tradesPerDay": 5.06,
+              "maxLoss": 2,
+              "pnl": 30.0
+            },
+            {
+              "trades": 17,
+              "winRate": 76.47,
+              "tradesPerDay": 12.28,
+              "maxLoss": 1,
+              "pnl": 96.0
+            },
+            {
+              "trades": 13,
+              "winRate": 61.54,
+              "tradesPerDay": 9.39,
+              "maxLoss": 5,
+              "pnl": 21.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 3,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 36.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 4,
+              "winRate": 50.0,
+              "maxLoss": 2,
+              "pnl": -6.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 12,
+              "winRate": 83.33,
+              "maxLoss": 1,
+              "pnl": 90.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 12,
+              "winRate": 66.67,
+              "maxLoss": 2,
+              "pnl": 36.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 6,
+              "winRate": 50.0,
+              "maxLoss": 3,
+              "pnl": -9.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 37,
+          "rejectedByStrategyLock": 0,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSec": 600
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-16T13:23:22+00:00",
+            "signal": "UP",
+            "entry": 66067.1,
+            "settle_time": "2026-06-16T13:33:22+00:00",
+            "settle": 66112.2,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 66400.0,
+            "zone_low": 66400.0,
+            "zone_high": 66400.0,
+            "flow300": -65.096
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-16T13:41:04+00:00",
+            "signal": "UP",
+            "entry": 66063.5,
+            "settle_time": "2026-06-16T13:51:04+00:00",
+            "settle": 66117.5,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 66400.0,
+            "zone_low": 66400.0,
+            "zone_high": 66400.0,
+            "flow300": -55.575
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-16T14:18:41+00:00",
+            "signal": "UP",
+            "entry": 65755.7,
+            "settle_time": "2026-06-16T14:28:41+00:00",
+            "settle": 65641.0,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 66100.0,
+            "zone_low": 66100.0,
+            "zone_high": 66100.0,
+            "flow300": -488.671
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-16T18:02:23+00:00",
+            "signal": "DOWN",
+            "entry": 66050.1,
+            "settle_time": "2026-06-16T18:12:23+00:00",
+            "settle": 66073.8,
+            "won": false,
+            "breakout": "UP",
+            "poc": 65700.0,
+            "zone_low": 65700.0,
+            "zone_high": 65700.0,
+            "flow300": 526.11
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T08:31:20+00:00",
+            "signal": "UP",
+            "entry": 65169.1,
+            "settle_time": "2026-06-17T08:41:20+00:00",
+            "settle": 64989.9,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 65500.0,
+            "zone_low": 65500.0,
+            "zone_high": 65500.0,
+            "flow300": -271.23
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T08:42:57+00:00",
+            "signal": "UP",
+            "entry": 64972.4,
+            "settle_time": "2026-06-17T08:52:57+00:00",
+            "settle": 64870.8,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 65300.0,
+            "zone_low": 65300.0,
+            "zone_high": 65300.0,
+            "flow300": -759.811
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T11:05:29+00:00",
+            "signal": "UP",
+            "entry": 64575.4,
+            "settle_time": "2026-06-17T11:15:29+00:00",
+            "settle": 64552.0,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 64900.0,
+            "zone_low": 64900.0,
+            "zone_high": 64900.0,
+            "flow300": -626.338
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T11:16:18+00:00",
+            "signal": "UP",
+            "entry": 64575.1,
+            "settle_time": "2026-06-17T11:26:18+00:00",
+            "settle": 64667.3,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 64900.0,
+            "zone_low": 64900.0,
+            "zone_high": 64900.0,
+            "flow300": -15.078
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T13:46:46+00:00",
+            "signal": "DOWN",
+            "entry": 65331.2,
+            "settle_time": "2026-06-17T13:56:46+00:00",
+            "settle": 65270.1,
+            "won": true,
+            "breakout": "UP",
+            "poc": 65000.0,
+            "zone_low": 65000.0,
+            "zone_high": 65000.0,
+            "flow300": 224.306
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T14:47:28+00:00",
+            "signal": "UP",
+            "entry": 64853.4,
+            "settle_time": "2026-06-17T14:57:28+00:00",
+            "settle": 65112.7,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65200.0,
+            "zone_low": 65200.0,
+            "zone_high": 65200.0,
+            "flow300": -298.807
+          }
+        ]
+      }
+    },
+    {
+      "strategyId": "BTC_10min_SECOND_CHIP_3600_FLOW",
+      "label": "SECOND_CHIP_3600_50_30",
+      "modelType": "second_chip",
+      "params": {
+        "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+        "lookback_sec": 3600,
+        "horizon_sec": 600,
+        "signal_gap_sec": 1800,
+        "target_share": 0.5,
+        "bin_mode": "fixed",
+        "bin_size": 50.0,
+        "bin_pct": 0.0003,
+        "break_pct": 0.003,
+        "direction_filter": "all",
+        "chip_filter": "flow_reversal",
+        "signal_hold_sec": 60,
+        "amount": 10.0,
+        "label": "SECOND_CHIP_3600_50_30"
+      },
+      "score": 38.85,
+      "rawSignals": {
+        "all": {
+          "trades": 241,
+          "wins": 124,
+          "losses": 117,
+          "winRate": 51.45,
+          "tradesPerDay": 58.05,
+          "maxLoss": 15,
+          "amount": 10.0,
+          "payoutRate": 0.8,
+          "pnl": -178.0,
+          "first": "2026-06-13T16:04:48+00:00",
+          "last": "2026-06-17T14:47:17+00:00"
+        },
+        "beforeLast24h": {
+          "trades": 169,
+          "wins": 88,
+          "losses": 81,
+          "winRate": 52.07,
+          "tradesPerDay": 53.62,
+          "maxLoss": 13,
+          "amount": 10.0,
+          "payoutRate": 0.8,
+          "pnl": -106.0,
+          "first": "2026-06-13T16:04:48+00:00",
+          "last": "2026-06-16T15:36:09+00:00"
+        },
+        "last24h": {
+          "trades": 72,
+          "wins": 36,
+          "losses": 36,
+          "winRate": 50.0,
+          "tradesPerDay": 72.0,
+          "maxLoss": 15,
+          "amount": 10.0,
+          "payoutRate": 0.8,
+          "pnl": -72.0,
+          "first": "2026-06-16T17:50:34+00:00",
+          "last": "2026-06-17T14:47:17+00:00"
+        },
+        "thirds": [
+          {
+            "trades": 38,
+            "winRate": 55.26,
+            "tradesPerDay": 27.46,
+            "maxLoss": 5,
+            "pnl": -2.0
+          },
+          {
+            "trades": 81,
+            "winRate": 44.44,
+            "tradesPerDay": 58.53,
+            "maxLoss": 13,
+            "pnl": -162.0
+          },
+          {
+            "trades": 122,
+            "winRate": 54.92,
+            "tradesPerDay": 88.16,
+            "maxLoss": 15,
+            "pnl": -14.0
+          }
+        ],
+        "byUtcDay": [
+          {
+            "day": "2026-06-13",
+            "trades": 15,
+            "winRate": 66.67,
+            "maxLoss": 5,
+            "pnl": 30.0
+          },
+          {
+            "day": "2026-06-14",
+            "trades": 25,
+            "winRate": 52.0,
+            "maxLoss": 5,
+            "pnl": -16.0
+          },
+          {
+            "day": "2026-06-15",
+            "trades": 61,
+            "winRate": 54.1,
+            "maxLoss": 11,
+            "pnl": -16.0
+          },
+          {
+            "day": "2026-06-16",
+            "trades": 78,
+            "winRate": 44.87,
+            "maxLoss": 13,
+            "pnl": -150.0
+          },
+          {
+            "day": "2026-06-17",
+            "trades": 62,
+            "winRate": 53.23,
+            "maxLoss": 15,
+            "pnl": -26.0
+          }
+        ]
+      },
+      "liveExecution": {
+        "metrics": {
+          "all": {
+            "trades": 66,
+            "wins": 41,
+            "losses": 25,
+            "winRate": 62.12,
+            "tradesPerDay": 15.9,
+            "maxLoss": 6,
+            "amount": 10.0,
+            "payoutRate": 0.8,
+            "pnl": 78.0,
+            "first": "2026-06-13T16:04:48+00:00",
+            "last": "2026-06-17T14:47:17+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 48,
+            "wins": 29,
+            "losses": 19,
+            "winRate": 60.42,
+            "tradesPerDay": 15.23,
+            "maxLoss": 6,
+            "amount": 10.0,
+            "payoutRate": 0.8,
+            "pnl": 42.0,
+            "first": "2026-06-13T16:04:48+00:00",
+            "last": "2026-06-16T15:35:54+00:00"
+          },
+          "last24h": {
+            "trades": 18,
+            "wins": 12,
+            "losses": 6,
+            "winRate": 66.67,
+            "tradesPerDay": 18.0,
+            "maxLoss": 2,
+            "amount": 10.0,
+            "payoutRate": 0.8,
+            "pnl": 36.0,
+            "first": "2026-06-16T17:50:34+00:00",
+            "last": "2026-06-17T14:47:17+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 12,
+              "winRate": 75.0,
+              "tradesPerDay": 8.67,
+              "maxLoss": 1,
+              "pnl": 42.0
+            },
+            {
+              "trades": 26,
+              "winRate": 50.0,
+              "tradesPerDay": 18.79,
+              "maxLoss": 6,
+              "pnl": -26.0
+            },
+            {
+              "trades": 28,
+              "winRate": 67.86,
+              "tradesPerDay": 20.23,
+              "maxLoss": 2,
+              "pnl": 62.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 4,
+              "winRate": 75.0,
+              "maxLoss": 1,
+              "pnl": 14.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 9,
+              "winRate": 77.78,
+              "maxLoss": 1,
+              "pnl": 36.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 19,
+              "winRate": 63.16,
+              "maxLoss": 4,
+              "pnl": 26.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 19,
+              "winRate": 47.37,
+              "maxLoss": 6,
+              "pnl": -28.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 15,
+              "winRate": 66.67,
+              "maxLoss": 2,
+              "pnl": 30.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 66,
+          "rejectedByStrategyLock": 175,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSecIgnored": 1800
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T08:17:21+00:00",
+            "signal": "UP",
+            "entry": 65246.7,
+            "settle_time": "2026-06-17T08:27:21+00:00",
+            "settle": 65354.0,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65500.0,
+            "zone_low": 65450.0,
+            "zone_high": 65500.0,
+            "flow300": -218.02
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T08:31:08+00:00",
+            "signal": "UP",
+            "entry": 65198.0,
+            "settle_time": "2026-06-17T08:41:08+00:00",
+            "settle": 65000.0,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 65500.0,
+            "zone_low": 65400.0,
+            "zone_high": 65500.0,
+            "flow300": -215.732
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T11:05:08+00:00",
+            "signal": "UP",
+            "entry": 64649.0,
+            "settle_time": "2026-06-17T11:15:08+00:00",
+            "settle": 64557.8,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 64900.0,
+            "zone_low": 64850.0,
+            "zone_high": 64900.0,
+            "flow300": -373.478
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T12:30:27+00:00",
+            "signal": "UP",
+            "entry": 64555.3,
+            "settle_time": "2026-06-17T12:40:27+00:00",
+            "settle": 64763.9,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 64800.0,
+            "zone_low": 64750.0,
+            "zone_high": 64800.0,
+            "flow300": -118.404
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T12:48:15+00:00",
+            "signal": "DOWN",
+            "entry": 65000.0,
+            "settle_time": "2026-06-17T12:58:15+00:00",
+            "settle": 64980.9,
+            "won": true,
+            "breakout": "UP",
+            "poc": 64800.0,
+            "zone_low": 64750.0,
+            "zone_high": 64800.0,
+            "flow300": 504.836
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T12:58:59+00:00",
+            "signal": "DOWN",
+            "entry": 64999.9,
+            "settle_time": "2026-06-17T13:08:59+00:00",
+            "settle": 64960.3,
+            "won": true,
+            "breakout": "UP",
+            "poc": 64800.0,
+            "zone_low": 64750.0,
+            "zone_high": 64800.0,
+            "flow300": 75.395
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T13:11:45+00:00",
+            "signal": "DOWN",
+            "entry": 64995.0,
+            "settle_time": "2026-06-17T13:21:45+00:00",
+            "settle": 64995.5,
+            "won": false,
+            "breakout": "UP",
+            "poc": 64800.0,
+            "zone_low": 64650.0,
+            "zone_high": 64800.0,
+            "flow300": 7.276
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T13:37:46+00:00",
+            "signal": "DOWN",
+            "entry": 65202.9,
+            "settle_time": "2026-06-17T13:47:46+00:00",
+            "settle": 65260.0,
+            "won": false,
+            "breakout": "UP",
+            "poc": 65000.0,
+            "zone_low": 64950.0,
+            "zone_high": 65000.0,
+            "flow300": 322.293
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T13:56:57+00:00",
+            "signal": "DOWN",
+            "entry": 65250.2,
+            "settle_time": "2026-06-17T14:06:57+00:00",
+            "settle": 65156.5,
+            "won": true,
+            "breakout": "UP",
+            "poc": 65000.0,
+            "zone_low": 64950.0,
+            "zone_high": 65050.0,
+            "flow300": 15.125
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T14:47:17+00:00",
+            "signal": "UP",
+            "entry": 64950.2,
+            "settle_time": "2026-06-17T14:57:17+00:00",
+            "settle": 65122.0,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65150.0,
+            "zone_low": 65150.0,
+            "zone_high": 65250.0,
+            "flow300": -112.344
+          }
+        ]
+      },
+      "configuredGapExecution": {
+        "metrics": {
+          "all": {
+            "trades": 48,
+            "wins": 31,
+            "losses": 17,
+            "winRate": 64.58,
+            "tradesPerDay": 11.56,
+            "maxLoss": 6,
+            "amount": 10.0,
+            "payoutRate": 0.8,
+            "pnl": 78.0,
+            "first": "2026-06-13T16:04:48+00:00",
+            "last": "2026-06-17T14:47:17+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 37,
+            "wins": 24,
+            "losses": 13,
+            "winRate": 64.86,
+            "tradesPerDay": 11.74,
+            "maxLoss": 6,
+            "amount": 10.0,
+            "payoutRate": 0.8,
+            "pnl": 62.0,
+            "first": "2026-06-13T16:04:48+00:00",
+            "last": "2026-06-16T15:35:54+00:00"
+          },
+          "last24h": {
+            "trades": 11,
+            "wins": 7,
+            "losses": 4,
+            "winRate": 63.64,
+            "tradesPerDay": 11.0,
+            "maxLoss": 2,
+            "amount": 10.0,
+            "payoutRate": 0.8,
+            "pnl": 16.0,
+            "first": "2026-06-16T17:50:34+00:00",
+            "last": "2026-06-17T14:47:17+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 10,
+              "winRate": 80.0,
+              "tradesPerDay": 7.23,
+              "maxLoss": 1,
+              "pnl": 44.0
+            },
+            {
+              "trades": 21,
+              "winRate": 52.38,
+              "tradesPerDay": 15.17,
+              "maxLoss": 6,
+              "pnl": -12.0
+            },
+            {
+              "trades": 17,
+              "winRate": 70.59,
+              "tradesPerDay": 12.28,
+              "maxLoss": 2,
+              "pnl": 46.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 3,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 24.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 8,
+              "winRate": 75.0,
+              "maxLoss": 1,
+              "pnl": 28.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 14,
+              "winRate": 71.43,
+              "maxLoss": 2,
+              "pnl": 40.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 14,
+              "winRate": 50.0,
+              "maxLoss": 6,
+              "pnl": -14.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 9,
+              "winRate": 55.56,
+              "maxLoss": 2,
+              "pnl": 0.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 48,
+          "rejectedByStrategyLock": 0,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSec": 1800
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-16T19:15:46+00:00",
+            "signal": "UP",
+            "entry": 65588.0,
+            "settle_time": "2026-06-16T19:25:46+00:00",
+            "settle": 65668.5,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65850.0,
+            "zone_low": 65800.0,
+            "zone_high": 65900.0,
+            "flow300": -243.654
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T01:22:20+00:00",
+            "signal": "UP",
+            "entry": 65480.3,
+            "settle_time": "2026-06-17T01:32:20+00:00",
+            "settle": 65514.9,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65700.0,
+            "zone_low": 65700.0,
+            "zone_high": 65750.0,
+            "flow300": -422.325
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T06:31:46+00:00",
+            "signal": "UP",
+            "entry": 65601.3,
+            "settle_time": "2026-06-17T06:41:46+00:00",
+            "settle": 65540.0,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 65800.0,
+            "zone_low": 65800.0,
+            "zone_high": 65800.0,
+            "flow300": -42.069
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T07:53:47+00:00",
+            "signal": "UP",
+            "entry": 65298.1,
+            "settle_time": "2026-06-17T08:03:47+00:00",
+            "settle": 65446.6,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65500.0,
+            "zone_low": 65500.0,
+            "zone_high": 65550.0,
+            "flow300": -742.796
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T08:31:08+00:00",
+            "signal": "UP",
+            "entry": 65198.0,
+            "settle_time": "2026-06-17T08:41:08+00:00",
+            "settle": 65000.0,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 65500.0,
+            "zone_low": 65400.0,
+            "zone_high": 65500.0,
+            "flow300": -215.732
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T11:05:08+00:00",
+            "signal": "UP",
+            "entry": 64649.0,
+            "settle_time": "2026-06-17T11:15:08+00:00",
+            "settle": 64557.8,
+            "won": false,
+            "breakout": "DOWN",
+            "poc": 64900.0,
+            "zone_low": 64850.0,
+            "zone_high": 64900.0,
+            "flow300": -373.478
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T12:30:27+00:00",
+            "signal": "UP",
+            "entry": 64555.3,
+            "settle_time": "2026-06-17T12:40:27+00:00",
+            "settle": 64763.9,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 64800.0,
+            "zone_low": 64750.0,
+            "zone_high": 64800.0,
+            "flow300": -118.404
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T13:00:52+00:00",
+            "signal": "DOWN",
+            "entry": 64998.3,
+            "settle_time": "2026-06-17T13:10:52+00:00",
+            "settle": 64944.1,
+            "won": true,
+            "breakout": "UP",
+            "poc": 64800.0,
+            "zone_low": 64700.0,
+            "zone_high": 64800.0,
+            "flow300": 50.61
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T13:37:46+00:00",
+            "signal": "DOWN",
+            "entry": 65202.9,
+            "settle_time": "2026-06-17T13:47:46+00:00",
+            "settle": 65260.0,
+            "won": false,
+            "breakout": "UP",
+            "poc": 65000.0,
+            "zone_low": 64950.0,
+            "zone_high": 65000.0,
+            "flow300": 322.293
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+            "model_type": "second_chip",
+            "time": "2026-06-17T14:47:17+00:00",
+            "signal": "UP",
+            "entry": 64950.2,
+            "settle_time": "2026-06-17T14:57:17+00:00",
+            "settle": 65122.0,
+            "won": true,
+            "breakout": "DOWN",
+            "poc": 65150.0,
+            "zone_low": 65150.0,
+            "zone_high": 65250.0,
+            "flow300": -112.344
+          }
+        ]
+      }
+    }
+  ],
+  "portfolio": {
+    "execution": {
+      "perStrategyLock": true,
+      "globalLockSec": 0,
+      "accepted": 167,
+      "rejectedByStrategyLock": 19,
+      "rejectedByGlobalLock": 0,
+      "note": "Default is independent per-strategy locking. globalLockSec is only for research."
+    },
+    "metrics": {
+      "all": {
+        "trades": 167,
+        "wins": 111,
+        "losses": 56,
+        "winRate": 66.47,
+        "tradesPerDay": 40.22,
+        "maxLoss": 8,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 164.0,
+        "first": "2026-06-13T16:04:48+00:00",
+        "last": "2026-06-17T16:59:08+00:00"
+      },
+      "beforeLast24h": {
+        "trades": 128,
+        "wins": 87,
+        "losses": 41,
+        "winRate": 67.97,
+        "tradesPerDay": 40.61,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 143.0,
+        "first": "2026-06-13T16:04:48+00:00",
+        "last": "2026-06-16T15:35:54+00:00"
+      },
+      "last24h": {
+        "trades": 39,
+        "wins": 24,
+        "losses": 15,
+        "winRate": 61.54,
+        "tradesPerDay": 39.0,
+        "maxLoss": 8,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 21.0,
+        "first": "2026-06-16T17:50:34+00:00",
+        "last": "2026-06-17T16:59:08+00:00"
+      },
+      "thirds": [
+        {
+          "trades": 40,
+          "winRate": 72.5,
+          "tradesPerDay": 28.9,
+          "maxLoss": 4,
+          "pnl": 61.0
+        },
+        {
+          "trades": 70,
+          "winRate": 61.43,
+          "tradesPerDay": 50.58,
+          "maxLoss": 4,
+          "pnl": 37.0
+        },
+        {
+          "trades": 57,
+          "winRate": 68.42,
+          "tradesPerDay": 41.19,
+          "maxLoss": 8,
+          "pnl": 66.0
+        }
+      ],
+      "byUtcDay": [
+        {
+          "day": "2026-06-13",
+          "trades": 11,
+          "winRate": 100.0,
+          "maxLoss": 0,
+          "pnl": 44.0
+        },
+        {
+          "day": "2026-06-14",
+          "trades": 30,
+          "winRate": 63.33,
+          "maxLoss": 4,
+          "pnl": 21.0
+        },
+        {
+          "day": "2026-06-15",
+          "trades": 48,
+          "winRate": 72.92,
+          "maxLoss": 4,
+          "pnl": 75.0
+        },
+        {
+          "day": "2026-06-16",
+          "trades": 47,
+          "winRate": 59.57,
+          "maxLoss": 4,
+          "pnl": 17.0
+        },
+        {
+          "day": "2026-06-17",
+          "trades": 31,
+          "winRate": 58.06,
+          "maxLoss": 8,
+          "pnl": 7.0
+        }
+      ]
+    },
+    "sampleTrades": [
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+        "model_type": "second_chip",
+        "time": "2026-06-17T11:05:08+00:00",
+        "signal": "UP",
+        "entry": 64649.0,
+        "settle_time": "2026-06-17T11:15:08+00:00",
+        "settle": 64557.8,
+        "won": false,
+        "breakout": "DOWN",
+        "poc": 64900.0,
+        "zone_low": 64850.0,
+        "zone_high": 64900.0,
+        "flow300": -373.478
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+        "model_type": "second_chip",
+        "time": "2026-06-17T11:05:23+00:00",
+        "signal": "UP",
+        "entry": 64614.7,
+        "settle_time": "2026-06-17T11:15:23+00:00",
+        "settle": 64557.4,
+        "won": false,
+        "breakout": "DOWN",
+        "poc": 64880.0,
+        "zone_low": 64880.0,
+        "zone_high": 64900.0,
+        "flow300": -506.075
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+        "model_type": "second_chip",
+        "time": "2026-06-17T11:05:29+00:00",
+        "signal": "UP",
+        "entry": 64575.4,
+        "settle_time": "2026-06-17T11:15:29+00:00",
+        "settle": 64552.0,
+        "won": false,
+        "breakout": "DOWN",
+        "poc": 64900.0,
+        "zone_low": 64900.0,
+        "zone_high": 64900.0,
+        "flow300": -626.338
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+        "model_type": "second_chip",
+        "time": "2026-06-17T11:16:18+00:00",
+        "signal": "UP",
+        "entry": 64575.1,
+        "settle_time": "2026-06-17T11:26:18+00:00",
+        "settle": 64667.3,
+        "won": true,
+        "breakout": "DOWN",
+        "poc": 64900.0,
+        "zone_low": 64900.0,
+        "zone_high": 64900.0,
+        "flow300": -15.078
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+        "model_type": "second_chip",
+        "time": "2026-06-17T12:30:26+00:00",
+        "signal": "UP",
+        "entry": 64560.4,
+        "settle_time": "2026-06-17T12:40:26+00:00",
+        "settle": 64763.8,
+        "won": true,
+        "breakout": "DOWN",
+        "poc": 64820.0,
+        "zone_low": 64820.0,
+        "zone_high": 64820.0,
+        "flow300": -116.45
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+        "model_type": "second_chip",
+        "time": "2026-06-17T12:30:27+00:00",
+        "signal": "UP",
+        "entry": 64555.3,
+        "settle_time": "2026-06-17T12:40:27+00:00",
+        "settle": 64763.9,
+        "won": true,
+        "breakout": "DOWN",
+        "poc": 64800.0,
+        "zone_low": 64750.0,
+        "zone_high": 64800.0,
+        "flow300": -118.404
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+        "model_type": "second_chip",
+        "time": "2026-06-17T12:48:27+00:00",
+        "signal": "DOWN",
+        "entry": 65075.9,
+        "settle_time": "2026-06-17T12:58:27+00:00",
+        "settle": 64977.4,
+        "won": true,
+        "breakout": "UP",
+        "poc": 64780.0,
+        "zone_low": 64780.0,
+        "zone_high": 64800.0,
+        "flow300": 539.982
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+        "model_type": "second_chip",
+        "time": "2026-06-17T13:00:52+00:00",
+        "signal": "DOWN",
+        "entry": 64998.3,
+        "settle_time": "2026-06-17T13:10:52+00:00",
+        "settle": 64944.1,
+        "won": true,
+        "breakout": "UP",
+        "poc": 64800.0,
+        "zone_low": 64700.0,
+        "zone_high": 64800.0,
+        "flow300": 50.61
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+        "model_type": "second_chip",
+        "time": "2026-06-17T13:37:46+00:00",
+        "signal": "DOWN",
+        "entry": 65202.9,
+        "settle_time": "2026-06-17T13:47:46+00:00",
+        "settle": 65260.0,
+        "won": false,
+        "breakout": "UP",
+        "poc": 65000.0,
+        "zone_low": 64950.0,
+        "zone_high": 65000.0,
+        "flow300": 322.293
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+        "model_type": "second_chip",
+        "time": "2026-06-17T13:41:51+00:00",
+        "signal": "DOWN",
+        "entry": 65267.5,
+        "settle_time": "2026-06-17T13:51:51+00:00",
+        "settle": 65249.8,
+        "won": true,
+        "breakout": "UP",
+        "poc": 65000.0,
+        "zone_low": 65000.0,
+        "zone_high": 65000.0,
+        "flow300": 805.487
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+        "model_type": "second_chip",
+        "time": "2026-06-17T13:46:46+00:00",
+        "signal": "DOWN",
+        "entry": 65331.2,
+        "settle_time": "2026-06-17T13:56:46+00:00",
+        "settle": 65270.1,
+        "won": true,
+        "breakout": "UP",
+        "poc": 65000.0,
+        "zone_low": 65000.0,
+        "zone_high": 65000.0,
+        "flow300": 224.306
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_3600_FLOW",
+        "model_type": "second_chip",
+        "time": "2026-06-17T14:47:17+00:00",
+        "signal": "UP",
+        "entry": 64950.2,
+        "settle_time": "2026-06-17T14:57:17+00:00",
+        "settle": 65122.0,
+        "won": true,
+        "breakout": "DOWN",
+        "poc": 65150.0,
+        "zone_low": 65150.0,
+        "zone_high": 65250.0,
+        "flow300": -112.344
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+        "model_type": "second_chip",
+        "time": "2026-06-17T14:47:20+00:00",
+        "signal": "UP",
+        "entry": 64896.3,
+        "settle_time": "2026-06-17T14:57:20+00:00",
+        "settle": 65117.3,
+        "won": true,
+        "breakout": "DOWN",
+        "poc": 65160.0,
+        "zone_low": 65160.0,
+        "zone_high": 65180.0,
+        "flow300": -177.925
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+        "model_type": "second_chip",
+        "time": "2026-06-17T14:47:28+00:00",
+        "signal": "UP",
+        "entry": 64853.4,
+        "settle_time": "2026-06-17T14:57:28+00:00",
+        "settle": 65112.7,
+        "won": true,
+        "breakout": "DOWN",
+        "poc": 65200.0,
+        "zone_low": 65200.0,
+        "zone_high": 65200.0,
+        "flow300": -298.807
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_CHIP_1800_OPT",
+        "model_type": "second_chip",
+        "time": "2026-06-17T16:59:08+00:00",
+        "signal": "DOWN",
+        "entry": 65826.2,
+        "settle_time": "2026-06-17T17:09:08+00:00",
+        "settle": 65835.8,
+        "won": false,
+        "breakout": "UP",
+        "poc": 65020.0,
+        "zone_low": 65020.0,
+        "zone_high": 65020.0,
+        "flow300": -0.04
+      }
+    ]
+  }
+}

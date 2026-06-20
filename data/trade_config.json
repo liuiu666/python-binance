@@ -2,154 +2,48 @@
   "amount": "5",
   "strategyVariants": [
     {
-      "id": "BTC_10min_SAFE",
-      "base": "SAFE",
-      "label": "推荐稳健 20/80",
+      "id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+      "base": "SECOND_VW_CONFIRM",
+      "label": "正态成交量确认 稳健",
       "amount": "5",
       "tailPct": 0.2,
       "duration": "10",
       "enabled": true,
       "tradeEnabled": true,
+      "lookbackSec": 2700,
+      "horizonSec": 600,
+      "gapSec": 600,
+      "etaTargetBps": 2,
+      "etaMaxWaitSec": 45,
       "backtest": {
-        "wr": 63.39,
-        "tradesPerDay": 3.46,
-        "trades": 336,
-        "maxLoss": 5
+        "wr": 68.66,
+        "tradesPerDay": 9.66,
+        "trades": 67,
+        "maxLoss": 3,
+        "sampleHours": 166.44
       }
     },
     {
-      "id": "BTC_10min_TAKER",
-      "base": "TAKER",
-      "label": "资金流过滤 20/80",
-      "amount": "10",
-      "tailPct": 0.2,
-      "duration": "10",
-      "enabled": true,
-      "tradeEnabled": true,
-      "backtest": {
-        "wr": 87.5,
-        "tradesPerDay": 0.94,
-        "trades": 32,
-        "maxLoss": 1
-      }
-    },
-    {
-      "id": "BTC_10min_TAKER_27",
-      "base": "TAKER",
-      "label": "资金流过滤 27/73",
-      "amount": "6",
+      "id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+      "base": "SECOND_VW_CONFIRM",
+      "label": "正态成交量确认 高频",
+      "amount": "5",
       "tailPct": 0.27,
       "duration": "10",
       "enabled": true,
       "tradeEnabled": true,
-      "backtest": {
-        "wr": 66.07,
-        "tradesPerDay": 2.95,
-        "trades": 112,
-        "maxLoss": 4
-      }
-    },
-    {
-      "id": "BTC_10min_SECOND_3600_20",
-      "base": "SECOND",
-      "label": "秒级正态 3600s 20/80",
-      "amount": "5",
-      "tailPct": 0.2,
-      "duration": "10",
-      "enabled": true,
-      "tradeEnabled": true,
-      "backtest": {
-        "wr": 66.67,
-        "tradesPerDay": 8.5,
-        "trades": 27,
-        "maxLoss": 2,
-        "sampleHours": 76.23
-      },
-      "lookbackSec": 3600,
-      "horizonSec": 600,
-      "gapSec": 1800,
-      "secondFilter": "none"
-    },
-    {
-      "id": "BTC_10min_SECOND_CHIP_1800_OPT",
-      "base": "SECOND_CHIP",
-      "label": "秒级筹码区 30m 优化",
-      "amount": "5",
-      "tailPct": 0.2,
-      "duration": "10",
-      "enabled": true,
-      "tradeEnabled": false,
-      "backtest": {
-        "wr": 73.91,
-        "tradesPerDay": 11.6,
-        "trades": 23,
-        "maxLoss": 1,
-        "sampleHours": 47.58
-      },
-      "lookbackSec": 1800,
-      "horizonSec": 600,
-      "gapSec": 300,
-      "chipTargetShare": 0.2,
-      "chipBinMode": "fixed",
-      "chipBinSize": 20,
-      "chipBinPct": 0.0003,
-      "chipBreakPct": 0.004,
-      "chipDirectionFilter": "all",
-      "chipFilter": "width_lte_3"
-    },
-    {
-      "id": "BTC_10min_SECOND_CHIP_3600_FLOW",
-      "base": "SECOND_CHIP",
-      "label": "????? 60m ???",
-      "amount": "10",
-      "tailPct": 0.2,
-      "duration": "10",
-      "enabled": true,
-      "tradeEnabled": true,
-      "backtest": {
-        "wr": 84.21,
-        "tradesPerDay": 9.41,
-        "trades": 19,
-        "maxLoss": 1,
-        "sampleHours": 48.48
-      },
-      "lookbackSec": 3600,
-      "horizonSec": 600,
-      "gapSec": 1800,
-      "chipTargetShare": 0.5,
-      "chipBinMode": "fixed",
-      "chipBinSize": 50,
-      "chipBinPct": 0.0003,
-      "chipBreakPct": 0.003,
-      "chipDirectionFilter": "all",
-      "chipFilter": "flow_reversal"
-    },
-    {
-      "id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
-      "base": "SECOND_CHIP",
-      "label": "秒级筹码区 WIDE_FLOW 60m",
-      "amount": "15",
-      "tailPct": 0.2,
-      "duration": "10",
-      "enabled": true,
-      "tradeEnabled": true,
-      "backtest": {
-        "wr": 76.67,
-        "tradesPerDay": 9.45,
-        "trades": 30,
-        "maxLoss": 2,
-        "sampleHours": 76.23
-      },
-      "lookbackSec": 3600,
+      "lookbackSec": 2700,
       "horizonSec": 600,
       "gapSec": 600,
-      "chipTargetShare": 0.2,
-      "chipBinMode": "fixed",
-      "chipBinSize": 100,
-      "chipBinPct": 0.0003,
-      "chipBreakPct": 0.005,
-      "chipDirectionFilter": "all",
-      "chipFilter": "flow_reversal"
+      "etaTargetBps": 3,
+      "etaMaxWaitSec": 45,
+      "backtest": {
+        "wr": 67.39,
+        "tradesPerDay": 13.27,
+        "trades": 92,
+        "maxLoss": 3,
+        "sampleHours": 166.44
+      }
     }
   ],
   "duration": "10",
@@ -157,76 +51,27 @@
   "realTradingEnabled": true,
   "shadowTradingEnabled": false,
   "strategyAmounts": {
-    "BTC_10min_SAFE": "5",
-    "BTC_10min_TAKER": "10",
-    "BTC_10min_TAKER_27": "6",
-    "BTC_10min_SECOND_3600_20": "5",
-    "BTC_10min_SECOND_CHIP_1800_OPT": "5",
-    "BTC_10min_SECOND_CHIP_3600_FLOW": "10",
-    "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW": "15"
+    "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2": "5",
+    "BTC_10min_SECOND_VW_FAST_2700_27_ETA3": "5"
   },
   "strategyParams": {
-    "BTC_10min_SAFE": {
-      "tailPct": 0.2,
-      "tradeEnabled": true
-    },
-    "BTC_10min_TAKER": {
-      "tailPct": 0.2,
-      "tradeEnabled": true
-    },
-    "BTC_10min_TAKER_27": {
-      "tailPct": 0.27,
-      "tradeEnabled": true
-    },
-    "BTC_10min_SECOND_3600_20": {
+    "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2": {
       "tailPct": 0.2,
       "tradeEnabled": true,
-      "lookbackSec": 3600,
-      "horizonSec": 600,
-      "gapSec": 1800,
-      "secondFilter": "none"
-    },
-    "BTC_10min_SECOND_CHIP_1800_OPT": {
-      "tailPct": 0.2,
-      "tradeEnabled": false,
-      "lookbackSec": 1800,
-      "horizonSec": 600,
-      "gapSec": 300,
-      "chipTargetShare": 0.2,
-      "chipBinMode": "fixed",
-      "chipBinSize": 20,
-      "chipBinPct": 0.0003,
-      "chipBreakPct": 0.004,
-      "chipDirectionFilter": "all",
-      "chipFilter": "width_lte_3"
-    },
-    "BTC_10min_SECOND_CHIP_3600_FLOW": {
-      "tailPct": 0.2,
-      "tradeEnabled": true,
-      "lookbackSec": 3600,
-      "horizonSec": 600,
-      "gapSec": 1800,
-      "chipTargetShare": 0.5,
-      "chipBinMode": "fixed",
-      "chipBinSize": 50,
-      "chipBinPct": 0.0003,
-      "chipBreakPct": 0.003,
-      "chipDirectionFilter": "all",
-      "chipFilter": "flow_reversal"
-    },
-    "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW": {
-      "tailPct": 0.2,
-      "tradeEnabled": true,
-      "lookbackSec": 3600,
+      "lookbackSec": 2700,
       "horizonSec": 600,
       "gapSec": 600,
-      "chipTargetShare": 0.2,
-      "chipBinMode": "fixed",
-      "chipBinSize": 100,
-      "chipBinPct": 0.0003,
-      "chipBreakPct": 0.005,
-      "chipDirectionFilter": "all",
-      "chipFilter": "flow_reversal"
+      "etaTargetBps": 2,
+      "etaMaxWaitSec": 45
+    },
+    "BTC_10min_SECOND_VW_FAST_2700_27_ETA3": {
+      "tailPct": 0.27,
+      "tradeEnabled": true,
+      "lookbackSec": 2700,
+      "horizonSec": 600,
+      "gapSec": 600,
+      "etaTargetBps": 3,
+      "etaMaxWaitSec": 45
     }
   }
 }

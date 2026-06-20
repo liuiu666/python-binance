@@ -1,0 +1,296 @@
+{
+  "latest_3d": {
+    "sample": {
+      "start": "2026-06-17T06:06:31+00:00",
+      "end": "2026-06-20T12:00:17+00:00",
+      "hours": 77.9,
+      "rows": 280427,
+      "observedPct": 96.26
+    },
+    "smart_all_direct": {
+      "trades": 105,
+      "winRate": 62.86,
+      "pnlU_5u_80pct": 69,
+      "maxLoss": 4,
+      "tradesPerDay": 32.35
+    },
+    "trend_only_direct": {
+      "trades": 67,
+      "winRate": 68.66,
+      "pnlU_5u_80pct": 79,
+      "maxLoss": 3,
+      "tradesPerDay": 20.64
+    },
+    "recommended_smart_all": {
+      "trades": 58,
+      "winRate": 65.52,
+      "pnlU_5u_80pct": 52,
+      "maxLoss": 2,
+      "tradesPerDay": 17.87
+    },
+    "recommended_smart_all_forecast": {
+      "testedSignals": 105,
+      "predictedHitCount": 85,
+      "actualHitCount": 67,
+      "predictedHitPrecision": 68.24,
+      "falsePredictedHitCount": 27
+    },
+    "recommended_smart_all_by_day": {
+      "2026-06-17": {
+        "trades": 20,
+        "winRate": 60.0,
+        "pnlU_5u_80pct": 8,
+        "maxLoss": 2,
+        "tradesPerDay": 43.72,
+        "avgDelaySec": 6.65
+      },
+      "2026-06-18": {
+        "trades": 22,
+        "winRate": 68.18,
+        "pnlU_5u_80pct": 25,
+        "maxLoss": 2,
+        "tradesPerDay": 33.4,
+        "avgDelaySec": 7.95
+      },
+      "2026-06-19": {
+        "trades": 13,
+        "winRate": 61.54,
+        "pnlU_5u_80pct": 7,
+        "maxLoss": 2,
+        "tradesPerDay": 15.06,
+        "avgDelaySec": 7.54
+      },
+      "2026-06-20": {
+        "trades": 3,
+        "winRate": 100.0,
+        "pnlU_5u_80pct": 12,
+        "maxLoss": 0,
+        "tradesPerDay": 27.89,
+        "avgDelaySec": 11.0
+      }
+    },
+    "recommended_trend_only": {
+      "trades": 37,
+      "winRate": 64.86,
+      "pnlU_5u_80pct": 31,
+      "maxLoss": 3,
+      "tradesPerDay": 11.4
+    },
+    "recommended_trend_only_forecast": {
+      "testedSignals": 67,
+      "predictedHitCount": 53,
+      "actualHitCount": 45,
+      "predictedHitPrecision": 69.81,
+      "falsePredictedHitCount": 16
+    },
+    "recommended_trend_only_by_day": {
+      "2026-06-17": {
+        "trades": 15,
+        "winRate": 66.67,
+        "pnlU_5u_80pct": 15,
+        "maxLoss": 2,
+        "tradesPerDay": 32.79,
+        "avgDelaySec": 8.13
+      },
+      "2026-06-18": {
+        "trades": 16,
+        "winRate": 75.0,
+        "pnlU_5u_80pct": 28,
+        "maxLoss": 2,
+        "tradesPerDay": 29.07,
+        "avgDelaySec": 4.5
+      },
+      "2026-06-19": {
+        "trades": 5,
+        "winRate": 20.0,
+        "pnlU_5u_80pct": -16,
+        "maxLoss": 3,
+        "tradesPerDay": 8.47,
+        "avgDelaySec": 14.6
+      },
+      "2026-06-20": {
+        "trades": 1,
+        "winRate": 100.0,
+        "pnlU_5u_80pct": 4,
+        "maxLoss": 0,
+        "tradesPerDay": 1000000000.0,
+        "avgDelaySec": 31.0
+      }
+    }
+  },
+  "combined_6d": {
+    "sample": {
+      "start": "2026-06-13T13:33:45+00:00",
+      "end": "2026-06-20T12:00:17+00:00",
+      "hours": 166.44,
+      "rows": 599193,
+      "observedPct": 95.68
+    },
+    "smart_all_direct": {
+      "trades": 189,
+      "winRate": 65.61,
+      "pnlU_5u_80pct": 171,
+      "maxLoss": 4,
+      "tradesPerDay": 27.25
+    },
+    "trend_only_direct": {
+      "trades": 112,
+      "winRate": 67.86,
+      "pnlU_5u_80pct": 124,
+      "maxLoss": 3,
+      "tradesPerDay": 16.15
+    },
+    "recommended_smart_all": {
+      "trades": 108,
+      "winRate": 68.52,
+      "pnlU_5u_80pct": 126,
+      "maxLoss": 2,
+      "tradesPerDay": 15.57
+    },
+    "recommended_smart_all_forecast": {
+      "testedSignals": 189,
+      "predictedHitCount": 159,
+      "actualHitCount": 123,
+      "predictedHitPrecision": 67.92,
+      "falsePredictedHitCount": 51
+    },
+    "recommended_smart_all_by_day": {
+      "2026-06-13": {
+        "trades": 5,
+        "winRate": 80.0,
+        "pnlU_5u_80pct": 11,
+        "maxLoss": 1,
+        "tradesPerDay": 21.52,
+        "avgDelaySec": 15.6
+      },
+      "2026-06-14": {
+        "trades": 6,
+        "winRate": 66.67,
+        "pnlU_5u_80pct": 6,
+        "maxLoss": 2,
+        "tradesPerDay": 6.88,
+        "avgDelaySec": 5.67
+      },
+      "2026-06-15": {
+        "trades": 15,
+        "winRate": 60.0,
+        "pnlU_5u_80pct": 6,
+        "maxLoss": 2,
+        "tradesPerDay": 20.51,
+        "avgDelaySec": 9.27
+      },
+      "2026-06-16": {
+        "trades": 22,
+        "winRate": 77.27,
+        "pnlU_5u_80pct": 43,
+        "maxLoss": 2,
+        "tradesPerDay": 30.69,
+        "avgDelaySec": 12.59
+      },
+      "2026-06-17": {
+        "trades": 22,
+        "winRate": 63.64,
+        "pnlU_5u_80pct": 16,
+        "maxLoss": 2,
+        "tradesPerDay": 36.6,
+        "avgDelaySec": 7.09
+      },
+      "2026-06-18": {
+        "trades": 22,
+        "winRate": 68.18,
+        "pnlU_5u_80pct": 25,
+        "maxLoss": 2,
+        "tradesPerDay": 33.4,
+        "avgDelaySec": 7.95
+      },
+      "2026-06-19": {
+        "trades": 13,
+        "winRate": 61.54,
+        "pnlU_5u_80pct": 7,
+        "maxLoss": 2,
+        "tradesPerDay": 15.06,
+        "avgDelaySec": 7.54
+      },
+      "2026-06-20": {
+        "trades": 3,
+        "winRate": 100.0,
+        "pnlU_5u_80pct": 12,
+        "maxLoss": 0,
+        "tradesPerDay": 27.89,
+        "avgDelaySec": 11.0
+      }
+    },
+    "recommended_trend_only": {
+      "trades": 59,
+      "winRate": 67.8,
+      "pnlU_5u_80pct": 65,
+      "maxLoss": 3,
+      "tradesPerDay": 8.51
+    },
+    "recommended_trend_only_forecast": {
+      "testedSignals": 112,
+      "predictedHitCount": 91,
+      "actualHitCount": 71,
+      "predictedHitPrecision": 64.84,
+      "falsePredictedHitCount": 32
+    },
+    "recommended_trend_only_by_day": {
+      "2026-06-13": {
+        "trades": 2,
+        "winRate": 50.0,
+        "pnlU_5u_80pct": -1,
+        "maxLoss": 1,
+        "tradesPerDay": 74.32,
+        "avgDelaySec": 37.5
+      },
+      "2026-06-15": {
+        "trades": 5,
+        "winRate": 60.0,
+        "pnlU_5u_80pct": 2,
+        "maxLoss": 2,
+        "tradesPerDay": 23.37,
+        "avgDelaySec": 11.4
+      },
+      "2026-06-16": {
+        "trades": 13,
+        "winRate": 76.92,
+        "pnlU_5u_80pct": 25,
+        "maxLoss": 2,
+        "tradesPerDay": 18.14,
+        "avgDelaySec": 18.54
+      },
+      "2026-06-17": {
+        "trades": 17,
+        "winRate": 70.59,
+        "pnlU_5u_80pct": 23,
+        "maxLoss": 2,
+        "tradesPerDay": 28.28,
+        "avgDelaySec": 8.53
+      },
+      "2026-06-18": {
+        "trades": 16,
+        "winRate": 75.0,
+        "pnlU_5u_80pct": 28,
+        "maxLoss": 2,
+        "tradesPerDay": 29.07,
+        "avgDelaySec": 4.5
+      },
+      "2026-06-19": {
+        "trades": 5,
+        "winRate": 20.0,
+        "pnlU_5u_80pct": -16,
+        "maxLoss": 3,
+        "tradesPerDay": 8.47,
+        "avgDelaySec": 14.6
+      },
+      "2026-06-20": {
+        "trades": 1,
+        "winRate": 100.0,
+        "pnlU_5u_80pct": 4,
+        "maxLoss": 0,
+        "tradesPerDay": 1000000000.0,
+        "avgDelaySec": 31.0
+      }
+    }
+  }
+}

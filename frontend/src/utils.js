@@ -14,11 +14,36 @@ export function payoutForDuration(duration) {
 export const DEFAULT_CONFIG = {
   amount: "5",
   strategyVariants: [
-    { id: "BTC_10min_SAFE", base: "SAFE", label: "推荐稳健 20/80", amount: "5", tailPct: 0.2, enabled: false, tradeEnabled: false },
-    { id: "BTC_10min_TAKER", base: "TAKER", label: "资金流过滤 20/80", amount: "5", tailPct: 0.2, enabled: false, tradeEnabled: false },
-    { id: "BTC_10min_SECOND_4200_22", base: "SECOND", label: "秒级正态 70m 22/78", amount: "10", tailPct: 0.22, enabled: true, tradeEnabled: true, lookbackSec: 4200, horizonSec: 600, gapSec: 1200, secondFilter: "none", duration: "10" },
-    { id: "BTC_10min_SECOND_CHIP_1800_OPT", base: "SECOND_CHIP", label: "秒级筹码区 30m 优化", amount: "5", enabled: true, tradeEnabled: false, lookbackSec: 1800, horizonSec: 600, gapSec: 300, chipTargetShare: 0.2, chipBinMode: "fixed", chipBinSize: 20, chipBinPct: 0.0003, chipBreakPct: 0.004, chipDirectionFilter: "all", chipFilter: "width_lte_3", duration: "10" },
-    { id: "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW", base: "SECOND_CHIP", label: "秒级筹码区 WIDE_FLOW 60m", amount: "15", enabled: true, tradeEnabled: true, lookbackSec: 3600, horizonSec: 600, gapSec: 600, chipTargetShare: 0.2, chipBinMode: "fixed", chipBinSize: 100, chipBinPct: 0.0003, chipBreakPct: 0.005, chipDirectionFilter: "all", chipFilter: "flow_reversal", duration: "10" }
+    {
+      id: "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+      base: "SECOND_VW_CONFIRM",
+      label: "正态成交量确认 稳健",
+      amount: "5",
+      tailPct: 0.2,
+      enabled: true,
+      tradeEnabled: true,
+      lookbackSec: 2700,
+      horizonSec: 600,
+      gapSec: 600,
+      etaTargetBps: 2,
+      etaMaxWaitSec: 45,
+      duration: "10"
+    },
+    {
+      id: "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+      base: "SECOND_VW_CONFIRM",
+      label: "正态成交量确认 高频",
+      amount: "5",
+      tailPct: 0.27,
+      enabled: true,
+      tradeEnabled: true,
+      lookbackSec: 2700,
+      horizonSec: 600,
+      gapSec: 600,
+      etaTargetBps: 3,
+      etaMaxWaitSec: 45,
+      duration: "10"
+    }
   ],
   duration: "10",
   autoTrade_10m: false,
@@ -62,28 +87,11 @@ export function strategyName(strategyId) {
   const id = String(strategyId || "");
   if (!strategyId || strategyId === "manual") return "手动";
   const exact = {
-    BTC_10min_SAFE: "推荐稳健 20/80",
-    BTC_10min_TAKER: "资金流过滤 20/80",
-    BTC_10min_TAKER_27: "资金流过滤 27/73",
-    BTC_10min_SECOND_3600_20: "秒级正态 60m 20/80",
-    BTC_10min_SECOND_4200_22: "秒级正态 70m 22/78",
-    BTC_10min_SECOND_CHIP_1800_OPT: "秒级筹码区 30m 窄区",
-    BTC_10min_SECOND_CHIP_3600_FLOW: "秒级筹码区 60m 资金流",
-    BTC_10min_SECOND_CHIP_3600_WIDE_FLOW: "秒级筹码区 60m WIDE_FLOW"
+    BTC_10min_SECOND_VW_STABLE_2700_20_ETA2: "正态成交量确认 稳健",
+    BTC_10min_SECOND_VW_FAST_2700_27_ETA3: "正态成交量确认 高频"
   };
   if (exact[id]) return exact[id];
-  const normal = id.match(/^BTC_10min_SECOND_(\d+)_(\d+)/);
-  if (normal) {
-    const minutes = Math.round(Number(normal[1]) / 60);
-    const lower = Number(normal[2]);
-    return `秒级正态 ${minutes}m ${lower}/${100 - lower}`;
-  }
-  const chip = id.match(/^BTC_10min_SECOND_CHIP_(\d+)/);
-  if (chip) return `秒级筹码区 ${Math.round(Number(chip[1]) / 60)}m`;
-  const taker = id.match(/^BTC_10min_TAKER_(\d+)/);
-  if (taker) return `资金流过滤 ${taker[1]}/${100 - Number(taker[1])}`;
-  const safe = id.match(/^BTC_10min_SAFE_(\d+)/);
-  if (safe) return `推荐稳健 ${safe[1]}/${100 - Number(safe[1])}`;
+  if (id.startsWith("BTC_10min_SECOND_VW_")) return "正态成交量确认";
   return strategyId;
 }
 
@@ -115,7 +123,7 @@ export function pnlText(row) {
 export function timeParts(time) {
   if (!time) return { date: "--", time: "--" };
   const d = new Date(Number(time));
-  if (isNaN(d.getTime())) return { date: "--", time: "--" };
+  if (Number.isNaN(d.getTime())) return { date: "--", time: "--" };
   const dateStr = d.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit" });
   const timeStr = d.toLocaleTimeString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", second: "2-digit" });
   return { date: dateStr, time: timeStr };
@@ -137,17 +145,11 @@ export function signalLabel(signal) {
     return "策略拦截: " + reasons;
   }
   if (signal.safety_blocked) return "避险拦截: 极端趋势";
-  if (signal.model_type === "second_chip") {
-    if (signal.reason === "already_outside_chip_zone") {
-      if (signal.chip_state === "below") return "已下破，等待重新进区";
-      if (signal.chip_state === "above") return "已上破，等待重新进区";
-      return "已在区外，等待重新进区";
-    }
-    if (signal.reason === "direction_filter") return "方向过滤，未执行";
-    if (signal.chip_state === "inside") return "区间内，等待突破";
-    return "等待筹码区突破";
-  }
-  return "等待极端区间";
+  if (signal.reason === "vw_confirm_not_aligned") return "等待成交量确认";
+  if (signal.reason === "eta_too_slow" || signal.reason === "no_momentum") return "等待ETA到价";
+  if (signal.reason === "waiting_eta_target_price") return "等待目标入场价";
+  if (signal.reason === "no_edge") return "等待尾部区间";
+  return "等待信号";
 }
 
 export function signalTimeText(time) {

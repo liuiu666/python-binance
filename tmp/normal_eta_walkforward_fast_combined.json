@@ -1,0 +1,721 @@
+{
+  "generatedAt": "2026-06-20T13:17:51.730698+00:00",
+  "sample": {
+    "start": "2026-06-13T13:33:45+00:00",
+    "end": "2026-06-20T12:00:17+00:00",
+    "hours": 166.44,
+    "rows": 599193,
+    "observedPct": 95.68,
+    "days": [
+      "2026-06-13",
+      "2026-06-14",
+      "2026-06-15",
+      "2026-06-16",
+      "2026-06-17",
+      "2026-06-18",
+      "2026-06-19",
+      "2026-06-20"
+    ]
+  },
+  "method": "Candidate walk-forward: select only from pre-researched normal+ETA candidates using past days, test next day.",
+  "candidates": [
+    {
+      "lookback": 2700,
+      "tail": 0.27,
+      "target": 2.0,
+      "wait": 45,
+      "downOnly": false
+    },
+    {
+      "lookback": 2700,
+      "tail": 0.27,
+      "target": 3.0,
+      "wait": 45,
+      "downOnly": false
+    },
+    {
+      "lookback": 3600,
+      "tail": 0.27,
+      "target": 1.0,
+      "wait": 20,
+      "downOnly": false
+    },
+    {
+      "lookback": 2700,
+      "tail": 0.2,
+      "target": 1.0,
+      "wait": 20,
+      "downOnly": false
+    },
+    {
+      "lookback": 2700,
+      "tail": 0.2,
+      "target": 2.0,
+      "wait": 45,
+      "downOnly": false
+    },
+    {
+      "lookback": 4200,
+      "tail": 0.2,
+      "target": 2.0,
+      "wait": 45,
+      "downOnly": false
+    },
+    {
+      "lookback": 1800,
+      "tail": 0.2,
+      "target": 1.0,
+      "wait": 20,
+      "downOnly": true
+    },
+    {
+      "lookback": 1800,
+      "tail": 0.2,
+      "target": 3.0,
+      "wait": 45,
+      "downOnly": false
+    }
+  ],
+  "summary": {
+    "balanced": {
+      "days": 6,
+      "trades": 82,
+      "winRate": 67.07,
+      "pnlU_5u_80pct": 85,
+      "maxDailyLossStreak": 4,
+      "tradesPerDay": 13.67
+    },
+    "stable": {
+      "days": 5,
+      "trades": 50,
+      "winRate": 70.0,
+      "pnlU_5u_80pct": 65,
+      "maxDailyLossStreak": 2,
+      "tradesPerDay": 10.0
+    }
+  },
+  "folds": [
+    {
+      "trainDays": [
+        "2026-06-13",
+        "2026-06-14"
+      ],
+      "testDay": "2026-06-15",
+      "balanced": {
+        "selected": {
+          "lookback": 1800,
+          "tail": 0.2,
+          "target": 3.0,
+          "wait": 45,
+          "downOnly": false,
+          "trainEta": {
+            "trades": 15,
+            "winRate": 40.0,
+            "pnlU_5u_80pct": -21,
+            "maxLoss": 4,
+            "tradesPerDay": 10.45,
+            "avgDelaySec": 14.8
+          },
+          "trainForecast": {
+            "testedSignals": 72,
+            "actualHitCount": 20,
+            "actualHitRate": 27.78,
+            "predictedHitCount": 36,
+            "predictedHitPrecision": 41.67,
+            "falsePredictedHitCount": 21
+          }
+        },
+        "test": {
+          "trades": 11,
+          "winRate": 81.82,
+          "pnlU_5u_80pct": 26,
+          "maxLoss": 1,
+          "tradesPerDay": 11.0,
+          "avgDelaySec": 15.36
+        },
+        "testForecast": {
+          "testedSignals": 48,
+          "actualHitCount": 21,
+          "actualHitRate": 43.75,
+          "predictedHitCount": 24,
+          "predictedHitPrecision": 45.83,
+          "falsePredictedHitCount": 13
+        },
+        "testByDay": {
+          "2026-06-15": {
+            "trades": 11,
+            "winRate": 81.82,
+            "pnlU_5u_80pct": 26,
+            "maxLoss": 1,
+            "tradesPerDay": 12.92,
+            "avgDelaySec": 15.36
+          }
+        }
+      },
+      "stable": {
+        "selected": null,
+        "test": null
+      }
+    },
+    {
+      "trainDays": [
+        "2026-06-13",
+        "2026-06-14",
+        "2026-06-15"
+      ],
+      "testDay": "2026-06-16",
+      "balanced": {
+        "selected": {
+          "lookback": 2700,
+          "tail": 0.27,
+          "target": 3.0,
+          "wait": 45,
+          "downOnly": false,
+          "trainEta": {
+            "trades": 27,
+            "winRate": 62.96,
+            "pnlU_5u_80pct": 18,
+            "maxLoss": 2,
+            "tradesPerDay": 11.09,
+            "avgDelaySec": 12.44
+          },
+          "trainForecast": {
+            "testedSignals": 129,
+            "actualHitCount": 43,
+            "actualHitRate": 33.33,
+            "predictedHitCount": 68,
+            "predictedHitPrecision": 39.71,
+            "falsePredictedHitCount": 41
+          }
+        },
+        "test": {
+          "trades": 15,
+          "winRate": 66.67,
+          "pnlU_5u_80pct": 15,
+          "maxLoss": 2,
+          "tradesPerDay": 15.0,
+          "avgDelaySec": 17.13
+        },
+        "testForecast": {
+          "testedSignals": 56,
+          "actualHitCount": 22,
+          "actualHitRate": 39.29,
+          "predictedHitCount": 28,
+          "predictedHitPrecision": 53.57,
+          "falsePredictedHitCount": 13
+        },
+        "testByDay": {
+          "2026-06-16": {
+            "trades": 15,
+            "winRate": 66.67,
+            "pnlU_5u_80pct": 15,
+            "maxLoss": 2,
+            "tradesPerDay": 18.16,
+            "avgDelaySec": 17.13
+          }
+        }
+      },
+      "stable": {
+        "selected": {
+          "lookback": 2700,
+          "tail": 0.27,
+          "target": 3.0,
+          "wait": 45,
+          "downOnly": false,
+          "trainEta": {
+            "trades": 27,
+            "winRate": 62.96,
+            "pnlU_5u_80pct": 18,
+            "maxLoss": 2,
+            "tradesPerDay": 11.09,
+            "avgDelaySec": 12.44
+          },
+          "trainForecast": {
+            "testedSignals": 129,
+            "actualHitCount": 43,
+            "actualHitRate": 33.33,
+            "predictedHitCount": 68,
+            "predictedHitPrecision": 39.71,
+            "falsePredictedHitCount": 41
+          }
+        },
+        "test": {
+          "trades": 15,
+          "winRate": 66.67,
+          "pnlU_5u_80pct": 15,
+          "maxLoss": 2,
+          "tradesPerDay": 15.0,
+          "avgDelaySec": 17.13
+        },
+        "testForecast": {
+          "testedSignals": 56,
+          "actualHitCount": 22,
+          "actualHitRate": 39.29,
+          "predictedHitCount": 28,
+          "predictedHitPrecision": 53.57,
+          "falsePredictedHitCount": 13
+        },
+        "testByDay": {
+          "2026-06-16": {
+            "trades": 15,
+            "winRate": 66.67,
+            "pnlU_5u_80pct": 15,
+            "maxLoss": 2,
+            "tradesPerDay": 18.16,
+            "avgDelaySec": 17.13
+          }
+        }
+      }
+    },
+    {
+      "trainDays": [
+        "2026-06-13",
+        "2026-06-14",
+        "2026-06-15",
+        "2026-06-16"
+      ],
+      "testDay": "2026-06-17",
+      "balanced": {
+        "selected": {
+          "lookback": 2700,
+          "tail": 0.27,
+          "target": 3.0,
+          "wait": 45,
+          "downOnly": false,
+          "trainEta": {
+            "trades": 42,
+            "winRate": 64.29,
+            "pnlU_5u_80pct": 33,
+            "maxLoss": 3,
+            "tradesPerDay": 12.23,
+            "avgDelaySec": 14.12
+          },
+          "trainForecast": {
+            "testedSignals": 187,
+            "actualHitCount": 65,
+            "actualHitRate": 34.76,
+            "predictedHitCount": 96,
+            "predictedHitPrecision": 43.75,
+            "falsePredictedHitCount": 54
+          }
+        },
+        "test": {
+          "trades": 23,
+          "winRate": 73.91,
+          "pnlU_5u_80pct": 38,
+          "maxLoss": 2,
+          "tradesPerDay": 23.0,
+          "avgDelaySec": 12.87
+        },
+        "testForecast": {
+          "testedSignals": 56,
+          "actualHitCount": 30,
+          "actualHitRate": 53.57,
+          "predictedHitCount": 36,
+          "predictedHitPrecision": 63.89,
+          "falsePredictedHitCount": 13
+        },
+        "testByDay": {
+          "2026-06-17": {
+            "trades": 23,
+            "winRate": 73.91,
+            "pnlU_5u_80pct": 38,
+            "maxLoss": 2,
+            "tradesPerDay": 25.39,
+            "avgDelaySec": 12.87
+          }
+        }
+      },
+      "stable": {
+        "selected": {
+          "lookback": 2700,
+          "tail": 0.27,
+          "target": 3.0,
+          "wait": 45,
+          "downOnly": false,
+          "trainEta": {
+            "trades": 42,
+            "winRate": 64.29,
+            "pnlU_5u_80pct": 33,
+            "maxLoss": 3,
+            "tradesPerDay": 12.23,
+            "avgDelaySec": 14.12
+          },
+          "trainForecast": {
+            "testedSignals": 187,
+            "actualHitCount": 65,
+            "actualHitRate": 34.76,
+            "predictedHitCount": 96,
+            "predictedHitPrecision": 43.75,
+            "falsePredictedHitCount": 54
+          }
+        },
+        "test": {
+          "trades": 23,
+          "winRate": 73.91,
+          "pnlU_5u_80pct": 38,
+          "maxLoss": 2,
+          "tradesPerDay": 23.0,
+          "avgDelaySec": 12.87
+        },
+        "testForecast": {
+          "testedSignals": 56,
+          "actualHitCount": 30,
+          "actualHitRate": 53.57,
+          "predictedHitCount": 36,
+          "predictedHitPrecision": 63.89,
+          "falsePredictedHitCount": 13
+        },
+        "testByDay": {
+          "2026-06-17": {
+            "trades": 23,
+            "winRate": 73.91,
+            "pnlU_5u_80pct": 38,
+            "maxLoss": 2,
+            "tradesPerDay": 25.39,
+            "avgDelaySec": 12.87
+          }
+        }
+      }
+    },
+    {
+      "trainDays": [
+        "2026-06-13",
+        "2026-06-14",
+        "2026-06-15",
+        "2026-06-16",
+        "2026-06-17"
+      ],
+      "testDay": "2026-06-18",
+      "balanced": {
+        "selected": {
+          "lookback": 2700,
+          "tail": 0.27,
+          "target": 3.0,
+          "wait": 45,
+          "downOnly": false,
+          "trainEta": {
+            "trades": 66,
+            "winRate": 68.18,
+            "pnlU_5u_80pct": 75,
+            "maxLoss": 3,
+            "tradesPerDay": 14.88,
+            "avgDelaySec": 14.11
+          },
+          "trainForecast": {
+            "testedSignals": 245,
+            "actualHitCount": 96,
+            "actualHitRate": 39.18,
+            "predictedHitCount": 133,
+            "predictedHitPrecision": 49.62,
+            "falsePredictedHitCount": 67
+          }
+        },
+        "test": {
+          "trades": 19,
+          "winRate": 57.89,
+          "pnlU_5u_80pct": 4,
+          "maxLoss": 4,
+          "tradesPerDay": 19.0,
+          "avgDelaySec": 14.89
+        },
+        "testForecast": {
+          "testedSignals": 70,
+          "actualHitCount": 31,
+          "actualHitRate": 44.29,
+          "predictedHitCount": 35,
+          "predictedHitPrecision": 54.29,
+          "falsePredictedHitCount": 16
+        },
+        "testByDay": {
+          "2026-06-18": {
+            "trades": 19,
+            "winRate": 57.89,
+            "pnlU_5u_80pct": 4,
+            "maxLoss": 4,
+            "tradesPerDay": 25.35,
+            "avgDelaySec": 14.89
+          }
+        }
+      },
+      "stable": {
+        "selected": {
+          "lookback": 4200,
+          "tail": 0.2,
+          "target": 2.0,
+          "wait": 45,
+          "downOnly": false,
+          "trainEta": {
+            "trades": 15,
+            "winRate": 80.0,
+            "pnlU_5u_80pct": 33,
+            "maxLoss": 1,
+            "tradesPerDay": 3.38,
+            "avgDelaySec": 9.6
+          },
+          "trainForecast": {
+            "testedSignals": 29,
+            "actualHitCount": 15,
+            "actualHitRate": 51.72,
+            "predictedHitCount": 26,
+            "predictedHitPrecision": 57.69,
+            "falsePredictedHitCount": 11
+          }
+        },
+        "test": {
+          "trades": 9,
+          "winRate": 55.56,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 2,
+          "tradesPerDay": 9.0,
+          "avgDelaySec": 12.56
+        },
+        "testForecast": {
+          "testedSignals": 19,
+          "actualHitCount": 9,
+          "actualHitRate": 47.37,
+          "predictedHitCount": 15,
+          "predictedHitPrecision": 60.0,
+          "falsePredictedHitCount": 6
+        },
+        "testByDay": {
+          "2026-06-18": {
+            "trades": 9,
+            "winRate": 55.56,
+            "pnlU_5u_80pct": 0,
+            "maxLoss": 2,
+            "tradesPerDay": 13.21,
+            "avgDelaySec": 12.56
+          }
+        }
+      }
+    },
+    {
+      "trainDays": [
+        "2026-06-13",
+        "2026-06-14",
+        "2026-06-15",
+        "2026-06-16",
+        "2026-06-17",
+        "2026-06-18"
+      ],
+      "testDay": "2026-06-19",
+      "balanced": {
+        "selected": {
+          "lookback": 2700,
+          "tail": 0.27,
+          "target": 3.0,
+          "wait": 45,
+          "downOnly": false,
+          "trainEta": {
+            "trades": 86,
+            "winRate": 66.28,
+            "pnlU_5u_80pct": 83,
+            "maxLoss": 4,
+            "tradesPerDay": 15.82,
+            "avgDelaySec": 14.29
+          },
+          "trainForecast": {
+            "testedSignals": 319,
+            "actualHitCount": 128,
+            "actualHitRate": 40.13,
+            "predictedHitCount": 170,
+            "predictedHitPrecision": 50.59,
+            "falsePredictedHitCount": 84
+          }
+        },
+        "test": {
+          "trades": 11,
+          "winRate": 63.64,
+          "pnlU_5u_80pct": 8,
+          "maxLoss": 1,
+          "tradesPerDay": 11.0,
+          "avgDelaySec": 15.91
+        },
+        "testForecast": {
+          "testedSignals": 46,
+          "actualHitCount": 15,
+          "actualHitRate": 32.61,
+          "predictedHitCount": 28,
+          "predictedHitPrecision": 39.29,
+          "falsePredictedHitCount": 17
+        },
+        "testByDay": {
+          "2026-06-19": {
+            "trades": 11,
+            "winRate": 63.64,
+            "pnlU_5u_80pct": 8,
+            "maxLoss": 1,
+            "tradesPerDay": 13.27,
+            "avgDelaySec": 15.91
+          }
+        }
+      },
+      "stable": {
+        "selected": {
+          "lookback": 4200,
+          "tail": 0.2,
+          "target": 2.0,
+          "wait": 45,
+          "downOnly": false,
+          "trainEta": {
+            "trades": 24,
+            "winRate": 70.83,
+            "pnlU_5u_80pct": 33,
+            "maxLoss": 2,
+            "tradesPerDay": 4.42,
+            "avgDelaySec": 10.71
+          },
+          "trainForecast": {
+            "testedSignals": 48,
+            "actualHitCount": 24,
+            "actualHitRate": 50.0,
+            "predictedHitCount": 41,
+            "predictedHitPrecision": 58.54,
+            "falsePredictedHitCount": 17
+          }
+        },
+        "test": {
+          "trades": 1,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 4,
+          "maxLoss": 0,
+          "tradesPerDay": 1.0,
+          "avgDelaySec": 1.0
+        },
+        "testForecast": {
+          "testedSignals": 2,
+          "actualHitCount": 1,
+          "actualHitRate": 50.0,
+          "predictedHitCount": 2,
+          "predictedHitPrecision": 50.0,
+          "falsePredictedHitCount": 1
+        },
+        "testByDay": {
+          "2026-06-19": {
+            "trades": 1,
+            "winRate": 100.0,
+            "pnlU_5u_80pct": 4,
+            "maxLoss": 0,
+            "tradesPerDay": 1000000000000.0,
+            "avgDelaySec": 1.0
+          }
+        }
+      }
+    },
+    {
+      "trainDays": [
+        "2026-06-13",
+        "2026-06-14",
+        "2026-06-15",
+        "2026-06-16",
+        "2026-06-17",
+        "2026-06-18",
+        "2026-06-19"
+      ],
+      "testDay": "2026-06-20",
+      "balanced": {
+        "selected": {
+          "lookback": 2700,
+          "tail": 0.27,
+          "target": 3.0,
+          "wait": 45,
+          "downOnly": false,
+          "trainEta": {
+            "trades": 97,
+            "winRate": 65.98,
+            "pnlU_5u_80pct": 91,
+            "maxLoss": 4,
+            "tradesPerDay": 15.07,
+            "avgDelaySec": 14.47
+          },
+          "trainForecast": {
+            "testedSignals": 366,
+            "actualHitCount": 143,
+            "actualHitRate": 39.07,
+            "predictedHitCount": 199,
+            "predictedHitPrecision": 48.74,
+            "falsePredictedHitCount": 102
+          }
+        },
+        "test": {
+          "trades": 3,
+          "winRate": 33.33,
+          "pnlU_5u_80pct": -6,
+          "maxLoss": 2,
+          "tradesPerDay": 6.0,
+          "avgDelaySec": 25.0
+        },
+        "testForecast": {
+          "testedSignals": 29,
+          "actualHitCount": 8,
+          "actualHitRate": 27.59,
+          "predictedHitCount": 12,
+          "predictedHitPrecision": 25.0,
+          "falsePredictedHitCount": 9
+        },
+        "testByDay": {
+          "2026-06-20": {
+            "trades": 3,
+            "winRate": 33.33,
+            "pnlU_5u_80pct": -6,
+            "maxLoss": 2,
+            "tradesPerDay": 15.23,
+            "avgDelaySec": 25.0
+          }
+        }
+      },
+      "stable": {
+        "selected": {
+          "lookback": 4200,
+          "tail": 0.2,
+          "target": 2.0,
+          "wait": 45,
+          "downOnly": false,
+          "trainEta": {
+            "trades": 25,
+            "winRate": 72.0,
+            "pnlU_5u_80pct": 37,
+            "maxLoss": 2,
+            "tradesPerDay": 3.89,
+            "avgDelaySec": 10.32
+          },
+          "trainForecast": {
+            "testedSignals": 50,
+            "actualHitCount": 25,
+            "actualHitRate": 50.0,
+            "predictedHitCount": 43,
+            "predictedHitPrecision": 58.14,
+            "falsePredictedHitCount": 18
+          }
+        },
+        "test": {
+          "trades": 2,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 8,
+          "maxLoss": 0,
+          "tradesPerDay": 4.0,
+          "avgDelaySec": 3.0
+        },
+        "testForecast": {
+          "testedSignals": 3,
+          "actualHitCount": 2,
+          "actualHitRate": 66.67,
+          "predictedHitCount": 2,
+          "predictedHitPrecision": 100.0,
+          "falsePredictedHitCount": 0
+        },
+        "testByDay": {
+          "2026-06-20": {
+            "trades": 2,
+            "winRate": 100.0,
+            "pnlU_5u_80pct": 8,
+            "maxLoss": 0,
+            "tradesPerDay": 10.05,
+            "avgDelaySec": 3.0
+          }
+        }
+      }
+    }
+  ]
+}

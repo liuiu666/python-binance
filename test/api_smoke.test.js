@@ -147,17 +147,17 @@ test("server write APIs require token when configured", async () => {
       body: {
         amount: "9",
         duration: "10",
-        strategyAmounts: {
-          BTC_10min_SAFE: "5",
-          BTC_10min_TAKER: "10"
-        }
+        strategyVariants: [
+          { id: "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2", base: "SECOND_VW_CONFIRM", amount: "5", tailPct: 0.2, etaTargetBps: 2, etaMaxWaitSec: 45 },
+          { id: "BTC_10min_SECOND_VW_FAST_2700_27_ETA3", base: "SECOND_VW_CONFIRM", amount: "5", tailPct: 0.27, etaTargetBps: 3, etaMaxWaitSec: 45 }
+        ]
       }
     });
     assert.equal(allowed.status, 200);
     assert.equal(allowed.json.amount, "9");
     assert.equal(allowed.json.duration, "10");
-    assert.equal(allowed.json.strategyAmounts.BTC_10min_SAFE, "5");
-    assert.equal(allowed.json.strategyAmounts.BTC_10min_TAKER, "5");
+    assert.equal(allowed.json.strategyAmounts.BTC_10min_SECOND_VW_STABLE_2700_20_ETA2, "5");
+    assert.equal(allowed.json.strategyAmounts.BTC_10min_SECOND_VW_FAST_2700_27_ETA3, "5");
     assert.equal(allowed.json.queueOrderPolicy, undefined);
   });
 });

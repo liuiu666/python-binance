@@ -1,0 +1,127 @@
+{
+  "amount": "5",
+  "strategyVariants": [
+    {
+      "id": "BTC_10min_SAFE",
+      "base": "SAFE",
+      "label": "推荐稳健 20/80",
+      "amount": "5",
+      "tailPct": 0.2,
+      "duration": "10",
+      "enabled": false,
+      "tradeEnabled": false,
+      "backtest": {
+        "wr": 63.39,
+        "tradesPerDay": 3.46,
+        "trades": 336,
+        "maxLoss": 5
+      }
+    },
+    {
+      "id": "BTC_10min_SECOND_4200_22",
+      "base": "SECOND",
+      "label": "秒级正态 4200s 22/78",
+      "amount": "5",
+      "tailPct": 0.22,
+      "duration": "10",
+      "enabled": true,
+      "tradeEnabled": false,
+      "backtest": {
+        "wr": 71.43,
+        "tradesPerDay": 8.82,
+        "trades": 28,
+        "maxLoss": 2,
+        "sampleHours": 76.23
+      },
+      "lookbackSec": 4200,
+      "horizonSec": 600,
+      "gapSec": 1200,
+      "secondFilter": "none"
+    },
+    {
+      "id": "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW",
+      "base": "SECOND_CHIP",
+      "label": "秒级筹码区 60m",
+      "amount": "5",
+      "tailPct": 0.2,
+      "duration": "10",
+      "enabled": true,
+      "tradeEnabled": false,
+      "backtest": {
+        "wr": 76.67,
+        "tradesPerDay": 9.45,
+        "trades": 30,
+        "maxLoss": 2,
+        "sampleHours": 76.23
+      },
+      "lookbackSec": 3600,
+      "horizonSec": 600,
+      "gapSec": 600,
+      "chipTargetShare": 0.2,
+      "chipBinMode": "fixed",
+      "chipBinSize": 100,
+      "chipBinPct": 0.0003,
+      "chipBreakPct": 0.005,
+      "chipDirectionFilter": "all",
+      "chipFilter": "flow_reversal"
+    },
+    {
+      "id": "BTC_10min_TAKER",
+      "base": "TAKER",
+      "label": "资金流过滤 20/80",
+      "amount": "5",
+      "tailPct": 0.2,
+      "duration": "10",
+      "enabled": false,
+      "tradeEnabled": false,
+      "backtest": {
+        "wr": 87.5,
+        "tradesPerDay": 0.94,
+        "trades": 32,
+        "maxLoss": 1
+      }
+    }
+  ],
+  "duration": "10",
+  "autoTrade_10m": true,
+  "realTradingEnabled": true,
+  "shadowTradingEnabled": false,
+  "strategyAmounts": {
+    "BTC_10min_SAFE": "5",
+    "BTC_10min_SECOND_4200_22": "5",
+    "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW": "5",
+    "BTC_10min_TAKER": "5"
+  },
+  "strategyParams": {
+    "BTC_10min_SAFE": {
+      "tailPct": 0.2,
+      "tradeEnabled": false
+    },
+    "BTC_10min_SECOND_4200_22": {
+      "tailPct": 0.22,
+      "tradeEnabled": false,
+      "lookbackSec": 4200,
+      "horizonSec": 600,
+      "gapSec": 1200,
+      "secondFilter": "none"
+    },
+    "BTC_10min_SECOND_CHIP_3600_WIDE_FLOW": {
+      "tailPct": 0.2,
+      "tradeEnabled": false,
+      "lookbackSec": 3600,
+      "horizonSec": 600,
+      "gapSec": 600,
+      "chipTargetShare": 0.2,
+      "chipBinMode": "fixed",
+      "chipBinSize": 100,
+      "chipBinPct": 0.0003,
+      "chipBreakPct": 0.005,
+      "chipDirectionFilter": "all",
+      "chipFilter": "flow_reversal"
+    },
+    "BTC_10min_TAKER": {
+      "tailPct": 0.2,
+      "tradeEnabled": false
+    }
+  }
+}

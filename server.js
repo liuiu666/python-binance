@@ -658,6 +658,12 @@ const ENTRY_TIMING_POLICIES = {
     maxWaitMin: 5,
     minPullbackDelayMs: 60000,
     minConfirmDelayMs: 60000
+  },
+  SECOND_VW_CONFIRM: {
+    name: "eta_target_price",
+    type: "eta_target_price",
+    pullbackBps: null,
+    maxWaitSec: null
   }
 };
 const entryTimingState = {};
@@ -665,6 +671,7 @@ const entryTimingState = {};
 function entryTimingPolicyForStrategy(strategyId) {
   if (String(strategyId || "").startsWith("BTC_10min_SAFE")) return ENTRY_TIMING_POLICIES.BTC_10min_SAFE;
   if (String(strategyId || "").startsWith("BTC_10min_TAKER")) return ENTRY_TIMING_POLICIES.BTC_10min_TAKER;
+  if (String(strategyId || "").startsWith("BTC_10min_SECOND_VW_")) return ENTRY_TIMING_POLICIES.SECOND_VW_CONFIRM;
   return null;
 }
 
@@ -797,6 +804,14 @@ function applyEntryTimingForSignal(strategyId, sig) {
       pullbackTime: null
     };
     entryTimingState[strategyId] = state;
+    if (policy.type === "eta_target_price") {
+      const waitSec = Number(sig.eta_max_wait_sec || policy.maxWaitSec || 45);
+      const targetBps = Number(sig.eta_target_bps || policy.pullbackBps || 2);
+      state.expiresAt = actionableMs + waitSec * 1000;
+      state.etaTargetBps = targetBps;
+      state.etaMaxWaitSec = waitSec;
+      state.etaTargetPrice = Number(sig.eta_entry_target_price);
+    }
     appendJsonl(TRADE_AUDIT_FILE, {
       serverTime: now,
       event: "entry_timing_start",
@@ -844,6 +859,29 @@ function applyEntryTimingForSignal(strategyId, sig) {
       return allowSignalForEntryTiming(sig, state, "pullback_seen");
     }
     return blockSignalForEntryTiming(sig, state, "waiting_pullback");
+  }
+
+  if (policy.type === "eta_target_price") {
+    const targetBps = Number(state.etaTargetBps || sig.eta_target_bps || 2);
+    const targetPrice = Number(state.etaTargetPrice);
+    const hitTarget = Number.isFinite(targetPrice)
+      ? (sig.signal === "UP" ? price <= targetPrice : price >= targetPrice)
+      : pullbackOk(sig.signal, price, state.referencePrice, targetBps);
+    if (hitTarget) {
+      appendJsonl(TRADE_AUDIT_FILE, {
+        serverTime: now,
+        event: "entry_timing_allow",
+        strategyId,
+        signal: sig.signal,
+        policy: policy.name,
+        referencePrice: state.referencePrice,
+        targetPrice: Number.isFinite(targetPrice) ? targetPrice : null,
+        targetBps,
+        entryPrice: price
+      });
+      return allowSignalForEntryTiming(sig, state, "eta_target_hit");
+    }
+    return blockSignalForEntryTiming(sig, state, "waiting_eta_target_price");
   }
 
   if (policy.type === "pullback_then_confirm") {
@@ -1949,6 +1987,24 @@ function applyProdStrategyParams(baseConfig, config) {
   for (const variant of variants) {
     const current = out[variant.id] && typeof out[variant.id] === "object" ? out[variant.id] : {};
     const template = variant.base === "SAFE" ? safeTemplate : takerTemplate;
+    if (variant.base === "SECOND_VW_CONFIRM") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        model_type: "second_normal_vw_confirm",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        second_lookback_sec: variant.lookbackSec || 2700,
+        second_horizon_sec: variant.horizonSec || 600,
+        second_min_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        second_tail_pct: variant.tailPct,
+        eta_target_bps: variant.etaTargetBps || 2,
+        eta_max_wait_sec: variant.etaMaxWaitSec || 45,
+        model_label: variant.label || `SECOND_VW_CONFIRM_${variant.lookbackSec || 2700}_${Math.round(Number(variant.tailPct || 0.2) * 100)}_ETA${variant.etaTargetBps || 2}`
+      };
+      continue;
+    }
     if (variant.base === "SECOND") {
       out[variant.id] = {
         ...current,
@@ -1988,6 +2044,25 @@ function applyProdStrategyParams(baseConfig, config) {
       };
       continue;
     }
+    if (variant.base === "SECOND_TREND_DOWN") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        model_type: "second_trend_pullback_down",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        second_trend_regime_lookback_sec: variant.regimeLookbackSec || 7200,
+        second_trend_regime_drop_pct: variant.regimeDropPct || 0.004,
+        second_trend_pullback_sec: variant.pullbackSec || 300,
+        second_trend_pullback_pct: variant.pullbackPct || 0.001,
+        second_trend_horizon_sec: variant.horizonSec || 600,
+        second_trend_min_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        second_trend_suppress_reversal: variant.suppressReversal !== false,
+        model_label: "SECOND_TREND_DOWN_7200_04_300_10"
+      };
+      continue;
+    }
     out[variant.id] = {
       ...template,
       ...current,
@@ -2018,13 +2093,20 @@ function strategyRestartFingerprint(config) {
     horizonSec: v.horizonSec,
     gapSec: v.gapSec,
     secondFilter: v.secondFilter,
+    etaTargetBps: v.etaTargetBps,
+    etaMaxWaitSec: v.etaMaxWaitSec,
     chipTargetShare: v.chipTargetShare,
     chipBinMode: v.chipBinMode,
     chipBinSize: v.chipBinSize,
     chipBinPct: v.chipBinPct,
     chipBreakPct: v.chipBreakPct,
     chipDirectionFilter: v.chipDirectionFilter,
-    chipFilter: v.chipFilter
+    chipFilter: v.chipFilter,
+    regimeLookbackSec: v.regimeLookbackSec,
+    regimeDropPct: v.regimeDropPct,
+    pullbackSec: v.pullbackSec,
+    pullbackPct: v.pullbackPct,
+    suppressReversal: v.suppressReversal
   })));
 }
 

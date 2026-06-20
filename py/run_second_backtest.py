@@ -13,8 +13,12 @@ from second_backtest.metrics import compact_metrics, payout_for_horizon, robust_
 from second_backtest.strategies import (
     SecondChipConfig,
     SecondNormalConfig,
+    SecondNormalVwConfirmConfig,
+    SecondTrendPullbackDownConfig,
     generate_chip_signals,
     generate_normal_signals,
+    generate_normal_vw_confirm_signals,
+    generate_trend_pullback_down_signals,
     prod_configs_to_second_configs,
 )
 
@@ -83,8 +87,16 @@ def _signals_for_config(
 ) -> list[dict]:
     if isinstance(cfg, SecondNormalConfig):
         return generate_normal_signals(bars, cfg, apply_config_gap=apply_config_gap)
+    if isinstance(cfg, SecondNormalVwConfirmConfig):
+        return generate_normal_vw_confirm_signals(bars, cfg, apply_config_gap=True)
     if isinstance(cfg, SecondChipConfig):
         return generate_chip_signals(bars, cfg, apply_config_gap=apply_config_gap)
+    if isinstance(cfg, SecondTrendPullbackDownConfig):
+        return generate_trend_pullback_down_signals(
+            bars,
+            cfg,
+            apply_config_gap=apply_config_gap,
+        )
     raise TypeError(f"unsupported config: {cfg!r}")
 
 
@@ -166,7 +178,7 @@ def _run_one(bars: pd.DataFrame, cfg, *, global_lock_sec: int) -> dict:
     return {
         "strategyId": cfg.strategy_id,
         "label": cfg.label,
-        "modelType": "second_normal" if isinstance(cfg, SecondNormalConfig) else "second_chip",
+        "modelType": _model_type_for_config(cfg),
         "params": _config_to_dict(cfg),
         "score": robust_score(gap_metrics),
         "rawSignals": compact_metrics(raw_metrics),
@@ -227,9 +239,15 @@ def _compact_trade(row: dict) -> dict:
 
 def _portfolio_report(bars: pd.DataFrame, configs: list, *, global_lock_sec: int) -> dict:
     all_signals = []
+    trend_down_configs = [
+        cfg for cfg in configs
+        if isinstance(cfg, SecondTrendPullbackDownConfig) and cfg.suppress_reversal_in_regime
+    ]
     for cfg in configs:
         raw = _signals_for_config(bars, cfg, apply_config_gap=False)
         all_signals.extend(apply_signal_gap(raw, cfg.signal_gap_sec))
+    if trend_down_configs:
+        all_signals = _suppress_reversal_during_trend_down(bars, all_signals, trend_down_configs)
     executed, rejected = execute_signals(
         all_signals,
         per_strategy_lock=True,
@@ -262,6 +280,48 @@ def _portfolio_report(bars: pd.DataFrame, configs: list, *, global_lock_sec: int
         "metrics": compact_metrics(metrics),
         "sampleTrades": [_compact_trade(row) for row in executed[-15:]],
     }
+
+
+def _model_type_for_config(cfg) -> str:
+    if isinstance(cfg, SecondNormalConfig):
+        return "second_normal"
+    if isinstance(cfg, SecondNormalVwConfirmConfig):
+        return "second_normal_vw_confirm"
+    if isinstance(cfg, SecondChipConfig):
+        return "second_chip"
+    if isinstance(cfg, SecondTrendPullbackDownConfig):
+        return "second_trend_pullback_down"
+    return "unknown"
+
+
+def _suppress_reversal_during_trend_down(
+    bars: pd.DataFrame,
+    signals: list[dict],
+    trend_configs: list[SecondTrendPullbackDownConfig],
+) -> list[dict]:
+    close = bars["close"].to_numpy(float)
+    index_by_time = {time: i for i, time in enumerate(bars.index)}
+    out = []
+    for row in signals:
+        model_type = row.get("model_type")
+        if model_type not in ("second_normal", "second_chip"):
+            out.append(row)
+            continue
+        idx = index_by_time.get(row.get("time"))
+        if idx is None:
+            out.append(row)
+            continue
+        suppressed = False
+        for cfg in trend_configs:
+            if idx < cfg.regime_lookback_sec:
+                continue
+            regime_ret = close[idx] / close[idx - cfg.regime_lookback_sec] - 1.0
+            if regime_ret <= -cfg.regime_drop_pct:
+                suppressed = True
+                break
+        if not suppressed:
+            out.append(row)
+    return out
 
 
 def build_report(args) -> dict:

@@ -1,0 +1,14 @@
+{
+  "last_agg_trade_id": 3343844797,
+  "ok": false,
+  "symbol": "BTCUSDT",
+  "market": "futures",
+  "file": "E:\\python-binance\\data\\btcusdt_1s_trades.csv",
+  "updated_at": "2026-06-17T17:12:10.152158+00:00",
+  "error": "[Errno 22] Invalid argument",
+  "fetched_trades": 26,
+  "rows": 339567,
+  "added": 1,
+  "last_ts": "2026-06-17T17:12:08+00:00",
+  "pending_seconds": 12
+}

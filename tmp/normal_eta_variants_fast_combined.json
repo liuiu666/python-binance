@@ -1,0 +1,2278 @@
+{
+  "generatedAt": "2026-06-20T13:53:35.774550+00:00",
+  "sample": {
+    "start": "2026-06-13T13:33:45+00:00",
+    "end": "2026-06-20T12:00:17+00:00",
+    "hours": 166.44,
+    "rows": 599193,
+    "observedPct": 95.68
+  },
+  "method": "Compare normal variants using the same 10m settlement and the same ETA entry filter. All features use data at or before signal second; entry search starts after the signal second.",
+  "fastMode": true,
+  "cases": [
+    {
+      "variant": "return_mean_std",
+      "lookbackSec": 1800,
+      "tailPct": 0.2,
+      "targetBps": 1.0,
+      "maxWaitSec": 20,
+      "downOnly": true,
+      "rawSignals": 369,
+      "executableSignals": 369,
+      "direct": {
+        "trades": 369,
+        "winRate": 52.57,
+        "pnlU_5u_80pct": -99,
+        "maxLoss": 7,
+        "tradesPerDay": 53.21,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 57,
+        "winRate": 64.91,
+        "pnlU_5u_80pct": 48,
+        "maxLoss": 4,
+        "tradesPerDay": 8.22,
+        "avgDelaySec": 6.0
+      },
+      "forecast": {
+        "testedSignals": 186,
+        "actualHitCount": 79,
+        "actualHitRate": 42.47,
+        "predictedHitCount": 116,
+        "predictedHitPrecision": 49.14,
+        "falsePredictedHitCount": 59
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        },
+        "DOWN": {
+          "trades": 57,
+          "winRate": 64.91,
+          "pnlU_5u_80pct": 48,
+          "maxLoss": 4,
+          "tradesPerDay": 8.22,
+          "avgDelaySec": 6.0
+        }
+      },
+      "etaByDay": {
+        "2026-06-13": {
+          "trades": 1,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 4,
+          "maxLoss": 0,
+          "tradesPerDay": 1000000000000.0,
+          "avgDelaySec": 1.0
+        },
+        "2026-06-14": {
+          "trades": 6,
+          "winRate": 33.33,
+          "pnlU_5u_80pct": -12,
+          "maxLoss": 3,
+          "tradesPerDay": 9.16,
+          "avgDelaySec": 3.0
+        },
+        "2026-06-15": {
+          "trades": 8,
+          "winRate": 50.0,
+          "pnlU_5u_80pct": -4,
+          "maxLoss": 4,
+          "tradesPerDay": 12.02,
+          "avgDelaySec": 9.25
+        },
+        "2026-06-16": {
+          "trades": 13,
+          "winRate": 46.15,
+          "pnlU_5u_80pct": -11,
+          "maxLoss": 2,
+          "tradesPerDay": 18.21,
+          "avgDelaySec": 7.62
+        },
+        "2026-06-17": {
+          "trades": 5,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 20,
+          "maxLoss": 0,
+          "tradesPerDay": 7.33,
+          "avgDelaySec": 4.8
+        },
+        "2026-06-18": {
+          "trades": 8,
+          "winRate": 62.5,
+          "pnlU_5u_80pct": 5,
+          "maxLoss": 2,
+          "tradesPerDay": 8.43,
+          "avgDelaySec": 5.88
+        },
+        "2026-06-19": {
+          "trades": 13,
+          "winRate": 84.62,
+          "pnlU_5u_80pct": 34,
+          "maxLoss": 1,
+          "tradesPerDay": 13.43,
+          "avgDelaySec": 4.23
+        },
+        "2026-06-20": {
+          "trades": 3,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 12,
+          "maxLoss": 0,
+          "tradesPerDay": 7.62,
+          "avgDelaySec": 8.0
+        }
+      }
+    },
+    {
+      "variant": "return_mean_std",
+      "lookbackSec": 2700,
+      "tailPct": 0.2,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "rawSignals": 186,
+      "executableSignals": 186,
+      "direct": {
+        "trades": 186,
+        "winRate": 55.38,
+        "pnlU_5u_80pct": -3,
+        "maxLoss": 4,
+        "tradesPerDay": 26.82,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 77,
+        "winRate": 64.94,
+        "pnlU_5u_80pct": 65,
+        "maxLoss": 4,
+        "tradesPerDay": 11.1,
+        "avgDelaySec": 12.71
+      },
+      "forecast": {
+        "testedSignals": 186,
+        "actualHitCount": 100,
+        "actualHitRate": 53.76,
+        "predictedHitCount": 132,
+        "predictedHitPrecision": 58.33,
+        "falsePredictedHitCount": 55
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 36,
+          "winRate": 72.22,
+          "pnlU_5u_80pct": 54,
+          "maxLoss": 2,
+          "tradesPerDay": 5.19,
+          "avgDelaySec": 11.69
+        },
+        "DOWN": {
+          "trades": 41,
+          "winRate": 58.54,
+          "pnlU_5u_80pct": 11,
+          "maxLoss": 4,
+          "tradesPerDay": 5.91,
+          "avgDelaySec": 13.61
+        }
+      },
+      "etaByDay": {
+        "2026-06-13": {
+          "trades": 2,
+          "winRate": 50.0,
+          "pnlU_5u_80pct": -1,
+          "maxLoss": 1,
+          "tradesPerDay": 15.52,
+          "avgDelaySec": 19.5
+        },
+        "2026-06-14": {
+          "trades": 8,
+          "winRate": 62.5,
+          "pnlU_5u_80pct": 5,
+          "maxLoss": 1,
+          "tradesPerDay": 9.33,
+          "avgDelaySec": 11.25
+        },
+        "2026-06-15": {
+          "trades": 17,
+          "winRate": 58.82,
+          "pnlU_5u_80pct": 5,
+          "maxLoss": 4,
+          "tradesPerDay": 20.23,
+          "avgDelaySec": 13.41
+        },
+        "2026-06-16": {
+          "trades": 10,
+          "winRate": 70.0,
+          "pnlU_5u_80pct": 13,
+          "maxLoss": 2,
+          "tradesPerDay": 12.63,
+          "avgDelaySec": 11.0
+        },
+        "2026-06-17": {
+          "trades": 15,
+          "winRate": 53.33,
+          "pnlU_5u_80pct": -3,
+          "maxLoss": 3,
+          "tradesPerDay": 19.61,
+          "avgDelaySec": 12.73
+        },
+        "2026-06-18": {
+          "trades": 13,
+          "winRate": 53.85,
+          "pnlU_5u_80pct": -2,
+          "maxLoss": 1,
+          "tradesPerDay": 18.58,
+          "avgDelaySec": 15.0
+        },
+        "2026-06-19": {
+          "trades": 8,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 32,
+          "maxLoss": 0,
+          "tradesPerDay": 10.09,
+          "avgDelaySec": 11.25
+        },
+        "2026-06-20": {
+          "trades": 4,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 16,
+          "maxLoss": 0,
+          "tradesPerDay": 14.74,
+          "avgDelaySec": 9.0
+        }
+      }
+    },
+    {
+      "variant": "return_mean_std",
+      "lookbackSec": 2700,
+      "tailPct": 0.27,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "rawSignals": 398,
+      "executableSignals": 398,
+      "direct": {
+        "trades": 398,
+        "winRate": 53.52,
+        "pnlU_5u_80pct": -73,
+        "maxLoss": 6,
+        "tradesPerDay": 57.39,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 131,
+        "winRate": 60.31,
+        "pnlU_5u_80pct": 56,
+        "maxLoss": 4,
+        "tradesPerDay": 18.89,
+        "avgDelaySec": 12.31
+      },
+      "forecast": {
+        "testedSignals": 398,
+        "actualHitCount": 192,
+        "actualHitRate": 48.24,
+        "predictedHitCount": 237,
+        "predictedHitPrecision": 55.27,
+        "falsePredictedHitCount": 106
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 68,
+          "winRate": 63.24,
+          "pnlU_5u_80pct": 47,
+          "maxLoss": 4,
+          "tradesPerDay": 9.81,
+          "avgDelaySec": 12.9
+        },
+        "DOWN": {
+          "trades": 63,
+          "winRate": 57.14,
+          "pnlU_5u_80pct": 9,
+          "maxLoss": 3,
+          "tradesPerDay": 9.08,
+          "avgDelaySec": 11.68
+        }
+      },
+      "etaByDay": {
+        "2026-06-13": {
+          "trades": 2,
+          "winRate": 50.0,
+          "pnlU_5u_80pct": -1,
+          "maxLoss": 1,
+          "tradesPerDay": 23.85,
+          "avgDelaySec": 2.0
+        },
+        "2026-06-14": {
+          "trades": 14,
+          "winRate": 35.71,
+          "pnlU_5u_80pct": -25,
+          "maxLoss": 3,
+          "tradesPerDay": 15.21,
+          "avgDelaySec": 11.79
+        },
+        "2026-06-15": {
+          "trades": 21,
+          "winRate": 52.38,
+          "pnlU_5u_80pct": -6,
+          "maxLoss": 3,
+          "tradesPerDay": 24.75,
+          "avgDelaySec": 12.1
+        },
+        "2026-06-16": {
+          "trades": 23,
+          "winRate": 69.57,
+          "pnlU_5u_80pct": 29,
+          "maxLoss": 3,
+          "tradesPerDay": 25.51,
+          "avgDelaySec": 13.78
+        },
+        "2026-06-17": {
+          "trades": 24,
+          "winRate": 70.83,
+          "pnlU_5u_80pct": 33,
+          "maxLoss": 2,
+          "tradesPerDay": 26.5,
+          "avgDelaySec": 7.92
+        },
+        "2026-06-18": {
+          "trades": 25,
+          "winRate": 64.0,
+          "pnlU_5u_80pct": 19,
+          "maxLoss": 3,
+          "tradesPerDay": 27.06,
+          "avgDelaySec": 12.6
+        },
+        "2026-06-19": {
+          "trades": 17,
+          "winRate": 58.82,
+          "pnlU_5u_80pct": 5,
+          "maxLoss": 2,
+          "tradesPerDay": 17.83,
+          "avgDelaySec": 17.41
+        },
+        "2026-06-20": {
+          "trades": 5,
+          "winRate": 60.0,
+          "pnlU_5u_80pct": 2,
+          "maxLoss": 2,
+          "tradesPerDay": 12.27,
+          "avgDelaySec": 14.4
+        }
+      }
+    },
+    {
+      "variant": "return_mean_std",
+      "lookbackSec": 2700,
+      "tailPct": 0.27,
+      "targetBps": 3.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "rawSignals": 398,
+      "executableSignals": 398,
+      "direct": {
+        "trades": 398,
+        "winRate": 53.52,
+        "pnlU_5u_80pct": -73,
+        "maxLoss": 6,
+        "tradesPerDay": 57.39,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 103,
+        "winRate": 65.05,
+        "pnlU_5u_80pct": 88,
+        "maxLoss": 4,
+        "tradesPerDay": 14.85,
+        "avgDelaySec": 14.98
+      },
+      "forecast": {
+        "testedSignals": 398,
+        "actualHitCount": 154,
+        "actualHitRate": 38.69,
+        "predictedHitCount": 214,
+        "predictedHitPrecision": 48.13,
+        "falsePredictedHitCount": 111
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 55,
+          "winRate": 69.09,
+          "pnlU_5u_80pct": 67,
+          "maxLoss": 4,
+          "tradesPerDay": 7.93,
+          "avgDelaySec": 15.95
+        },
+        "DOWN": {
+          "trades": 48,
+          "winRate": 60.42,
+          "pnlU_5u_80pct": 21,
+          "maxLoss": 2,
+          "tradesPerDay": 6.92,
+          "avgDelaySec": 13.88
+        }
+      },
+      "etaByDay": {
+        "2026-06-13": {
+          "trades": 2,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 8,
+          "maxLoss": 0,
+          "tradesPerDay": 23.85,
+          "avgDelaySec": 2.0
+        },
+        "2026-06-14": {
+          "trades": 9,
+          "winRate": 44.44,
+          "pnlU_5u_80pct": -9,
+          "maxLoss": 2,
+          "tradesPerDay": 9.78,
+          "avgDelaySec": 12.11
+        },
+        "2026-06-15": {
+          "trades": 16,
+          "winRate": 68.75,
+          "pnlU_5u_80pct": 19,
+          "maxLoss": 2,
+          "tradesPerDay": 18.86,
+          "avgDelaySec": 13.94
+        },
+        "2026-06-16": {
+          "trades": 16,
+          "winRate": 68.75,
+          "pnlU_5u_80pct": 19,
+          "maxLoss": 2,
+          "tradesPerDay": 17.75,
+          "avgDelaySec": 18.69
+        },
+        "2026-06-17": {
+          "trades": 23,
+          "winRate": 73.91,
+          "pnlU_5u_80pct": 38,
+          "maxLoss": 2,
+          "tradesPerDay": 25.39,
+          "avgDelaySec": 12.87
+        },
+        "2026-06-18": {
+          "trades": 20,
+          "winRate": 60.0,
+          "pnlU_5u_80pct": 8,
+          "maxLoss": 4,
+          "tradesPerDay": 22.01,
+          "avgDelaySec": 14.9
+        },
+        "2026-06-19": {
+          "trades": 12,
+          "winRate": 58.33,
+          "pnlU_5u_80pct": 3,
+          "maxLoss": 1,
+          "tradesPerDay": 12.59,
+          "avgDelaySec": 15.75
+        },
+        "2026-06-20": {
+          "trades": 5,
+          "winRate": 60.0,
+          "pnlU_5u_80pct": 2,
+          "maxLoss": 2,
+          "tradesPerDay": 12.28,
+          "avgDelaySec": 25.0
+        }
+      }
+    },
+    {
+      "variant": "return_mean_std",
+      "lookbackSec": 3600,
+      "tailPct": 0.27,
+      "targetBps": 1.0,
+      "maxWaitSec": 20,
+      "downOnly": false,
+      "rawSignals": 248,
+      "executableSignals": 248,
+      "direct": {
+        "trades": 248,
+        "winRate": 57.26,
+        "pnlU_5u_80pct": 38,
+        "maxLoss": 4,
+        "tradesPerDay": 35.76,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 96,
+        "winRate": 59.38,
+        "pnlU_5u_80pct": 33,
+        "maxLoss": 6,
+        "tradesPerDay": 13.84,
+        "avgDelaySec": 5.07
+      },
+      "forecast": {
+        "testedSignals": 248,
+        "actualHitCount": 140,
+        "actualHitRate": 56.45,
+        "predictedHitCount": 148,
+        "predictedHitPrecision": 64.86,
+        "falsePredictedHitCount": 52
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 52,
+          "winRate": 65.38,
+          "pnlU_5u_80pct": 46,
+          "maxLoss": 3,
+          "tradesPerDay": 7.5,
+          "avgDelaySec": 5.1
+        },
+        "DOWN": {
+          "trades": 44,
+          "winRate": 52.27,
+          "pnlU_5u_80pct": -13,
+          "maxLoss": 6,
+          "tradesPerDay": 6.34,
+          "avgDelaySec": 5.05
+        }
+      },
+      "etaByDay": {
+        "2026-06-13": {
+          "trades": 1,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 4,
+          "maxLoss": 0,
+          "tradesPerDay": 1000000000000.0,
+          "avgDelaySec": 1.0
+        },
+        "2026-06-14": {
+          "trades": 12,
+          "winRate": 50.0,
+          "pnlU_5u_80pct": -6,
+          "maxLoss": 3,
+          "tradesPerDay": 13.02,
+          "avgDelaySec": 6.08
+        },
+        "2026-06-15": {
+          "trades": 12,
+          "winRate": 33.33,
+          "pnlU_5u_80pct": -24,
+          "maxLoss": 6,
+          "tradesPerDay": 16.21,
+          "avgDelaySec": 5.08
+        },
+        "2026-06-16": {
+          "trades": 12,
+          "winRate": 58.33,
+          "pnlU_5u_80pct": 3,
+          "maxLoss": 2,
+          "tradesPerDay": 17.24,
+          "avgDelaySec": 3.83
+        },
+        "2026-06-17": {
+          "trades": 21,
+          "winRate": 66.67,
+          "pnlU_5u_80pct": 21,
+          "maxLoss": 2,
+          "tradesPerDay": 25.56,
+          "avgDelaySec": 4.1
+        },
+        "2026-06-18": {
+          "trades": 21,
+          "winRate": 57.14,
+          "pnlU_5u_80pct": 3,
+          "maxLoss": 3,
+          "tradesPerDay": 26.61,
+          "avgDelaySec": 6.76
+        },
+        "2026-06-19": {
+          "trades": 12,
+          "winRate": 83.33,
+          "pnlU_5u_80pct": 30,
+          "maxLoss": 1,
+          "tradesPerDay": 14.65,
+          "avgDelaySec": 5.25
+        },
+        "2026-06-20": {
+          "trades": 5,
+          "winRate": 60.0,
+          "pnlU_5u_80pct": 2,
+          "maxLoss": 2,
+          "tradesPerDay": 13.27,
+          "avgDelaySec": 3.0
+        }
+      }
+    },
+    {
+      "variant": "return_mean_std",
+      "lookbackSec": 4200,
+      "tailPct": 0.2,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "rawSignals": 53,
+      "executableSignals": 53,
+      "direct": {
+        "trades": 53,
+        "winRate": 66.04,
+        "pnlU_5u_80pct": 50,
+        "maxLoss": 4,
+        "tradesPerDay": 7.64,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 27,
+        "winRate": 74.07,
+        "pnlU_5u_80pct": 45,
+        "maxLoss": 2,
+        "tradesPerDay": 3.89,
+        "avgDelaySec": 9.78
+      },
+      "forecast": {
+        "testedSignals": 53,
+        "actualHitCount": 27,
+        "actualHitRate": 50.94,
+        "predictedHitCount": 45,
+        "predictedHitPrecision": 60.0,
+        "falsePredictedHitCount": 18
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 10,
+          "winRate": 70.0,
+          "pnlU_5u_80pct": 13,
+          "maxLoss": 2,
+          "tradesPerDay": 1.44,
+          "avgDelaySec": 14.5
+        },
+        "DOWN": {
+          "trades": 17,
+          "winRate": 76.47,
+          "pnlU_5u_80pct": 32,
+          "maxLoss": 1,
+          "tradesPerDay": 2.45,
+          "avgDelaySec": 7.0
+        }
+      },
+      "etaByDay": {
+        "2026-06-14": {
+          "trades": 5,
+          "winRate": 80.0,
+          "pnlU_5u_80pct": 11,
+          "maxLoss": 1,
+          "tradesPerDay": 8.89,
+          "avgDelaySec": 8.2
+        },
+        "2026-06-15": {
+          "trades": 2,
+          "winRate": 50.0,
+          "pnlU_5u_80pct": -1,
+          "maxLoss": 1,
+          "tradesPerDay": 9.85,
+          "avgDelaySec": 3.0
+        },
+        "2026-06-16": {
+          "trades": 4,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 16,
+          "maxLoss": 0,
+          "tradesPerDay": 14.89,
+          "avgDelaySec": 14.25
+        },
+        "2026-06-17": {
+          "trades": 4,
+          "winRate": 75.0,
+          "pnlU_5u_80pct": 7,
+          "maxLoss": 1,
+          "tradesPerDay": 15.47,
+          "avgDelaySec": 10.0
+        },
+        "2026-06-18": {
+          "trades": 9,
+          "winRate": 55.56,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 2,
+          "tradesPerDay": 13.21,
+          "avgDelaySec": 12.56
+        },
+        "2026-06-19": {
+          "trades": 1,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 4,
+          "maxLoss": 0,
+          "tradesPerDay": 1000000000000.0,
+          "avgDelaySec": 1.0
+        },
+        "2026-06-20": {
+          "trades": 2,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 8,
+          "maxLoss": 0,
+          "tradesPerDay": 10.05,
+          "avgDelaySec": 3.0
+        }
+      }
+    },
+    {
+      "variant": "return_median_mad",
+      "lookbackSec": 1800,
+      "tailPct": 0.2,
+      "targetBps": 1.0,
+      "maxWaitSec": 20,
+      "downOnly": true,
+      "rawSignals": 0,
+      "executableSignals": 0,
+      "direct": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnlU_5u_80pct": 0,
+        "maxLoss": 0,
+        "tradesPerDay": 0.0,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnlU_5u_80pct": 0,
+        "maxLoss": 0,
+        "tradesPerDay": 0.0,
+        "avgDelaySec": 0.0
+      },
+      "forecast": {
+        "testedSignals": 0,
+        "actualHitCount": 0,
+        "actualHitRate": 0.0,
+        "predictedHitCount": 0,
+        "predictedHitPrecision": 0.0,
+        "falsePredictedHitCount": 0
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        },
+        "DOWN": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        }
+      },
+      "etaByDay": {}
+    },
+    {
+      "variant": "return_median_mad",
+      "lookbackSec": 2700,
+      "tailPct": 0.2,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "rawSignals": 0,
+      "executableSignals": 0,
+      "direct": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnlU_5u_80pct": 0,
+        "maxLoss": 0,
+        "tradesPerDay": 0.0,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnlU_5u_80pct": 0,
+        "maxLoss": 0,
+        "tradesPerDay": 0.0,
+        "avgDelaySec": 0.0
+      },
+      "forecast": {
+        "testedSignals": 0,
+        "actualHitCount": 0,
+        "actualHitRate": 0.0,
+        "predictedHitCount": 0,
+        "predictedHitPrecision": 0.0,
+        "falsePredictedHitCount": 0
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        },
+        "DOWN": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        }
+      },
+      "etaByDay": {}
+    },
+    {
+      "variant": "return_median_mad",
+      "lookbackSec": 2700,
+      "tailPct": 0.27,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "rawSignals": 0,
+      "executableSignals": 0,
+      "direct": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnlU_5u_80pct": 0,
+        "maxLoss": 0,
+        "tradesPerDay": 0.0,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnlU_5u_80pct": 0,
+        "maxLoss": 0,
+        "tradesPerDay": 0.0,
+        "avgDelaySec": 0.0
+      },
+      "forecast": {
+        "testedSignals": 0,
+        "actualHitCount": 0,
+        "actualHitRate": 0.0,
+        "predictedHitCount": 0,
+        "predictedHitPrecision": 0.0,
+        "falsePredictedHitCount": 0
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        },
+        "DOWN": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        }
+      },
+      "etaByDay": {}
+    },
+    {
+      "variant": "return_median_mad",
+      "lookbackSec": 2700,
+      "tailPct": 0.27,
+      "targetBps": 3.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "rawSignals": 0,
+      "executableSignals": 0,
+      "direct": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnlU_5u_80pct": 0,
+        "maxLoss": 0,
+        "tradesPerDay": 0.0,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnlU_5u_80pct": 0,
+        "maxLoss": 0,
+        "tradesPerDay": 0.0,
+        "avgDelaySec": 0.0
+      },
+      "forecast": {
+        "testedSignals": 0,
+        "actualHitCount": 0,
+        "actualHitRate": 0.0,
+        "predictedHitCount": 0,
+        "predictedHitPrecision": 0.0,
+        "falsePredictedHitCount": 0
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        },
+        "DOWN": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        }
+      },
+      "etaByDay": {}
+    },
+    {
+      "variant": "return_median_mad",
+      "lookbackSec": 3600,
+      "tailPct": 0.27,
+      "targetBps": 1.0,
+      "maxWaitSec": 20,
+      "downOnly": false,
+      "rawSignals": 0,
+      "executableSignals": 0,
+      "direct": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnlU_5u_80pct": 0,
+        "maxLoss": 0,
+        "tradesPerDay": 0.0,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnlU_5u_80pct": 0,
+        "maxLoss": 0,
+        "tradesPerDay": 0.0,
+        "avgDelaySec": 0.0
+      },
+      "forecast": {
+        "testedSignals": 0,
+        "actualHitCount": 0,
+        "actualHitRate": 0.0,
+        "predictedHitCount": 0,
+        "predictedHitPrecision": 0.0,
+        "falsePredictedHitCount": 0
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        },
+        "DOWN": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        }
+      },
+      "etaByDay": {}
+    },
+    {
+      "variant": "return_median_mad",
+      "lookbackSec": 4200,
+      "tailPct": 0.2,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "rawSignals": 0,
+      "executableSignals": 0,
+      "direct": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnlU_5u_80pct": 0,
+        "maxLoss": 0,
+        "tradesPerDay": 0.0,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnlU_5u_80pct": 0,
+        "maxLoss": 0,
+        "tradesPerDay": 0.0,
+        "avgDelaySec": 0.0
+      },
+      "forecast": {
+        "testedSignals": 0,
+        "actualHitCount": 0,
+        "actualHitRate": 0.0,
+        "predictedHitCount": 0,
+        "predictedHitPrecision": 0.0,
+        "falsePredictedHitCount": 0
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        },
+        "DOWN": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        }
+      },
+      "etaByDay": {}
+    },
+    {
+      "variant": "price_level_z",
+      "lookbackSec": 1800,
+      "tailPct": 0.2,
+      "targetBps": 1.0,
+      "maxWaitSec": 20,
+      "downOnly": true,
+      "rawSignals": 909,
+      "executableSignals": 909,
+      "direct": {
+        "trades": 909,
+        "winRate": 51.38,
+        "pnlU_5u_80pct": -342,
+        "maxLoss": 7,
+        "tradesPerDay": 131.07,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 140,
+        "winRate": 50.71,
+        "pnlU_5u_80pct": -61,
+        "maxLoss": 5,
+        "tradesPerDay": 20.19,
+        "avgDelaySec": 7.22
+      },
+      "forecast": {
+        "testedSignals": 462,
+        "actualHitCount": 214,
+        "actualHitRate": 46.32,
+        "predictedHitCount": 250,
+        "predictedHitPrecision": 56.0,
+        "falsePredictedHitCount": 110
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 0,
+          "winRate": 0.0,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 0,
+          "tradesPerDay": 0.0,
+          "avgDelaySec": 0.0
+        },
+        "DOWN": {
+          "trades": 140,
+          "winRate": 50.71,
+          "pnlU_5u_80pct": -61,
+          "maxLoss": 5,
+          "tradesPerDay": 20.19,
+          "avgDelaySec": 7.22
+        }
+      },
+      "etaByDay": {
+        "2026-06-13": {
+          "trades": 2,
+          "winRate": 50.0,
+          "pnlU_5u_80pct": -1,
+          "maxLoss": 1,
+          "tradesPerDay": 7.35,
+          "avgDelaySec": 8.0
+        },
+        "2026-06-14": {
+          "trades": 19,
+          "winRate": 31.58,
+          "pnlU_5u_80pct": -41,
+          "maxLoss": 5,
+          "tradesPerDay": 19.29,
+          "avgDelaySec": 5.79
+        },
+        "2026-06-15": {
+          "trades": 31,
+          "winRate": 64.52,
+          "pnlU_5u_80pct": 25,
+          "maxLoss": 2,
+          "tradesPerDay": 31.71,
+          "avgDelaySec": 7.55
+        },
+        "2026-06-16": {
+          "trades": 22,
+          "winRate": 40.91,
+          "pnlU_5u_80pct": -29,
+          "maxLoss": 3,
+          "tradesPerDay": 22.49,
+          "avgDelaySec": 5.77
+        },
+        "2026-06-17": {
+          "trades": 18,
+          "winRate": 50.0,
+          "pnlU_5u_80pct": -9,
+          "maxLoss": 3,
+          "tradesPerDay": 18.64,
+          "avgDelaySec": 7.17
+        },
+        "2026-06-18": {
+          "trades": 17,
+          "winRate": 58.82,
+          "pnlU_5u_80pct": 5,
+          "maxLoss": 3,
+          "tradesPerDay": 17.31,
+          "avgDelaySec": 10.29
+        },
+        "2026-06-19": {
+          "trades": 24,
+          "winRate": 45.83,
+          "pnlU_5u_80pct": -21,
+          "maxLoss": 4,
+          "tradesPerDay": 24.58,
+          "avgDelaySec": 7.42
+        },
+        "2026-06-20": {
+          "trades": 7,
+          "winRate": 71.43,
+          "pnlU_5u_80pct": 10,
+          "maxLoss": 2,
+          "tradesPerDay": 15.67,
+          "avgDelaySec": 6.0
+        }
+      }
+    },
+    {
+      "variant": "price_level_z",
+      "lookbackSec": 2700,
+      "tailPct": 0.2,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "rawSignals": 884,
+      "executableSignals": 884,
+      "direct": {
+        "trades": 884,
+        "winRate": 51.7,
+        "pnlU_5u_80pct": -307,
+        "maxLoss": 7,
+        "tradesPerDay": 127.47,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 244,
+        "winRate": 47.95,
+        "pnlU_5u_80pct": -167,
+        "maxLoss": 7,
+        "tradesPerDay": 35.18,
+        "avgDelaySec": 15.02
+      },
+      "forecast": {
+        "testedSignals": 884,
+        "actualHitCount": 396,
+        "actualHitRate": 44.8,
+        "predictedHitCount": 494,
+        "predictedHitPrecision": 49.39,
+        "falsePredictedHitCount": 250
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 125,
+          "winRate": 47.2,
+          "pnlU_5u_80pct": -94,
+          "maxLoss": 5,
+          "tradesPerDay": 18.02,
+          "avgDelaySec": 15.16
+        },
+        "DOWN": {
+          "trades": 119,
+          "winRate": 48.74,
+          "pnlU_5u_80pct": -73,
+          "maxLoss": 5,
+          "tradesPerDay": 17.16,
+          "avgDelaySec": 14.87
+        }
+      },
+      "etaByDay": {
+        "2026-06-13": {
+          "trades": 8,
+          "winRate": 75.0,
+          "pnlU_5u_80pct": 14,
+          "maxLoss": 2,
+          "tradesPerDay": 27.41,
+          "avgDelaySec": 19.62
+        },
+        "2026-06-14": {
+          "trades": 27,
+          "winRate": 40.74,
+          "pnlU_5u_80pct": -36,
+          "maxLoss": 4,
+          "tradesPerDay": 30.51,
+          "avgDelaySec": 17.93
+        },
+        "2026-06-15": {
+          "trades": 31,
+          "winRate": 38.71,
+          "pnlU_5u_80pct": -47,
+          "maxLoss": 7,
+          "tradesPerDay": 32.74,
+          "avgDelaySec": 13.97
+        },
+        "2026-06-16": {
+          "trades": 39,
+          "winRate": 56.41,
+          "pnlU_5u_80pct": 3,
+          "maxLoss": 3,
+          "tradesPerDay": 40.88,
+          "avgDelaySec": 16.72
+        },
+        "2026-06-17": {
+          "trades": 48,
+          "winRate": 47.92,
+          "pnlU_5u_80pct": -33,
+          "maxLoss": 4,
+          "tradesPerDay": 49.11,
+          "avgDelaySec": 11.98
+        },
+        "2026-06-18": {
+          "trades": 48,
+          "winRate": 41.67,
+          "pnlU_5u_80pct": -60,
+          "maxLoss": 5,
+          "tradesPerDay": 48.68,
+          "avgDelaySec": 15.77
+        },
+        "2026-06-19": {
+          "trades": 29,
+          "winRate": 58.62,
+          "pnlU_5u_80pct": 8,
+          "maxLoss": 3,
+          "tradesPerDay": 36.08,
+          "avgDelaySec": 13.24
+        },
+        "2026-06-20": {
+          "trades": 14,
+          "winRate": 42.86,
+          "pnlU_5u_80pct": -16,
+          "maxLoss": 3,
+          "tradesPerDay": 33.21,
+          "avgDelaySec": 15.93
+        }
+      }
+    },
+    {
+      "variant": "price_level_z",
+      "lookbackSec": 2700,
+      "tailPct": 0.27,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "rawSignals": 941,
+      "executableSignals": 941,
+      "direct": {
+        "trades": 941,
+        "winRate": 50.37,
+        "pnlU_5u_80pct": -439,
+        "maxLoss": 7,
+        "tradesPerDay": 135.69,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 210,
+        "winRate": 50.95,
+        "pnlU_5u_80pct": -87,
+        "maxLoss": 7,
+        "tradesPerDay": 30.28,
+        "avgDelaySec": 14.56
+      },
+      "forecast": {
+        "testedSignals": 941,
+        "actualHitCount": 385,
+        "actualHitRate": 40.91,
+        "predictedHitCount": 467,
+        "predictedHitPrecision": 44.97,
+        "falsePredictedHitCount": 257
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 119,
+          "winRate": 50.42,
+          "pnlU_5u_80pct": -55,
+          "maxLoss": 4,
+          "tradesPerDay": 17.16,
+          "avgDelaySec": 13.61
+        },
+        "DOWN": {
+          "trades": 91,
+          "winRate": 51.65,
+          "pnlU_5u_80pct": -32,
+          "maxLoss": 4,
+          "tradesPerDay": 13.12,
+          "avgDelaySec": 15.8
+        }
+      },
+      "etaByDay": {
+        "2026-06-13": {
+          "trades": 7,
+          "winRate": 71.43,
+          "pnlU_5u_80pct": 10,
+          "maxLoss": 2,
+          "tradesPerDay": 24.5,
+          "avgDelaySec": 12.14
+        },
+        "2026-06-14": {
+          "trades": 21,
+          "winRate": 38.1,
+          "pnlU_5u_80pct": -33,
+          "maxLoss": 7,
+          "tradesPerDay": 23.41,
+          "avgDelaySec": 14.71
+        },
+        "2026-06-15": {
+          "trades": 33,
+          "winRate": 51.52,
+          "pnlU_5u_80pct": -12,
+          "maxLoss": 6,
+          "tradesPerDay": 33.41,
+          "avgDelaySec": 12.09
+        },
+        "2026-06-16": {
+          "trades": 34,
+          "winRate": 55.88,
+          "pnlU_5u_80pct": 1,
+          "maxLoss": 4,
+          "tradesPerDay": 36.04,
+          "avgDelaySec": 14.09
+        },
+        "2026-06-17": {
+          "trades": 38,
+          "winRate": 55.26,
+          "pnlU_5u_80pct": -1,
+          "maxLoss": 3,
+          "tradesPerDay": 44.6,
+          "avgDelaySec": 10.24
+        },
+        "2026-06-18": {
+          "trades": 38,
+          "winRate": 55.26,
+          "pnlU_5u_80pct": -1,
+          "maxLoss": 4,
+          "tradesPerDay": 39.3,
+          "avgDelaySec": 14.05
+        },
+        "2026-06-19": {
+          "trades": 28,
+          "winRate": 46.43,
+          "pnlU_5u_80pct": -23,
+          "maxLoss": 4,
+          "tradesPerDay": 28.26,
+          "avgDelaySec": 20.0
+        },
+        "2026-06-20": {
+          "trades": 11,
+          "winRate": 27.27,
+          "pnlU_5u_80pct": -28,
+          "maxLoss": 7,
+          "tradesPerDay": 26.6,
+          "avgDelaySec": 27.55
+        }
+      }
+    },
+    {
+      "variant": "price_level_z",
+      "lookbackSec": 2700,
+      "tailPct": 0.27,
+      "targetBps": 3.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "rawSignals": 941,
+      "executableSignals": 941,
+      "direct": {
+        "trades": 941,
+        "winRate": 50.37,
+        "pnlU_5u_80pct": -439,
+        "maxLoss": 7,
+        "tradesPerDay": 135.69,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 146,
+        "winRate": 53.42,
+        "pnlU_5u_80pct": -28,
+        "maxLoss": 6,
+        "tradesPerDay": 21.05,
+        "avgDelaySec": 17.42
+      },
+      "forecast": {
+        "testedSignals": 941,
+        "actualHitCount": 285,
+        "actualHitRate": 30.29,
+        "predictedHitCount": 411,
+        "predictedHitPrecision": 35.52,
+        "falsePredictedHitCount": 265
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 81,
+          "winRate": 51.85,
+          "pnlU_5u_80pct": -27,
+          "maxLoss": 4,
+          "tradesPerDay": 11.68,
+          "avgDelaySec": 17.16
+        },
+        "DOWN": {
+          "trades": 65,
+          "winRate": 55.38,
+          "pnlU_5u_80pct": -1,
+          "maxLoss": 5,
+          "tradesPerDay": 9.37,
+          "avgDelaySec": 17.74
+        }
+      },
+      "etaByDay": {
+        "2026-06-13": {
+          "trades": 4,
+          "winRate": 100.0,
+          "pnlU_5u_80pct": 16,
+          "maxLoss": 0,
+          "tradesPerDay": 21.55,
+          "avgDelaySec": 17.75
+        },
+        "2026-06-14": {
+          "trades": 17,
+          "winRate": 35.29,
+          "pnlU_5u_80pct": -31,
+          "maxLoss": 6,
+          "tradesPerDay": 25.99,
+          "avgDelaySec": 18.71
+        },
+        "2026-06-15": {
+          "trades": 24,
+          "winRate": 58.33,
+          "pnlU_5u_80pct": 6,
+          "maxLoss": 2,
+          "tradesPerDay": 24.3,
+          "avgDelaySec": 16.46
+        },
+        "2026-06-16": {
+          "trades": 25,
+          "winRate": 52.0,
+          "pnlU_5u_80pct": -8,
+          "maxLoss": 3,
+          "tradesPerDay": 27.43,
+          "avgDelaySec": 18.64
+        },
+        "2026-06-17": {
+          "trades": 30,
+          "winRate": 66.67,
+          "pnlU_5u_80pct": 30,
+          "maxLoss": 2,
+          "tradesPerDay": 35.21,
+          "avgDelaySec": 11.53
+        },
+        "2026-06-18": {
+          "trades": 22,
+          "winRate": 45.45,
+          "pnlU_5u_80pct": -20,
+          "maxLoss": 3,
+          "tradesPerDay": 23.34,
+          "avgDelaySec": 16.73
+        },
+        "2026-06-19": {
+          "trades": 17,
+          "winRate": 52.94,
+          "pnlU_5u_80pct": -4,
+          "maxLoss": 3,
+          "tradesPerDay": 18.1,
+          "avgDelaySec": 24.47
+        },
+        "2026-06-20": {
+          "trades": 7,
+          "winRate": 28.57,
+          "pnlU_5u_80pct": -17,
+          "maxLoss": 5,
+          "tradesPerDay": 16.93,
+          "avgDelaySec": 23.29
+        }
+      }
+    },
+    {
+      "variant": "price_level_z",
+      "lookbackSec": 3600,
+      "tailPct": 0.27,
+      "targetBps": 1.0,
+      "maxWaitSec": 20,
+      "downOnly": false,
+      "rawSignals": 925,
+      "executableSignals": 925,
+      "direct": {
+        "trades": 925,
+        "winRate": 52.0,
+        "pnlU_5u_80pct": -296,
+        "maxLoss": 8,
+        "tradesPerDay": 133.38,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 211,
+        "winRate": 49.76,
+        "pnlU_5u_80pct": -110,
+        "maxLoss": 6,
+        "tradesPerDay": 30.42,
+        "avgDelaySec": 7.57
+      },
+      "forecast": {
+        "testedSignals": 925,
+        "actualHitCount": 397,
+        "actualHitRate": 42.92,
+        "predictedHitCount": 418,
+        "predictedHitPrecision": 50.48,
+        "falsePredictedHitCount": 207
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 109,
+          "winRate": 46.79,
+          "pnlU_5u_80pct": -86,
+          "maxLoss": 6,
+          "tradesPerDay": 15.72,
+          "avgDelaySec": 7.09
+        },
+        "DOWN": {
+          "trades": 102,
+          "winRate": 52.94,
+          "pnlU_5u_80pct": -24,
+          "maxLoss": 8,
+          "tradesPerDay": 14.71,
+          "avgDelaySec": 8.08
+        }
+      },
+      "etaByDay": {
+        "2026-06-13": {
+          "trades": 9,
+          "winRate": 55.56,
+          "pnlU_5u_80pct": 0,
+          "maxLoss": 2,
+          "tradesPerDay": 26.63,
+          "avgDelaySec": 10.67
+        },
+        "2026-06-14": {
+          "trades": 24,
+          "winRate": 41.67,
+          "pnlU_5u_80pct": -30,
+          "maxLoss": 6,
+          "tradesPerDay": 25.46,
+          "avgDelaySec": 7.88
+        },
+        "2026-06-15": {
+          "trades": 37,
+          "winRate": 43.24,
+          "pnlU_5u_80pct": -41,
+          "maxLoss": 4,
+          "tradesPerDay": 39.88,
+          "avgDelaySec": 7.57
+        },
+        "2026-06-16": {
+          "trades": 29,
+          "winRate": 65.52,
+          "pnlU_5u_80pct": 26,
+          "maxLoss": 4,
+          "tradesPerDay": 31.7,
+          "avgDelaySec": 8.93
+        },
+        "2026-06-17": {
+          "trades": 34,
+          "winRate": 64.71,
+          "pnlU_5u_80pct": 28,
+          "maxLoss": 4,
+          "tradesPerDay": 34.81,
+          "avgDelaySec": 5.97
+        },
+        "2026-06-18": {
+          "trades": 36,
+          "winRate": 38.89,
+          "pnlU_5u_80pct": -54,
+          "maxLoss": 5,
+          "tradesPerDay": 37.55,
+          "avgDelaySec": 7.5
+        },
+        "2026-06-19": {
+          "trades": 34,
+          "winRate": 47.06,
+          "pnlU_5u_80pct": -26,
+          "maxLoss": 6,
+          "tradesPerDay": 34.56,
+          "avgDelaySec": 6.79
+        },
+        "2026-06-20": {
+          "trades": 8,
+          "winRate": 37.5,
+          "pnlU_5u_80pct": -13,
+          "maxLoss": 2,
+          "tradesPerDay": 20.21,
+          "avgDelaySec": 8.62
+        }
+      }
+    },
+    {
+      "variant": "price_level_z",
+      "lookbackSec": 4200,
+      "tailPct": 0.2,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "rawSignals": 854,
+      "executableSignals": 854,
+      "direct": {
+        "trades": 854,
+        "winRate": 51.29,
+        "pnlU_5u_80pct": -328,
+        "maxLoss": 7,
+        "tradesPerDay": 123.14,
+        "avgDelaySec": 0.0
+      },
+      "eta": {
+        "trades": 232,
+        "winRate": 46.98,
+        "pnlU_5u_80pct": -179,
+        "maxLoss": 7,
+        "tradesPerDay": 33.45,
+        "avgDelaySec": 15.41
+      },
+      "forecast": {
+        "testedSignals": 854,
+        "actualHitCount": 369,
+        "actualHitRate": 43.21,
+        "predictedHitCount": 485,
+        "predictedHitPrecision": 47.84,
+        "falsePredictedHitCount": 253
+      },
+      "etaBySide": {
+        "UP": {
+          "trades": 124,
+          "winRate": 45.16,
+          "pnlU_5u_80pct": -116,
+          "maxLoss": 8,
+          "tradesPerDay": 17.88,
+          "avgDelaySec": 15.23
+        },
+        "DOWN": {
+          "trades": 108,
+          "winRate": 49.07,
+          "pnlU_5u_80pct": -63,
+          "maxLoss": 5,
+          "tradesPerDay": 15.57,
+          "avgDelaySec": 15.6
+        }
+      },
+      "etaByDay": {
+        "2026-06-13": {
+          "trades": 7,
+          "winRate": 42.86,
+          "pnlU_5u_80pct": -8,
+          "maxLoss": 2,
+          "tradesPerDay": 20.42,
+          "avgDelaySec": 26.86
+        },
+        "2026-06-14": {
+          "trades": 26,
+          "winRate": 30.77,
+          "pnlU_5u_80pct": -58,
+          "maxLoss": 7,
+          "tradesPerDay": 27.19,
+          "avgDelaySec": 13.69
+        },
+        "2026-06-15": {
+          "trades": 36,
+          "winRate": 27.78,
+          "pnlU_5u_80pct": -90,
+          "maxLoss": 6,
+          "tradesPerDay": 36.58,
+          "avgDelaySec": 16.61
+        },
+        "2026-06-16": {
+          "trades": 33,
+          "winRate": 57.58,
+          "pnlU_5u_80pct": 6,
+          "maxLoss": 3,
+          "tradesPerDay": 36.2,
+          "avgDelaySec": 13.91
+        },
+        "2026-06-17": {
+          "trades": 41,
+          "winRate": 53.66,
+          "pnlU_5u_80pct": -7,
+          "maxLoss": 5,
+          "tradesPerDay": 42.32,
+          "avgDelaySec": 16.61
+        },
+        "2026-06-18": {
+          "trades": 48,
+          "winRate": 54.17,
+          "pnlU_5u_80pct": -6,
+          "maxLoss": 5,
+          "tradesPerDay": 49.72,
+          "avgDelaySec": 13.58
+        },
+        "2026-06-19": {
+          "trades": 30,
+          "winRate": 53.33,
+          "pnlU_5u_80pct": -6,
+          "maxLoss": 3,
+          "tradesPerDay": 30.54,
+          "avgDelaySec": 15.23
+        },
+        "2026-06-20": {
+          "trades": 11,
+          "winRate": 45.45,
+          "pnlU_5u_80pct": -10,
+          "maxLoss": 4,
+          "tradesPerDay": 23.21,
+          "avgDelaySec": 16.64
+        }
+      }
+    }
+  ],
+  "ranked": [
+    {
+      "variant": "return_mean_std",
+      "lookbackSec": 2700,
+      "tailPct": 0.27,
+      "targetBps": 3.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "directWinRate": 53.52,
+      "directTradesPerDay": 57.39,
+      "eta_trades": 103,
+      "eta_winRate": 65.05,
+      "eta_pnlU_5u_80pct": 88,
+      "eta_maxLoss": 4,
+      "eta_tradesPerDay": 14.85,
+      "eta_avgDelaySec": 14.98,
+      "testedSignals": 398,
+      "actualHitCount": 154,
+      "actualHitRate": 38.69,
+      "predictedHitCount": 214,
+      "predictedHitPrecision": 48.13,
+      "falsePredictedHitCount": 111
+    },
+    {
+      "variant": "return_mean_std",
+      "lookbackSec": 2700,
+      "tailPct": 0.2,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "directWinRate": 55.38,
+      "directTradesPerDay": 26.82,
+      "eta_trades": 77,
+      "eta_winRate": 64.94,
+      "eta_pnlU_5u_80pct": 65,
+      "eta_maxLoss": 4,
+      "eta_tradesPerDay": 11.1,
+      "eta_avgDelaySec": 12.71,
+      "testedSignals": 186,
+      "actualHitCount": 100,
+      "actualHitRate": 53.76,
+      "predictedHitCount": 132,
+      "predictedHitPrecision": 58.33,
+      "falsePredictedHitCount": 55
+    },
+    {
+      "variant": "return_mean_std",
+      "lookbackSec": 2700,
+      "tailPct": 0.27,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "directWinRate": 53.52,
+      "directTradesPerDay": 57.39,
+      "eta_trades": 131,
+      "eta_winRate": 60.31,
+      "eta_pnlU_5u_80pct": 56,
+      "eta_maxLoss": 4,
+      "eta_tradesPerDay": 18.89,
+      "eta_avgDelaySec": 12.31,
+      "testedSignals": 398,
+      "actualHitCount": 192,
+      "actualHitRate": 48.24,
+      "predictedHitCount": 237,
+      "predictedHitPrecision": 55.27,
+      "falsePredictedHitCount": 106
+    },
+    {
+      "variant": "return_mean_std",
+      "lookbackSec": 1800,
+      "tailPct": 0.2,
+      "targetBps": 1.0,
+      "maxWaitSec": 20,
+      "downOnly": true,
+      "directWinRate": 52.57,
+      "directTradesPerDay": 53.21,
+      "eta_trades": 57,
+      "eta_winRate": 64.91,
+      "eta_pnlU_5u_80pct": 48,
+      "eta_maxLoss": 4,
+      "eta_tradesPerDay": 8.22,
+      "eta_avgDelaySec": 6.0,
+      "testedSignals": 186,
+      "actualHitCount": 79,
+      "actualHitRate": 42.47,
+      "predictedHitCount": 116,
+      "predictedHitPrecision": 49.14,
+      "falsePredictedHitCount": 59
+    },
+    {
+      "variant": "return_mean_std",
+      "lookbackSec": 4200,
+      "tailPct": 0.2,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "directWinRate": 66.04,
+      "directTradesPerDay": 7.64,
+      "eta_trades": 27,
+      "eta_winRate": 74.07,
+      "eta_pnlU_5u_80pct": 45,
+      "eta_maxLoss": 2,
+      "eta_tradesPerDay": 3.89,
+      "eta_avgDelaySec": 9.78,
+      "testedSignals": 53,
+      "actualHitCount": 27,
+      "actualHitRate": 50.94,
+      "predictedHitCount": 45,
+      "predictedHitPrecision": 60.0,
+      "falsePredictedHitCount": 18
+    },
+    {
+      "variant": "return_mean_std",
+      "lookbackSec": 3600,
+      "tailPct": 0.27,
+      "targetBps": 1.0,
+      "maxWaitSec": 20,
+      "downOnly": false,
+      "directWinRate": 57.26,
+      "directTradesPerDay": 35.76,
+      "eta_trades": 96,
+      "eta_winRate": 59.38,
+      "eta_pnlU_5u_80pct": 33,
+      "eta_maxLoss": 6,
+      "eta_tradesPerDay": 13.84,
+      "eta_avgDelaySec": 5.07,
+      "testedSignals": 248,
+      "actualHitCount": 140,
+      "actualHitRate": 56.45,
+      "predictedHitCount": 148,
+      "predictedHitPrecision": 64.86,
+      "falsePredictedHitCount": 52
+    },
+    {
+      "variant": "price_level_z",
+      "lookbackSec": 2700,
+      "tailPct": 0.27,
+      "targetBps": 3.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "directWinRate": 50.37,
+      "directTradesPerDay": 135.69,
+      "eta_trades": 146,
+      "eta_winRate": 53.42,
+      "eta_pnlU_5u_80pct": -28,
+      "eta_maxLoss": 6,
+      "eta_tradesPerDay": 21.05,
+      "eta_avgDelaySec": 17.42,
+      "testedSignals": 941,
+      "actualHitCount": 285,
+      "actualHitRate": 30.29,
+      "predictedHitCount": 411,
+      "predictedHitPrecision": 35.52,
+      "falsePredictedHitCount": 265
+    },
+    {
+      "variant": "price_level_z",
+      "lookbackSec": 1800,
+      "tailPct": 0.2,
+      "targetBps": 1.0,
+      "maxWaitSec": 20,
+      "downOnly": true,
+      "directWinRate": 51.38,
+      "directTradesPerDay": 131.07,
+      "eta_trades": 140,
+      "eta_winRate": 50.71,
+      "eta_pnlU_5u_80pct": -61,
+      "eta_maxLoss": 5,
+      "eta_tradesPerDay": 20.19,
+      "eta_avgDelaySec": 7.22,
+      "testedSignals": 462,
+      "actualHitCount": 214,
+      "actualHitRate": 46.32,
+      "predictedHitCount": 250,
+      "predictedHitPrecision": 56.0,
+      "falsePredictedHitCount": 110
+    },
+    {
+      "variant": "price_level_z",
+      "lookbackSec": 2700,
+      "tailPct": 0.27,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "directWinRate": 50.37,
+      "directTradesPerDay": 135.69,
+      "eta_trades": 210,
+      "eta_winRate": 50.95,
+      "eta_pnlU_5u_80pct": -87,
+      "eta_maxLoss": 7,
+      "eta_tradesPerDay": 30.28,
+      "eta_avgDelaySec": 14.56,
+      "testedSignals": 941,
+      "actualHitCount": 385,
+      "actualHitRate": 40.91,
+      "predictedHitCount": 467,
+      "predictedHitPrecision": 44.97,
+      "falsePredictedHitCount": 257
+    },
+    {
+      "variant": "price_level_z",
+      "lookbackSec": 3600,
+      "tailPct": 0.27,
+      "targetBps": 1.0,
+      "maxWaitSec": 20,
+      "downOnly": false,
+      "directWinRate": 52.0,
+      "directTradesPerDay": 133.38,
+      "eta_trades": 211,
+      "eta_winRate": 49.76,
+      "eta_pnlU_5u_80pct": -110,
+      "eta_maxLoss": 6,
+      "eta_tradesPerDay": 30.42,
+      "eta_avgDelaySec": 7.57,
+      "testedSignals": 925,
+      "actualHitCount": 397,
+      "actualHitRate": 42.92,
+      "predictedHitCount": 418,
+      "predictedHitPrecision": 50.48,
+      "falsePredictedHitCount": 207
+    },
+    {
+      "variant": "price_level_z",
+      "lookbackSec": 2700,
+      "tailPct": 0.2,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "directWinRate": 51.7,
+      "directTradesPerDay": 127.47,
+      "eta_trades": 244,
+      "eta_winRate": 47.95,
+      "eta_pnlU_5u_80pct": -167,
+      "eta_maxLoss": 7,
+      "eta_tradesPerDay": 35.18,
+      "eta_avgDelaySec": 15.02,
+      "testedSignals": 884,
+      "actualHitCount": 396,
+      "actualHitRate": 44.8,
+      "predictedHitCount": 494,
+      "predictedHitPrecision": 49.39,
+      "falsePredictedHitCount": 250
+    },
+    {
+      "variant": "price_level_z",
+      "lookbackSec": 4200,
+      "tailPct": 0.2,
+      "targetBps": 2.0,
+      "maxWaitSec": 45,
+      "downOnly": false,
+      "directWinRate": 51.29,
+      "directTradesPerDay": 123.14,
+      "eta_trades": 232,
+      "eta_winRate": 46.98,
+      "eta_pnlU_5u_80pct": -179,
+      "eta_maxLoss": 7,
+      "eta_tradesPerDay": 33.45,
+      "eta_avgDelaySec": 15.41,
+      "testedSignals": 854,
+      "actualHitCount": 369,
+      "actualHitRate": 43.21,
+      "predictedHitCount": 485,
+      "predictedHitPrecision": 47.84,
+      "falsePredictedHitCount": 253
+    }
+  ],
+  "stable": [],
+  "byVariant": {
+    "return_mean_std": [
+      {
+        "variant": "return_mean_std",
+        "lookbackSec": 2700,
+        "tailPct": 0.27,
+        "targetBps": 3.0,
+        "maxWaitSec": 45,
+        "downOnly": false,
+        "directWinRate": 53.52,
+        "directTradesPerDay": 57.39,
+        "eta_trades": 103,
+        "eta_winRate": 65.05,
+        "eta_pnlU_5u_80pct": 88,
+        "eta_maxLoss": 4,
+        "eta_tradesPerDay": 14.85,
+        "eta_avgDelaySec": 14.98,
+        "testedSignals": 398,
+        "actualHitCount": 154,
+        "actualHitRate": 38.69,
+        "predictedHitCount": 214,
+        "predictedHitPrecision": 48.13,
+        "falsePredictedHitCount": 111
+      },
+      {
+        "variant": "return_mean_std",
+        "lookbackSec": 2700,
+        "tailPct": 0.2,
+        "targetBps": 2.0,
+        "maxWaitSec": 45,
+        "downOnly": false,
+        "directWinRate": 55.38,
+        "directTradesPerDay": 26.82,
+        "eta_trades": 77,
+        "eta_winRate": 64.94,
+        "eta_pnlU_5u_80pct": 65,
+        "eta_maxLoss": 4,
+        "eta_tradesPerDay": 11.1,
+        "eta_avgDelaySec": 12.71,
+        "testedSignals": 186,
+        "actualHitCount": 100,
+        "actualHitRate": 53.76,
+        "predictedHitCount": 132,
+        "predictedHitPrecision": 58.33,
+        "falsePredictedHitCount": 55
+      },
+      {
+        "variant": "return_mean_std",
+        "lookbackSec": 2700,
+        "tailPct": 0.27,
+        "targetBps": 2.0,
+        "maxWaitSec": 45,
+        "downOnly": false,
+        "directWinRate": 53.52,
+        "directTradesPerDay": 57.39,
+        "eta_trades": 131,
+        "eta_winRate": 60.31,
+        "eta_pnlU_5u_80pct": 56,
+        "eta_maxLoss": 4,
+        "eta_tradesPerDay": 18.89,
+        "eta_avgDelaySec": 12.31,
+        "testedSignals": 398,
+        "actualHitCount": 192,
+        "actualHitRate": 48.24,
+        "predictedHitCount": 237,
+        "predictedHitPrecision": 55.27,
+        "falsePredictedHitCount": 106
+      },
+      {
+        "variant": "return_mean_std",
+        "lookbackSec": 1800,
+        "tailPct": 0.2,
+        "targetBps": 1.0,
+        "maxWaitSec": 20,
+        "downOnly": true,
+        "directWinRate": 52.57,
+        "directTradesPerDay": 53.21,
+        "eta_trades": 57,
+        "eta_winRate": 64.91,
+        "eta_pnlU_5u_80pct": 48,
+        "eta_maxLoss": 4,
+        "eta_tradesPerDay": 8.22,
+        "eta_avgDelaySec": 6.0,
+        "testedSignals": 186,
+        "actualHitCount": 79,
+        "actualHitRate": 42.47,
+        "predictedHitCount": 116,
+        "predictedHitPrecision": 49.14,
+        "falsePredictedHitCount": 59
+      },
+      {
+        "variant": "return_mean_std",
+        "lookbackSec": 4200,
+        "tailPct": 0.2,
+        "targetBps": 2.0,
+        "maxWaitSec": 45,
+        "downOnly": false,
+        "directWinRate": 66.04,
+        "directTradesPerDay": 7.64,
+        "eta_trades": 27,
+        "eta_winRate": 74.07,
+        "eta_pnlU_5u_80pct": 45,
+        "eta_maxLoss": 2,
+        "eta_tradesPerDay": 3.89,
+        "eta_avgDelaySec": 9.78,
+        "testedSignals": 53,
+        "actualHitCount": 27,
+        "actualHitRate": 50.94,
+        "predictedHitCount": 45,
+        "predictedHitPrecision": 60.0,
+        "falsePredictedHitCount": 18
+      },
+      {
+        "variant": "return_mean_std",
+        "lookbackSec": 3600,
+        "tailPct": 0.27,
+        "targetBps": 1.0,
+        "maxWaitSec": 20,
+        "downOnly": false,
+        "directWinRate": 57.26,
+        "directTradesPerDay": 35.76,
+        "eta_trades": 96,
+        "eta_winRate": 59.38,
+        "eta_pnlU_5u_80pct": 33,
+        "eta_maxLoss": 6,
+        "eta_tradesPerDay": 13.84,
+        "eta_avgDelaySec": 5.07,
+        "testedSignals": 248,
+        "actualHitCount": 140,
+        "actualHitRate": 56.45,
+        "predictedHitCount": 148,
+        "predictedHitPrecision": 64.86,
+        "falsePredictedHitCount": 52
+      }
+    ],
+    "return_median_mad": [],
+    "price_level_z": [
+      {
+        "variant": "price_level_z",
+        "lookbackSec": 2700,
+        "tailPct": 0.27,
+        "targetBps": 3.0,
+        "maxWaitSec": 45,
+        "downOnly": false,
+        "directWinRate": 50.37,
+        "directTradesPerDay": 135.69,
+        "eta_trades": 146,
+        "eta_winRate": 53.42,
+        "eta_pnlU_5u_80pct": -28,
+        "eta_maxLoss": 6,
+        "eta_tradesPerDay": 21.05,
+        "eta_avgDelaySec": 17.42,
+        "testedSignals": 941,
+        "actualHitCount": 285,
+        "actualHitRate": 30.29,
+        "predictedHitCount": 411,
+        "predictedHitPrecision": 35.52,
+        "falsePredictedHitCount": 265
+      },
+      {
+        "variant": "price_level_z",
+        "lookbackSec": 1800,
+        "tailPct": 0.2,
+        "targetBps": 1.0,
+        "maxWaitSec": 20,
+        "downOnly": true,
+        "directWinRate": 51.38,
+        "directTradesPerDay": 131.07,
+        "eta_trades": 140,
+        "eta_winRate": 50.71,
+        "eta_pnlU_5u_80pct": -61,
+        "eta_maxLoss": 5,
+        "eta_tradesPerDay": 20.19,
+        "eta_avgDelaySec": 7.22,
+        "testedSignals": 462,
+        "actualHitCount": 214,
+        "actualHitRate": 46.32,
+        "predictedHitCount": 250,
+        "predictedHitPrecision": 56.0,
+        "falsePredictedHitCount": 110
+      },
+      {
+        "variant": "price_level_z",
+        "lookbackSec": 2700,
+        "tailPct": 0.27,
+        "targetBps": 2.0,
+        "maxWaitSec": 45,
+        "downOnly": false,
+        "directWinRate": 50.37,
+        "directTradesPerDay": 135.69,
+        "eta_trades": 210,
+        "eta_winRate": 50.95,
+        "eta_pnlU_5u_80pct": -87,
+        "eta_maxLoss": 7,
+        "eta_tradesPerDay": 30.28,
+        "eta_avgDelaySec": 14.56,
+        "testedSignals": 941,
+        "actualHitCount": 385,
+        "actualHitRate": 40.91,
+        "predictedHitCount": 467,
+        "predictedHitPrecision": 44.97,
+        "falsePredictedHitCount": 257
+      },
+      {
+        "variant": "price_level_z",
+        "lookbackSec": 3600,
+        "tailPct": 0.27,
+        "targetBps": 1.0,
+        "maxWaitSec": 20,
+        "downOnly": false,
+        "directWinRate": 52.0,
+        "directTradesPerDay": 133.38,
+        "eta_trades": 211,
+        "eta_winRate": 49.76,
+        "eta_pnlU_5u_80pct": -110,
+        "eta_maxLoss": 6,
+        "eta_tradesPerDay": 30.42,
+        "eta_avgDelaySec": 7.57,
+        "testedSignals": 925,
+        "actualHitCount": 397,
+        "actualHitRate": 42.92,
+        "predictedHitCount": 418,
+        "predictedHitPrecision": 50.48,
+        "falsePredictedHitCount": 207
+      },
+      {
+        "variant": "price_level_z",
+        "lookbackSec": 2700,
+        "tailPct": 0.2,
+        "targetBps": 2.0,
+        "maxWaitSec": 45,
+        "downOnly": false,
+        "directWinRate": 51.7,
+        "directTradesPerDay": 127.47,
+        "eta_trades": 244,
+        "eta_winRate": 47.95,
+        "eta_pnlU_5u_80pct": -167,
+        "eta_maxLoss": 7,
+        "eta_tradesPerDay": 35.18,
+        "eta_avgDelaySec": 15.02,
+        "testedSignals": 884,
+        "actualHitCount": 396,
+        "actualHitRate": 44.8,
+        "predictedHitCount": 494,
+        "predictedHitPrecision": 49.39,
+        "falsePredictedHitCount": 250
+      },
+      {
+        "variant": "price_level_z",
+        "lookbackSec": 4200,
+        "tailPct": 0.2,
+        "targetBps": 2.0,
+        "maxWaitSec": 45,
+        "downOnly": false,
+        "directWinRate": 51.29,
+        "directTradesPerDay": 123.14,
+        "eta_trades": 232,
+        "eta_winRate": 46.98,
+        "eta_pnlU_5u_80pct": -179,
+        "eta_maxLoss": 7,
+        "eta_tradesPerDay": 33.45,
+        "eta_avgDelaySec": 15.41,
+        "testedSignals": 854,
+        "actualHitCount": 369,
+        "actualHitRate": 43.21,
+        "predictedHitCount": 485,
+        "predictedHitPrecision": 47.84,
+        "falsePredictedHitCount": 253
+      }
+    ]
+  }
+}

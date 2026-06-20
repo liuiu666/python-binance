@@ -1,0 +1,30 @@
+{
+  "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2": {
+    "enabled": true,
+    "model_type": "second_normal_vw_confirm",
+    "symbol": "btcusdt",
+    "interval_min": 10,
+    "horizon": 10,
+    "second_lookback_sec": 2700,
+    "second_horizon_sec": 600,
+    "second_min_gap_sec": 600,
+    "second_tail_pct": 0.2,
+    "eta_target_bps": 2.0,
+    "eta_max_wait_sec": 45,
+    "model_label": "正态成交量确认 稳健"
+  },
+  "BTC_10min_SECOND_VW_FAST_2700_27_ETA3": {
+    "enabled": true,
+    "model_type": "second_normal_vw_confirm",
+    "symbol": "btcusdt",
+    "interval_min": 10,
+    "horizon": 10,
+    "second_lookback_sec": 2700,
+    "second_horizon_sec": 600,
+    "second_min_gap_sec": 600,
+    "second_tail_pct": 0.27,
+    "eta_target_bps": 3.0,
+    "eta_max_wait_sec": 45,
+    "model_label": "正态成交量确认 高频"
+  }
+}

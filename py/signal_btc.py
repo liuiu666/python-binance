@@ -1329,6 +1329,179 @@ class SecondNormalStrategy:
         return {**base, "signal": signal, "reason": "second_tail_reversal"}
 
 
+class SecondNormalVwConfirmStrategy(SecondNormalStrategy):
+    """Second-level normal reversal confirmed by volume-weighted returns plus ETA."""
+
+    def __init__(self, strategy_id, cfg):
+        super().__init__(strategy_id, cfg)
+        self.eta_target_bps = float(cfg.get("eta_target_bps", 2.0))
+        self.eta_max_wait_sec = int(cfg.get("eta_max_wait_sec", 45))
+
+    @staticmethod
+    def _normal_cdf(x):
+        return 0.5 * (1.0 + math.erf(float(x) / math.sqrt(2.0)))
+
+    def _forecast_eta(self, close, buy_qty, sell_qty, signal):
+        import numpy as np
+
+        speed_window = 30
+        accel_window = 10
+        min_speed_bps = 0.005
+        idx = len(close) - 1
+        if idx < speed_window + accel_window + 2:
+            return False, {"eta_ok": False, "eta_reason": "warmup"}
+        side = 1.0 if signal == "DOWN" else -1.0
+        ret_bps = side * 10000.0 * np.diff(np.log(close), prepend=np.nan)
+        recent = ret_bps[idx - speed_window + 1 : idx + 1]
+        prev = ret_bps[idx - speed_window - accel_window + 1 : idx - accel_window + 1]
+        if len(recent) < speed_window or len(prev) < speed_window:
+            return False, {"eta_ok": False, "eta_reason": "warmup"}
+        weights = np.linspace(1.0, 2.0, len(recent))
+        pos_recent = np.clip(recent, 0.0, None)
+        weighted_speed = float(np.average(pos_recent, weights=weights))
+        net_move = float(np.nansum(recent))
+        path = float(np.nansum(np.abs(recent)))
+        efficiency = max(0.0, min(1.0, net_move / path)) if path > 1e-12 else 0.0
+        volume = buy_qty[idx - speed_window + 1 : idx + 1] + sell_qty[idx - speed_window + 1 : idx + 1]
+        flow = side * (buy_qty[idx - speed_window + 1 : idx + 1] - sell_qty[idx - speed_window + 1 : idx + 1])
+        flow_eff = float(np.nansum(flow) / max(np.nansum(volume), 1e-12))
+        flow_multiplier = max(0.25, min(1.5, 1.0 + flow_eff))
+        v_now = float(np.nanmean(np.clip(recent[-accel_window:], 0.0, None)))
+        v_prev = float(np.nanmean(np.clip(prev[-accel_window:], 0.0, None)))
+        accel = (v_now - v_prev) / max(float(accel_window), 1.0)
+        raw_speed = weighted_speed * max(efficiency, 0.15) * flow_multiplier
+        if raw_speed < min_speed_bps:
+            return False, {
+                "eta_ok": False,
+                "eta_reason": "no_momentum",
+                "eta_sec": 1_000_000_000.0,
+                "eta_speed_bps_sec": raw_speed,
+                "eta_efficiency": efficiency,
+                "eta_flow_eff": flow_eff,
+            }
+        eta_linear = self.eta_target_bps / raw_speed
+        eta_accel = eta_linear
+        if abs(accel) > 1e-9:
+            disc = raw_speed * raw_speed + 2.0 * accel * self.eta_target_bps
+            if disc > 0:
+                root = (-raw_speed + math.sqrt(disc)) / accel
+                if root > 0 and np.isfinite(root):
+                    eta_accel = float(root)
+        eta = max(1.0, 0.65 * eta_linear + 0.35 * eta_accel)
+        ok = eta <= float(self.eta_max_wait_sec)
+        return ok, {
+            "eta_ok": bool(ok),
+            "eta_reason": "predicted_reachable" if ok else "eta_too_slow",
+            "eta_sec": round(float(eta), 4),
+            "eta_speed_bps_sec": round(float(raw_speed), 8),
+            "eta_efficiency": round(float(efficiency), 6),
+            "eta_flow_eff": round(float(flow_eff), 6),
+            "eta_accel_bps_sec2": round(float(accel), 8),
+        }
+
+    def predict(self, df5=None):
+        import numpy as np
+
+        bars = self._load_seconds()
+        warmup = max(self.lookback_sec + 1, self.lookback_sec + 45)
+        if bars is None or len(bars) < warmup:
+            return None
+        recent = bars.tail(self.lookback_sec + 1).copy()
+        close = np.asarray(recent["close"].astype(float).values, dtype=float)
+        volume = np.asarray(recent["volume"].astype(float).values, dtype=float)
+        buy_qty = np.asarray(bars["buy_qty"].astype(float).values, dtype=float)
+        sell_qty = np.asarray(bars["sell_qty"].astype(float).values, dtype=float)
+        full_close = np.asarray(bars["close"].astype(float).values, dtype=float)
+        lr = np.log(close[1:] / close[:-1])
+        lr = lr[np.isfinite(lr)]
+        if len(lr) < 60:
+            return None
+        mu = float(np.mean(lr))
+        sigma = float(np.std(lr, ddof=1))
+        if sigma < 1e-12:
+            return None
+        z = (self.horizon_sec * mu) / (math.sqrt(self.horizon_sec) * sigma)
+        p_up = self._normal_cdf(z)
+        threshold_hi = 1.0 - self.tail_pct
+        signal = "DOWN" if p_up >= threshold_hi else "UP" if p_up <= self.tail_pct else None
+
+        vw_signal = None
+        vw_p_up = None
+        vw_z = None
+        if len(volume) > 1:
+            weights = np.nan_to_num(volume[1:], nan=0.0)
+            x = np.nan_to_num(np.log(close[1:] / close[:-1]), nan=0.0)
+            sw = float(np.sum(weights))
+            if sw > 1e-12:
+                vw_mu = float(np.sum(weights * x) / sw)
+                vw_sigma = math.sqrt(max(float(np.sum(weights * x * x) / sw - vw_mu * vw_mu), 0.0))
+                if vw_sigma > 1e-12:
+                    vw_z = (self.horizon_sec * vw_mu) / (math.sqrt(self.horizon_sec) * vw_sigma)
+                    vw_p_up = self._normal_cdf(vw_z)
+                    vw_signal = "DOWN" if vw_p_up >= threshold_hi else "UP" if vw_p_up <= self.tail_pct else None
+
+        conf = abs(p_up - 0.5) * 200
+        signal_time = bars["time"].iloc[-1]
+        last_price = float(full_close[-1])
+        base = {
+            "strategy_id": self.id,
+            "confidence": round(min(conf, 95), 1),
+            "avg_prob": round(p_up, 4),
+            "rsi_value": None,
+            "high_conf": bool(signal),
+            "agree": True,
+            "vol_ok": True,
+            "session_gate_ok": True,
+            "rsi_extreme": True,
+            "z_score": round(float(z), 4),
+            "p_up": round(float(p_up), 4),
+            "vw_p_up": None if vw_p_up is None else round(float(vw_p_up), 4),
+            "vw_z_score": None if vw_z is None else round(float(vw_z), 4),
+            "mu_sec": round(mu, 10),
+            "sigma_sec": round(sigma, 10),
+            "lookback_sec": self.lookback_sec,
+            "horizon_sec": self.horizon_sec,
+            "interval_min": self.interval_min,
+            "duration": self.interval_min,
+            "min_gap_sec": self.min_gap_sec,
+            "tail_pct": self.tail_pct,
+            "eta_target_bps": self.eta_target_bps,
+            "eta_max_wait_sec": self.eta_max_wait_sec,
+            "time": signal_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "model_type": "second_normal_vw_confirm",
+            "bypass_entry_timing": False,
+        }
+        if not signal:
+            return {**base, "signal": None, "reason": "no_edge"}
+        if vw_signal != signal:
+            return {
+                **base,
+                "signal": None,
+                "reason": "vw_confirm_not_aligned",
+                "blocked_signal": signal,
+                "blocked_confidence": round(min(conf, 95), 1),
+            }
+        eta_ok, eta_extra = self._forecast_eta(full_close, buy_qty, sell_qty, signal)
+        base.update(eta_extra)
+        if not eta_ok:
+            return {
+                **base,
+                "signal": None,
+                "reason": eta_extra.get("eta_reason", "eta_blocked"),
+                "blocked_signal": signal,
+                "blocked_confidence": round(min(conf, 95), 1),
+            }
+        target = last_price * math.exp((self.eta_target_bps if signal == "DOWN" else -self.eta_target_bps) / 10000.0)
+        return {
+            **base,
+            "signal": signal,
+            "reason": "second_normal_vw_confirm_eta",
+            "price": round(last_price, 4),
+            "eta_entry_target_price": round(float(target), 4),
+            "eta_entry_reference_price": round(last_price, 4),
+        }
+
+
 class SecondChipStrategy(SecondNormalStrategy):
     """Second-level POC chip-zone reversal for 10m binary options."""
 
@@ -1597,6 +1770,102 @@ class SecondChipStrategy(SecondNormalStrategy):
         if not filter_ok:
             return {**base, "signal": None, "reason": "chip_filter", "blocked_signal": signal, "chip_breakout": breakout, "chip_filter_reason": filter_reason}
         return {**base, "signal": signal, "reason": "second_chip_reversal", "chip_breakout": breakout}
+
+
+class SecondTrendPullbackDownStrategy(SecondNormalStrategy):
+    """Trade downtrend acceptance by selling the short pullback."""
+
+    def __init__(self, strategy_id, cfg):
+        super().__init__(strategy_id, cfg)
+        self.regime_lookback_sec = int(cfg.get("second_trend_regime_lookback_sec", 7200))
+        self.regime_alt_lookback_sec = int(cfg.get("second_trend_regime_alt_lookback_sec", 5400))
+        self.regime_drop_pct = float(cfg.get("second_trend_regime_drop_pct", 0.004))
+        self.regime_alt_drop_pct = float(cfg.get("second_trend_regime_alt_drop_pct", 0.003))
+        self.max_pos_pct = float(cfg.get("second_trend_max_pos_pct", 0.6))
+        self.max_entry_pos_pct = float(cfg.get("second_trend_max_entry_pos_pct", 0.4))
+        self.max_recent_ret_pct = float(cfg.get("second_trend_max_recent_ret_pct", 0.001))
+        self.pullback_sec = int(cfg.get("second_trend_pullback_sec", 300))
+        self.pullback_pct = float(cfg.get("second_trend_pullback_pct", 0.001))
+        self.horizon_sec = int(cfg.get("second_trend_horizon_sec", cfg.get("second_horizon_sec", 600)))
+        self.min_gap_sec = int(cfg.get("second_trend_min_gap_sec", cfg.get("second_trend_signal_gap_sec", 600)))
+        self.suppress_reversal = bool(cfg.get("second_trend_suppress_reversal", True))
+        self.interval_min = max(1, int(round(self.horizon_sec / 60)))
+
+    def predict(self, df5=None):
+        bars = self._load_seconds()
+        required = max(self.regime_lookback_sec, self.regime_alt_lookback_sec, self.pullback_sec, 1800) + 2
+        if bars is None or len(bars) < required:
+            return None
+        recent = bars.tail(required).copy()
+        close = recent["close"].astype(float).values
+        price = float(close[-1])
+        regime_base = float(close[-1 - self.regime_lookback_sec])
+        alt_regime_base = float(close[-1 - self.regime_alt_lookback_sec])
+        recent_base = float(close[-1 - 1800])
+        pullback_base = float(close[-1 - self.pullback_sec])
+        regime_ret = price / max(regime_base, 1e-12) - 1.0
+        alt_regime_ret = price / max(alt_regime_base, 1e-12) - 1.0
+        recent_ret = price / max(recent_base, 1e-12) - 1.0
+        pullback_ret = price / max(pullback_base, 1e-12) - 1.0
+        regime_window = close[-self.regime_lookback_sec:]
+        roll_min = float(np.min(regime_window))
+        roll_max = float(np.max(regime_window))
+        roll_mean = float(np.mean(regime_window))
+        pos = (price - roll_min) / max(roll_max - roll_min, 1e-12)
+        mean_gap = price / max(roll_mean, 1e-12) - 1.0
+        regime_active = (
+            (regime_ret <= -self.regime_drop_pct or alt_regime_ret <= -self.regime_alt_drop_pct)
+            and pos < self.max_pos_pct
+            and recent_ret <= self.max_recent_ret_pct
+            and mean_gap <= 0
+        )
+        pullback_active = pullback_ret >= self.pullback_pct and pos < self.max_entry_pos_pct
+        signal = "DOWN" if regime_active and pullback_active else None
+        confidence = min(95.0, max(0.0, abs(regime_ret) / max(self.regime_drop_pct, 1e-12) * 35.0))
+        if pullback_active:
+            confidence = min(95.0, confidence + min(35.0, pullback_ret / max(self.pullback_pct, 1e-12) * 20.0))
+        signal_time = bars["time"].iloc[-1]
+        base = {
+            "strategy_id": self.id,
+            "confidence": round(float(confidence), 1),
+            "avg_prob": None,
+            "rsi_value": None,
+            "high_conf": bool(signal),
+            "agree": True,
+            "vol_ok": True,
+            "session_gate_ok": True,
+            "rsi_extreme": True,
+            "regime_lookback_sec": self.regime_lookback_sec,
+            "regime_alt_lookback_sec": self.regime_alt_lookback_sec,
+            "regime_drop_pct": round(self.regime_drop_pct, 6),
+            "regime_alt_drop_pct": round(self.regime_alt_drop_pct, 6),
+            "regime_ret": round(float(regime_ret), 6),
+            "alt_regime_ret": round(float(alt_regime_ret), 6),
+            "recent_ret": round(float(recent_ret), 6),
+            "pos_regime": round(float(pos), 6),
+            "mean_gap_regime": round(float(mean_gap), 6),
+            "max_pos_pct": round(self.max_pos_pct, 6),
+            "max_entry_pos_pct": round(self.max_entry_pos_pct, 6),
+            "max_recent_ret_pct": round(self.max_recent_ret_pct, 6),
+            "pullback_sec": self.pullback_sec,
+            "pullback_pct": round(self.pullback_pct, 6),
+            "pullback_ret": round(float(pullback_ret), 6),
+            "trend_regime_active": bool(regime_active),
+            "trend_pullback_active": bool(pullback_active),
+            "suppress_reversal_in_regime": bool(self.suppress_reversal),
+            "horizon_sec": self.horizon_sec,
+            "interval_min": self.interval_min,
+            "duration": self.interval_min,
+            "min_gap_sec": self.min_gap_sec,
+            "time": signal_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "model_type": "second_trend_pullback_down",
+            "bypass_entry_timing": True,
+        }
+        if not regime_active:
+            return {**base, "signal": None, "reason": "no_downtrend_acceptance"}
+        if not pullback_active:
+            return {**base, "signal": None, "reason": "waiting_pullback"}
+        return {**base, "signal": signal, "reason": "trend_down_pullback_continuation"}
 
 
 class Strategy:
@@ -2478,8 +2747,12 @@ def _make_strategy(sid, cfg):
         return POCNormalStrategy(sid, cfg)
     if cfg.get("model_type") == "second_normal":
         return SecondNormalStrategy(sid, cfg)
+    if cfg.get("model_type") == "second_normal_vw_confirm":
+        return SecondNormalVwConfirmStrategy(sid, cfg)
     if cfg.get("model_type") == "second_chip":
         return SecondChipStrategy(sid, cfg)
+    if cfg.get("model_type") == "second_trend_pullback_down":
+        return SecondTrendPullbackDownStrategy(sid, cfg)
     return Strategy(sid, cfg)
 
 def build_strategies(config_map):
@@ -2487,8 +2760,35 @@ def build_strategies(config_map):
     return [
         _make_strategy(k, v)
         for k, v in config_map.items()
-        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal", "second_chip") or k not in live_two_minute_ids)
+        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal", "second_normal_vw_confirm", "second_chip", "second_trend_pullback_down") or k not in live_two_minute_ids)
     ]
+
+
+def apply_trend_mode_switch(signals):
+    trend_blockers = [
+        row for row in signals.values()
+        if row.get("model_type") == "second_trend_pullback_down"
+        and row.get("trend_regime_active")
+        and row.get("suppress_reversal_in_regime")
+    ]
+    if not trend_blockers:
+        return signals
+    blocker = trend_blockers[0]
+    out = {}
+    for strategy_id, row in signals.items():
+        if row.get("model_type") in ("second_normal", "second_normal_vw_confirm", "second_chip") and row.get("signal"):
+            blocked = dict(row)
+            blocked["blocked_signal"] = blocked.get("signal")
+            blocked["blocked_confidence"] = blocked.get("confidence")
+            blocked["signal"] = None
+            blocked["high_conf"] = False
+            blocked["reason"] = "trend_down_mode_suppressed_reversal"
+            blocked["trend_mode_strategy_id"] = blocker.get("strategy_id")
+            blocked["trend_regime_ret"] = blocker.get("regime_ret")
+            out[strategy_id] = blocked
+        else:
+            out[strategy_id] = row
+    return out
 
 configs = load_config()
 configs_mtime = file_mtime(CONFIG_FILE)
@@ -2592,6 +2892,7 @@ while True:
                     f"  {r.get('time','?')} {strategy.id} avg={fmt_num(r.get('avg_prob')):.3f}"
                     f" RSI={fmt_num(r.get('rsi_value')):.0f} {status_text(r)}"
                 )
+        signals = apply_trend_mode_switch(signals)
         for _, strategy in live_two_minute_strategies:
             if configs.get(strategy.id, {}).get("model_type") == "poc_normal": continue
             r = strategy.predict(live_1m)

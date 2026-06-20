@@ -1,0 +1,35 @@
+{
+  "files": [
+    {
+      "rel": "data/trade_config.json",
+      "size": 2981
+    },
+    {
+      "rel": "data/prod_config.json",
+      "size": 1984
+    },
+    {
+      "rel": "data/live_signals.json",
+      "size": 1996
+    },
+    {
+      "rel": "data/second_data_status.json",
+      "size": 4287
+    },
+    {
+      "rel": "data/signal_audit.jsonl",
+      "size": 6062031
+    },
+    {
+      "rel": "data/trade_audit.jsonl",
+      "error": "FileNotFoundError(2, 'No such file')"
+    }
+  ],
+  "shards": [
+    {
+      "name": "2026-06-17.csv",
+      "size": 9469103,
+      "mtime": 1781718984
+    }
+  ]
+}
