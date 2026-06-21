@@ -1,6 +1,6 @@
 import React from "react";
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
-import { directionClass, directionText, fmtPct, signalLabel } from "../utils";
+import { directionClass, directionText, fmt, fmtPct, signalLabel } from "../utils";
 
 const baseBadgeStyle = {
   background: "rgba(255,255,255,0.04)",
@@ -99,6 +99,16 @@ function badgeStyle(tone) {
   return baseBadgeStyle;
 }
 
+function StatBadge({ label, stat }) {
+  const pnl = Number(stat?.pnl || 0);
+  const tone = pnl > 0 ? "up" : pnl < 0 ? "down" : "neutral";
+  return (
+    <span className="badge" style={badgeStyle(tone)}>
+      {label} {fmtPct(stat?.winRate, 1)} / {pnl > 0 ? "+" : ""}{fmt(pnl, 2)}U
+    </span>
+  );
+}
+
 function DirectionBadge({ signal }) {
   const dir = signal?.signal;
   const cls = directionClass(dir);
@@ -111,7 +121,7 @@ function DirectionBadge({ signal }) {
   );
 }
 
-export default function StrategyCard({ title, signal, amount, variant }) {
+export default function StrategyCard({ title, signal, amount, variant, stats }) {
   const direction = signal?.signal;
   const duration = signal?.duration || signal?.interval_min || "10";
   const confidence = signal?.confidence !== undefined && signal?.confidence !== null ? fmtPct(signal.confidence, 0) : "--";
@@ -145,6 +155,8 @@ export default function StrategyCard({ title, signal, amount, variant }) {
           <span className="badge" style={baseBadgeStyle}>周期 {duration}m</span>
           {!isChip ? <span className="badge" style={baseBadgeStyle}>阈值 {tailText(variant, signal)}</span> : null}
           {backtest ? <span className="badge" style={baseBadgeStyle}>回测 {fmtPct(backtest.wr, 2)} / {backtest.tradesPerDay}笔天</span> : null}
+          <StatBadge label="实盘" stat={stats?.real} />
+          <StatBadge label="影子" stat={stats?.shadow} />
           <span className="badge" style={baseBadgeStyle}>策略 {isChip ? "秒级筹码区反转" : "正态尾部反转"}</span>
           {isChip ? (
             <>

@@ -41,6 +41,22 @@ const chartTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
 
 const CHART_TIME_ZONE_LABEL = "北京时间 UTC+8";
 
+function healthTone(ok) {
+  if (ok === true) return "ok";
+  if (ok === false) return "fail";
+  return "";
+}
+
+function compactHealth(ok, ageMs) {
+  const prefix = ok === true ? "正常" : ok === false ? "异常" : "--";
+  return ageMs === null || ageMs === undefined ? prefix : `${prefix} ${ageText(ageMs)}`;
+}
+
+function strategyStats(history, strategyId) {
+  const pick = kind => (history?.breakdown?.[kind]?.byStrategy || []).find(item => item.key === strategyId);
+  return { real: pick("real"), shadow: pick("shadow") };
+}
+
 function formatChartTime(time) {
   const seconds = typeof time === "number" ? time : Number(time?.timestamp || time);
   if (!Number.isFinite(seconds)) return "";
@@ -81,6 +97,8 @@ export default function App() {
   const [runtime, setRuntime] = useState(null);
   const [tablet, setTablet] = useState(null);
   const [tradeHistory, setTradeHistory] = useState(null);
+  const [dataHealth, setDataHealth] = useState(null);
+  const [secondDataHealth, setSecondDataHealth] = useState(null);
   const [realBalance, setRealBalance] = useState(null);
   const [configDraft, setConfigDraft] = useState(DEFAULT_CONFIG);
   const [configDirty, setConfigDirty] = useState(false);
@@ -156,6 +174,11 @@ export default function App() {
 
   const loadTradeHistory = useCallback(() => {
     apiFetch("/api/trade-history?limit=120").then(res => res.json()).then(setTradeHistory).catch(() => {});
+  }, [apiFetch]);
+
+  const loadHealth = useCallback(() => {
+    apiFetch("/api/data-health").then(res => res.json()).then(setDataHealth).catch(() => {});
+    apiFetch("/api/second-data-health").then(res => res.json()).then(setSecondDataHealth).catch(() => {});
   }, [apiFetch]);
 
   const loadConfig = useCallback((force = false) => {
@@ -277,8 +300,9 @@ export default function App() {
     triggerServerAction("/api/data-update/refresh", "数据刷新", () => {
       loadRuntime();
       loadSignals();
+      loadHealth();
     });
-  }, [loadRuntime, loadSignals, triggerServerAction]);
+  }, [loadHealth, loadRuntime, loadSignals, triggerServerAction]);
 
   const refreshReportsNow = useCallback(() => {
     triggerServerAction("/api/reports/refresh", "报告刷新");
@@ -289,19 +313,21 @@ export default function App() {
     loadRuntime();
     loadTablet();
     loadTradeHistory();
+    loadHealth();
     loadConfig(true);
     loadPriceFallback();
     notify("已刷新", "success");
-  }, [loadConfig, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory, notify]);
+  }, [loadConfig, loadHealth, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory, notify]);
 
   useEffect(() => {
     loadSignals();
     loadRuntime();
     loadTablet();
     loadTradeHistory();
+    loadHealth();
     loadConfig();
     loadPriceFallback();
-  }, [loadConfig, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory]);
+  }, [loadConfig, loadHealth, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory]);
 
   useEffect(() => {
     const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -460,34 +486,47 @@ export default function App() {
       });
     }
 
-    const tradesToMarker = tradeHistory?.recent || [];
     const mergedData = chartData.sort((a, b) => a.time - b.time);
     
     if (mergedData.length > 0) {
       areaSeriesRef.current.setData(mergedData);
     }
 
-    // 3. Build markers list with strict NaN prevention
+    // 3. Build compact markers with strict NaN prevention.
     const markers = [];
-    for (const trade of tradesToMarker) {
+    const chartStartSec = mergedData.length ? Number(mergedData[0].time) : null;
+    const chartEndSec = mergedData.length ? Number(mergedData[mergedData.length - 1].time) : null;
+    const tradesToMarker = (tradeHistory?.recent || []).filter(trade => {
+      if (!trade?.openTime || chartStartSec === null || chartEndSec === null) return false;
+      const openSec = Math.floor(Number(trade.openTime) / 1000);
+      const settleSec = trade.settleTime ? Math.floor(Number(trade.settleTime) / 1000) : openSec;
+      return (
+        Number.isFinite(openSec) &&
+        Number.isFinite(settleSec) &&
+        settleSec >= chartStartSec &&
+        openSec <= chartEndSec
+      );
+    });
+    const markerTrades = tradesToMarker.slice(0, 60);
+    for (let idx = 0; idx < markerTrades.length; idx++) {
+      const trade = markerTrades[idx];
       if (!trade.openTime) continue;
       const openSec = Math.floor(Number(trade.openTime) / 1000);
       if (Number.isNaN(openSec)) continue;
       
-      // Open marker (CALL or PUT) with execution source prefixes
       const isTablet = trade.source === "autojs";
       const isManual = !trade.strategyId || trade.strategyId === "manual";
-      const prefix = isManual
-        ? (isTablet ? "[平板手动]" : "[网页手动]")
-        : (isTablet ? "[信号实盘]" : "[影子模拟]");
-      const stratName = strategyName(trade.strategyId);
+      const isShadow = String(trade.source || "").startsWith("shadow:") || trade.event === "shadow_trade";
+      const prefix = isManual ? "手" : isShadow ? "影" : isTablet ? "实" : "模";
+      const markerNo = markerTrades.length - idx;
+      const direction = trade.direction === "UP" ? "涨" : "跌";
 
       markers.push({
         time: openSec,
         position: trade.direction === "UP" ? "belowBar" : "aboveBar",
         color: trade.direction === "UP" ? "#27c3a5" : "#e45858",
         shape: trade.direction === "UP" ? "arrowUp" : "arrowDown",
-        text: `${prefix} ${trade.direction === "UP" ? "买涨" : "买跌"}(${stratName}) ${trade.amount}U`
+        text: `${prefix}${markerNo} ${direction} ${trade.amount}U`
       });
 
       // Close marker (WON, LOST, TIE)
@@ -499,7 +538,7 @@ export default function App() {
           position: "inBar",
           color: trade.status === "won" ? "#27c3a5" : trade.status === "lost" ? "#e45858" : "#f0c94a",
           shape: "circle",
-          text: `${trade.status === "won" ? "胜" : trade.status === "lost" ? "负" : "平"} (${trade.pnl > 0 ? "+" : ""}${trade.pnl}U)`
+          text: `${trade.pnl > 0 ? "+" : ""}${trade.pnl}U`
         });
       }
     }
@@ -513,6 +552,7 @@ export default function App() {
   useInterval(loadSignals, 3000);
   useInterval(loadPriceFallback, 3000);
   useInterval(loadTradeHistory, 5000);
+  useInterval(loadHealth, 10000);
   useInterval(loadTablet, 15000);
   useInterval(loadRuntime, 30000);
   useInterval(loadConfig, 10000);
@@ -641,8 +681,9 @@ export default function App() {
           </div>
           <div className="top-actions">
             <Metric label="BTC 价格" value={fmtPrice(currentPrice)} unit="USDT" tone={priceTone} />
-            <Metric label="稳健强度" value={safeSignal?.confidence !== undefined ? fmtPct(safeSignal.confidence, 0) : "--"} tone={safeConfidenceTone} />
-            <Metric label="资金流强度" value={takerSignal?.confidence !== undefined ? fmtPct(takerSignal.confidence, 0) : "--"} tone={takerConfidenceTone} />
+            <Metric label="1分钟数据" value={compactHealth(dataHealth?.files?.klines1m?.ok, dataHealth?.files?.klines1m?.ageMs)} tone={healthTone(dataHealth?.files?.klines1m?.ok)} />
+            <Metric label="秒级采集" value={compactHealth(secondDataHealth?.ok, secondDataHealth?.ageMs)} tone={healthTone(secondDataHealth?.ok)} />
+            <Metric label="代理节点" value={secondDataHealth?.status?.node_selection?.active_proxy ? "代理" : "直连"} tone={secondDataHealth?.status?.node_selection?.active_proxy ? "ok" : ""} />
             <Metric label="账户余额" value={realBalance?.amount !== undefined ? fmt(realBalance.amount, 2) : "--"} unit="USDT" tone={realBalance?.amount !== undefined ? "ok" : ""} />
             <Metric label="稳健投数" value={safeVariant.amount || "--"} unit="USDT" />
             <Metric label="资金流档位" value={takerVariantText || "--"} />
@@ -662,6 +703,7 @@ export default function App() {
               signal={signalPayload?.[variant.id]}
               amount={amountForSignal(variant.id, signalPayload?.[variant.id], signalPayload, configDraft)}
               variant={variant}
+              stats={strategyStats(tradeHistory, variant.id)}
             />
           ))}
         </section>
@@ -702,6 +744,8 @@ export default function App() {
             <OpsPanel
               runtime={runtime}
               tablet={tablet}
+              dataHealth={dataHealth}
+              secondDataHealth={secondDataHealth}
               onRefreshData={refreshDataNow}
               onRefreshReports={refreshReportsNow}
             />

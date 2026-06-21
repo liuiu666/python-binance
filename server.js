@@ -667,6 +667,7 @@ const ENTRY_TIMING_POLICIES = {
   }
 };
 const entryTimingState = {};
+const entryTimingAllowedSignals = {};
 
 function entryTimingPolicyForStrategy(strategyId) {
   if (String(strategyId || "").startsWith("BTC_10min_SAFE")) return ENTRY_TIMING_POLICIES.BTC_10min_SAFE;
@@ -738,6 +739,26 @@ function blockSignalForEntryTiming(sig, state, reason) {
   return out;
 }
 
+function latchedEntrySignal(strategyId, sig) {
+  const latched = entryTimingAllowedSignals[strategyId];
+  if (!latched) return null;
+  const now = Date.now();
+  if (now > Number(latched.expiresAt || 0)) {
+    delete entryTimingAllowedSignals[strategyId];
+    return null;
+  }
+  if (sig && sig.signal && sig.signal !== latched.signal) return null;
+  return {
+    ...(sig || latched.signalPayload),
+    ...latched.signalPayload,
+    entry_timing: {
+      ...(latched.signalPayload.entry_timing || {}),
+      latched: true,
+      latch_expires_at: isoTime(latched.expiresAt)
+    }
+  };
+}
+
 function allowSignalForEntryTiming(sig, state, reason) {
   const now = Date.now();
   if (!state.allowedAt) {
@@ -747,7 +768,7 @@ function allowSignalForEntryTiming(sig, state, reason) {
     delete entryTimingState[state.strategyId];
     return blockSignalForEntryTiming(sig, state, "entry_timing_entry_window_elapsed");
   }
-  return {
+  const allowed = {
     ...sig,
     actionable_time: state.allowedActionableTime,
     entry_timing: {
@@ -765,11 +786,19 @@ function allowSignalForEntryTiming(sig, state, reason) {
       pullback_time: state.pullbackTime ? isoTime(state.pullbackTime) : null
     }
   };
+  entryTimingAllowedSignals[state.strategyId] = {
+    signal: sig.signal,
+    expiresAt: Math.min(state.allowedAt + SIGNAL_EXPIRY_MS, state.expiresAt + SIGNAL_EXPIRY_MS),
+    signalPayload: allowed
+  };
+  return allowed;
 }
 
 function applyEntryTimingForSignal(strategyId, sig) {
   const policy = entryTimingPolicyForStrategy(strategyId);
   if (sig && sig.bypass_entry_timing) return sig;
+  const latched = latchedEntrySignal(strategyId, sig);
+  if (latched) return latched;
   if (!ENTRY_TIMING_ENABLED || !policy || !sig || !sig.signal) return sig;
   if (policy.type === "none") return sig;
 

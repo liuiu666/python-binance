@@ -1,7 +1,7 @@
 import React from "react";
 import { RefreshCcw } from "lucide-react";
 
-export default function OpsPanel({ runtime, tablet, onRefreshData, onRefreshReports }) {
+export default function OpsPanel({ runtime, tablet, dataHealth, secondDataHealth, onRefreshData, onRefreshReports }) {
   const tabletVersion = tablet?.latestHeartbeat?.version || "";
   const serverVersion = runtime?.scriptVersion || "";
   const versionMismatch = tabletVersion && serverVersion && tabletVersion !== serverVersion;
@@ -14,6 +14,18 @@ export default function OpsPanel({ runtime, tablet, onRefreshData, onRefreshRepo
     if (n >= 60000) return `${Math.round(n / 60000)} 分钟`;
     return `${Math.round(n / 1000)} 秒`;
   };
+  const ageText = value => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "--";
+    if (n < 60000) return `${Math.round(n / 1000)} 秒`;
+    return `${Math.round(n / 60000)} 分钟`;
+  };
+  const secondStatus = secondDataHealth?.status || {};
+  const nodeSelection = secondStatus.node_selection || {};
+  const activeNode = nodeSelection.active_node || "--";
+  const activeProxy = nodeSelection.active_proxy || "未使用";
+  const dataOk = dataHealth?.allow === true || dataHealth?.blocked === false;
+  const secondOk = secondDataHealth?.ok === true;
   const links = [
     { label: "平板页", url: runtime?.tabletPageUrl },
     { label: "Loader", url: runtime?.loaderUrl },
@@ -36,6 +48,14 @@ export default function OpsPanel({ runtime, tablet, onRefreshData, onRefreshRepo
             {item.label}
           </a>
         ))}
+      </div>
+      <div className="ops-status-box">
+        <strong>数据采集</strong>
+        <div className={dataOk ? "up" : "down"}>1分钟/资金数据 {dataOk ? "正常" : "拦截"} {dataHealth?.reasons?.length ? `(${dataHealth.reasons.join(", ")})` : ""}</div>
+        <div className={secondOk ? "up" : "down"}>秒级成交 {secondOk ? "正常" : "异常"}，延迟 {ageText(secondDataHealth?.ageMs)}</div>
+        <div>活跃节点 {activeNode}</div>
+        <div>代理 {activeProxy}</div>
+        <div>累计行数 {secondStatus.rows || "--"}，最新 {secondStatus.last_ts_shanghai || secondStatus.last_ts || "--"}</div>
       </div>
       <div style={{
         marginTop: "10px",

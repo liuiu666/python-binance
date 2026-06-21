@@ -35,6 +35,7 @@ var lastScreenNudge = 0;
 var lastAuditHeartbeat = 0;
 var balanceFailCount = 0;
 var lastBalanceValue = null;
+var lastTradeInteractionMs = 0;
 var BALANCE_INTERVAL_MS = 30000;
 var RUNTIME_ALIVE_INTERVAL_MS = 10000;
 var SCREEN_NUDGE_INTERVAL_MS = 60000;
@@ -474,6 +475,7 @@ function ensureRuntimeAlive(force) {
 function safeNudgeScreen(force) {
     var now = Date.now();
     if (!force && now - lastScreenNudge < SCREEN_NUDGE_INTERVAL_MS) return;
+    if (!force && now - lastTradeInteractionMs < 15000) return;
     lastScreenNudge = now;
 
     try {
@@ -933,6 +935,7 @@ function forceWakeForTrade() {
 }
 
 function placeTrade(dir, order) {
+    lastTradeInteractionMs = Date.now();
     var prevAmt = tradeConfig.amount;
     var prevDur = tradeConfig.duration;
     var strategyId = order && order.strategyId ? order.strategyId : "manual";
@@ -1228,13 +1231,20 @@ function main() {
     while (isRunning) {
         try {
             ensureRuntimeAlive(false);
-            safeNudgeScreen(false);
             if (checkManualTrade()) { sleep(POLL_INTERVAL); continue; }
             
             var payload = getSignalPayload();
             reportHeartbeat(payload);
             var queue = buildTradeQueue(payload);
             queue = filterConflictQueue(queue);
+            var hasTradeableOrder = false;
+            for (var nq = 0; nq < queue.length; nq++) {
+                if (queue[nq] && queue[nq].signal) {
+                    hasTradeableOrder = true;
+                    break;
+                }
+            }
+            if (!hasTradeableOrder) safeNudgeScreen(false);
             
             if (!tradeConfig.autoTrade) {
                 if (Date.now() % 60000 < POLL_INTERVAL) log("AutoTrade OFF");
@@ -1280,6 +1290,7 @@ function main() {
                     if (now - lastTs < 60000) continue;
                     log("SIGNAL " + order.strategyId + ": " + order.signal + " " + order.confidence + "% RSI=" + order.rsi_value + " amt=" + order.amount + "U dur=" + order.duration + "min");
                     reportTradeAudit("signal_tradeable", order, {});
+                    lastTradeInteractionMs = Date.now();
                     var ok = placeTrade(order.signal, order);
                     if (ok === true) {
                         previousDoneAt = Date.now();

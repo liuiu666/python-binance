@@ -105,8 +105,8 @@ export function statusClass(status) {
 
 export function statusText(status) {
   if (status === "unverified") return "未成交";
-  if (status === "won") return "赢";
-  if (status === "lost") return "输";
+  if (status === "won") return "胜";
+  if (status === "lost") return "负";
   if (status === "tie") return "平";
   if (status === "aborted") return "取消";
   return "持仓";
