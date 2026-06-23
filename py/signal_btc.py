@@ -489,6 +489,8 @@ ENABLE_LEGACY_TWO_MINUTE_LIVE = os.environ.get("ENABLE_LEGACY_TWO_MINUTE_LIVE", 
 
 sys.path.insert(0, os.path.join(APP_DIR, "py"))
 from backtest_enhanced import build_features, load_symbol
+from second_backtest.data import load_second_bars
+from second_backtest.incident_filter import apply_incident_filter_to_live_signals
 from research_2m_10min_binary import (
     SYMBOL as RESEARCH_2M_SYMBOL,
     aggregate_bars as aggregate_2m_bars,
@@ -1189,52 +1191,14 @@ class SecondNormalStrategy:
         self.interval_min = max(1, int(round(self.horizon_sec / 60)))
 
     def _load_seconds(self):
-        import pandas as pd
-
-        if not os.path.exists(SECOND_TRADES_FILE):
+        try:
+            sec = load_second_bars(SECOND_TRADES_FILE, include_shards=True)
+        except Exception as exc:
+            print(f"[Signal] second data load failed: {exc}")
             return None
-        df = pd.read_csv(SECOND_TRADES_FILE)
-        if "ts" not in df.columns and "timestamp" in df.columns:
-            df = df.rename(columns={"timestamp": "ts"})
-        if "price" not in df.columns and "close" in df.columns:
-            df = df.rename(columns={"close": "price"})
-        if "price" not in df.columns or "ts" not in df.columns:
+        if sec.empty:
             return None
-        df["ts"] = pd.to_datetime(df["ts"], utc=True, errors="coerce")
-        df["price"] = pd.to_numeric(df["price"], errors="coerce")
-        if "qty" in df.columns:
-            df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0.0)
-        elif "volume" in df.columns:
-            df["qty"] = pd.to_numeric(df["volume"], errors="coerce").fillna(0.0)
-        else:
-            df["qty"] = 0.0
-        if "taker_buy_volume" in df.columns or "taker_sell_volume" in df.columns:
-            buy_qty = pd.to_numeric(df.get("taker_buy_volume", 0), errors="coerce").fillna(0.0)
-            sell_qty = pd.to_numeric(df.get("taker_sell_volume", 0), errors="coerce").fillna(0.0)
-        elif "isBuyerMaker" in df.columns:
-            sell_qty = df["qty"].where(df["isBuyerMaker"].astype(str).str.lower().isin(["true", "1"]), 0.0)
-            buy_qty = df["qty"].where(~df["isBuyerMaker"].astype(str).str.lower().isin(["true", "1"]), 0.0)
-        else:
-            buy_qty = df["qty"] * 0.5
-            sell_qty = df["qty"] * 0.5
-        df["buy_qty"] = buy_qty
-        df["sell_qty"] = sell_qty
-        df = df.dropna(subset=["ts", "price"]).sort_values("ts")
-        if df.empty:
-            return None
-        df["sec"] = df["ts"].dt.floor("s")
-        sec = df.groupby("sec").agg(
-            close=("price", "last"),
-            volume=("qty", "sum"),
-            buy_qty=("buy_qty", "sum"),
-            sell_qty=("sell_qty", "sum"),
-        ).reset_index().rename(columns={"sec": "time"})
-        idx = pd.date_range(sec["time"].min(), sec["time"].max(), freq="s", tz="UTC")
-        sec = sec.set_index("time").reindex(idx)
-        sec["close"] = sec["close"].ffill()
-        for col in ["volume", "buy_qty", "sell_qty"]:
-            sec[col] = sec[col].fillna(0.0)
-        return sec.dropna(subset=["close"]).reset_index().rename(columns={"index": "time"})
+        return sec.reset_index().rename(columns={"index": "time"})
 
     def _filter_allows(self, signal, bars):
         import numpy as np
@@ -1770,6 +1734,155 @@ class SecondChipStrategy(SecondNormalStrategy):
         if not filter_ok:
             return {**base, "signal": None, "reason": "chip_filter", "blocked_signal": signal, "chip_breakout": breakout, "chip_filter_reason": filter_reason}
         return {**base, "signal": signal, "reason": "second_chip_reversal", "chip_breakout": breakout}
+
+
+class SecondRangeBreakoutConfirmStrategy(SecondNormalStrategy):
+    """Second-level range breakout continuation with a causal confirmation window."""
+
+    def __init__(self, strategy_id, cfg):
+        super().__init__(strategy_id, cfg)
+        self.lookback_sec = int(cfg.get("second_range_lookback_sec", cfg.get("second_lookback_sec", 1800)))
+        self.horizon_sec = int(cfg.get("second_range_horizon_sec", cfg.get("second_horizon_sec", 600)))
+        self.min_gap_sec = int(cfg.get("second_range_signal_gap_sec", cfg.get("second_min_gap_sec", self.horizon_sec)))
+        self.z_entry = float(cfg.get("second_range_z_entry", 2.2))
+        self.confirm_sec = int(cfg.get("second_range_confirm_sec", 60))
+        self.hold_z = float(cfg.get("second_range_hold_z", 1.0))
+        self.min_hold_ratio = float(cfg.get("second_range_min_hold_ratio", 0.75))
+        self.pre_slope_sec = int(cfg.get("second_range_pre_slope_sec", 300))
+        self.confirm_slope_sec = int(cfg.get("second_range_confirm_slope_sec", self.confirm_sec))
+        self.min_pre_slope_bps = float(cfg.get("second_range_min_pre_slope_bps", 8.0))
+        self.min_confirm_slope_bps = float(cfg.get("second_range_min_confirm_slope_bps", 4.0))
+        self.min_flow_imbalance = float(cfg.get("second_range_min_flow_imbalance", 0.12))
+        self.min_confirm_flow_imbalance = float(cfg.get("second_range_min_confirm_flow_imbalance", 0.08))
+        self.min_volume_ratio = float(cfg.get("second_range_min_volume_ratio", 0.45))
+        self.min_volatility_ratio = float(cfg.get("second_range_min_volatility_ratio", 0.55))
+        self.max_age_beyond_sec = int(cfg.get("second_range_max_age_beyond_sec", 180))
+        self.interval_min = max(1, int(round(self.horizon_sec / 60)))
+
+    def predict(self, df5=None):
+        import numpy as np
+        import pandas as pd
+
+        bars = self._load_seconds()
+        warmup = self.lookback_sec + self.confirm_sec + max(self.pre_slope_sec, self.confirm_slope_sec) + 5
+        if bars is None or len(bars) < warmup:
+            return None
+        close = np.asarray(bars["close"].astype(float).values, dtype=float)
+        volume = np.asarray(bars["volume"].astype(float).values, dtype=float)
+        buy_qty = np.asarray(bars["buy_qty"].astype(float).values, dtype=float)
+        sell_qty = np.asarray(bars["sell_qty"].astype(float).values, dtype=float)
+        idx = len(close) - 1
+        break_idx = idx - self.confirm_sec
+        pre = max(30, self.pre_slope_sec)
+        conf = max(10, self.confirm_slope_sec)
+        if break_idx - max(self.lookback_sec, pre) < 0:
+            return None
+
+        look = close[break_idx - self.lookback_sec : break_idx]
+        mu = float(np.nanmean(look))
+        sigma = float(np.nanstd(look, ddof=1))
+        signal_time = bars["time"].iloc[-1]
+        base = {
+            "strategy_id": self.id,
+            "confidence": 0,
+            "avg_prob": None,
+            "rsi_value": None,
+            "high_conf": False,
+            "agree": True,
+            "vol_ok": True,
+            "session_gate_ok": True,
+            "rsi_extreme": True,
+            "lookback_sec": self.lookback_sec,
+            "horizon_sec": self.horizon_sec,
+            "interval_min": self.interval_min,
+            "duration": self.interval_min,
+            "min_gap_sec": self.min_gap_sec,
+            "z_entry": self.z_entry,
+            "confirm_sec": self.confirm_sec,
+            "time": signal_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "model_type": "second_range_breakout_confirm",
+            "bypass_entry_timing": True,
+        }
+        if not np.isfinite(mu) or not np.isfinite(sigma) or sigma <= 1e-12:
+            return {**base, "signal": None, "reason": "range_sigma_invalid"}
+
+        break_z = (close[break_idx] - mu) / sigma
+        if not np.isfinite(break_z) or abs(break_z) < self.z_entry:
+            return {**base, "signal": None, "reason": "inside_range", "range_z": round(float(break_z), 4)}
+        side = 1.0 if break_z > 0 else -1.0
+        signal = "UP" if side > 0 else "DOWN"
+
+        age = 0
+        for j in range(break_idx, max(-1, break_idx - self.max_age_beyond_sec), -1):
+            zj = (close[j] - mu) / sigma
+            if abs(zj) >= self.z_entry and np.sign(zj) == np.sign(break_z):
+                age += 1
+            else:
+                break
+        if self.max_age_beyond_sec > 0 and age > self.max_age_beyond_sec:
+            return {**base, "signal": None, "reason": "breakout_too_old", "blocked_signal": signal, "beyond_age_sec": age}
+
+        pre_slope_bps = (close[break_idx] / close[break_idx - pre] - 1.0) * 10000.0
+        aligned_pre_slope = side * pre_slope_bps
+        buy_pre = float(np.nansum(buy_qty[break_idx - pre + 1 : break_idx + 1]))
+        sell_pre = float(np.nansum(sell_qty[break_idx - pre + 1 : break_idx + 1]))
+        flow = (buy_pre - sell_pre) / max(buy_pre + sell_pre, 1e-12)
+        aligned_flow = side * flow
+        if aligned_pre_slope < self.min_pre_slope_bps:
+            return {**base, "signal": None, "reason": "pre_slope_not_aligned", "blocked_signal": signal, "aligned_pre_slope_bps": round(float(aligned_pre_slope), 4)}
+        if aligned_flow < self.min_flow_imbalance:
+            return {**base, "signal": None, "reason": "pre_flow_not_aligned", "blocked_signal": signal, "aligned_flow_imbalance": round(float(aligned_flow), 4)}
+
+        vol_pre = float(np.nansum(volume[break_idx - pre + 1 : break_idx + 1]))
+        vol_ref = float(pd.Series(volume[max(0, break_idx - self.lookback_sec) : break_idx + 1]).mean() * pre)
+        vol_ratio = vol_pre / max(vol_ref, 1e-12)
+        ret = np.abs(np.diff(np.log(close[max(0, break_idx - self.lookback_sec) : break_idx + 1]), prepend=np.nan))
+        abs_ref = float(np.nanmean(ret))
+        abs_pre = float(np.nanmean(np.abs(np.diff(np.log(close[break_idx - pre : break_idx + 1]), prepend=np.nan))))
+        volatility_ratio = abs_pre / max(abs_ref, 1e-12)
+        if not np.isfinite(vol_ratio) or vol_ratio < self.min_volume_ratio:
+            return {**base, "signal": None, "reason": "volume_ratio_low", "blocked_signal": signal, "pre_volume_ratio": round(float(vol_ratio), 4)}
+        if not np.isfinite(volatility_ratio) or volatility_ratio < self.min_volatility_ratio:
+            return {**base, "signal": None, "reason": "volatility_ratio_low", "blocked_signal": signal, "pre_volatility_ratio": round(float(volatility_ratio), 4)}
+
+        path_z = side * ((close[break_idx + 1 : idx + 1] - mu) / sigma)
+        hold_ratio = float(np.mean(path_z >= self.hold_z)) if len(path_z) else 0.0
+        if hold_ratio < self.min_hold_ratio:
+            return {**base, "signal": None, "reason": "confirm_hold_failed", "blocked_signal": signal, "hold_ratio": round(hold_ratio, 4)}
+
+        conf_start = max(break_idx, idx - conf)
+        confirm_slope_bps = (close[idx] / close[conf_start] - 1.0) * 10000.0
+        aligned_confirm_slope = side * confirm_slope_bps
+        buy_conf = float(np.nansum(buy_qty[conf_start + 1 : idx + 1]))
+        sell_conf = float(np.nansum(sell_qty[conf_start + 1 : idx + 1]))
+        confirm_flow = (buy_conf - sell_conf) / max(buy_conf + sell_conf, 1e-12)
+        aligned_confirm_flow = side * confirm_flow
+        if aligned_confirm_slope < self.min_confirm_slope_bps:
+            return {**base, "signal": None, "reason": "confirm_slope_not_aligned", "blocked_signal": signal, "aligned_confirm_slope_bps": round(float(aligned_confirm_slope), 4)}
+        if aligned_confirm_flow < self.min_confirm_flow_imbalance:
+            return {**base, "signal": None, "reason": "confirm_flow_not_aligned", "blocked_signal": signal, "aligned_confirm_flow_imbalance": round(float(aligned_confirm_flow), 4)}
+
+        confidence = min(95.0, 45.0 + abs(float(break_z)) * 7.0 + aligned_confirm_slope)
+        return {
+            **base,
+            "signal": signal,
+            "reason": "second_range_breakout_confirm",
+            "confidence": round(float(confidence), 1),
+            "high_conf": True,
+            "price": round(float(close[idx]), 4),
+            "break_time": bars["time"].iloc[break_idx].strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "break_z": round(float(break_z), 4),
+            "confirm_z": round(float((close[idx] - mu) / sigma), 4),
+            "hold_ratio": round(float(hold_ratio), 4),
+            "pre_slope_bps": round(float(pre_slope_bps), 4),
+            "confirm_slope_bps": round(float(confirm_slope_bps), 4),
+            "pre_flow_imbalance": round(float(flow), 4),
+            "confirm_flow_imbalance": round(float(confirm_flow), 4),
+            "pre_volume_ratio": round(float(vol_ratio), 4),
+            "pre_volatility_ratio": round(float(volatility_ratio), 4),
+            "range_mean": round(float(mu), 4),
+            "range_sigma_bps": round(float(sigma / close[break_idx] * 10000.0), 4),
+        }
 
 
 class SecondTrendPullbackDownStrategy(SecondNormalStrategy):
@@ -2751,6 +2864,8 @@ def _make_strategy(sid, cfg):
         return SecondNormalVwConfirmStrategy(sid, cfg)
     if cfg.get("model_type") == "second_chip":
         return SecondChipStrategy(sid, cfg)
+    if cfg.get("model_type") == "second_range_breakout_confirm":
+        return SecondRangeBreakoutConfirmStrategy(sid, cfg)
     if cfg.get("model_type") == "second_trend_pullback_down":
         return SecondTrendPullbackDownStrategy(sid, cfg)
     return Strategy(sid, cfg)
@@ -2760,7 +2875,7 @@ def build_strategies(config_map):
     return [
         _make_strategy(k, v)
         for k, v in config_map.items()
-        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal", "second_normal_vw_confirm", "second_chip", "second_trend_pullback_down") or k not in live_two_minute_ids)
+        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal", "second_normal_vw_confirm", "second_chip", "second_range_breakout_confirm", "second_trend_pullback_down") or k not in live_two_minute_ids)
     ]
 
 
@@ -2776,7 +2891,7 @@ def apply_trend_mode_switch(signals):
     blocker = trend_blockers[0]
     out = {}
     for strategy_id, row in signals.items():
-        if row.get("model_type") in ("second_normal", "second_normal_vw_confirm", "second_chip") and row.get("signal"):
+        if row.get("model_type") in ("second_normal", "second_normal_vw_confirm", "second_chip", "second_range_breakout_confirm") and row.get("signal"):
             blocked = dict(row)
             blocked["blocked_signal"] = blocked.get("signal")
             blocked["blocked_confidence"] = blocked.get("confidence")
@@ -2789,6 +2904,15 @@ def apply_trend_mode_switch(signals):
         else:
             out[strategy_id] = row
     return out
+
+
+def apply_incident_mode_filter(signals, config_map):
+    try:
+        bars = load_second_bars(SECOND_TRADES_FILE, include_shards=True)
+    except Exception as exc:
+        print(f"[Signal] incident filter skipped, second data load failed: {exc}")
+        return signals
+    return apply_incident_filter_to_live_signals(bars, signals, config_map)
 
 configs = load_config()
 configs_mtime = file_mtime(CONFIG_FILE)
@@ -2893,6 +3017,7 @@ while True:
                     f" RSI={fmt_num(r.get('rsi_value')):.0f} {status_text(r)}"
                 )
         signals = apply_trend_mode_switch(signals)
+        signals = apply_incident_mode_filter(signals, configs)
         for _, strategy in live_two_minute_strategies:
             if configs.get(strategy.id, {}).get("model_type") == "poc_normal": continue
             r = strategy.predict(live_1m)

@@ -1,0 +1,1834 @@
+{
+  "generatedAt": "2026-06-22T03:48:46.307574+00:00",
+  "baseline": {
+    "trades": 166,
+    "wins": 107,
+    "losses": 59,
+    "winRate": 64.46,
+    "tradesPerDay": 19.81,
+    "maxLoss": 4,
+    "amount": 5.0,
+    "payoutRate": 0.8,
+    "pnl": 133.0,
+    "first": "2026-06-13T19:40:38+00:00",
+    "last": "2026-06-21T22:17:58+00:00"
+  },
+  "quantiles": {
+    "vol1_p99": 24.557159999999914,
+    "vol1_p999": 117.87518400000734,
+    "vol10_p99": 179.3780799999998,
+    "vol10_p999": 708.5296000000076,
+    "vol30_p99": 497.2899199999999,
+    "vol30_p999": 1605.5405040000376,
+    "vol60_p99": 954.7612399999978,
+    "vol60_p999": 2834.0168240001035,
+    "abs_move10_p99": 7.236800524345308,
+    "abs_move10_p999": 15.09039874196162,
+    "abs_move30_p99": 13.012177840314257,
+    "abs_move30_p999": 27.392212359694
+  },
+  "bestByPnl": [
+    {
+      "name": "sustain_m10_p99_imb0.8",
+      "cooldownSec": 10,
+      "buyShockSeconds": 47,
+      "sellShockSeconds": 42,
+      "blocked": 4,
+      "blockedWins": 2,
+      "blockedLosses": 2,
+      "blockedLossRate": 50.0,
+      "filtered": {
+        "trades": 162,
+        "wins": 105,
+        "losses": 57,
+        "winRate": 64.81,
+        "tradesPerDay": 19.33,
+        "maxLoss": 3,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 135.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": -4,
+        "winRate": 0.35,
+        "pnl": 2.0,
+        "maxLoss": -1
+      },
+      "score": 10.3
+    },
+    {
+      "name": "sustain_m12_p99_imb0.8",
+      "cooldownSec": 10,
+      "buyShockSeconds": 33,
+      "sellShockSeconds": 22,
+      "blocked": 2,
+      "blockedWins": 1,
+      "blockedLosses": 1,
+      "blockedLossRate": 50.0,
+      "filtered": {
+        "trades": 164,
+        "wins": 106,
+        "losses": 58,
+        "winRate": 64.63,
+        "tradesPerDay": 19.57,
+        "maxLoss": 3,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 134.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": -2,
+        "winRate": 0.17,
+        "pnl": 1.0,
+        "maxLoss": -1
+      },
+      "score": 9.15
+    },
+    {
+      "name": "spike_r5_p99_c2",
+      "cooldownSec": 30,
+      "buyShockSeconds": 83,
+      "sellShockSeconds": 66,
+      "blocked": 9,
+      "blockedWins": 5,
+      "blockedLosses": 4,
+      "blockedLossRate": 44.44,
+      "filtered": {
+        "trades": 157,
+        "wins": 102,
+        "losses": 55,
+        "winRate": 64.97,
+        "tradesPerDay": 18.73,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T21:41:22+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": -9,
+        "winRate": 0.51,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p99_c4",
+      "cooldownSec": 10,
+      "buyShockSeconds": 1,
+      "sellShockSeconds": 5,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p99_c4",
+      "cooldownSec": 20,
+      "buyShockSeconds": 1,
+      "sellShockSeconds": 5,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p99_c4",
+      "cooldownSec": 30,
+      "buyShockSeconds": 1,
+      "sellShockSeconds": 5,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p99_c4",
+      "cooldownSec": 10,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p99_c4",
+      "cooldownSec": 20,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p99_c4",
+      "cooldownSec": 30,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r12_p99_c3",
+      "cooldownSec": 10,
+      "buyShockSeconds": 2,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r12_p99_c3",
+      "cooldownSec": 20,
+      "buyShockSeconds": 2,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r12_p99_c3",
+      "cooldownSec": 30,
+      "buyShockSeconds": 2,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r12_p99_c4",
+      "cooldownSec": 10,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r12_p99_c4",
+      "cooldownSec": 20,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r12_p99_c4",
+      "cooldownSec": 30,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r3_p999_c4",
+      "cooldownSec": 10,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 1,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r3_p999_c4",
+      "cooldownSec": 20,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 1,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r3_p999_c4",
+      "cooldownSec": 30,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 1,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p999_c3",
+      "cooldownSec": 10,
+      "buyShockSeconds": 9,
+      "sellShockSeconds": 6,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p999_c3",
+      "cooldownSec": 20,
+      "buyShockSeconds": 9,
+      "sellShockSeconds": 6,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p999_c3",
+      "cooldownSec": 30,
+      "buyShockSeconds": 9,
+      "sellShockSeconds": 6,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p999_c4",
+      "cooldownSec": 10,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p999_c4",
+      "cooldownSec": 20,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p999_c4",
+      "cooldownSec": 30,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p999_c3",
+      "cooldownSec": 10,
+      "buyShockSeconds": 3,
+      "sellShockSeconds": 2,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p999_c3",
+      "cooldownSec": 20,
+      "buyShockSeconds": 3,
+      "sellShockSeconds": 2,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p999_c3",
+      "cooldownSec": 30,
+      "buyShockSeconds": 3,
+      "sellShockSeconds": 2,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p999_c4",
+      "cooldownSec": 10,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p999_c4",
+      "cooldownSec": 20,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p999_c4",
+      "cooldownSec": 30,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    }
+  ],
+  "bestByLossSelectivity": [
+    {
+      "name": "sustain_m10_p99_imb0.8",
+      "cooldownSec": 10,
+      "buyShockSeconds": 47,
+      "sellShockSeconds": 42,
+      "blocked": 4,
+      "blockedWins": 2,
+      "blockedLosses": 2,
+      "blockedLossRate": 50.0,
+      "filtered": {
+        "trades": 162,
+        "wins": 105,
+        "losses": 57,
+        "winRate": 64.81,
+        "tradesPerDay": 19.33,
+        "maxLoss": 3,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 135.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": -4,
+        "winRate": 0.35,
+        "pnl": 2.0,
+        "maxLoss": -1
+      },
+      "score": 10.3
+    },
+    {
+      "name": "sustain_m12_p99_imb0.8",
+      "cooldownSec": 10,
+      "buyShockSeconds": 33,
+      "sellShockSeconds": 22,
+      "blocked": 2,
+      "blockedWins": 1,
+      "blockedLosses": 1,
+      "blockedLossRate": 50.0,
+      "filtered": {
+        "trades": 164,
+        "wins": 106,
+        "losses": 58,
+        "winRate": 64.63,
+        "tradesPerDay": 19.57,
+        "maxLoss": 3,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 134.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": -2,
+        "winRate": 0.17,
+        "pnl": 1.0,
+        "maxLoss": -1
+      },
+      "score": 9.15
+    },
+    {
+      "name": "sustain_m12_p99_imb0.8",
+      "cooldownSec": 20,
+      "buyShockSeconds": 33,
+      "sellShockSeconds": 22,
+      "blocked": 3,
+      "blockedWins": 2,
+      "blockedLosses": 1,
+      "blockedLossRate": 33.33,
+      "filtered": {
+        "trades": 163,
+        "wins": 105,
+        "losses": 58,
+        "winRate": 64.42,
+        "tradesPerDay": 19.45,
+        "maxLoss": 3,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 130.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": -3,
+        "winRate": -0.04,
+        "pnl": -3.0,
+        "maxLoss": -1
+      },
+      "score": 4.55
+    },
+    {
+      "name": "sustain_m10_p99_imb0.8",
+      "cooldownSec": 60,
+      "buyShockSeconds": 47,
+      "sellShockSeconds": 42,
+      "blocked": 8,
+      "blockedWins": 5,
+      "blockedLosses": 3,
+      "blockedLossRate": 37.5,
+      "filtered": {
+        "trades": 158,
+        "wins": 102,
+        "losses": 56,
+        "winRate": 64.56,
+        "tradesPerDay": 18.85,
+        "maxLoss": 3,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 128.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": -8,
+        "winRate": 0.1,
+        "pnl": -5.0,
+        "maxLoss": -1
+      },
+      "score": 2.25
+    },
+    {
+      "name": "sustain_m8_p99_imb0.8",
+      "cooldownSec": 10,
+      "buyShockSeconds": 89,
+      "sellShockSeconds": 66,
+      "blocked": 6,
+      "blockedWins": 4,
+      "blockedLosses": 2,
+      "blockedLossRate": 33.33,
+      "filtered": {
+        "trades": 160,
+        "wins": 103,
+        "losses": 57,
+        "winRate": 64.38,
+        "tradesPerDay": 19.09,
+        "maxLoss": 3,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 127.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": -6,
+        "winRate": -0.08,
+        "pnl": -6.0,
+        "maxLoss": -1
+      },
+      "score": 1.1
+    },
+    {
+      "name": "sustain_m10_p99_imb0.7",
+      "cooldownSec": 10,
+      "buyShockSeconds": 137,
+      "sellShockSeconds": 85,
+      "blocked": 15,
+      "blockedWins": 9,
+      "blockedLosses": 6,
+      "blockedLossRate": 40.0,
+      "filtered": {
+        "trades": 151,
+        "wins": 98,
+        "losses": 53,
+        "winRate": 64.9,
+        "tradesPerDay": 18.02,
+        "maxLoss": 3,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 127.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": -15,
+        "winRate": 0.44,
+        "pnl": -6.0,
+        "maxLoss": -1
+      },
+      "score": 1.1
+    },
+    {
+      "name": "spike_r5_p99_c2",
+      "cooldownSec": 30,
+      "buyShockSeconds": 83,
+      "sellShockSeconds": 66,
+      "blocked": 9,
+      "blockedWins": 5,
+      "blockedLosses": 4,
+      "blockedLossRate": 44.44,
+      "filtered": {
+        "trades": 157,
+        "wins": 102,
+        "losses": 55,
+        "winRate": 64.97,
+        "tradesPerDay": 18.73,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T21:41:22+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": -9,
+        "winRate": 0.51,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p99_c4",
+      "cooldownSec": 10,
+      "buyShockSeconds": 1,
+      "sellShockSeconds": 5,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p99_c4",
+      "cooldownSec": 20,
+      "buyShockSeconds": 1,
+      "sellShockSeconds": 5,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p99_c4",
+      "cooldownSec": 30,
+      "buyShockSeconds": 1,
+      "sellShockSeconds": 5,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p99_c4",
+      "cooldownSec": 10,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p99_c4",
+      "cooldownSec": 20,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p99_c4",
+      "cooldownSec": 30,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r12_p99_c3",
+      "cooldownSec": 10,
+      "buyShockSeconds": 2,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r12_p99_c3",
+      "cooldownSec": 20,
+      "buyShockSeconds": 2,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r12_p99_c3",
+      "cooldownSec": 30,
+      "buyShockSeconds": 2,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r12_p99_c4",
+      "cooldownSec": 10,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r12_p99_c4",
+      "cooldownSec": 20,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r12_p99_c4",
+      "cooldownSec": 30,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r3_p999_c4",
+      "cooldownSec": 10,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 1,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r3_p999_c4",
+      "cooldownSec": 20,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 1,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r3_p999_c4",
+      "cooldownSec": 30,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 1,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p999_c3",
+      "cooldownSec": 10,
+      "buyShockSeconds": 9,
+      "sellShockSeconds": 6,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p999_c3",
+      "cooldownSec": 20,
+      "buyShockSeconds": 9,
+      "sellShockSeconds": 6,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p999_c3",
+      "cooldownSec": 30,
+      "buyShockSeconds": 9,
+      "sellShockSeconds": 6,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p999_c4",
+      "cooldownSec": 10,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p999_c4",
+      "cooldownSec": 20,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r5_p999_c4",
+      "cooldownSec": 30,
+      "buyShockSeconds": 0,
+      "sellShockSeconds": 0,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p999_c3",
+      "cooldownSec": 10,
+      "buyShockSeconds": 3,
+      "sellShockSeconds": 2,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    },
+    {
+      "name": "spike_r8_p999_c3",
+      "cooldownSec": 20,
+      "buyShockSeconds": 3,
+      "sellShockSeconds": 2,
+      "blocked": 0,
+      "blockedWins": 0,
+      "blockedLosses": 0,
+      "blockedLossRate": 0.0,
+      "filtered": {
+        "trades": 166,
+        "wins": 107,
+        "losses": 59,
+        "winRate": 64.46,
+        "tradesPerDay": 19.81,
+        "maxLoss": 4,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 133.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-21T22:17:58+00:00"
+      },
+      "delta": {
+        "trades": 0,
+        "winRate": 0.0,
+        "pnl": 0.0,
+        "maxLoss": 0
+      },
+      "score": 0.0
+    }
+  ]
+}

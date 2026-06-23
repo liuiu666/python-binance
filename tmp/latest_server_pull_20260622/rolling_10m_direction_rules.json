@@ -1,0 +1,323 @@
+{
+  "sample": {
+    "start": "2026-06-16T12:49:17+00:00",
+    "end": "2026-06-22T12:47:04+00:00",
+    "rows": 518268,
+    "sampledRows": 1911
+  },
+  "conditions": {
+    "inside_core_z_abs_le_1": {
+      "n": 871,
+      "upRate": 49.14,
+      "downRate": 50.63,
+      "avgFutBps": -0.7447,
+      "medAbsBps": 8.7105
+    },
+    "upper_edge_z_1_to_2": {
+      "n": 408,
+      "upRate": 48.53,
+      "downRate": 51.47,
+      "avgFutBps": -1.2715,
+      "medAbsBps": 8.584
+    },
+    "lower_edge_z_-2_to_-1": {
+      "n": 368,
+      "upRate": 54.08,
+      "downRate": 45.65,
+      "avgFutBps": 1.5701,
+      "medAbsBps": 8.0351
+    },
+    "breakout_up_z_gt_2": {
+      "n": 112,
+      "upRate": 49.11,
+      "downRate": 50.89,
+      "avgFutBps": -1.2024,
+      "medAbsBps": 7.9502
+    },
+    "breakout_down_z_lt_-2": {
+      "n": 152,
+      "upRate": 53.95,
+      "downRate": 46.05,
+      "avgFutBps": 2.3096,
+      "medAbsBps": 9.6225
+    },
+    "trend_up_core": {
+      "n": 82,
+      "upRate": 40.24,
+      "downRate": 59.76,
+      "avgFutBps": -4.5746,
+      "medAbsBps": 8.9315
+    },
+    "trend_down_core": {
+      "n": 87,
+      "upRate": 51.72,
+      "downRate": 48.28,
+      "avgFutBps": 0.0936,
+      "medAbsBps": 7.7292
+    },
+    "upper_reversion": {
+      "n": 67,
+      "upRate": 49.25,
+      "downRate": 50.75,
+      "avgFutBps": -0.1349,
+      "medAbsBps": 7.5798
+    },
+    "lower_reversion": {
+      "n": 57,
+      "upRate": 49.12,
+      "downRate": 49.12,
+      "avgFutBps": 3.0784,
+      "medAbsBps": 7.3354
+    },
+    "upper_break_continue": {
+      "n": 97,
+      "upRate": 52.58,
+      "downRate": 47.42,
+      "avgFutBps": -0.6803,
+      "medAbsBps": 7.9344
+    },
+    "lower_break_continue": {
+      "n": 131,
+      "upRate": 51.91,
+      "downRate": 48.09,
+      "avgFutBps": 2.0615,
+      "medAbsBps": 9.5125
+    },
+    "upper_fake_break": {
+      "n": 10,
+      "upRate": 50.0,
+      "downRate": 50.0,
+      "avgFutBps": -2.6895,
+      "medAbsBps": 4.5772
+    },
+    "lower_fake_break": {
+      "n": 20,
+      "upRate": 45.0,
+      "downRate": 55.0,
+      "avgFutBps": 0.258,
+      "medAbsBps": 8.483
+    }
+  },
+  "topRules": [
+    {
+      "side": "UP",
+      "zMin": 1,
+      "slope1Min": 5,
+      "flow1Min": 0.08,
+      "n": 125,
+      "upRate": 53.6,
+      "downRate": 46.4,
+      "avgFutBps": 0.6641,
+      "medAbsBps": 9.0952
+    },
+    {
+      "side": "UP",
+      "zMin": 1,
+      "slope1Min": 0,
+      "flow1Min": 0.08,
+      "n": 305,
+      "upRate": 53.44,
+      "downRate": 46.56,
+      "avgFutBps": -0.0859,
+      "medAbsBps": 8.262
+    },
+    {
+      "side": "UP",
+      "zMin": 1,
+      "slope1Min": 5,
+      "flow1Min": 0.03,
+      "n": 131,
+      "upRate": 53.44,
+      "downRate": 46.56,
+      "avgFutBps": 0.6495,
+      "medAbsBps": 9.0924
+    },
+    {
+      "side": "UP",
+      "zMin": 1,
+      "slope1Min": 5,
+      "flow1Min": 0.12,
+      "n": 120,
+      "upRate": 53.33,
+      "downRate": 46.67,
+      "avgFutBps": 0.6478,
+      "medAbsBps": 9.7183
+    },
+    {
+      "side": "UP",
+      "zMin": 1,
+      "slope1Min": 0,
+      "flow1Min": 0.12,
+      "n": 286,
+      "upRate": 53.15,
+      "downRate": 46.85,
+      "avgFutBps": -0.0111,
+      "medAbsBps": 8.4237
+    },
+    {
+      "side": "UP",
+      "zMin": 0.5,
+      "slope1Min": 5,
+      "flow1Min": 0.03,
+      "n": 155,
+      "upRate": 52.9,
+      "downRate": 47.1,
+      "avgFutBps": 0.4481,
+      "medAbsBps": 8.6711
+    },
+    {
+      "side": "UP",
+      "zMin": 0.5,
+      "slope1Min": 5,
+      "flow1Min": 0.12,
+      "n": 140,
+      "upRate": 52.86,
+      "downRate": 47.14,
+      "avgFutBps": 0.2807,
+      "medAbsBps": 9.7183
+    },
+    {
+      "side": "UP",
+      "zMin": 1,
+      "slope1Min": 0,
+      "flow1Min": 0.05,
+      "n": 318,
+      "upRate": 52.83,
+      "downRate": 47.17,
+      "avgFutBps": -0.1651,
+      "medAbsBps": 8.3129
+    },
+    {
+      "side": "UP",
+      "zMin": 0.5,
+      "slope1Min": 0,
+      "flow1Min": 0.08,
+      "n": 375,
+      "upRate": 52.8,
+      "downRate": 47.2,
+      "avgFutBps": -0.3803,
+      "medAbsBps": 8.1207
+    },
+    {
+      "side": "UP",
+      "zMin": 0.5,
+      "slope1Min": 5,
+      "flow1Min": 0.08,
+      "n": 146,
+      "upRate": 52.74,
+      "downRate": 47.26,
+      "avgFutBps": 0.3041,
+      "medAbsBps": 9.0938
+    },
+    {
+      "side": "UP",
+      "zMin": 0.5,
+      "slope1Min": 0,
+      "flow1Min": 0.12,
+      "n": 351,
+      "upRate": 52.71,
+      "downRate": 47.29,
+      "avgFutBps": -0.2781,
+      "medAbsBps": 8.1779
+    },
+    {
+      "side": "UP",
+      "zMin": 1,
+      "slope1Min": 5,
+      "flow1Min": 0.05,
+      "n": 129,
+      "upRate": 52.71,
+      "downRate": 47.29,
+      "avgFutBps": 0.466,
+      "medAbsBps": 9.0924
+    },
+    {
+      "side": "UP",
+      "zMin": 0.5,
+      "slope1Min": 5,
+      "flow1Min": 0.05,
+      "n": 152,
+      "upRate": 52.63,
+      "downRate": 47.37,
+      "avgFutBps": 0.3344,
+      "medAbsBps": 8.8818
+    },
+    {
+      "side": "UP",
+      "zMin": 1,
+      "slope1Min": 0,
+      "flow1Min": 0.03,
+      "n": 325,
+      "upRate": 52.62,
+      "downRate": 47.38,
+      "avgFutBps": -0.2045,
+      "medAbsBps": 8.3638
+    },
+    {
+      "side": "UP",
+      "zMin": 1,
+      "slope1Min": 5,
+      "flow1Min": 0,
+      "n": 135,
+      "upRate": 52.59,
+      "downRate": 47.41,
+      "avgFutBps": 0.0636,
+      "medAbsBps": 9.0952
+    },
+    {
+      "side": "UP",
+      "zMin": 0.5,
+      "slope1Min": 0,
+      "flow1Min": 0.05,
+      "n": 390,
+      "upRate": 52.56,
+      "downRate": 47.44,
+      "avgFutBps": -0.3579,
+      "medAbsBps": 8.1493
+    },
+    {
+      "side": "UP",
+      "zMin": 2,
+      "slope1Min": 3,
+      "flow1Min": 0.08,
+      "n": 82,
+      "upRate": 52.44,
+      "downRate": 47.56,
+      "avgFutBps": -0.1456,
+      "medAbsBps": 8.3189
+    },
+    {
+      "side": "UP",
+      "zMin": 0.5,
+      "slope1Min": 5,
+      "flow1Min": 0,
+      "n": 159,
+      "upRate": 52.2,
+      "downRate": 47.8,
+      "avgFutBps": -0.0443,
+      "medAbsBps": 9.0924
+    },
+    {
+      "side": "UP",
+      "zMin": 0.5,
+      "slope1Min": 0,
+      "flow1Min": 0.03,
+      "n": 403,
+      "upRate": 52.11,
+      "downRate": 47.89,
+      "avgFutBps": -0.3621,
+      "medAbsBps": 8.1207
+    },
+    {
+      "side": "UP",
+      "zMin": 0,
+      "slope1Min": 5,
+      "flow1Min": 0.03,
+      "n": 175,
+      "upRate": 52.0,
+      "downRate": 48.0,
+      "avgFutBps": 0.3239,
+      "medAbsBps": 8.6711
+    }
+  ]
+}

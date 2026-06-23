@@ -1,0 +1,646 @@
+{
+  "results": [
+    {
+      "name": "current_stable",
+      "params": {
+        "tailPct": 0.2,
+        "etaTargetBps": 2,
+        "etaMaxWaitSec": 45,
+        "upReversalConfirmBps": 1.5,
+        "upReversalConfirmMaxSec": 45,
+        "incident": "cur",
+        "blocked": 2
+      },
+      "score": 53.4962,
+      "metrics": {
+        "all": {
+          "trades": 35,
+          "wins": 22,
+          "losses": 13,
+          "winRate": 62.86,
+          "tradesPerDay": 9.84,
+          "maxLoss": 3,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 69.0,
+          "first": "2026-06-14T08:15:55+00:00",
+          "last": "2026-06-17T14:15:15+00:00"
+        },
+        "beforeLast24h": {
+          "trades": 24,
+          "wins": 14,
+          "losses": 10,
+          "winRate": 58.33,
+          "tradesPerDay": 9.38,
+          "maxLoss": 3,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 18.0,
+          "first": "2026-06-14T08:15:55+00:00",
+          "last": "2026-06-16T14:31:46+00:00"
+        },
+        "last24h": {
+          "trades": 11,
+          "wins": 8,
+          "losses": 3,
+          "winRate": 72.73,
+          "tradesPerDay": 11.0,
+          "maxLoss": 1,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 51.0,
+          "first": "2026-06-16T18:03:42+00:00",
+          "last": "2026-06-17T14:15:15+00:00"
+        },
+        "thirds": [
+          {
+            "trades": 8,
+            "winRate": 50.0,
+            "tradesPerDay": 6.74,
+            "maxLoss": 1,
+            "pnl": -12.0
+          },
+          {
+            "trades": 14,
+            "winRate": 57.14,
+            "tradesPerDay": 11.8,
+            "maxLoss": 3,
+            "pnl": 6.0
+          },
+          {
+            "trades": 13,
+            "winRate": 76.92,
+            "tradesPerDay": 10.96,
+            "maxLoss": 1,
+            "pnl": 75.0
+          }
+        ],
+        "byUtcDay": [
+          {
+            "day": "2026-06-14",
+            "trades": 6,
+            "winRate": 50.0,
+            "maxLoss": 1,
+            "pnl": -9.0
+          },
+          {
+            "day": "2026-06-15",
+            "trades": 12,
+            "winRate": 66.67,
+            "maxLoss": 3,
+            "pnl": 36.0
+          },
+          {
+            "day": "2026-06-16",
+            "trades": 9,
+            "winRate": 66.67,
+            "maxLoss": 3,
+            "pnl": 27.0
+          },
+          {
+            "day": "2026-06-17",
+            "trades": 8,
+            "winRate": 62.5,
+            "maxLoss": 1,
+            "pnl": 15.0
+          }
+        ]
+      }
+    },
+    {
+      "name": "candidate_stable_quality",
+      "params": {
+        "tailPct": 0.22,
+        "etaTargetBps": 2,
+        "etaMaxWaitSec": 30,
+        "upReversalConfirmBps": 2.5,
+        "upReversalConfirmMaxSec": 45,
+        "incident": "loose",
+        "blocked": 4
+      },
+      "score": 74.1957,
+      "metrics": {
+        "all": {
+          "trades": 26,
+          "wins": 21,
+          "losses": 5,
+          "winRate": 80.77,
+          "tradesPerDay": 7.31,
+          "maxLoss": 1,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 177.0,
+          "first": "2026-06-14T06:11:46+00:00",
+          "last": "2026-06-17T14:15:13+00:00"
+        },
+        "beforeLast24h": {
+          "trades": 18,
+          "wins": 14,
+          "losses": 4,
+          "winRate": 77.78,
+          "tradesPerDay": 7.04,
+          "maxLoss": 1,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 108.0,
+          "first": "2026-06-14T06:11:46+00:00",
+          "last": "2026-06-16T14:30:21+00:00"
+        },
+        "last24h": {
+          "trades": 8,
+          "wins": 7,
+          "losses": 1,
+          "winRate": 87.5,
+          "tradesPerDay": 8.0,
+          "maxLoss": 1,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 69.0,
+          "first": "2026-06-16T19:15:46+00:00",
+          "last": "2026-06-17T14:15:13+00:00"
+        },
+        "thirds": [
+          {
+            "trades": 7,
+            "winRate": 71.43,
+            "tradesPerDay": 5.9,
+            "maxLoss": 1,
+            "pnl": 30.0
+          },
+          {
+            "trades": 9,
+            "winRate": 77.78,
+            "tradesPerDay": 7.59,
+            "maxLoss": 1,
+            "pnl": 54.0
+          },
+          {
+            "trades": 10,
+            "winRate": 90.0,
+            "tradesPerDay": 8.43,
+            "maxLoss": 1,
+            "pnl": 93.0
+          }
+        ],
+        "byUtcDay": [
+          {
+            "day": "2026-06-14",
+            "trades": 5,
+            "winRate": 60.0,
+            "maxLoss": 1,
+            "pnl": 6.0
+          },
+          {
+            "day": "2026-06-15",
+            "trades": 6,
+            "winRate": 100.0,
+            "maxLoss": 0,
+            "pnl": 72.0
+          },
+          {
+            "day": "2026-06-16",
+            "trades": 9,
+            "winRate": 77.78,
+            "maxLoss": 1,
+            "pnl": 54.0
+          },
+          {
+            "day": "2026-06-17",
+            "trades": 6,
+            "winRate": 83.33,
+            "maxLoss": 1,
+            "pnl": 45.0
+          }
+        ]
+      }
+    },
+    {
+      "name": "candidate_stable_balance",
+      "params": {
+        "tailPct": 0.22,
+        "etaTargetBps": 2,
+        "etaMaxWaitSec": 60,
+        "upReversalConfirmBps": 2.5,
+        "upReversalConfirmMaxSec": 45,
+        "incident": "loose",
+        "blocked": 4
+      },
+      "score": 70.5024,
+      "metrics": {
+        "all": {
+          "trades": 42,
+          "wins": 31,
+          "losses": 11,
+          "winRate": 73.81,
+          "tradesPerDay": 11.8,
+          "maxLoss": 2,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 207.0,
+          "first": "2026-06-14T06:11:46+00:00",
+          "last": "2026-06-17T14:15:13+00:00"
+        },
+        "beforeLast24h": {
+          "trades": 29,
+          "wins": 21,
+          "losses": 8,
+          "winRate": 72.41,
+          "tradesPerDay": 11.34,
+          "maxLoss": 2,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 132.0,
+          "first": "2026-06-14T06:11:46+00:00",
+          "last": "2026-06-16T14:30:21+00:00"
+        },
+        "last24h": {
+          "trades": 13,
+          "wins": 10,
+          "losses": 3,
+          "winRate": 76.92,
+          "tradesPerDay": 13.0,
+          "maxLoss": 2,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 75.0,
+          "first": "2026-06-16T18:03:24+00:00",
+          "last": "2026-06-17T14:15:13+00:00"
+        },
+        "thirds": [
+          {
+            "trades": 11,
+            "winRate": 72.73,
+            "tradesPerDay": 9.27,
+            "maxLoss": 1,
+            "pnl": 51.0
+          },
+          {
+            "trades": 15,
+            "winRate": 66.67,
+            "tradesPerDay": 12.65,
+            "maxLoss": 2,
+            "pnl": 45.0
+          },
+          {
+            "trades": 16,
+            "winRate": 81.25,
+            "tradesPerDay": 13.49,
+            "maxLoss": 2,
+            "pnl": 111.0
+          }
+        ],
+        "byUtcDay": [
+          {
+            "day": "2026-06-14",
+            "trades": 9,
+            "winRate": 66.67,
+            "maxLoss": 1,
+            "pnl": 27.0
+          },
+          {
+            "day": "2026-06-15",
+            "trades": 10,
+            "winRate": 90.0,
+            "maxLoss": 1,
+            "pnl": 93.0
+          },
+          {
+            "day": "2026-06-16",
+            "trades": 14,
+            "winRate": 71.43,
+            "maxLoss": 2,
+            "pnl": 60.0
+          },
+          {
+            "day": "2026-06-17",
+            "trades": 9,
+            "winRate": 66.67,
+            "maxLoss": 2,
+            "pnl": 27.0
+          }
+        ]
+      }
+    },
+    {
+      "name": "current_fast",
+      "params": {
+        "tailPct": 0.27,
+        "etaTargetBps": 3,
+        "etaMaxWaitSec": 45,
+        "upReversalConfirmBps": 0,
+        "upReversalConfirmMaxSec": 20,
+        "incident": "cur",
+        "blocked": 1
+      },
+      "score": 60.8656,
+      "metrics": {
+        "all": {
+          "trades": 46,
+          "wins": 29,
+          "losses": 17,
+          "winRate": 63.04,
+          "tradesPerDay": 12.93,
+          "maxLoss": 2,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 93.0,
+          "first": "2026-06-14T13:10:39+00:00",
+          "last": "2026-06-17T14:47:36+00:00"
+        },
+        "beforeLast24h": {
+          "trades": 30,
+          "wins": 17,
+          "losses": 13,
+          "winRate": 56.67,
+          "tradesPerDay": 11.73,
+          "maxLoss": 2,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 9.0,
+          "first": "2026-06-14T13:10:39+00:00",
+          "last": "2026-06-16T14:33:15+00:00"
+        },
+        "last24h": {
+          "trades": 16,
+          "wins": 12,
+          "losses": 4,
+          "winRate": 75.0,
+          "tradesPerDay": 16.0,
+          "maxLoss": 1,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 84.0,
+          "first": "2026-06-16T18:02:25+00:00",
+          "last": "2026-06-17T14:47:36+00:00"
+        },
+        "thirds": [
+          {
+            "trades": 7,
+            "winRate": 57.14,
+            "tradesPerDay": 5.9,
+            "maxLoss": 2,
+            "pnl": 3.0
+          },
+          {
+            "trades": 18,
+            "winRate": 50.0,
+            "tradesPerDay": 15.18,
+            "maxLoss": 2,
+            "pnl": -27.0
+          },
+          {
+            "trades": 21,
+            "winRate": 76.19,
+            "tradesPerDay": 17.71,
+            "maxLoss": 1,
+            "pnl": 117.0
+          }
+        ],
+        "byUtcDay": [
+          {
+            "day": "2026-06-14",
+            "trades": 6,
+            "winRate": 50.0,
+            "maxLoss": 2,
+            "pnl": -9.0
+          },
+          {
+            "day": "2026-06-15",
+            "trades": 13,
+            "winRate": 61.54,
+            "maxLoss": 2,
+            "pnl": 21.0
+          },
+          {
+            "day": "2026-06-16",
+            "trades": 15,
+            "winRate": 66.67,
+            "maxLoss": 2,
+            "pnl": 45.0
+          },
+          {
+            "day": "2026-06-17",
+            "trades": 12,
+            "winRate": 66.67,
+            "maxLoss": 1,
+            "pnl": 36.0
+          }
+        ]
+      }
+    },
+    {
+      "name": "candidate_fast_quality",
+      "params": {
+        "tailPct": 0.27,
+        "etaTargetBps": 4,
+        "etaMaxWaitSec": 30,
+        "upReversalConfirmBps": 0,
+        "upReversalConfirmMaxSec": 30,
+        "incident": "off",
+        "blocked": 0
+      },
+      "score": 65.6145,
+      "metrics": {
+        "all": {
+          "trades": 24,
+          "wins": 18,
+          "losses": 6,
+          "winRate": 75.0,
+          "tradesPerDay": 6.74,
+          "maxLoss": 2,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 126.0,
+          "first": "2026-06-14T14:29:15+00:00",
+          "last": "2026-06-17T14:47:36+00:00"
+        },
+        "beforeLast24h": {
+          "trades": 16,
+          "wins": 10,
+          "losses": 6,
+          "winRate": 62.5,
+          "tradesPerDay": 6.25,
+          "maxLoss": 2,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 30.0,
+          "first": "2026-06-14T14:29:15+00:00",
+          "last": "2026-06-16T14:33:15+00:00"
+        },
+        "last24h": {
+          "trades": 8,
+          "wins": 8,
+          "losses": 0,
+          "winRate": 100.0,
+          "tradesPerDay": 8.0,
+          "maxLoss": 0,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 96.0,
+          "first": "2026-06-16T18:02:25+00:00",
+          "last": "2026-06-17T14:47:36+00:00"
+        },
+        "thirds": [
+          {
+            "trades": 5,
+            "winRate": 60.0,
+            "tradesPerDay": 4.22,
+            "maxLoss": 1,
+            "pnl": 6.0
+          },
+          {
+            "trades": 8,
+            "winRate": 50.0,
+            "tradesPerDay": 6.74,
+            "maxLoss": 2,
+            "pnl": -12.0
+          },
+          {
+            "trades": 11,
+            "winRate": 100.0,
+            "tradesPerDay": 9.27,
+            "maxLoss": 0,
+            "pnl": 132.0
+          }
+        ],
+        "byUtcDay": [
+          {
+            "day": "2026-06-14",
+            "trades": 4,
+            "winRate": 50.0,
+            "maxLoss": 1,
+            "pnl": -6.0
+          },
+          {
+            "day": "2026-06-15",
+            "trades": 7,
+            "winRate": 57.14,
+            "maxLoss": 2,
+            "pnl": 3.0
+          },
+          {
+            "day": "2026-06-16",
+            "trades": 7,
+            "winRate": 85.71,
+            "maxLoss": 1,
+            "pnl": 57.0
+          },
+          {
+            "day": "2026-06-17",
+            "trades": 6,
+            "winRate": 100.0,
+            "maxLoss": 0,
+            "pnl": 72.0
+          }
+        ]
+      }
+    },
+    {
+      "name": "candidate_fast_volume",
+      "params": {
+        "tailPct": 0.29,
+        "etaTargetBps": 3,
+        "etaMaxWaitSec": 60,
+        "upReversalConfirmBps": 0,
+        "upReversalConfirmMaxSec": 30,
+        "incident": "loose",
+        "blocked": 7
+      },
+      "score": 64.6807,
+      "metrics": {
+        "all": {
+          "trades": 56,
+          "wins": 37,
+          "losses": 19,
+          "winRate": 66.07,
+          "tradesPerDay": 15.74,
+          "maxLoss": 2,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 159.0,
+          "first": "2026-06-14T09:19:03+00:00",
+          "last": "2026-06-17T14:47:36+00:00"
+        },
+        "beforeLast24h": {
+          "trades": 40,
+          "wins": 26,
+          "losses": 14,
+          "winRate": 65.0,
+          "tradesPerDay": 15.64,
+          "maxLoss": 2,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 102.0,
+          "first": "2026-06-14T09:19:03+00:00",
+          "last": "2026-06-16T14:47:53+00:00"
+        },
+        "last24h": {
+          "trades": 16,
+          "wins": 11,
+          "losses": 5,
+          "winRate": 68.75,
+          "tradesPerDay": 16.0,
+          "maxLoss": 2,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 57.0,
+          "first": "2026-06-16T19:36:14+00:00",
+          "last": "2026-06-17T14:47:36+00:00"
+        },
+        "thirds": [
+          {
+            "trades": 14,
+            "winRate": 57.14,
+            "tradesPerDay": 11.8,
+            "maxLoss": 2,
+            "pnl": 6.0
+          },
+          {
+            "trades": 19,
+            "winRate": 63.16,
+            "tradesPerDay": 16.02,
+            "maxLoss": 2,
+            "pnl": 39.0
+          },
+          {
+            "trades": 23,
+            "winRate": 73.91,
+            "tradesPerDay": 19.39,
+            "maxLoss": 2,
+            "pnl": 114.0
+          }
+        ],
+        "byUtcDay": [
+          {
+            "day": "2026-06-14",
+            "trades": 12,
+            "winRate": 58.33,
+            "maxLoss": 2,
+            "pnl": 9.0
+          },
+          {
+            "day": "2026-06-15",
+            "trades": 13,
+            "winRate": 69.23,
+            "maxLoss": 1,
+            "pnl": 48.0
+          },
+          {
+            "day": "2026-06-16",
+            "trades": 17,
+            "winRate": 70.59,
+            "maxLoss": 2,
+            "pnl": 69.0
+          },
+          {
+            "day": "2026-06-17",
+            "trades": 14,
+            "winRate": 64.29,
+            "maxLoss": 2,
+            "pnl": 33.0
+          }
+        ]
+      }
+    }
+  ]
+}

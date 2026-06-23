@@ -6,7 +6,7 @@
       "base": "SECOND_VW_CONFIRM",
       "label": "正态成交量确认 稳健",
       "amount": "5",
-      "tailPct": 0.2,
+      "tailPct": 0.22,
       "duration": "10",
       "enabled": true,
       "tradeEnabled": true,
@@ -14,13 +14,22 @@
       "horizonSec": 600,
       "gapSec": 600,
       "etaTargetBps": 2,
-      "etaMaxWaitSec": 45,
+      "etaMaxWaitSec": 60,
+      "upReversalConfirmBps": 2.5,
+      "upReversalConfirmMaxSec": 45,
+      "incidentFilterEnabled": true,
+      "incidentFilterMode": "directional_only",
+      "incidentWindowSec": 10,
+      "incidentMinMoveBps": 8,
+      "incidentMinVolumeQuantile": 0.985,
+      "incidentMinFlowImbalance": 0.7,
+      "incidentCooldownSec": 15,
       "backtest": {
-        "wr": 68.66,
-        "tradesPerDay": 9.66,
-        "trades": 67,
-        "maxLoss": 3,
-        "sampleHours": 166.44
+        "wr": 73.81,
+        "tradesPerDay": 11.8,
+        "trades": 42,
+        "maxLoss": 2,
+        "sampleHours": 85.4
       }
     },
     {
@@ -37,12 +46,53 @@
       "gapSec": 600,
       "etaTargetBps": 3,
       "etaMaxWaitSec": 45,
+      "upReversalConfirmBps": 0,
+      "upReversalConfirmMaxSec": 20,
+      "incidentFilterEnabled": true,
+      "incidentFilterMode": "directional_only",
+      "incidentWindowSec": 10,
+      "incidentMinMoveBps": 10,
+      "incidentMinVolumeQuantile": 0.99,
+      "incidentMinFlowImbalance": 0.8,
+      "incidentCooldownSec": 10,
       "backtest": {
         "wr": 67.39,
         "tradesPerDay": 13.27,
         "trades": 92,
         "maxLoss": 3,
         "sampleHours": 166.44
+      }
+    },
+    {
+      "id": "BTC_10min_SECOND_RANGE_BREAKOUT_CONFIRM_1800_Z22_C60",
+      "base": "SECOND_RANGE_BREAKOUT_CONFIRM",
+      "label": "range breakout confirm shadow",
+      "amount": "5",
+      "duration": "10",
+      "enabled": true,
+      "tradeEnabled": false,
+      "lookbackSec": 1800,
+      "horizonSec": 600,
+      "gapSec": 600,
+      "rangeZEntry": 2.2,
+      "rangeConfirmSec": 60,
+      "rangeHoldZ": 1,
+      "rangeMinHoldRatio": 0.75,
+      "rangePreSlopeSec": 300,
+      "rangeConfirmSlopeSec": 60,
+      "rangeMinPreSlopeBps": 8,
+      "rangeMinConfirmSlopeBps": 4,
+      "rangeMinFlowImbalance": 0.12,
+      "rangeMinConfirmFlowImbalance": 0.08,
+      "rangeMinVolumeRatio": 0.45,
+      "rangeMinVolatilityRatio": 0.55,
+      "rangeMaxAgeBeyondSec": 180,
+      "backtest": {
+        "wr": 61.29,
+        "tradesPerDay": 5.17,
+        "trades": 31,
+        "maxLoss": 2,
+        "sampleHours": 143.96
       }
     }
   ],
@@ -52,17 +102,27 @@
   "shadowTradingEnabled": false,
   "strategyAmounts": {
     "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2": "5",
-    "BTC_10min_SECOND_VW_FAST_2700_27_ETA3": "5"
+    "BTC_10min_SECOND_VW_FAST_2700_27_ETA3": "5",
+    "BTC_10min_SECOND_RANGE_BREAKOUT_CONFIRM_1800_Z22_C60": "5"
   },
   "strategyParams": {
     "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2": {
-      "tailPct": 0.2,
+      "tailPct": 0.22,
       "tradeEnabled": true,
       "lookbackSec": 2700,
       "horizonSec": 600,
       "gapSec": 600,
       "etaTargetBps": 2,
-      "etaMaxWaitSec": 45
+      "etaMaxWaitSec": 60,
+      "upReversalConfirmBps": 2.5,
+      "upReversalConfirmMaxSec": 45,
+      "incidentFilterEnabled": true,
+      "incidentFilterMode": "directional_only",
+      "incidentWindowSec": 10,
+      "incidentMinMoveBps": 8,
+      "incidentMinVolumeQuantile": 0.985,
+      "incidentMinFlowImbalance": 0.7,
+      "incidentCooldownSec": 15
     },
     "BTC_10min_SECOND_VW_FAST_2700_27_ETA3": {
       "tailPct": 0.27,
@@ -71,7 +131,35 @@
       "horizonSec": 600,
       "gapSec": 600,
       "etaTargetBps": 3,
-      "etaMaxWaitSec": 45
+      "etaMaxWaitSec": 45,
+      "upReversalConfirmBps": 0,
+      "upReversalConfirmMaxSec": 20,
+      "incidentFilterEnabled": true,
+      "incidentFilterMode": "directional_only",
+      "incidentWindowSec": 10,
+      "incidentMinMoveBps": 10,
+      "incidentMinVolumeQuantile": 0.99,
+      "incidentMinFlowImbalance": 0.8,
+      "incidentCooldownSec": 10
+    },
+    "BTC_10min_SECOND_RANGE_BREAKOUT_CONFIRM_1800_Z22_C60": {
+      "tradeEnabled": false,
+      "lookbackSec": 1800,
+      "horizonSec": 600,
+      "gapSec": 600,
+      "rangeZEntry": 2.2,
+      "rangeConfirmSec": 60,
+      "rangeHoldZ": 1,
+      "rangeMinHoldRatio": 0.75,
+      "rangePreSlopeSec": 300,
+      "rangeConfirmSlopeSec": 60,
+      "rangeMinPreSlopeBps": 8,
+      "rangeMinConfirmSlopeBps": 4,
+      "rangeMinFlowImbalance": 0.12,
+      "rangeMinConfirmFlowImbalance": 0.08,
+      "rangeMinVolumeRatio": 0.45,
+      "rangeMinVolatilityRatio": 0.55,
+      "rangeMaxAgeBeyondSec": 180
     }
   }
 }

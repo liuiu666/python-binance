@@ -213,7 +213,7 @@ echo "[4/8] install Python runtime"
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip wheel setuptools
-python -m pip install pandas numpy requests scikit-learn lightgbm xgboost
+python -m pip install pandas numpy requests websocket-client python-socks scikit-learn lightgbm xgboost
 
 echo "[5/8] install Node runtime deps"
 rm -rf node_modules
@@ -223,7 +223,7 @@ echo "[6/8] syntax checks"
 node --check server.js
 node --check auto_btc.js
 . .venv/bin/activate
-python -m py_compile py/signal_btc.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/backtest_enhanced.py py/run_second_backtest.py py/run_second_research.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/execution.py py/second_backtest/metrics.py py/second_backtest/strategies.py py/second_backtest/research.py
+python -m py_compile py/signal_btc.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/backtest_enhanced.py py/run_second_backtest.py py/run_second_research.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/execution.py py/second_backtest/incident_filter.py py/second_backtest/metrics.py py/second_backtest/strategies.py py/second_backtest/research.py
 
 echo "[7/8] write systemd services"
 NODE_BIN="$(command -v node)"
@@ -291,8 +291,14 @@ Environment=DATA_DIR=$APP_DIR/data
 Environment=PYTHONUNBUFFERED=1
 Environment=SECOND_DATA_MARKET=futures
 Environment=SECOND_DATA_SYMBOL=BTCUSDT
-Environment=SECOND_DATA_INTERVAL_SEC=1
+Environment=SECOND_DATA_MODE=rest
+Environment=SECOND_DATA_INTERVAL_SEC=2
 Environment=SECOND_DATA_RETENTION_DAYS=120
+Environment=SECOND_DATA_HTTP_TIMEOUT=8
+Environment=SECOND_DATA_FAPI_BASES=https://fapi.binance.com
+Environment=SECOND_DATA_FINALIZE_DELAY_SEC=2
+Environment=SECOND_DATA_RATE_LIMIT_BACKOFF_SEC=300
+Environment=SECOND_DATA_STATUS_INTERVAL_SEC=2
 ExecStart=$APP_DIR/.venv/bin/python py/collect_second_data.py
 Restart=always
 RestartSec=5

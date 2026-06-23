@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 import requests
+import websocket
 
 try:
     import msvcrt
@@ -29,11 +30,16 @@ APP_DIR = os.environ.get("APP_DIR") or os.path.dirname(os.path.dirname(os.path.a
 OUT = os.environ.get("DATA_DIR", os.path.join(APP_DIR, "data"))
 SYMBOL = os.environ.get("SECOND_DATA_SYMBOL", "BTCUSDT").upper()
 MARKET = os.environ.get("SECOND_DATA_MARKET", "futures").strip().lower()
+MODE = os.environ.get("SECOND_DATA_MODE", "rest").strip().lower()
 INTERVAL_SEC = max(0.5, float(os.environ.get("SECOND_DATA_INTERVAL_SEC", "1")))
 BACKFILL_MINUTES = max(1, int(os.environ.get("SECOND_DATA_BACKFILL_MINUTES", "10")))
 RETENTION_DAYS = max(1, int(os.environ.get("SECOND_DATA_RETENTION_DAYS", "120")))
 HTTP_TIMEOUT = float(os.environ.get("SECOND_DATA_HTTP_TIMEOUT", "8"))
 FINALIZE_DELAY_SEC = max(1, int(os.environ.get("SECOND_DATA_FINALIZE_DELAY_SEC", "2")))
+RATE_LIMIT_BACKOFF_SEC = max(30, int(os.environ.get("SECOND_DATA_RATE_LIMIT_BACKOFF_SEC", "180")))
+WS_PING_INTERVAL_SEC = max(10, int(os.environ.get("SECOND_DATA_WS_PING_INTERVAL_SEC", "20")))
+WS_PING_TIMEOUT_SEC = max(5, int(os.environ.get("SECOND_DATA_WS_PING_TIMEOUT_SEC", "10")))
+STATUS_INTERVAL_SEC = max(1, int(os.environ.get("SECOND_DATA_STATUS_INTERVAL_SEC", "2")))
 
 OUT_FILE = os.path.join(OUT, f"{SYMBOL.lower()}_1s_trades.csv")
 STATUS_FILE = os.path.join(OUT, "second_data_status.json")
@@ -57,6 +63,22 @@ FAPI_BASES = [
     ).split(",")
     if base.strip()
 ]
+
+
+def default_ws_url():
+    stream = f"{SYMBOL.lower()}@aggTrade"
+    if MARKET == "futures":
+        return f"wss://fstream.binance.com/ws/{stream}"
+    return f"wss://stream.binance.com:9443/ws/{stream}"
+
+
+WS_URL = os.environ.get("SECOND_DATA_WS_URL", default_ws_url()).strip()
+
+
+class RateLimitError(RuntimeError):
+    def __init__(self, message, retry_after_sec=None):
+        super().__init__(message)
+        self.retry_after_sec = retry_after_sec
 
 
 def utc_ms():
@@ -121,15 +143,44 @@ def request_json(path, params):
         for attempt in range(3):
             try:
                 r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
+                if r.status_code in (418, 429):
+                    retry_after = _rate_limit_retry_after(r)
+                    raise RateLimitError(
+                        f"{r.status_code} rate limited for {url}: {r.text[:300]}",
+                        retry_after,
+                    )
                 r.raise_for_status()
                 data = r.json()
                 if isinstance(data, dict) and data.get("code"):
                     raise RuntimeError(f"{data.get('code')}: {data.get('msg')}")
                 return data
+            except RateLimitError:
+                raise
             except Exception as exc:
                 errors.append(f"{url} attempt={attempt + 1}: {exc}")
                 time.sleep(0.25 + attempt * 0.5)
     raise RuntimeError("; ".join(errors[-4:]))
+
+
+def _rate_limit_retry_after(response):
+    retry_after = response.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return max(RATE_LIMIT_BACKOFF_SEC, int(float(retry_after)))
+        except (TypeError, ValueError):
+            pass
+    try:
+        data = response.json()
+        msg = str(data.get("msg") or "")
+    except Exception:
+        msg = response.text or ""
+    import re
+
+    match = re.search(r"banned until (\d{12,})", msg)
+    if match:
+        until_ms = int(match.group(1))
+        return max(RATE_LIMIT_BACKOFF_SEC, int((until_ms - utc_ms()) / 1000) + 15)
+    return RATE_LIMIT_BACKOFF_SEC
 
 
 def read_status():
@@ -227,6 +278,23 @@ def fetch_trades(status):
     return rows if isinstance(rows, list) else []
 
 
+def make_state(status):
+    last_row = last_csv_row(OUT_FILE)
+    persisted_id = status.get("last_agg_trade_id")
+    if not isinstance(persisted_id, int) and last_row:
+        try:
+            persisted_id = int(float(last_row.get("last_agg_trade_id")))
+        except Exception:
+            persisted_id = None
+    return {
+        "status": status,
+        "cursor_id": persisted_id,
+        "total_rows": int(status.get("rows") or count_csv_rows(OUT_FILE)),
+        "pending": pd.DataFrame(),
+        "last_flush": 0.0,
+    }
+
+
 def aggregate_trades(rows):
     if not rows:
         return pd.DataFrame()
@@ -281,6 +349,49 @@ def aggregate_trades(rows):
     return grouped
 
 
+def flush_state(state, fetched_trades=0, force=False):
+    status = state["status"]
+    pending = state["pending"]
+    cutoff = pd.Timestamp.now(tz="UTC").floor("s") - pd.Timedelta(seconds=FINALIZE_DELAY_SEC)
+    if pending.empty:
+        complete = pending
+    else:
+        complete = pending[pending["timestamp"] <= cutoff].copy()
+        pending = pending[pending["timestamp"] > cutoff].copy().reset_index(drop=True)
+    if complete.empty and not force and time.time() - state["last_flush"] < STATUS_INTERVAL_SEC:
+        state["pending"] = pending
+        return 0
+
+    added = append_csv(complete, OUT_FILE)
+    state["total_rows"] += added
+    last_ts = status.get("last_ts")
+    last_persisted_id = status.get("last_agg_trade_id")
+    if added:
+        last_ts = pd.to_datetime(complete["timestamp"].iloc[-1], utc=True).isoformat()
+        last_persisted_id = int(complete["last_agg_trade_id"].max())
+        status["last_agg_trade_id"] = last_persisted_id
+
+    status.update({
+        "ok": True,
+        "symbol": SYMBOL,
+        "market": MARKET,
+        "mode": MODE,
+        "file": OUT_FILE,
+        "updated_at": iso_now(),
+        "error": None,
+        "fetched_trades": int(fetched_trades),
+        "rows": state["total_rows"],
+        "added": added,
+        "last_ts": last_ts,
+        "pending_seconds": int(len(pending)),
+        "last_agg_trade_id": last_persisted_id,
+    })
+    write_status(status)
+    state["pending"] = pending
+    state["last_flush"] = time.time()
+    return added
+
+
 def collapse_bars(bars):
     if bars.empty:
         return bars
@@ -324,82 +435,159 @@ def collapse_bars(bars):
     return out[CSV_COLUMNS]
 
 
-def main():
-    acquire_singleton_lock()
-    print(f"[SecondData] Starting {SYMBOL} {MARKET} collector -> {OUT_FILE}")
+def run_rest_loop():
+    print(f"[SecondData] Starting {SYMBOL} {MARKET} REST collector -> {OUT_FILE}")
     status = read_status()
-    last_row = last_csv_row(OUT_FILE)
-    persisted_id = status.get("last_agg_trade_id")
-    if not isinstance(persisted_id, int) and last_row:
-        try:
-            persisted_id = int(float(last_row.get("last_agg_trade_id")))
-        except Exception:
-            persisted_id = None
-    cursor_id = persisted_id
-    total_rows = int(status.get("rows") or count_csv_rows(OUT_FILE))
-    pending = pd.DataFrame()
+    state = make_state(status)
     while True:
         started = time.time()
         try:
+            cursor_id = state["cursor_id"]
             fetch_status = {"last_agg_trade_id": cursor_id} if isinstance(cursor_id, int) else {}
             rows = fetch_trades(fetch_status)
             bars = aggregate_trades(rows)
             if rows:
-                cursor_id = max(int(row["a"]) for row in rows if "a" in row)
+                state["cursor_id"] = max(int(row["a"]) for row in rows if "a" in row)
             if not bars.empty:
-                pending = collapse_bars(pd.concat([pending, bars], ignore_index=True) if not pending.empty else bars)
-            cutoff = pd.Timestamp.now(tz="UTC").floor("s") - pd.Timedelta(seconds=FINALIZE_DELAY_SEC)
-            if pending.empty:
-                complete = pending
-            else:
-                complete = pending[pending["timestamp"] <= cutoff].copy()
-                pending = pending[pending["timestamp"] > cutoff].copy().reset_index(drop=True)
-            added = append_csv(complete, OUT_FILE)
-            total_rows += added
-            last_ts = None
-            last_persisted_id = status.get("last_agg_trade_id")
-            if added:
-                last_ts = pd.to_datetime(complete["timestamp"].iloc[-1], utc=True).isoformat()
-                last_persisted_id = int(complete["last_agg_trade_id"].max())
-                status["last_agg_trade_id"] = last_persisted_id
-            elif last_row and not status.get("last_ts"):
-                last_ts = last_row.get("timestamp")
-            else:
-                last_ts = status.get("last_ts")
-            status.update({
-                "ok": True,
-                "symbol": SYMBOL,
-                "market": MARKET,
-                "file": OUT_FILE,
-                "updated_at": iso_now(),
-                "error": None,
-                "fetched_trades": int(len(rows)),
-                "rows": total_rows,
-                "added": added,
-                "last_ts": last_ts,
-                "pending_seconds": int(len(pending)),
-                "last_agg_trade_id": last_persisted_id,
-            })
-            write_status(status)
+                pending = state["pending"]
+                state["pending"] = collapse_bars(pd.concat([pending, bars], ignore_index=True) if not pending.empty else bars)
+            flush_state(state, fetched_trades=len(rows), force=True)
             print(
-                f"\r[SecondData] rows={status.get('rows')} last={status.get('last_ts')} "
-                f"trades={len(rows)} pending={len(pending)}",
+                f"\r[SecondData] rows={state['status'].get('rows')} last={state['status'].get('last_ts')} "
+                f"trades={len(rows)} pending={len(state['pending'])}",
                 end="",
                 flush=True,
             )
         except Exception as exc:
-            status.update({
+            retry_after = getattr(exc, "retry_after_sec", None)
+            state["status"].update({
                 "ok": False,
                 "symbol": SYMBOL,
                 "market": MARKET,
+                "mode": MODE,
                 "file": OUT_FILE,
                 "updated_at": iso_now(),
                 "error": str(exc),
             })
-            write_status(status)
+            if retry_after is not None:
+                state["status"]["rate_limit_backoff_sec"] = int(retry_after)
+            write_status(state["status"])
             print(f"\n[SecondData] Error: {exc}", flush=True)
+            if retry_after is not None:
+                print(f"[SecondData] Rate limited; sleeping {int(retry_after)}s", flush=True)
+                time.sleep(float(retry_after))
         elapsed = time.time() - started
         time.sleep(max(0.0, INTERVAL_SEC - elapsed))
+
+
+def _websocket_proxy_args():
+    from urllib.parse import urlparse
+
+    proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+    if not proxy:
+        return {}
+    parsed = urlparse(proxy)
+    if parsed.hostname not in ("127.0.0.1", "localhost") and os.environ.get("SECOND_DATA_WS_USE_PROXY", "1") == "0":
+        return {}
+    return {
+        "http_proxy_host": parsed.hostname,
+        "http_proxy_port": parsed.port,
+        "proxy_type": "http",
+    }
+
+
+def run_websocket_loop():
+    print(f"[SecondData] Starting {SYMBOL} {MARKET} websocket collector {WS_URL} -> {OUT_FILE}")
+    status = read_status()
+    state = make_state(status)
+
+    def on_open(_ws):
+        state["status"].update({
+            "ok": True,
+            "symbol": SYMBOL,
+            "market": MARKET,
+            "mode": MODE,
+            "websocket_url": WS_URL,
+            "file": OUT_FILE,
+            "updated_at": iso_now(),
+            "error": None,
+        })
+        write_status(state["status"])
+        print("[SecondData] WebSocket connected", flush=True)
+
+    def on_message(_ws, message):
+        try:
+            row = json.loads(message)
+            if not isinstance(row, dict) or "a" not in row:
+                return
+            bars = aggregate_trades([row])
+            if bars.empty:
+                return
+            state["cursor_id"] = int(row["a"])
+            pending = state["pending"]
+            state["pending"] = collapse_bars(pd.concat([pending, bars], ignore_index=True) if not pending.empty else bars)
+            added = flush_state(state, fetched_trades=1)
+            if added:
+                print(
+                    f"\r[SecondData] rows={state['status'].get('rows')} last={state['status'].get('last_ts')} "
+                    f"ws=1 pending={len(state['pending'])}",
+                    end="",
+                    flush=True,
+                )
+        except Exception as exc:
+            state["status"].update({
+                "ok": False,
+                "symbol": SYMBOL,
+                "market": MARKET,
+                "mode": MODE,
+                "websocket_url": WS_URL,
+                "file": OUT_FILE,
+                "updated_at": iso_now(),
+                "error": str(exc),
+            })
+            write_status(state["status"])
+            print(f"\n[SecondData] WebSocket message error: {exc}", flush=True)
+
+    def on_error(_ws, error):
+        state["status"].update({
+            "ok": False,
+            "symbol": SYMBOL,
+            "market": MARKET,
+            "mode": MODE,
+            "websocket_url": WS_URL,
+            "file": OUT_FILE,
+            "updated_at": iso_now(),
+            "error": str(error),
+        })
+        write_status(state["status"])
+        print(f"\n[SecondData] WebSocket error: {error}", flush=True)
+
+    def on_close(_ws, code, reason):
+        flush_state(state, force=True)
+        print(f"\n[SecondData] WebSocket closed code={code} reason={reason}", flush=True)
+
+    while True:
+        ws = websocket.WebSocketApp(
+            WS_URL,
+            on_open=on_open,
+            on_message=on_message,
+            on_error=on_error,
+            on_close=on_close,
+        )
+        ws.run_forever(
+            ping_interval=WS_PING_INTERVAL_SEC,
+            ping_timeout=WS_PING_TIMEOUT_SEC,
+            **_websocket_proxy_args(),
+        )
+        time.sleep(max(1.0, min(INTERVAL_SEC, 10.0)))
+
+
+def main():
+    acquire_singleton_lock()
+    if MODE in ("rest", "poll", "polling"):
+        run_rest_loop()
+    else:
+        run_websocket_loop()
 
 
 if __name__ == "__main__":

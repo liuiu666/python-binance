@@ -1,0 +1,1993 @@
+{
+  "generatedAt": "2026-06-22T04:50:46.840158+00:00",
+  "source": "E:\\python-binance\\tmp\\strategy_research_server_20260622\\btcusdt_1s_trades.csv",
+  "method": {
+    "data": "1-second BTC bars only; missing seconds are forward-filled close with zero volume.",
+    "causal": "Each signal uses data at or before its signal second and settles horizon_sec later.",
+    "execution": "Reports liveExecution and configuredGapExecution; no global dedupe unless requested."
+  },
+  "dataQuality": {
+    "exists": true,
+    "file": "tmp\\strategy_research_server_20260622\\btcusdt_1s_trades.csv",
+    "sources": [
+      "tmp\\strategy_research_server_20260622\\btcusdt_1s_trades.csv"
+    ],
+    "rows": 320516,
+    "uniqueSlots": 317404,
+    "start": "2026-06-13T13:33:45+00:00",
+    "end": "2026-06-17T10:07:50+00:00",
+    "missingSlots": 15842,
+    "missingPct": 4.7538,
+    "duplicateSlots": 3112,
+    "maxGapSec": 9
+  },
+  "sample": {
+    "start": "2026-06-13T13:33:45+00:00",
+    "end": "2026-06-17T09:20:18+00:00",
+    "hours": 91.78,
+    "rows": 330394,
+    "observedRows": 314582,
+    "filledRows": 15812
+  },
+  "strategies": [
+    {
+      "strategyId": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+      "label": "正态成交量确认 高频",
+      "modelType": "second_normal_vw_confirm",
+      "params": {
+        "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+        "lookback_sec": 2700,
+        "horizon_sec": 600,
+        "signal_gap_sec": 600,
+        "tail_pct": 0.27,
+        "eta_target_bps": 3.0,
+        "eta_max_wait_sec": 45,
+        "up_reversal_confirm_bps": 0.0,
+        "up_reversal_confirm_max_sec": 20,
+        "incident_filter": {
+          "incident_filter_enabled": true,
+          "incident_filter_mode": "directional_only",
+          "incident_window_sec": 10,
+          "incident_min_move_bps": 10,
+          "incident_min_volume_quantile": 0.99,
+          "incident_min_flow_imbalance": 0.8,
+          "incident_cooldown_sec": 10
+        },
+        "amount": 15.0,
+        "label": "正态成交量确认 高频"
+      },
+      "score": 64.2612,
+      "rawSignals": {
+        "all": {
+          "trades": 48,
+          "wins": 31,
+          "losses": 17,
+          "winRate": 64.58,
+          "tradesPerDay": 12.55,
+          "maxLoss": 2,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 117.0,
+          "first": "2026-06-13T19:40:38+00:00",
+          "last": "2026-06-17T08:31:57+00:00"
+        },
+        "beforeLast24h": {
+          "trades": 30,
+          "wins": 18,
+          "losses": 12,
+          "winRate": 60.0,
+          "tradesPerDay": 10.62,
+          "maxLoss": 2,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 36.0,
+          "first": "2026-06-13T19:40:38+00:00",
+          "last": "2026-06-16T08:42:59+00:00"
+        },
+        "last24h": {
+          "trades": 18,
+          "wins": 13,
+          "losses": 5,
+          "winRate": 72.22,
+          "tradesPerDay": 18.0,
+          "maxLoss": 1,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 81.0,
+          "first": "2026-06-16T09:46:36+00:00",
+          "last": "2026-06-17T08:31:57+00:00"
+        },
+        "thirds": [
+          {
+            "trades": 7,
+            "winRate": 71.43,
+            "tradesPerDay": 5.49,
+            "maxLoss": 1,
+            "pnl": 30.0
+          },
+          {
+            "trades": 19,
+            "winRate": 57.89,
+            "tradesPerDay": 14.91,
+            "maxLoss": 2,
+            "pnl": 12.0
+          },
+          {
+            "trades": 22,
+            "winRate": 68.18,
+            "tradesPerDay": 17.26,
+            "maxLoss": 2,
+            "pnl": 75.0
+          }
+        ],
+        "byUtcDay": [
+          {
+            "day": "2026-06-13",
+            "trades": 2,
+            "winRate": 100.0,
+            "maxLoss": 0,
+            "pnl": 24.0
+          },
+          {
+            "day": "2026-06-14",
+            "trades": 8,
+            "winRate": 50.0,
+            "maxLoss": 2,
+            "pnl": -12.0
+          },
+          {
+            "day": "2026-06-15",
+            "trades": 15,
+            "winRate": 66.67,
+            "maxLoss": 2,
+            "pnl": 45.0
+          },
+          {
+            "day": "2026-06-16",
+            "trades": 15,
+            "winRate": 66.67,
+            "maxLoss": 2,
+            "pnl": 45.0
+          },
+          {
+            "day": "2026-06-17",
+            "trades": 8,
+            "winRate": 62.5,
+            "maxLoss": 1,
+            "pnl": 15.0
+          }
+        ]
+      },
+      "liveExecution": {
+        "metrics": {
+          "all": {
+            "trades": 48,
+            "wins": 31,
+            "losses": 17,
+            "winRate": 64.58,
+            "tradesPerDay": 12.55,
+            "maxLoss": 2,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 117.0,
+            "first": "2026-06-13T19:40:38+00:00",
+            "last": "2026-06-17T08:31:57+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 30,
+            "wins": 18,
+            "losses": 12,
+            "winRate": 60.0,
+            "tradesPerDay": 10.62,
+            "maxLoss": 2,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 36.0,
+            "first": "2026-06-13T19:40:38+00:00",
+            "last": "2026-06-16T08:42:59+00:00"
+          },
+          "last24h": {
+            "trades": 18,
+            "wins": 13,
+            "losses": 5,
+            "winRate": 72.22,
+            "tradesPerDay": 18.0,
+            "maxLoss": 1,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 81.0,
+            "first": "2026-06-16T09:46:36+00:00",
+            "last": "2026-06-17T08:31:57+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 7,
+              "winRate": 71.43,
+              "tradesPerDay": 5.49,
+              "maxLoss": 1,
+              "pnl": 30.0
+            },
+            {
+              "trades": 19,
+              "winRate": 57.89,
+              "tradesPerDay": 14.91,
+              "maxLoss": 2,
+              "pnl": 12.0
+            },
+            {
+              "trades": 22,
+              "winRate": 68.18,
+              "tradesPerDay": 17.26,
+              "maxLoss": 2,
+              "pnl": 75.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 2,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 24.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 8,
+              "winRate": 50.0,
+              "maxLoss": 2,
+              "pnl": -12.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 15,
+              "winRate": 66.67,
+              "maxLoss": 2,
+              "pnl": 45.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 15,
+              "winRate": 66.67,
+              "maxLoss": 2,
+              "pnl": 45.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 8,
+              "winRate": 62.5,
+              "maxLoss": 1,
+              "pnl": 15.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 48,
+          "rejectedByStrategyLock": 0,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSecIgnored": 600
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T22:01:50+00:00",
+            "signal": "UP",
+            "entry": 65686.591066,
+            "settle_time": "2026-06-16T22:11:50+00:00",
+            "settle": 65829.5,
+            "won": true,
+            "p_up": 0.269519
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T23:50:25+00:00",
+            "signal": "UP",
+            "entry": 65609.914073,
+            "settle_time": "2026-06-17T00:00:25+00:00",
+            "settle": 65673.4,
+            "won": true,
+            "p_up": 0.269109
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T01:19:40+00:00",
+            "signal": "UP",
+            "entry": 65550.33195,
+            "settle_time": "2026-06-17T01:29:40+00:00",
+            "settle": 65554.1,
+            "won": true,
+            "p_up": 0.249931
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T02:18:27+00:00",
+            "signal": "DOWN",
+            "entry": 65892.964925,
+            "settle_time": "2026-06-17T02:28:27+00:00",
+            "settle": 66023.3,
+            "won": false,
+            "p_up": 0.840091
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T05:05:11+00:00",
+            "signal": "DOWN",
+            "entry": 65936.778067,
+            "settle_time": "2026-06-17T05:15:11+00:00",
+            "settle": 65751.7,
+            "won": true,
+            "p_up": 0.730136
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T06:27:08+00:00",
+            "signal": "UP",
+            "entry": 65710.983748,
+            "settle_time": "2026-06-17T06:37:08+00:00",
+            "settle": 65647.5,
+            "won": false,
+            "p_up": 0.26663
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T06:41:26+00:00",
+            "signal": "UP",
+            "entry": 65560.728831,
+            "settle_time": "2026-06-17T06:51:26+00:00",
+            "settle": 65615.5,
+            "won": true,
+            "p_up": 0.268148
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T07:20:40+00:00",
+            "signal": "UP",
+            "entry": 65464.257776,
+            "settle_time": "2026-06-17T07:30:40+00:00",
+            "settle": 65512.9,
+            "won": true,
+            "p_up": 0.252311
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T07:53:33+00:00",
+            "signal": "UP",
+            "entry": 65309.40424,
+            "settle_time": "2026-06-17T08:03:33+00:00",
+            "settle": 65436.8,
+            "won": true,
+            "p_up": 0.262442
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T08:31:57+00:00",
+            "signal": "UP",
+            "entry": 65120.960781,
+            "settle_time": "2026-06-17T08:41:57+00:00",
+            "settle": 65041.5,
+            "won": false,
+            "p_up": 0.255604
+          }
+        ]
+      },
+      "configuredGapExecution": {
+        "metrics": {
+          "all": {
+            "trades": 48,
+            "wins": 31,
+            "losses": 17,
+            "winRate": 64.58,
+            "tradesPerDay": 12.55,
+            "maxLoss": 2,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 117.0,
+            "first": "2026-06-13T19:40:38+00:00",
+            "last": "2026-06-17T08:31:57+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 30,
+            "wins": 18,
+            "losses": 12,
+            "winRate": 60.0,
+            "tradesPerDay": 10.62,
+            "maxLoss": 2,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 36.0,
+            "first": "2026-06-13T19:40:38+00:00",
+            "last": "2026-06-16T08:42:59+00:00"
+          },
+          "last24h": {
+            "trades": 18,
+            "wins": 13,
+            "losses": 5,
+            "winRate": 72.22,
+            "tradesPerDay": 18.0,
+            "maxLoss": 1,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 81.0,
+            "first": "2026-06-16T09:46:36+00:00",
+            "last": "2026-06-17T08:31:57+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 7,
+              "winRate": 71.43,
+              "tradesPerDay": 5.49,
+              "maxLoss": 1,
+              "pnl": 30.0
+            },
+            {
+              "trades": 19,
+              "winRate": 57.89,
+              "tradesPerDay": 14.91,
+              "maxLoss": 2,
+              "pnl": 12.0
+            },
+            {
+              "trades": 22,
+              "winRate": 68.18,
+              "tradesPerDay": 17.26,
+              "maxLoss": 2,
+              "pnl": 75.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 2,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 24.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 8,
+              "winRate": 50.0,
+              "maxLoss": 2,
+              "pnl": -12.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 15,
+              "winRate": 66.67,
+              "maxLoss": 2,
+              "pnl": 45.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 15,
+              "winRate": 66.67,
+              "maxLoss": 2,
+              "pnl": 45.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 8,
+              "winRate": 62.5,
+              "maxLoss": 1,
+              "pnl": 15.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 48,
+          "rejectedByStrategyLock": 0,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSec": 600
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T22:01:50+00:00",
+            "signal": "UP",
+            "entry": 65686.591066,
+            "settle_time": "2026-06-16T22:11:50+00:00",
+            "settle": 65829.5,
+            "won": true,
+            "p_up": 0.269519
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T23:50:25+00:00",
+            "signal": "UP",
+            "entry": 65609.914073,
+            "settle_time": "2026-06-17T00:00:25+00:00",
+            "settle": 65673.4,
+            "won": true,
+            "p_up": 0.269109
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T01:19:40+00:00",
+            "signal": "UP",
+            "entry": 65550.33195,
+            "settle_time": "2026-06-17T01:29:40+00:00",
+            "settle": 65554.1,
+            "won": true,
+            "p_up": 0.249931
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T02:18:27+00:00",
+            "signal": "DOWN",
+            "entry": 65892.964925,
+            "settle_time": "2026-06-17T02:28:27+00:00",
+            "settle": 66023.3,
+            "won": false,
+            "p_up": 0.840091
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T05:05:11+00:00",
+            "signal": "DOWN",
+            "entry": 65936.778067,
+            "settle_time": "2026-06-17T05:15:11+00:00",
+            "settle": 65751.7,
+            "won": true,
+            "p_up": 0.730136
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T06:27:08+00:00",
+            "signal": "UP",
+            "entry": 65710.983748,
+            "settle_time": "2026-06-17T06:37:08+00:00",
+            "settle": 65647.5,
+            "won": false,
+            "p_up": 0.26663
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T06:41:26+00:00",
+            "signal": "UP",
+            "entry": 65560.728831,
+            "settle_time": "2026-06-17T06:51:26+00:00",
+            "settle": 65615.5,
+            "won": true,
+            "p_up": 0.268148
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T07:20:40+00:00",
+            "signal": "UP",
+            "entry": 65464.257776,
+            "settle_time": "2026-06-17T07:30:40+00:00",
+            "settle": 65512.9,
+            "won": true,
+            "p_up": 0.252311
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T07:53:33+00:00",
+            "signal": "UP",
+            "entry": 65309.40424,
+            "settle_time": "2026-06-17T08:03:33+00:00",
+            "settle": 65436.8,
+            "won": true,
+            "p_up": 0.262442
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T08:31:57+00:00",
+            "signal": "UP",
+            "entry": 65120.960781,
+            "settle_time": "2026-06-17T08:41:57+00:00",
+            "settle": 65041.5,
+            "won": false,
+            "p_up": 0.255604
+          }
+        ]
+      },
+      "incidentFilterExecution": {
+        "metrics": {
+          "all": {
+            "trades": 48,
+            "wins": 31,
+            "losses": 17,
+            "winRate": 64.58,
+            "tradesPerDay": 12.55,
+            "maxLoss": 2,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 117.0,
+            "first": "2026-06-13T19:40:38+00:00",
+            "last": "2026-06-17T08:31:57+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 30,
+            "wins": 18,
+            "losses": 12,
+            "winRate": 60.0,
+            "tradesPerDay": 10.62,
+            "maxLoss": 2,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 36.0,
+            "first": "2026-06-13T19:40:38+00:00",
+            "last": "2026-06-16T08:42:59+00:00"
+          },
+          "last24h": {
+            "trades": 18,
+            "wins": 13,
+            "losses": 5,
+            "winRate": 72.22,
+            "tradesPerDay": 18.0,
+            "maxLoss": 1,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 81.0,
+            "first": "2026-06-16T09:46:36+00:00",
+            "last": "2026-06-17T08:31:57+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 7,
+              "winRate": 71.43,
+              "tradesPerDay": 5.49,
+              "maxLoss": 1,
+              "pnl": 30.0
+            },
+            {
+              "trades": 19,
+              "winRate": 57.89,
+              "tradesPerDay": 14.91,
+              "maxLoss": 2,
+              "pnl": 12.0
+            },
+            {
+              "trades": 22,
+              "winRate": 68.18,
+              "tradesPerDay": 17.26,
+              "maxLoss": 2,
+              "pnl": 75.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 2,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 24.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 8,
+              "winRate": 50.0,
+              "maxLoss": 2,
+              "pnl": -12.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 15,
+              "winRate": 66.67,
+              "maxLoss": 2,
+              "pnl": 45.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 15,
+              "winRate": 66.67,
+              "maxLoss": 2,
+              "pnl": 45.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 8,
+              "winRate": 62.5,
+              "maxLoss": 1,
+              "pnl": 15.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 48,
+          "rejectedByStrategyLock": 0,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSec": 600,
+          "incidentFilter": {
+            "enabled": true,
+            "mode": "directional_only",
+            "windowSec": 10,
+            "minMoveBps": 10.0,
+            "minVolumeQuantile": 0.99,
+            "minFlowImbalance": 0.8,
+            "cooldownSec": 10
+          },
+          "incidentRejected": 0,
+          "incidentDiagnostics": {
+            "enabled": true,
+            "mode": "directional_only",
+            "blocked": 0,
+            "buyShockSeconds": 27,
+            "sellShockSeconds": 34,
+            "volumeThreshold": 147.27941,
+            "config": {
+              "enabled": true,
+              "mode": "directional_only",
+              "windowSec": 10,
+              "minMoveBps": 10.0,
+              "minVolumeQuantile": 0.99,
+              "minFlowImbalance": 0.8,
+              "cooldownSec": 10
+            }
+          }
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T22:01:50+00:00",
+            "signal": "UP",
+            "entry": 65686.591066,
+            "settle_time": "2026-06-16T22:11:50+00:00",
+            "settle": 65829.5,
+            "won": true,
+            "p_up": 0.269519
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T23:50:25+00:00",
+            "signal": "UP",
+            "entry": 65609.914073,
+            "settle_time": "2026-06-17T00:00:25+00:00",
+            "settle": 65673.4,
+            "won": true,
+            "p_up": 0.269109
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T01:19:40+00:00",
+            "signal": "UP",
+            "entry": 65550.33195,
+            "settle_time": "2026-06-17T01:29:40+00:00",
+            "settle": 65554.1,
+            "won": true,
+            "p_up": 0.249931
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T02:18:27+00:00",
+            "signal": "DOWN",
+            "entry": 65892.964925,
+            "settle_time": "2026-06-17T02:28:27+00:00",
+            "settle": 66023.3,
+            "won": false,
+            "p_up": 0.840091
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T05:05:11+00:00",
+            "signal": "DOWN",
+            "entry": 65936.778067,
+            "settle_time": "2026-06-17T05:15:11+00:00",
+            "settle": 65751.7,
+            "won": true,
+            "p_up": 0.730136
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T06:27:08+00:00",
+            "signal": "UP",
+            "entry": 65710.983748,
+            "settle_time": "2026-06-17T06:37:08+00:00",
+            "settle": 65647.5,
+            "won": false,
+            "p_up": 0.26663
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T06:41:26+00:00",
+            "signal": "UP",
+            "entry": 65560.728831,
+            "settle_time": "2026-06-17T06:51:26+00:00",
+            "settle": 65615.5,
+            "won": true,
+            "p_up": 0.268148
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T07:20:40+00:00",
+            "signal": "UP",
+            "entry": 65464.257776,
+            "settle_time": "2026-06-17T07:30:40+00:00",
+            "settle": 65512.9,
+            "won": true,
+            "p_up": 0.252311
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T07:53:33+00:00",
+            "signal": "UP",
+            "entry": 65309.40424,
+            "settle_time": "2026-06-17T08:03:33+00:00",
+            "settle": 65436.8,
+            "won": true,
+            "p_up": 0.262442
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T08:31:57+00:00",
+            "signal": "UP",
+            "entry": 65120.960781,
+            "settle_time": "2026-06-17T08:41:57+00:00",
+            "settle": 65041.5,
+            "won": false,
+            "p_up": 0.255604
+          }
+        ],
+        "sampleRejected": []
+      }
+    },
+    {
+      "strategyId": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+      "label": "正态成交量确认 稳健",
+      "modelType": "second_normal_vw_confirm",
+      "params": {
+        "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+        "lookback_sec": 2700,
+        "horizon_sec": 600,
+        "signal_gap_sec": 600,
+        "tail_pct": 0.2,
+        "eta_target_bps": 2.0,
+        "eta_max_wait_sec": 45,
+        "up_reversal_confirm_bps": 1.5,
+        "up_reversal_confirm_max_sec": 45,
+        "incident_filter": {
+          "incident_filter_enabled": true,
+          "incident_filter_mode": "directional_only",
+          "incident_window_sec": 10,
+          "incident_min_move_bps": 10,
+          "incident_min_volume_quantile": 0.99,
+          "incident_min_flow_imbalance": 0.8,
+          "incident_cooldown_sec": 10
+        },
+        "amount": 15.0,
+        "label": "正态成交量确认 稳健"
+      },
+      "score": 54.2088,
+      "rawSignals": {
+        "all": {
+          "trades": 35,
+          "wins": 23,
+          "losses": 12,
+          "winRate": 65.71,
+          "tradesPerDay": 9.15,
+          "maxLoss": 4,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 96.0,
+          "first": "2026-06-13T21:41:25+00:00",
+          "last": "2026-06-17T07:54:01+00:00"
+        },
+        "beforeLast24h": {
+          "trades": 24,
+          "wins": 13,
+          "losses": 11,
+          "winRate": 54.17,
+          "tradesPerDay": 8.5,
+          "maxLoss": 4,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": -9.0,
+          "first": "2026-06-13T21:41:25+00:00",
+          "last": "2026-06-16T08:50:16+00:00"
+        },
+        "last24h": {
+          "trades": 11,
+          "wins": 10,
+          "losses": 1,
+          "winRate": 90.91,
+          "tradesPerDay": 11.0,
+          "maxLoss": 1,
+          "amount": 15.0,
+          "payoutRate": 0.8,
+          "pnl": 105.0,
+          "first": "2026-06-16T09:50:36+00:00",
+          "last": "2026-06-17T07:54:01+00:00"
+        },
+        "thirds": [
+          {
+            "trades": 4,
+            "winRate": 75.0,
+            "tradesPerDay": 3.14,
+            "maxLoss": 1,
+            "pnl": 21.0
+          },
+          {
+            "trades": 18,
+            "winRate": 55.56,
+            "tradesPerDay": 14.12,
+            "maxLoss": 4,
+            "pnl": 0.0
+          },
+          {
+            "trades": 13,
+            "winRate": 76.92,
+            "tradesPerDay": 10.2,
+            "maxLoss": 2,
+            "pnl": 75.0
+          }
+        ],
+        "byUtcDay": [
+          {
+            "day": "2026-06-13",
+            "trades": 1,
+            "winRate": 100.0,
+            "maxLoss": 0,
+            "pnl": 12.0
+          },
+          {
+            "day": "2026-06-14",
+            "trades": 7,
+            "winRate": 57.14,
+            "maxLoss": 1,
+            "pnl": 3.0
+          },
+          {
+            "day": "2026-06-15",
+            "trades": 13,
+            "winRate": 61.54,
+            "maxLoss": 4,
+            "pnl": 21.0
+          },
+          {
+            "day": "2026-06-16",
+            "trades": 9,
+            "winRate": 66.67,
+            "maxLoss": 3,
+            "pnl": 27.0
+          },
+          {
+            "day": "2026-06-17",
+            "trades": 5,
+            "winRate": 80.0,
+            "maxLoss": 1,
+            "pnl": 33.0
+          }
+        ]
+      },
+      "liveExecution": {
+        "metrics": {
+          "all": {
+            "trades": 35,
+            "wins": 23,
+            "losses": 12,
+            "winRate": 65.71,
+            "tradesPerDay": 9.15,
+            "maxLoss": 4,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 96.0,
+            "first": "2026-06-13T21:41:25+00:00",
+            "last": "2026-06-17T07:54:01+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 24,
+            "wins": 13,
+            "losses": 11,
+            "winRate": 54.17,
+            "tradesPerDay": 8.5,
+            "maxLoss": 4,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": -9.0,
+            "first": "2026-06-13T21:41:25+00:00",
+            "last": "2026-06-16T08:50:16+00:00"
+          },
+          "last24h": {
+            "trades": 11,
+            "wins": 10,
+            "losses": 1,
+            "winRate": 90.91,
+            "tradesPerDay": 11.0,
+            "maxLoss": 1,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 105.0,
+            "first": "2026-06-16T09:50:36+00:00",
+            "last": "2026-06-17T07:54:01+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 4,
+              "winRate": 75.0,
+              "tradesPerDay": 3.14,
+              "maxLoss": 1,
+              "pnl": 21.0
+            },
+            {
+              "trades": 18,
+              "winRate": 55.56,
+              "tradesPerDay": 14.12,
+              "maxLoss": 4,
+              "pnl": 0.0
+            },
+            {
+              "trades": 13,
+              "winRate": 76.92,
+              "tradesPerDay": 10.2,
+              "maxLoss": 2,
+              "pnl": 75.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 1,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 12.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 7,
+              "winRate": 57.14,
+              "maxLoss": 1,
+              "pnl": 3.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 13,
+              "winRate": 61.54,
+              "maxLoss": 4,
+              "pnl": 21.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 9,
+              "winRate": 66.67,
+              "maxLoss": 3,
+              "pnl": 27.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 5,
+              "winRate": 80.0,
+              "maxLoss": 1,
+              "pnl": 33.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 35,
+          "rejectedByStrategyLock": 0,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSecIgnored": 600
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T13:11:23+00:00",
+            "signal": "UP",
+            "entry": 66014.5,
+            "settle_time": "2026-06-16T13:21:23+00:00",
+            "settle": 66159.7,
+            "won": true,
+            "p_up": 0.191097
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T14:31:45+00:00",
+            "signal": "UP",
+            "entry": 65420.0,
+            "settle_time": "2026-06-16T14:41:45+00:00",
+            "settle": 65701.2,
+            "won": true,
+            "p_up": 0.198205
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T18:03:42+00:00",
+            "signal": "DOWN",
+            "entry": 66201.138904,
+            "settle_time": "2026-06-16T18:13:42+00:00",
+            "settle": 66084.6,
+            "won": true,
+            "p_up": 0.804098
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T19:16:41+00:00",
+            "signal": "UP",
+            "entry": 65554.7,
+            "settle_time": "2026-06-16T19:26:41+00:00",
+            "settle": 65673.0,
+            "won": true,
+            "p_up": 0.197762
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T21:13:18+00:00",
+            "signal": "DOWN",
+            "entry": 65874.773637,
+            "settle_time": "2026-06-16T21:23:18+00:00",
+            "settle": 65705.2,
+            "won": true,
+            "p_up": 0.802133
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T01:22:59+00:00",
+            "signal": "UP",
+            "entry": 65454.4,
+            "settle_time": "2026-06-17T01:32:59+00:00",
+            "settle": 65541.9,
+            "won": true,
+            "p_up": 0.191385
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T02:18:22+00:00",
+            "signal": "DOWN",
+            "entry": 65886.375958,
+            "settle_time": "2026-06-17T02:28:22+00:00",
+            "settle": 66007.8,
+            "won": false,
+            "p_up": 0.840091
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T02:28:46+00:00",
+            "signal": "DOWN",
+            "entry": 66033.805441,
+            "settle_time": "2026-06-17T02:38:46+00:00",
+            "settle": 65822.7,
+            "won": true,
+            "p_up": 0.801124
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T06:28:36+00:00",
+            "signal": "UP",
+            "entry": 65622.2,
+            "settle_time": "2026-06-17T06:38:36+00:00",
+            "settle": 65652.0,
+            "won": true,
+            "p_up": 0.186283
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T07:54:01+00:00",
+            "signal": "UP",
+            "entry": 65230.5,
+            "settle_time": "2026-06-17T08:04:01+00:00",
+            "settle": 65438.0,
+            "won": true,
+            "p_up": 0.198881
+          }
+        ]
+      },
+      "configuredGapExecution": {
+        "metrics": {
+          "all": {
+            "trades": 35,
+            "wins": 23,
+            "losses": 12,
+            "winRate": 65.71,
+            "tradesPerDay": 9.15,
+            "maxLoss": 4,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 96.0,
+            "first": "2026-06-13T21:41:25+00:00",
+            "last": "2026-06-17T07:54:01+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 24,
+            "wins": 13,
+            "losses": 11,
+            "winRate": 54.17,
+            "tradesPerDay": 8.5,
+            "maxLoss": 4,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": -9.0,
+            "first": "2026-06-13T21:41:25+00:00",
+            "last": "2026-06-16T08:50:16+00:00"
+          },
+          "last24h": {
+            "trades": 11,
+            "wins": 10,
+            "losses": 1,
+            "winRate": 90.91,
+            "tradesPerDay": 11.0,
+            "maxLoss": 1,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 105.0,
+            "first": "2026-06-16T09:50:36+00:00",
+            "last": "2026-06-17T07:54:01+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 4,
+              "winRate": 75.0,
+              "tradesPerDay": 3.14,
+              "maxLoss": 1,
+              "pnl": 21.0
+            },
+            {
+              "trades": 18,
+              "winRate": 55.56,
+              "tradesPerDay": 14.12,
+              "maxLoss": 4,
+              "pnl": 0.0
+            },
+            {
+              "trades": 13,
+              "winRate": 76.92,
+              "tradesPerDay": 10.2,
+              "maxLoss": 2,
+              "pnl": 75.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 1,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 12.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 7,
+              "winRate": 57.14,
+              "maxLoss": 1,
+              "pnl": 3.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 13,
+              "winRate": 61.54,
+              "maxLoss": 4,
+              "pnl": 21.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 9,
+              "winRate": 66.67,
+              "maxLoss": 3,
+              "pnl": 27.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 5,
+              "winRate": 80.0,
+              "maxLoss": 1,
+              "pnl": 33.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 35,
+          "rejectedByStrategyLock": 0,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSec": 600
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T13:11:23+00:00",
+            "signal": "UP",
+            "entry": 66014.5,
+            "settle_time": "2026-06-16T13:21:23+00:00",
+            "settle": 66159.7,
+            "won": true,
+            "p_up": 0.191097
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T14:31:45+00:00",
+            "signal": "UP",
+            "entry": 65420.0,
+            "settle_time": "2026-06-16T14:41:45+00:00",
+            "settle": 65701.2,
+            "won": true,
+            "p_up": 0.198205
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T18:03:42+00:00",
+            "signal": "DOWN",
+            "entry": 66201.138904,
+            "settle_time": "2026-06-16T18:13:42+00:00",
+            "settle": 66084.6,
+            "won": true,
+            "p_up": 0.804098
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T19:16:41+00:00",
+            "signal": "UP",
+            "entry": 65554.7,
+            "settle_time": "2026-06-16T19:26:41+00:00",
+            "settle": 65673.0,
+            "won": true,
+            "p_up": 0.197762
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T21:13:18+00:00",
+            "signal": "DOWN",
+            "entry": 65874.773637,
+            "settle_time": "2026-06-16T21:23:18+00:00",
+            "settle": 65705.2,
+            "won": true,
+            "p_up": 0.802133
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T01:22:59+00:00",
+            "signal": "UP",
+            "entry": 65454.4,
+            "settle_time": "2026-06-17T01:32:59+00:00",
+            "settle": 65541.9,
+            "won": true,
+            "p_up": 0.191385
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T02:18:22+00:00",
+            "signal": "DOWN",
+            "entry": 65886.375958,
+            "settle_time": "2026-06-17T02:28:22+00:00",
+            "settle": 66007.8,
+            "won": false,
+            "p_up": 0.840091
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T02:28:46+00:00",
+            "signal": "DOWN",
+            "entry": 66033.805441,
+            "settle_time": "2026-06-17T02:38:46+00:00",
+            "settle": 65822.7,
+            "won": true,
+            "p_up": 0.801124
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T06:28:36+00:00",
+            "signal": "UP",
+            "entry": 65622.2,
+            "settle_time": "2026-06-17T06:38:36+00:00",
+            "settle": 65652.0,
+            "won": true,
+            "p_up": 0.186283
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T07:54:01+00:00",
+            "signal": "UP",
+            "entry": 65230.5,
+            "settle_time": "2026-06-17T08:04:01+00:00",
+            "settle": 65438.0,
+            "won": true,
+            "p_up": 0.198881
+          }
+        ]
+      },
+      "incidentFilterExecution": {
+        "metrics": {
+          "all": {
+            "trades": 33,
+            "wins": 22,
+            "losses": 11,
+            "winRate": 66.67,
+            "tradesPerDay": 8.63,
+            "maxLoss": 3,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 99.0,
+            "first": "2026-06-13T21:41:25+00:00",
+            "last": "2026-06-17T06:28:36+00:00"
+          },
+          "beforeLast24h": {
+            "trades": 23,
+            "wins": 13,
+            "losses": 10,
+            "winRate": 56.52,
+            "tradesPerDay": 8.14,
+            "maxLoss": 3,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 6.0,
+            "first": "2026-06-13T21:41:25+00:00",
+            "last": "2026-06-16T08:50:16+00:00"
+          },
+          "last24h": {
+            "trades": 10,
+            "wins": 9,
+            "losses": 1,
+            "winRate": 90.0,
+            "tradesPerDay": 10.0,
+            "maxLoss": 1,
+            "amount": 15.0,
+            "payoutRate": 0.8,
+            "pnl": 93.0,
+            "first": "2026-06-16T09:50:36+00:00",
+            "last": "2026-06-17T06:28:36+00:00"
+          },
+          "thirds": [
+            {
+              "trades": 4,
+              "winRate": 75.0,
+              "tradesPerDay": 3.14,
+              "maxLoss": 1,
+              "pnl": 21.0
+            },
+            {
+              "trades": 17,
+              "winRate": 58.82,
+              "tradesPerDay": 13.34,
+              "maxLoss": 3,
+              "pnl": 15.0
+            },
+            {
+              "trades": 12,
+              "winRate": 75.0,
+              "tradesPerDay": 9.41,
+              "maxLoss": 2,
+              "pnl": 63.0
+            }
+          ],
+          "byUtcDay": [
+            {
+              "day": "2026-06-13",
+              "trades": 1,
+              "winRate": 100.0,
+              "maxLoss": 0,
+              "pnl": 12.0
+            },
+            {
+              "day": "2026-06-14",
+              "trades": 7,
+              "winRate": 57.14,
+              "maxLoss": 1,
+              "pnl": 3.0
+            },
+            {
+              "day": "2026-06-15",
+              "trades": 12,
+              "winRate": 66.67,
+              "maxLoss": 3,
+              "pnl": 36.0
+            },
+            {
+              "day": "2026-06-16",
+              "trades": 9,
+              "winRate": 66.67,
+              "maxLoss": 3,
+              "pnl": 27.0
+            },
+            {
+              "day": "2026-06-17",
+              "trades": 4,
+              "winRate": 75.0,
+              "maxLoss": 1,
+              "pnl": 21.0
+            }
+          ]
+        },
+        "policy": {
+          "perStrategyLock": true,
+          "globalLockSec": 0,
+          "cooldownSec": 600,
+          "accepted": 33,
+          "rejectedByStrategyLock": 0,
+          "rejectedByGlobalLock": 0,
+          "configuredGapSec": 600,
+          "incidentFilter": {
+            "enabled": true,
+            "mode": "directional_only",
+            "windowSec": 10,
+            "minMoveBps": 10.0,
+            "minVolumeQuantile": 0.99,
+            "minFlowImbalance": 0.8,
+            "cooldownSec": 10
+          },
+          "incidentRejected": 2,
+          "incidentDiagnostics": {
+            "enabled": true,
+            "mode": "directional_only",
+            "blocked": 2,
+            "buyShockSeconds": 27,
+            "sellShockSeconds": 34,
+            "volumeThreshold": 147.27941,
+            "config": {
+              "enabled": true,
+              "mode": "directional_only",
+              "windowSec": 10,
+              "minMoveBps": 10.0,
+              "minVolumeQuantile": 0.99,
+              "minFlowImbalance": 0.8,
+              "cooldownSec": 10
+            }
+          }
+        },
+        "sampleTrades": [
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T09:50:36+00:00",
+            "signal": "UP",
+            "entry": 66452.6,
+            "settle_time": "2026-06-16T10:00:36+00:00",
+            "settle": 66488.6,
+            "won": true,
+            "p_up": 0.197918
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T13:11:23+00:00",
+            "signal": "UP",
+            "entry": 66014.5,
+            "settle_time": "2026-06-16T13:21:23+00:00",
+            "settle": 66159.7,
+            "won": true,
+            "p_up": 0.191097
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T14:31:45+00:00",
+            "signal": "UP",
+            "entry": 65420.0,
+            "settle_time": "2026-06-16T14:41:45+00:00",
+            "settle": 65701.2,
+            "won": true,
+            "p_up": 0.198205
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T18:03:42+00:00",
+            "signal": "DOWN",
+            "entry": 66201.138904,
+            "settle_time": "2026-06-16T18:13:42+00:00",
+            "settle": 66084.6,
+            "won": true,
+            "p_up": 0.804098
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T19:16:41+00:00",
+            "signal": "UP",
+            "entry": 65554.7,
+            "settle_time": "2026-06-16T19:26:41+00:00",
+            "settle": 65673.0,
+            "won": true,
+            "p_up": 0.197762
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-16T21:13:18+00:00",
+            "signal": "DOWN",
+            "entry": 65874.773637,
+            "settle_time": "2026-06-16T21:23:18+00:00",
+            "settle": 65705.2,
+            "won": true,
+            "p_up": 0.802133
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T01:22:59+00:00",
+            "signal": "UP",
+            "entry": 65454.4,
+            "settle_time": "2026-06-17T01:32:59+00:00",
+            "settle": 65541.9,
+            "won": true,
+            "p_up": 0.191385
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T02:18:22+00:00",
+            "signal": "DOWN",
+            "entry": 65886.375958,
+            "settle_time": "2026-06-17T02:28:22+00:00",
+            "settle": 66007.8,
+            "won": false,
+            "p_up": 0.840091
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T02:28:46+00:00",
+            "signal": "DOWN",
+            "entry": 66033.805441,
+            "settle_time": "2026-06-17T02:38:46+00:00",
+            "settle": 65822.7,
+            "won": true,
+            "p_up": 0.801124
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T06:28:36+00:00",
+            "signal": "UP",
+            "entry": 65622.2,
+            "settle_time": "2026-06-17T06:38:36+00:00",
+            "settle": 65652.0,
+            "won": true,
+            "p_up": 0.186283
+          }
+        ],
+        "sampleRejected": [
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-15T11:19:55+00:00",
+            "signal": "DOWN",
+            "entry": 66184.235524,
+            "settle_time": "2026-06-15T11:29:55+00:00",
+            "settle": 66220.0,
+            "won": false,
+            "p_up": 0.801316
+          },
+          {
+            "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+            "model_type": "second_normal_vw_confirm",
+            "time": "2026-06-17T07:54:01+00:00",
+            "signal": "UP",
+            "entry": 65230.5,
+            "settle_time": "2026-06-17T08:04:01+00:00",
+            "settle": 65438.0,
+            "won": true,
+            "p_up": 0.198881
+          }
+        ]
+      }
+    }
+  ],
+  "portfolio": {
+    "execution": {
+      "perStrategyLock": true,
+      "globalLockSec": 0,
+      "accepted": 83,
+      "rejectedByStrategyLock": 0,
+      "rejectedByGlobalLock": 0,
+      "note": "Default is independent per-strategy locking. globalLockSec is only for research."
+    },
+    "metrics": {
+      "all": {
+        "trades": 83,
+        "wins": 54,
+        "losses": 29,
+        "winRate": 65.06,
+        "tradesPerDay": 21.71,
+        "maxLoss": 5,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 71.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-17T08:31:57+00:00"
+      },
+      "beforeLast24h": {
+        "trades": 54,
+        "wins": 31,
+        "losses": 23,
+        "winRate": 57.41,
+        "tradesPerDay": 19.12,
+        "maxLoss": 5,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 9.0,
+        "first": "2026-06-13T19:40:38+00:00",
+        "last": "2026-06-16T08:50:16+00:00"
+      },
+      "last24h": {
+        "trades": 29,
+        "wins": 23,
+        "losses": 6,
+        "winRate": 79.31,
+        "tradesPerDay": 29.0,
+        "maxLoss": 2,
+        "amount": 5.0,
+        "payoutRate": 0.8,
+        "pnl": 62.0,
+        "first": "2026-06-16T09:46:36+00:00",
+        "last": "2026-06-17T08:31:57+00:00"
+      },
+      "thirds": [
+        {
+          "trades": 11,
+          "winRate": 72.73,
+          "tradesPerDay": 8.63,
+          "maxLoss": 2,
+          "pnl": 17.0
+        },
+        {
+          "trades": 37,
+          "winRate": 56.76,
+          "tradesPerDay": 29.03,
+          "maxLoss": 5,
+          "pnl": 4.0
+        },
+        {
+          "trades": 35,
+          "winRate": 71.43,
+          "tradesPerDay": 27.46,
+          "maxLoss": 3,
+          "pnl": 50.0
+        }
+      ],
+      "byUtcDay": [
+        {
+          "day": "2026-06-13",
+          "trades": 3,
+          "winRate": 100.0,
+          "maxLoss": 0,
+          "pnl": 12.0
+        },
+        {
+          "day": "2026-06-14",
+          "trades": 15,
+          "winRate": 53.33,
+          "maxLoss": 3,
+          "pnl": -3.0
+        },
+        {
+          "day": "2026-06-15",
+          "trades": 28,
+          "winRate": 64.29,
+          "maxLoss": 5,
+          "pnl": 22.0
+        },
+        {
+          "day": "2026-06-16",
+          "trades": 24,
+          "winRate": 66.67,
+          "maxLoss": 3,
+          "pnl": 24.0
+        },
+        {
+          "day": "2026-06-17",
+          "trades": 13,
+          "winRate": 69.23,
+          "maxLoss": 2,
+          "pnl": 16.0
+        }
+      ]
+    },
+    "sampleTrades": [
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-16T22:01:50+00:00",
+        "signal": "UP",
+        "entry": 65686.591066,
+        "settle_time": "2026-06-16T22:11:50+00:00",
+        "settle": 65829.5,
+        "won": true,
+        "p_up": 0.269519
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-16T23:50:25+00:00",
+        "signal": "UP",
+        "entry": 65609.914073,
+        "settle_time": "2026-06-17T00:00:25+00:00",
+        "settle": 65673.4,
+        "won": true,
+        "p_up": 0.269109
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T01:19:40+00:00",
+        "signal": "UP",
+        "entry": 65550.33195,
+        "settle_time": "2026-06-17T01:29:40+00:00",
+        "settle": 65554.1,
+        "won": true,
+        "p_up": 0.249931
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T01:22:59+00:00",
+        "signal": "UP",
+        "entry": 65454.4,
+        "settle_time": "2026-06-17T01:32:59+00:00",
+        "settle": 65541.9,
+        "won": true,
+        "p_up": 0.191385
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T02:18:22+00:00",
+        "signal": "DOWN",
+        "entry": 65886.375958,
+        "settle_time": "2026-06-17T02:28:22+00:00",
+        "settle": 66007.8,
+        "won": false,
+        "p_up": 0.840091
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T02:18:27+00:00",
+        "signal": "DOWN",
+        "entry": 65892.964925,
+        "settle_time": "2026-06-17T02:28:27+00:00",
+        "settle": 66023.3,
+        "won": false,
+        "p_up": 0.840091
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T02:28:46+00:00",
+        "signal": "DOWN",
+        "entry": 66033.805441,
+        "settle_time": "2026-06-17T02:38:46+00:00",
+        "settle": 65822.7,
+        "won": true,
+        "p_up": 0.801124
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T05:05:11+00:00",
+        "signal": "DOWN",
+        "entry": 65936.778067,
+        "settle_time": "2026-06-17T05:15:11+00:00",
+        "settle": 65751.7,
+        "won": true,
+        "p_up": 0.730136
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T06:27:08+00:00",
+        "signal": "UP",
+        "entry": 65710.983748,
+        "settle_time": "2026-06-17T06:37:08+00:00",
+        "settle": 65647.5,
+        "won": false,
+        "p_up": 0.26663
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T06:28:36+00:00",
+        "signal": "UP",
+        "entry": 65622.2,
+        "settle_time": "2026-06-17T06:38:36+00:00",
+        "settle": 65652.0,
+        "won": true,
+        "p_up": 0.186283
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T06:41:26+00:00",
+        "signal": "UP",
+        "entry": 65560.728831,
+        "settle_time": "2026-06-17T06:51:26+00:00",
+        "settle": 65615.5,
+        "won": true,
+        "p_up": 0.268148
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T07:20:40+00:00",
+        "signal": "UP",
+        "entry": 65464.257776,
+        "settle_time": "2026-06-17T07:30:40+00:00",
+        "settle": 65512.9,
+        "won": true,
+        "p_up": 0.252311
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T07:53:33+00:00",
+        "signal": "UP",
+        "entry": 65309.40424,
+        "settle_time": "2026-06-17T08:03:33+00:00",
+        "settle": 65436.8,
+        "won": true,
+        "p_up": 0.262442
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T07:54:01+00:00",
+        "signal": "UP",
+        "entry": 65230.5,
+        "settle_time": "2026-06-17T08:04:01+00:00",
+        "settle": 65438.0,
+        "won": true,
+        "p_up": 0.198881
+      },
+      {
+        "strategy_id": "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+        "model_type": "second_normal_vw_confirm",
+        "time": "2026-06-17T08:31:57+00:00",
+        "signal": "UP",
+        "entry": 65120.960781,
+        "settle_time": "2026-06-17T08:41:57+00:00",
+        "settle": 65041.5,
+        "won": false,
+        "p_up": 0.255604
+      }
+    ]
+  }
+}

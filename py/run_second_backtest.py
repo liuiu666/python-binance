@@ -7,17 +7,28 @@ from pathlib import Path
 
 import pandas as pd
 
-from second_backtest.data import audit_second_csv, load_second_bars
+from second_backtest.data import audit_second_sources, load_second_bars
 from second_backtest.execution import apply_signal_gap, execute_signals
+from second_backtest.incident_filter import (
+    apply_incident_filter_to_signals,
+    incident_config_from_dict,
+    incident_config_to_dict,
+)
 from second_backtest.metrics import compact_metrics, payout_for_horizon, robust_score, split_metrics
 from second_backtest.strategies import (
     SecondChipConfig,
     SecondNormalConfig,
+    SecondNormalDirection3mConfig,
+    SecondNormalMultiframeConfig,
     SecondNormalVwConfirmConfig,
+    SecondRangeBreakoutConfirmConfig,
     SecondTrendPullbackDownConfig,
     generate_chip_signals,
+    generate_normal_direction_3m_signals,
+    generate_normal_multiframe_signals,
     generate_normal_signals,
     generate_normal_vw_confirm_signals,
+    generate_range_breakout_confirm_signals,
     generate_trend_pullback_down_signals,
     prod_configs_to_second_configs,
 )
@@ -87,10 +98,16 @@ def _signals_for_config(
 ) -> list[dict]:
     if isinstance(cfg, SecondNormalConfig):
         return generate_normal_signals(bars, cfg, apply_config_gap=apply_config_gap)
+    if isinstance(cfg, SecondNormalDirection3mConfig):
+        return generate_normal_direction_3m_signals(bars, cfg, apply_config_gap=apply_config_gap)
+    if isinstance(cfg, SecondNormalMultiframeConfig):
+        return generate_normal_multiframe_signals(bars, cfg, apply_config_gap=apply_config_gap)
     if isinstance(cfg, SecondNormalVwConfirmConfig):
         return generate_normal_vw_confirm_signals(bars, cfg, apply_config_gap=True)
     if isinstance(cfg, SecondChipConfig):
         return generate_chip_signals(bars, cfg, apply_config_gap=apply_config_gap)
+    if isinstance(cfg, SecondRangeBreakoutConfirmConfig):
+        return generate_range_breakout_confirm_signals(bars, cfg, apply_config_gap=apply_config_gap)
     if isinstance(cfg, SecondTrendPullbackDownConfig):
         return generate_trend_pullback_down_signals(
             bars,
@@ -125,6 +142,37 @@ def _execute_and_measure(
     return executed, rejected, metrics
 
 
+def _execute_incident_and_measure(
+    bars: pd.DataFrame,
+    signals: list[dict],
+    cfg,
+    *,
+    global_lock_sec: int,
+    incident_cfg,
+) -> tuple[list[dict], list[dict], list[dict], dict, dict]:
+    filtered, incident_rejected, incident_diag = apply_incident_filter_to_signals(
+        bars,
+        signals,
+        incident_cfg,
+    )
+    executed, rejected = execute_signals(
+        filtered,
+        per_strategy_lock=True,
+        global_lock_sec=global_lock_sec,
+        cooldown_sec=cfg.horizon_sec,
+        use_horizon_as_lock=True,
+    )
+    payout = payout_for_horizon(cfg.horizon_sec)
+    metrics = split_metrics(
+        executed,
+        bars.index.min(),
+        bars.index.max(),
+        amount=cfg.amount,
+        payout_rate=payout,
+    )
+    return executed, rejected, incident_rejected, incident_diag, metrics
+
+
 def _execution_policy(
     cfg,
     accepted: list[dict],
@@ -155,6 +203,7 @@ def _execution_policy(
 def _run_one(bars: pd.DataFrame, cfg, *, global_lock_sec: int) -> dict:
     raw = _signals_for_config(bars, cfg, apply_config_gap=False)
     configured_gap = apply_signal_gap(raw, cfg.signal_gap_sec)
+    incident_cfg = incident_config_from_dict(getattr(cfg, "incident_filter", {}))
     live_executed, live_rejected, live_metrics = _execute_and_measure(
         bars,
         raw,
@@ -166,6 +215,13 @@ def _run_one(bars: pd.DataFrame, cfg, *, global_lock_sec: int) -> dict:
         configured_gap,
         cfg,
         global_lock_sec=global_lock_sec,
+    )
+    incident_executed, incident_rejected, incident_blocked, incident_diag, incident_metrics = _execute_incident_and_measure(
+        bars,
+        configured_gap,
+        cfg,
+        global_lock_sec=global_lock_sec,
+        incident_cfg=incident_cfg,
     )
     payout = payout_for_horizon(cfg.horizon_sec)
     raw_metrics = split_metrics(
@@ -203,6 +259,23 @@ def _run_one(bars: pd.DataFrame, cfg, *, global_lock_sec: int) -> dict:
                 configured_gap_applied=True,
             ),
             "sampleTrades": [_compact_trade(row) for row in gap_executed[-10:]],
+        },
+        "incidentFilterExecution": {
+            "metrics": compact_metrics(incident_metrics),
+            "policy": {
+                **_execution_policy(
+                    cfg,
+                    incident_executed,
+                    incident_rejected,
+                    global_lock_sec=global_lock_sec,
+                    configured_gap_applied=True,
+                ),
+                "incidentFilter": incident_config_to_dict(incident_cfg),
+                "incidentRejected": len(incident_blocked),
+                "incidentDiagnostics": incident_diag,
+            },
+            "sampleTrades": [_compact_trade(row) for row in incident_executed[-10:]],
+            "sampleRejected": [_compact_trade(row) for row in incident_blocked[:10]],
         },
     }
 
@@ -285,6 +358,10 @@ def _portfolio_report(bars: pd.DataFrame, configs: list, *, global_lock_sec: int
 def _model_type_for_config(cfg) -> str:
     if isinstance(cfg, SecondNormalConfig):
         return "second_normal"
+    if isinstance(cfg, SecondNormalDirection3mConfig):
+        return "second_normal_direction_3m"
+    if isinstance(cfg, SecondNormalMultiframeConfig):
+        return "second_normal_multiframe"
     if isinstance(cfg, SecondNormalVwConfirmConfig):
         return "second_normal_vw_confirm"
     if isinstance(cfg, SecondChipConfig):
@@ -356,7 +433,7 @@ def build_report(args) -> dict:
             "causal": "Each signal uses data at or before its signal second and settles horizon_sec later.",
             "execution": "Reports liveExecution and configuredGapExecution; no global dedupe unless requested.",
         },
-        "dataQuality": audit_second_csv(args.csv),
+        "dataQuality": audit_second_sources(args.csv),
         "sample": {
             "start": bars.index.min().isoformat(),
             "end": bars.index.max().isoformat(),

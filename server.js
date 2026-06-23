@@ -719,6 +719,17 @@ function pullbackOk(direction, price, reference, bps) {
   return direction === "UP" ? price <= reference - move : price >= reference + move;
 }
 
+function priceMoveBps(later, reference) {
+  if (!Number.isFinite(later) || !Number.isFinite(reference) || reference <= 0) return null;
+  return ((later - reference) / reference) * 10000;
+}
+
+function hasActionableTimeMargin(sig, marginMs = 15000) {
+  const actionableMs = signalTimeMs(sig);
+  if (!actionableMs) return true;
+  return Date.now() - actionableMs <= configuredMaxActionableLagMs() - marginMs;
+}
+
 function blockSignalForEntryTiming(sig, state, reason) {
   const out = { ...sig };
   out.signal = null;
@@ -893,10 +904,66 @@ function applyEntryTimingForSignal(strategyId, sig) {
   if (policy.type === "eta_target_price") {
     const targetBps = Number(state.etaTargetBps || sig.eta_target_bps || 2);
     const targetPrice = Number(state.etaTargetPrice);
+    const upConfirmBps = Number(sig.up_reversal_confirm_bps ?? 0.0);
+    const upConfirmMaxSec = Number(sig.up_reversal_confirm_max_sec ?? 20);
     const hitTarget = Number.isFinite(targetPrice)
       ? (sig.signal === "UP" ? price <= targetPrice : price >= targetPrice)
       : pullbackOk(sig.signal, price, state.referencePrice, targetBps);
+    if (sig.signal === "UP") {
+      if (hitTarget && !state.upTargetHitAt) {
+        state.upTargetHitAt = now;
+        state.upTargetPrice = price;
+        state.upTargetLow = price;
+        appendJsonl(TRADE_AUDIT_FILE, {
+          serverTime: now,
+          event: "entry_timing_pullback_seen",
+          strategyId,
+          signal: sig.signal,
+          policy: policy.name,
+          referencePrice: state.referencePrice,
+          targetPrice: Number.isFinite(targetPrice) ? targetPrice : null,
+          targetBps,
+          entryPrice: price,
+          confirmBps: upConfirmBps,
+          confirmMaxSec: upConfirmMaxSec
+        });
+      }
+      if (!state.upTargetHitAt) {
+        return blockSignalForEntryTiming(sig, state, "waiting_eta_target_price");
+      }
+      state.upTargetLow = Math.min(Number(state.upTargetLow || price), price);
+      const reboundBps = priceMoveBps(price, Number(state.upTargetLow));
+      const confirmOk = Number(upConfirmBps) <= 0 || (reboundBps !== null && reboundBps >= upConfirmBps);
+      if (!confirmOk) {
+        const reason = now > Number(state.upTargetHitAt) + upConfirmMaxSec * 1000
+          ? "up_reversal_confirm_failed"
+          : "waiting_up_reversal_confirm";
+        return blockSignalForEntryTiming(sig, state, reason);
+      }
+      if (!hasActionableTimeMargin(sig)) {
+        delete entryTimingState[strategyId];
+        return blockSignalForEntryTiming(sig, state, "entry_timing_insufficient_actionable_margin");
+      }
+      appendJsonl(TRADE_AUDIT_FILE, {
+        serverTime: now,
+        event: "entry_timing_allow",
+        strategyId,
+        signal: sig.signal,
+        policy: policy.name,
+        referencePrice: state.referencePrice,
+        targetPrice: Number.isFinite(targetPrice) ? targetPrice : null,
+        targetBps,
+        entryPrice: price,
+        upTargetLow: state.upTargetLow,
+        reboundBps
+      });
+      return allowSignalForEntryTiming(sig, state, "up_reversal_confirmed");
+    }
     if (hitTarget) {
+      if (!hasActionableTimeMargin(sig)) {
+        delete entryTimingState[strategyId];
+        return blockSignalForEntryTiming(sig, state, "entry_timing_insufficient_actionable_margin");
+      }
       appendJsonl(TRADE_AUDIT_FILE, {
         serverTime: now,
         event: "entry_timing_allow",
@@ -2030,6 +2097,15 @@ function applyProdStrategyParams(baseConfig, config) {
         second_tail_pct: variant.tailPct,
         eta_target_bps: variant.etaTargetBps || 2,
         eta_max_wait_sec: variant.etaMaxWaitSec || 45,
+        up_reversal_confirm_bps: variant.upReversalConfirmBps ?? 0.0,
+        up_reversal_confirm_max_sec: variant.upReversalConfirmMaxSec ?? 20,
+        incident_filter_enabled: variant.incidentFilterEnabled !== false,
+        incident_filter_mode: variant.incidentFilterMode || "directional_only",
+        incident_window_sec: variant.incidentWindowSec || 10,
+        incident_min_move_bps: variant.incidentMinMoveBps ?? 10,
+        incident_min_volume_quantile: variant.incidentMinVolumeQuantile ?? 0.99,
+        incident_min_flow_imbalance: variant.incidentMinFlowImbalance ?? 0.8,
+        incident_cooldown_sec: variant.incidentCooldownSec ?? 10,
         model_label: variant.label || `SECOND_VW_CONFIRM_${variant.lookbackSec || 2700}_${Math.round(Number(variant.tailPct || 0.2) * 100)}_ETA${variant.etaTargetBps || 2}`
       };
       continue;
@@ -2070,6 +2146,35 @@ function applyProdStrategyParams(baseConfig, config) {
         second_chip_direction_filter: variant.chipDirectionFilter || "breakout_up_only",
         second_chip_filter: variant.chipFilter || "none",
         model_label: `SECOND_CHIP_${variant.lookbackSec || 3600}_${Math.round(Number(variant.chipTargetShare || 0.2) * 100)}_${Math.round(Number(variant.chipBreakPct || 0.0023) * 10000)}`
+      };
+      continue;
+    }
+    if (variant.base === "SECOND_RANGE_BREAKOUT_CONFIRM") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        trade_enabled: variant.tradeEnabled === true,
+        model_type: "second_range_breakout_confirm",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        second_range_lookback_sec: variant.lookbackSec || 1800,
+        second_range_horizon_sec: variant.horizonSec || 600,
+        second_range_signal_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        second_range_z_entry: variant.rangeZEntry ?? 2.2,
+        second_range_confirm_sec: variant.rangeConfirmSec ?? 60,
+        second_range_hold_z: variant.rangeHoldZ ?? 1.0,
+        second_range_min_hold_ratio: variant.rangeMinHoldRatio ?? 0.75,
+        second_range_pre_slope_sec: variant.rangePreSlopeSec ?? 300,
+        second_range_confirm_slope_sec: variant.rangeConfirmSlopeSec ?? 60,
+        second_range_min_pre_slope_bps: variant.rangeMinPreSlopeBps ?? 8,
+        second_range_min_confirm_slope_bps: variant.rangeMinConfirmSlopeBps ?? 4,
+        second_range_min_flow_imbalance: variant.rangeMinFlowImbalance ?? 0.12,
+        second_range_min_confirm_flow_imbalance: variant.rangeMinConfirmFlowImbalance ?? 0.08,
+        second_range_min_volume_ratio: variant.rangeMinVolumeRatio ?? 0.45,
+        second_range_min_volatility_ratio: variant.rangeMinVolatilityRatio ?? 0.55,
+        second_range_max_age_beyond_sec: variant.rangeMaxAgeBeyondSec ?? 180,
+        model_label: variant.label || "range breakout confirm shadow"
       };
       continue;
     }
@@ -2124,6 +2229,15 @@ function strategyRestartFingerprint(config) {
     secondFilter: v.secondFilter,
     etaTargetBps: v.etaTargetBps,
     etaMaxWaitSec: v.etaMaxWaitSec,
+    upReversalConfirmBps: v.upReversalConfirmBps,
+    upReversalConfirmMaxSec: v.upReversalConfirmMaxSec,
+    incidentFilterEnabled: v.incidentFilterEnabled,
+    incidentFilterMode: v.incidentFilterMode,
+    incidentWindowSec: v.incidentWindowSec,
+    incidentMinMoveBps: v.incidentMinMoveBps,
+    incidentMinVolumeQuantile: v.incidentMinVolumeQuantile,
+    incidentMinFlowImbalance: v.incidentMinFlowImbalance,
+    incidentCooldownSec: v.incidentCooldownSec,
     chipTargetShare: v.chipTargetShare,
     chipBinMode: v.chipBinMode,
     chipBinSize: v.chipBinSize,
