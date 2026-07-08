@@ -32,6 +32,7 @@ LS_RATIO_FILE = os.path.join(OUT, "btcusdt_lsratio.csv")
 FUNDING_FILE = os.path.join(OUT, "btcusdt_funding.csv")
 SECOND_TRADES_FILE = os.path.join(OUT, "btcusdt_1s_trades.csv")
 ORDERBOOK_FILE = os.path.join(OUT, "btcusdt_orderbook_1s.csv")
+SIGNAL_SCAN_INTERVAL_SEC = max(1.0, float(os.environ.get("SIGNAL_SCAN_INTERVAL_SEC", "2")))
 
 # ── 秒级 bars 内存缓存 ──────────────────────────────────────────────────────
 # 所有 SecondNormalStrategy 实例共享同一份 bars，避免每次 predict 全量读盘。
@@ -1633,7 +1634,7 @@ class SecondNormalStrategy:
             "second_zone_filter": self.zone_filter,
             "time": signal_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "model_type": "second_normal",
-            "next_signal_estimate": "V1每5秒扫描；价格假突破1.2σ后回到正态区间，且订单薄有被动支撑/压力时触发10分钟实盘信号。",
+            "next_signal_estimate": f"V1每{SIGNAL_SCAN_INTERVAL_SEC:g}秒扫描；价格假突破1.2σ后回到正态区间，且订单薄有被动支撑/压力时触发10分钟实盘信号。",
             "bypass_entry_timing": True,
         }
         zone_context = dynamic_zone_context_from_bars(bars)
@@ -1942,7 +1943,7 @@ class SecondNormalRouterV21Strategy(SecondNormalStrategy):
         r10 = self._range_bps(close_tail)
         observed600 = self._observed_pct(bars, 600)
         price = float(bars["close"].iloc[-1])
-        next_check_at = pd.Timestamp.now(tz="UTC") + pd.Timedelta(seconds=5)
+        next_check_at = pd.Timestamp.now(tz="UTC") + pd.Timedelta(seconds=SIGNAL_SCAN_INTERVAL_SEC)
         base = {
             "strategy_id": self.id,
             "model_type": "second_normal_router_v21",
@@ -1958,10 +1959,10 @@ class SecondNormalRouterV21Strategy(SecondNormalStrategy):
             "time": now_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "price": round(price, 4),
             "entry": round(price, 4),
-            "scan_interval_sec": 5,
+            "scan_interval_sec": SIGNAL_SCAN_INTERVAL_SEC,
             "next_check_time": next_check_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "next_check_time_shanghai": next_check_at.tz_convert("Asia/Shanghai").strftime("%Y/%m/%d %H:%M:%S"),
-            "next_signal_estimate": "正式实盘口径约4.21单/天；策略每5秒滚动扫描，实际要等任一分支进入25%尾部，不按整点固定触发。",
+            "next_signal_estimate": f"正式实盘口径约4.21单/天；策略每{SIGNAL_SCAN_INTERVAL_SEC:g}秒滚动扫描，实际要等任一分支进入25%尾部，不按整点固定触发。",
             "bypass_entry_timing": True,
             "rsi_value": None,
             "agree": True,
@@ -2103,7 +2104,7 @@ class SecondNormalLowVolV22Strategy(SecondNormalRouterV21Strategy):
             "low_vol_confirm_sec": int(self.low_vol_confirm_sec),
             "low_vol_reversion_bps": round(float(self.low_vol_reversion_bps), 4),
             "low_vol_breakout_bps": round(float(self.low_vol_breakout_bps), 4),
-            "scan_interval_sec": 5,
+            "scan_interval_sec": SIGNAL_SCAN_INTERVAL_SEC,
             "next_signal_estimate": (
                 "只在低波动状态观察：先等V21尾部候选，随后15秒内确认回归或突破；"
                 "不是固定时间出单。"
@@ -4036,7 +4037,7 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         orderbook = self._load_orderbook(indexed.index)
         signal_time = indexed.index[-1]
         price = float(indexed["close"].iloc[-1])
-        next_check_at = pd.Timestamp.now(tz="UTC") + pd.Timedelta(seconds=5)
+        next_check_at = pd.Timestamp.now(tz="UTC") + pd.Timedelta(seconds=SIGNAL_SCAN_INTERVAL_SEC)
         base = {
             "strategy_id": self.id,
             "model_type": "second_normal_liquidity_orderbook_v1",
@@ -4053,10 +4054,10 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
             "time": signal_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "price": round(price, 4),
             "entry": round(price, 4),
-            "scan_interval_sec": 5,
+            "scan_interval_sec": SIGNAL_SCAN_INTERVAL_SEC,
             "next_check_time": next_check_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "next_check_time_shanghai": next_check_at.tz_convert("Asia/Shanghai").strftime("%Y/%m/%d %H:%M:%S"),
-            "next_signal_estimate": "影子策略每5秒扫描；只在价格假突破1.2σ后回到正态区间，并且订单薄仍有被动支撑/压力时记录10分钟影子单。",
+            "next_signal_estimate": f"影子策略每{SIGNAL_SCAN_INTERVAL_SEC:g}秒扫描；只在价格假突破1.2σ后回到正态区间，并且订单薄仍有被动支撑/压力时记录10分钟影子单。",
             "bypass_entry_timing": True,
             "shadow_only": not self.trade_enabled,
             "trade_enabled": self.trade_enabled,
@@ -4072,7 +4073,7 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
             },
         }
         base["next_signal_estimate"] = (
-            "V2每5秒扫描；价格假突破1.2σ后回到正态区间，"
+            f"V2每{SIGNAL_SCAN_INTERVAL_SEC:g}秒扫描；价格假突破1.2σ后回到正态区间，"
             "且订单薄有被动支撑/压力时触发10分钟实盘信号。"
         )
         base["condition_summary"] = {
@@ -5525,4 +5526,4 @@ while True:
         import traceback; traceback.print_exc()
         if os.environ.get("SIGNAL_ONCE") == "1":
             raise
-    time.sleep(5)
+    time.sleep(SIGNAL_SCAN_INTERVAL_SEC)
