@@ -1,55 +1,95 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createChart, CandlestickSeries, createSeriesMarkers } from "lightweight-charts";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BadgeCheck,
-  Server,
+  Activity,
+  AlertTriangle,
+  BarChart3,
+  Clock3,
   Database,
-  Clock,
+  ListChecks,
+  RefreshCcw,
+  Server,
+  Settings,
+  ShieldCheck,
   Wifi,
-  RefreshCcw
+  Zap
 } from "lucide-react";
 
 import {
   DEFAULT_CONFIG,
-  fmt,
-  fmtPrice,
-  fmtPct,
+  activeSignalFromPayload,
   ageText,
   amountForSignal,
-  activeSignalFromPayload,
+  directionClass,
+  directionText,
+  fmt,
+  fmtPct,
+  fmtPrice,
+  healthText,
+  healthTone,
+  isShadowTrade,
+  pnlText,
+  signalLabel,
+  statLine,
+  statusClass,
+  statusText,
   strategyName,
+  timeParts,
   useInterval
 } from "./utils";
 
-import StrategyCard from "./components/StrategyCard";
-import SignalBanner from "./components/SignalBanner";
 import ConfigPanel from "./components/ConfigPanel";
-import ManualPanel from "./components/ManualPanel";
-import OpsPanel from "./components/OpsPanel";
 import LoginGate from "./components/LoginGate";
+import ManualPanel from "./components/ManualPanel";
+import StrategyCard from "./components/StrategyCard";
 import TradeHistory from "./components/TradeHistory";
 
-const chartTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
-  timeZone: "Asia/Shanghai",
-  hour12: false,
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit"
-});
+const MarketChart = lazy(() => import("./components/MarketChart"));
+const NormalVisual = lazy(() => import("./components/NormalVisual"));
 
-const CHART_TIME_ZONE_LABEL = "北京时间 UTC+8";
+const TABS = [
+  { id: "current", label: "当前交易", icon: Activity },
+  { id: "strategies", label: "策略", icon: ShieldCheck },
+  { id: "orders", label: "订单", icon: ListChecks },
+  { id: "data", label: "数据", icon: Database },
+  { id: "settings", label: "设置", icon: Settings }
+];
 
-function healthTone(ok) {
-  if (ok === true) return "ok";
-  if (ok === false) return "fail";
-  return "";
+function Toasts({ items }) {
+  return (
+    <div className="toast-stack" aria-live="polite">
+      {items.map(item => <div className={`toast ${item.type || "info"}`} key={item.id}>{item.message}</div>)}
+    </div>
+  );
 }
 
-function compactHealth(ok, ageMs) {
-  const prefix = ok === true ? "正常" : ok === false ? "异常" : "--";
-  return ageMs === null || ageMs === undefined ? prefix : `${prefix} ${ageText(ageMs)}`;
+function MetricCard({ label, value, sub, tone = "neutral", icon: Icon }) {
+  return (
+    <article className={`metric-card ${tone}`}>
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+        {sub ? <small>{sub}</small> : null}
+      </div>
+      {Icon ? <Icon size={20} /> : null}
+    </article>
+  );
+}
+
+function DashboardTabs({ active, counts, onChange }) {
+  return (
+    <nav className="dashboard-tabs" aria-label="控制台分页">
+      {TABS.map(tab => {
+        const Icon = tab.icon;
+        return (
+          <button type="button" className={active === tab.id ? "active" : ""} key={tab.id} onClick={() => onChange(tab.id)}>
+            <Icon size={16} />
+            {tab.label}
+            {counts?.[tab.id] ? <span aria-hidden="true">{counts[tab.id]}</span> : null}
+          </button>
+        );
+      })}
+    </nav>
+  );
 }
 
 function strategyStats(history, strategyId) {
@@ -57,38 +97,234 @@ function strategyStats(history, strategyId) {
   return { real: pick("real"), shadow: pick("shadow") };
 }
 
-function formatChartTime(time) {
-  const seconds = typeof time === "number" ? time : Number(time?.timestamp || time);
-  if (!Number.isFinite(seconds)) return "";
-  return chartTimeFormatter.format(new Date(seconds * 1000));
+function compactSignalRows(signalPayload, variants) {
+  return (variants || []).map(variant => ({
+    variant,
+    signal: signalPayload?.[variant.id] || null
+  }));
 }
 
-function Metric({ label, value, unit, tone }) {
-  return (
-    <div className="metric">
-      <span className="metric-label">{label}</span>
-      <span className={`metric-value ${tone || ""}`}>
-        {value}
-        {unit ? <small>{unit}</small> : null}
-      </span>
-    </div>
-  );
-}
+function CurrentTradePanel({ history, activeSignal, signalAmount, currentPrice }) {
+  const activeRows = history?.active || [];
+  const realRows = activeRows.filter(row => !isShadowTrade(row));
+  const shadowRows = activeRows.filter(isShadowTrade);
 
-function Toasts({ items }) {
   return (
-    <div className="toast-stack" aria-live="polite">
-      {items.map(item => (
-        <div className={`toast ${item.type || "info"}`} key={item.id}>
-          {item.message}
+    <section className="panel current-panel">
+      <header className="section-head compact">
+        <div>
+          <span className="eyebrow">当前</span>
+          <h2>交易状态</h2>
         </div>
-      ))}
-    </div>
+        <strong>{realRows.length} 实 / {shadowRows.length} 影</strong>
+      </header>
+
+      <div className="current-signal-box">
+        <span className={`big-direction ${directionClass(activeSignal?.signal)}`}>{directionText(activeSignal?.signal)}</span>
+        <div>
+          <strong>{signalLabel(activeSignal)}</strong>
+          <small>金额 {signalAmount || "--"}U / 当前价 {fmtPrice(currentPrice)}</small>
+        </div>
+      </div>
+
+      <div className="hint-box">
+        <span>为什么没信号</span>
+        <p>{activeSignal?.signal_detail || activeSignal?.next_signal_estimate || "正在等待策略输出。"}</p>
+      </div>
+
+      {activeSignal?.next_check_time_shanghai ? (
+        <div className="hint-box">
+          <span>下次扫描</span>
+          <p>{activeSignal.next_check_time_shanghai}</p>
+        </div>
+      ) : null}
+
+      <div className="active-trades">
+        <div className="sub-head">
+          <h3>持仓</h3>
+          <span>{activeRows.length} 单</span>
+        </div>
+        {activeRows.length ? activeRows.slice(0, 6).map(row => {
+          const tp = timeParts(row.openTime);
+          const cls = statusClass(row.status);
+          return (
+            <article className={`active-trade ${cls}`} key={row.id || `${row.openTime}-${row.strategyId}`}>
+              <div>
+                <span className={`status-pill ${cls}`}>{statusText(row.status)}</span>
+                <strong className={directionClass(row.direction)}>{directionText(row.direction)}</strong>
+              </div>
+              <p>{strategyName(row.strategyId)}</p>
+              <span>{fmt(row.amount, 0)}U</span>
+              <small>{tp.time}</small>
+              <b>{pnlText(row)}</b>
+            </article>
+          );
+        }) : <div className="empty-state compact">当前没有持仓，等待下一次策略信号。</div>}
+      </div>
+    </section>
   );
+}
+
+function StrategySnapshot({ signalRows, tradeHistory, configDraft, signalPayload }) {
+  return (
+    <section className="strategy-snapshot">
+      {signalRows.map(({ variant, signal }) => (
+        <StrategyCard
+          key={variant.id}
+          title={variant.label}
+          signal={signal}
+          amount={amountForSignal(variant.id, signal, signalPayload, configDraft)}
+          variant={variant}
+          stats={strategyStats(tradeHistory, variant.id)}
+        />
+      ))}
+    </section>
+  );
+}
+
+function DataHealthPanel({ dataHealth, secondDataHealth, orderbookHealth, orderbookPrediction, runtime, tablet, onRefreshData, onRefreshReports }) {
+  const secondStatus = secondDataHealth?.status || {};
+  const node = secondStatus.node_selection || {};
+  const prediction = orderbookPrediction?.status?.prediction || {};
+  const validation = orderbookPrediction?.status?.validation || {};
+  const targets = prediction.targets || [];
+
+  return (
+    <main className="data-grid">
+      <section className="panel">
+        <header className="section-head compact">
+          <div>
+            <span className="eyebrow">采集</span>
+            <h2><Database size={18} /> 数据健康</h2>
+          </div>
+          <div className="inline-actions">
+            <button type="button" onClick={onRefreshData}><RefreshCcw size={15} /> 拉取</button>
+            <button type="button" onClick={onRefreshReports}><BarChart3 size={15} /> 报告</button>
+          </div>
+        </header>
+
+        <div className="health-grid">
+          <MetricCard
+            label="1分钟K线"
+            value={healthText(dataHealth?.files?.klines1m?.ok, dataHealth?.files?.klines1m?.ageMs)}
+            tone={healthTone(dataHealth?.files?.klines1m?.ok)}
+            icon={BarChart3}
+          />
+          <MetricCard
+            label="秒级成交"
+            value={healthText(secondDataHealth?.ok, secondDataHealth?.ageMs)}
+            sub={`${secondStatus.rows || "--"} 行 / ${secondStatus.last_ts_shanghai || secondStatus.last_ts || "--"}`}
+            tone={healthTone(secondDataHealth?.ok)}
+            icon={Zap}
+          />
+          <MetricCard
+            label="订单薄"
+            value={healthText(orderbookHealth?.ok, orderbookHealth?.ageMs)}
+            sub={`中间价 ${fmtPrice(orderbookHealth?.status?.mid)} / 价差 ${fmt(orderbookHealth?.status?.spread_bps, 3)}bp`}
+            tone={healthTone(orderbookHealth?.ok)}
+            icon={Wifi}
+          />
+          <MetricCard
+            label="采集节点"
+            value={node.active_proxy ? "代理" : "直连"}
+            sub={node.active_node || "未上报"}
+            tone={node.active_proxy ? "ok" : "neutral"}
+            icon={Server}
+          />
+        </div>
+
+        {dataHealth?.reasons?.length ? <div className="reason-line bad">数据拦截原因：{dataHealth.reasons.join("；")}</div> : null}
+      </section>
+
+      <section className="panel">
+        <header className="section-head compact">
+          <div>
+            <span className="eyebrow">流动性</span>
+            <h2>订单薄预测</h2>
+          </div>
+          <strong className={orderbookPrediction?.ok ? "synced" : "dirty"}>{orderbookPrediction?.ok ? "正常" : "等待"}</strong>
+        </header>
+        <div className="orderbook-summary">
+          <span className={`big-direction ${prediction.direction === "UP" ? "up" : prediction.direction === "DOWN" ? "down" : "neutral"}`}>
+            {prediction.direction === "UP" ? "看涨" : prediction.direction === "DOWN" ? "看跌" : "震荡"}
+          </span>
+          <div>
+            <strong>置信度 {fmtPct(prediction.confidence, 1)}</strong>
+            <small>挂单偏向 {fmt(prediction.features?.imbalance5, 3)} / {fmt(prediction.features?.imbalance20, 3)}</small>
+          </div>
+        </div>
+        <div className="target-list">
+          {targets.length ? targets.map(target => {
+            const v = validation[String(target.horizonSec)] || {};
+            return (
+              <div key={target.horizonSec}>
+                <span>{target.horizonSec}s 后</span>
+                <strong>{fmtPrice(target.predictedPrice)}</strong>
+                <small>预计 {fmt(target.predictedBps, 3)}bp / 命中 {fmtPct(v.hitRate, 1)}</small>
+              </div>
+            );
+          }) : <div className="empty-state compact">暂无订单薄预测</div>}
+        </div>
+      </section>
+
+      <section className="panel">
+        <header className="section-head compact">
+          <div>
+            <span className="eyebrow">运行</span>
+            <h2>服务状态</h2>
+          </div>
+        </header>
+        <div className="runtime-list">
+          <span>服务ID <strong>{runtime?.serverId || "--"}</strong></span>
+          <span>数据目录 <strong>{runtime?.dataDir || "--"}</strong></span>
+          <span>信号服务 <strong>{runtime?.managedProcessesEnabled === false ? "本地模式" : "托管模式"}</strong></span>
+          <span>平板心跳 <strong>{tablet?.checks?.heartbeatOnline ? `在线 ${ageText(tablet.latestHeartbeatAgeMs)}` : "等待"}</strong></span>
+          <span>脚本版本 <strong>{runtime?.scriptVersion || "--"}</strong></span>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function TopBar({ currentPrice, priceChange, dataHealth, secondDataHealth, orderbookHealth, realBalance, onRefresh }) {
+  const priceTone = priceChange?.diff > 0 ? "up" : priceChange?.diff < 0 ? "down" : "neutral";
+  return (
+    <header className="topbar">
+      <div className="brand">
+        <div className="brand-mark">B</div>
+        <div>
+          <strong>BTC 实盘控制台</strong>
+          <span>策略、数据、订单分层监控</span>
+        </div>
+      </div>
+      <div className="top-metrics">
+        <MetricCard label="BTC" value={fmtPrice(currentPrice)} sub={priceChange ? `${priceChange.diff >= 0 ? "+" : ""}${fmtPrice(priceChange.diff)} (${priceChange.pct >= 0 ? "+" : ""}${priceChange.pct.toFixed(2)}%)` : "--"} tone={priceTone} />
+        <MetricCard label="秒级" value={healthText(secondDataHealth?.ok, secondDataHealth?.ageMs)} tone={healthTone(secondDataHealth?.ok)} />
+        <MetricCard label="订单薄" value={healthText(orderbookHealth?.ok, orderbookHealth?.ageMs)} tone={healthTone(orderbookHealth?.ok)} />
+        <MetricCard label="1分钟" value={healthText(dataHealth?.files?.klines1m?.ok, dataHealth?.files?.klines1m?.ageMs)} tone={healthTone(dataHealth?.files?.klines1m?.ok)} />
+        <MetricCard label="余额" value={realBalance?.amount !== undefined ? fmt(realBalance.amount, 2) : "--"} sub="USDT" tone="ok" />
+        <button className="icon-button" type="button" onClick={onRefresh} title="刷新">
+          <RefreshCcw size={17} />
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function shanghaiDayKey() {
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+  const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${map.year}-${map.month}-${map.day}`;
 }
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!window.localStorage.getItem("btc_auth_token"));
+  const [activeTab, setActiveTab] = useState("current");
   const [currentPrice, setCurrentPrice] = useState(null);
   const [firstPrice, setFirstPrice] = useState(null);
   const [priceHistory, setPriceHistory] = useState([]);
@@ -97,93 +333,92 @@ export default function App() {
   const [runtime, setRuntime] = useState(null);
   const [tablet, setTablet] = useState(null);
   const [tradeHistory, setTradeHistory] = useState(null);
+  const [tradeHistoryPage, setTradeHistoryPage] = useState({ mode: "day", day: shanghaiDayKey(), kind: "real" });
   const [dataHealth, setDataHealth] = useState(null);
   const [secondDataHealth, setSecondDataHealth] = useState(null);
+  const [orderbookHealth, setOrderbookHealth] = useState(null);
+  const [orderbookPrediction, setOrderbookPrediction] = useState(null);
   const [realBalance, setRealBalance] = useState(null);
   const [configDraft, setConfigDraft] = useState(DEFAULT_CONFIG);
   const [configDirty, setConfigDirty] = useState(false);
   const [apiToken, setApiToken] = useState(() => window.localStorage.getItem("btcApiToken") || "");
   const [toasts, setToasts] = useState([]);
-  const lastWsPriceRef = useRef(0);
   const dirtyRef = useRef(false);
-  const chartContainerRef = useRef(null);
-  const chartInstanceRef = useRef(null);
-  const areaSeriesRef = useRef(null); // Used as candlestick series ref now
+  const lastWsPriceRef = useRef(0);
 
-  const activeSignal = useMemo(() => activeSignalFromPayload(signalPayload), [signalPayload]);
+  const apiFetch = useCallback((url, options = {}) => {
+    const headers = { ...(options.headers || {}) };
+    const authToken = window.localStorage.getItem("btc_auth_token");
+    if (authToken) headers["X-API-Token"] = authToken;
+    else if (apiToken) headers["X-API-Token"] = apiToken;
+    return fetch(url, { ...options, headers });
+  }, [apiToken]);
+
+  const loadJson = useCallback((url, setter) => {
+    return apiFetch(url)
+      .then(res => res.json())
+      .then(setter)
+      .catch(() => {});
+  }, [apiFetch]);
+
+  const notify = useCallback((message, type = "info") => {
+    const id = `${Date.now()}-${Math.random()}`;
+    setToasts(items => [...items, { id, message, type }].slice(-4));
+    window.setTimeout(() => setToasts(items => items.filter(item => item.id !== id)), 2600);
+  }, []);
+
   const visibleVariants = useMemo(() => {
-    return (signalPayload?._strategyVariants || configDraft.strategyVariants || DEFAULT_CONFIG.strategyVariants).filter(item => item.enabled !== false);
-  }, [configDraft, signalPayload]);
+    return signalPayload?._strategyVariants || configDraft.strategyVariants || DEFAULT_CONFIG.strategyVariants;
+  }, [configDraft.strategyVariants, signalPayload]);
+
+  const signalRows = useMemo(() => compactSignalRows(signalPayload, visibleVariants), [signalPayload, visibleVariants]);
+  const activeSignal = useMemo(() => activeSignalFromPayload(signalPayload), [signalPayload]);
   const signalAmount = useMemo(() => {
     if (!activeSignal) return String(configDraft.amount || DEFAULT_CONFIG.amount);
     return amountForSignal(activeSignal.strategy_id, activeSignal, signalPayload, configDraft);
   }, [activeSignal, configDraft, signalPayload]);
 
-  const safeSignal = signalPayload?.BTC_10min_SAFE || null;
-  const takerSignals = visibleVariants
-    .filter(item => item.base === "TAKER")
-    .map(item => signalPayload?.[item.id])
-    .filter(Boolean);
-  const takerSignal = takerSignals[0] || null;
-  const safeVariant = visibleVariants.find(item => item.base === "SAFE") || DEFAULT_CONFIG.strategyVariants[0];
-  const takerVariantText = visibleVariants
-    .filter(item => item.base === "TAKER")
-    .map(item => `${item.amount}U`)
-    .join(" / ");
-
   const priceChange = useMemo(() => {
     if (!currentPrice || !firstPrice) return null;
     const diff = Number(currentPrice) - Number(firstPrice);
-    const pct = (diff / Number(firstPrice)) * 100;
-    return { diff, pct };
+    return { diff, pct: diff / Number(firstPrice) * 100 };
   }, [currentPrice, firstPrice]);
 
-  const notify = useCallback((message, type = "info") => {
-    const id = `${Date.now()}-${Math.random()}`;
-    setToasts(items => [...items, { id, message, type }].slice(-4));
-    setTimeout(() => {
-      setToasts(items => items.filter(item => item.id !== id));
-    }, 2800);
-  }, []);
+  const counts = useMemo(() => ({
+    current: tradeHistory?.active?.length || "",
+    strategies: signalRows.filter(row => row.signal?.signal).length || "",
+    orders: tradeHistory?.pagination?.total || tradeHistory?.summary?.total || "",
+    data: dataHealth?.blocked || secondDataHealth?.ok === false || orderbookHealth?.ok === false ? "异常" : "",
+    settings: configDirty ? "未保存" : ""
+  }), [configDirty, dataHealth, orderbookHealth, secondDataHealth, signalRows, tradeHistory]);
 
-  const apiFetch = useCallback((url, options = {}) => {
-    const headers = { ...(options.headers || {}) };
-    const authToken = window.localStorage.getItem("btc_auth_token");
-    if (authToken) {
-      headers["X-API-Token"] = authToken;
-    } else if (apiToken) {
-      headers["X-API-Token"] = apiToken;
-    }
-    return fetch(url, { ...options, headers });
-  }, [apiToken]);
-
-  const loadSignals = useCallback(() => {
-    apiFetch("/api/signal?source=dashboard")
-      .then(res => res.json())
-      .then(setSignalPayload)
-      .catch(() => {});
-  }, [apiFetch]);
-
-  const loadRuntime = useCallback(() => {
-    apiFetch("/api/runtime").then(res => res.json()).then(setRuntime).catch(() => {});
-  }, [apiFetch]);
-
-  const loadTablet = useCallback(() => {
-    apiFetch("/api/tablet-diagnostics").then(res => res.json()).then(setTablet).catch(() => {});
-  }, [apiFetch]);
-
-  const loadTradeHistory = useCallback(() => {
-    apiFetch("/api/trade-history?limit=120").then(res => res.json()).then(setTradeHistory).catch(() => {});
-  }, [apiFetch]);
-
+  const loadSignals = useCallback(() => loadJson("/api/signal?source=dashboard", setSignalPayload), [loadJson]);
+  const loadRuntime = useCallback(() => loadJson("/api/runtime", setRuntime), [loadJson]);
+  const loadTablet = useCallback(() => loadJson("/api/tablet-diagnostics", setTablet), [loadJson]);
+  const loadBalance = useCallback(() => loadJson("/api/balance", setRealBalance), [loadJson]);
   const loadHealth = useCallback(() => {
-    apiFetch("/api/data-health").then(res => res.json()).then(setDataHealth).catch(() => {});
-    apiFetch("/api/second-data-health").then(res => res.json()).then(setSecondDataHealth).catch(() => {});
-  }, [apiFetch]);
+    loadJson("/api/data-health", setDataHealth);
+    loadJson("/api/second-data-health", setSecondDataHealth);
+    loadJson("/api/orderbook-health", setOrderbookHealth);
+    loadJson("/api/orderbook-prediction", setOrderbookPrediction);
+  }, [loadJson]);
+
+  const loadTradeHistory = useCallback((pageState = tradeHistoryPage) => {
+    const params = new URLSearchParams({
+      mode: pageState.mode || "day",
+      day: pageState.day || shanghaiDayKey(),
+      kind: pageState.kind || "real"
+    });
+    if (pageState.mode === "page") {
+      params.set("page", String(pageState.page || 1));
+      params.set("pageSize", String(pageState.pageSize || 40));
+    }
+    return loadJson(`/api/trade-history?${params}`, setTradeHistory);
+  }, [loadJson, tradeHistoryPage]);
 
   const loadConfig = useCallback((force = false) => {
-    if (dirtyRef.current && !force) return;
-    apiFetch("/api/config")
+    if (dirtyRef.current && !force) return Promise.resolve();
+    return apiFetch("/api/config")
       .then(res => res.json())
       .then(config => {
         setConfigDraft({
@@ -198,24 +433,37 @@ export default function App() {
   }, [apiFetch]);
 
   const loadPriceFallback = useCallback(() => {
-    if (Date.now() - lastWsPriceRef.current < 5000) return;
-    apiFetch("/api/price")
-      .then(res => res.json())
-      .then(data => {
-        if (!data?.price) return;
-        const price = Number(data.price);
-        setCurrentPrice(price);
-        setFirstPrice(old => old || price);
-        setPriceHistory(history => [...history.slice(-599), { time: Date.now(), price }]);
-      })
-      .catch(() => {});
+    if (Date.now() - lastWsPriceRef.current >= 5000) {
+      apiFetch("/api/price")
+        .then(res => res.json())
+        .then(data => {
+          const price = Number(data?.price);
+          if (!Number.isFinite(price)) return;
+          setCurrentPrice(price);
+          setFirstPrice(old => old || price);
+          setPriceHistory(history => [...history.slice(-599), { time: Date.now(), price }]);
+        })
+        .catch(() => {});
+    }
     apiFetch("/api/candles")
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data?.candles) && data.candles.length) setCandles(data.candles);
+        if (Array.isArray(data?.candles)) setCandles(data.candles);
       })
       .catch(() => {});
   }, [apiFetch]);
+
+  const refreshAll = useCallback(() => {
+    loadSignals();
+    loadRuntime();
+    loadTablet();
+    loadTradeHistory();
+    loadHealth();
+    loadBalance();
+    loadConfig(true);
+    loadPriceFallback();
+    notify("已刷新", "success");
+  }, [loadBalance, loadConfig, loadHealth, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory, notify]);
 
   const markDraft = useCallback(patch => {
     dirtyRef.current = true;
@@ -235,11 +483,17 @@ export default function App() {
   }, []);
 
   const saveConfig = useCallback(() => {
-    const { autoTrade, realTradingOverride, ...cleanDraft } = configDraft;
+    const variants = Array.isArray(configDraft.strategyVariants)
+      ? configDraft.strategyVariants
+      : DEFAULT_CONFIG.strategyVariants;
+    const hasLiveStrategy = variants.some(variant => variant.enabled !== false && variant.tradeEnabled !== false);
     const payload = {
-      ...cleanDraft,
+      ...configDraft,
+      strategyVariants: variants,
       amount: String(configDraft.amount || DEFAULT_CONFIG.amount),
-      duration: String(configDraft.duration || DEFAULT_CONFIG.duration)
+      duration: String(configDraft.duration || DEFAULT_CONFIG.duration),
+      realTradingEnabled: hasLiveStrategy,
+      autoTrade_10m: hasLiveStrategy
     };
     apiFetch("/api/config", {
       method: "POST",
@@ -250,8 +504,7 @@ export default function App() {
       .then(body => {
         if (body.error) {
           notify(body.error, "error");
-        } else {
-          notify("配置已保存", "success");
+          return;
         }
         setConfigDraft({
           ...DEFAULT_CONFIG,
@@ -260,64 +513,53 @@ export default function App() {
         });
         dirtyRef.current = false;
         setConfigDirty(false);
+        notify("配置已保存并下发", "success");
       })
       .catch(() => notify("保存失败", "error"));
   }, [apiFetch, configDraft, notify]);
 
   const manualTrade = useCallback(direction => {
-    const payload = {
-      direction,
-      amount: String(configDraft.amount || DEFAULT_CONFIG.amount),
-      duration: String(configDraft.duration || DEFAULT_CONFIG.duration)
-    };
     apiFetch("/api/manual", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        direction,
+        amount: String(configDraft.amount || DEFAULT_CONFIG.amount),
+        duration: String(configDraft.duration || DEFAULT_CONFIG.duration)
+      })
     })
       .then(res => res.json())
-      .then(cmd => {
-        if (cmd.error) notify(`下单指令失败: ${cmd.error}`, "error");
-        else notify(`已发布手动看${direction === "UP" ? "涨" : "跌"}指令`, "success");
+      .then(body => {
+        if (body.error) notify(`手动下单失败：${body.error}`, "error");
+        else notify(`已发布手动${directionText(direction)}指令`, "success");
       })
-      .catch(() => notify("发布失败", "error"));
+      .catch(() => notify("手动下单请求失败", "error"));
   }, [apiFetch, configDraft, notify]);
 
-  const triggerServerAction = useCallback((url, label, onSuccess) => {
+  const triggerAction = useCallback((url, label, after) => {
     apiFetch(url, { method: "POST" })
       .then(res => res.json())
       .then(body => {
-        if (body.error) notify(`${label}失败: ${body.error}`, "error");
+        if (body.error) notify(`${label}失败：${body.error}`, "error");
         else {
           notify(`${label}成功`, "success");
-          if (onSuccess) onSuccess();
+          after?.();
         }
       })
-      .catch(() => notify(`${label}请求错误`, "error"));
+      .catch(() => notify(`${label}请求失败`, "error"));
   }, [apiFetch, notify]);
 
-  const refreshDataNow = useCallback(() => {
-    triggerServerAction("/api/data-update/refresh", "数据刷新", () => {
-      loadRuntime();
-      loadSignals();
-      loadHealth();
-    });
-  }, [loadHealth, loadRuntime, loadSignals, triggerServerAction]);
-
-  const refreshReportsNow = useCallback(() => {
-    triggerServerAction("/api/reports/refresh", "报告刷新");
-  }, [triggerServerAction]);
-
-  const refreshAll = useCallback(() => {
-    loadSignals();
-    loadRuntime();
-    loadTablet();
-    loadTradeHistory();
-    loadHealth();
-    loadConfig(true);
-    loadPriceFallback();
-    notify("已刷新", "success");
-  }, [loadConfig, loadHealth, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory, notify]);
+  const handleTradeHistoryPageChange = useCallback(patch => {
+    const next = {
+      ...tradeHistoryPage,
+      ...patch,
+      mode: patch.mode || tradeHistoryPage.mode || "day",
+      day: patch.day || tradeHistoryPage.day || shanghaiDayKey(),
+      page: patch.kind && patch.kind !== tradeHistoryPage.kind ? 1 : (patch.page || tradeHistoryPage.page || 1)
+    };
+    setTradeHistoryPage(next);
+    loadTradeHistory(next);
+  }, [loadTradeHistory, tradeHistoryPage]);
 
   useEffect(() => {
     loadSignals();
@@ -325,9 +567,10 @@ export default function App() {
     loadTablet();
     loadTradeHistory();
     loadHealth();
+    loadBalance();
     loadConfig();
     loadPriceFallback();
-  }, [loadConfig, loadHealth, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory]);
+  }, [loadBalance, loadConfig, loadHealth, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory]);
 
   useEffect(() => {
     const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -338,19 +581,13 @@ export default function App() {
     function connect() {
       ws = new WebSocket(`${scheme}//${window.location.host}/ws`);
       ws.onmessage = event => {
-        const message = JSON.parse(event.data);
-        if (message.type === "init") {
-          if (message.price) {
-            const price = Number(message.price);
-            setCurrentPrice(price);
-            setFirstPrice(old => old || price);
-            lastWsPriceRef.current = Date.now();
-          }
-          if (Array.isArray(message.history)) setPriceHistory(message.history);
-          if (Array.isArray(message.candles)) setCandles(message.candles);
-          if (message.realBalance?.amount !== undefined) setRealBalance(message.realBalance);
+        let message;
+        try {
+          message = JSON.parse(event.data);
+        } catch {
+          return;
         }
-        if (message.type === "price") {
+        if (message.type === "init" || message.type === "price") {
           const price = Number(message.price);
           if (Number.isFinite(price)) {
             setCurrentPrice(price);
@@ -359,30 +596,15 @@ export default function App() {
           }
           if (Array.isArray(message.history)) setPriceHistory(message.history);
           if (Array.isArray(message.candles)) setCandles(message.candles);
-          if (!Array.isArray(message.candles) && message.candle) {
-            setCandles(old => {
-              const copy = [...old];
-              if (copy.length === 0) {
-                copy.push(message.candle);
-              } else {
-                const idx = copy.findIndex(c => c.time === message.candle.time);
-                if (idx >= 0) {
-                  copy[idx] = message.candle;
-                } else {
-                  copy.push(message.candle);
-                }
-              }
-              return copy.slice(-500);
-            });
-          }
+          if (message.realBalance?.amount !== undefined) setRealBalance(message.realBalance);
         }
         if (message.type === "state" && message.realBalance?.amount !== undefined) setRealBalance(message.realBalance);
         if (message.type === "balance" && message.amount !== undefined) setRealBalance(message);
         if (message.type === "trade_update") {
-          notify(`订单 #${message.trade?.id || ""} ${message.trade?.status || ""}`, "info");
+          notify(`订单更新：${message.trade?.status || ""}`, "info");
           loadTradeHistory();
         }
-        if (message.type === "error") notify(message.message || "服务端消息错误", "error");
+        if (message.type === "error") notify(message.message || "服务端消息异常", "error");
       };
       ws.onclose = () => {
         if (!closed) retryTimer = window.setTimeout(connect, 2000);
@@ -398,169 +620,23 @@ export default function App() {
     };
   }, [loadTradeHistory, notify]);
 
-  useEffect(() => {
-    if (!chartContainerRef.current) return;
-
-    // Initialize TradingView Lightweight Chart
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { color: "transparent" },
-        textColor: "#7d8792",
-      },
-      grid: {
-        vertLines: { color: "rgba(255, 255, 255, 0.04)" },
-        horzLines: { color: "rgba(255, 255, 255, 0.04)" },
-      },
-      rightPriceScale: {
-        borderColor: "rgba(255, 255, 255, 0.1)",
-      },
-      timeScale: {
-        borderColor: "rgba(255, 255, 255, 0.1)",
-        timeVisible: true,
-        secondsVisible: true,
-        tickMarkFormatter: formatChartTime,
-      },
-      localization: {
-        locale: "zh-CN",
-        timeFormatter: formatChartTime,
-      },
-      crosshair: {
-        horzLine: {
-          labelBackgroundColor: "#1a1e24",
-        },
-        vertLine: {
-          labelBackgroundColor: "#1a1e24",
-        },
-      },
-    });
-
-    const areaSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#27c3a5",
-      downColor: "#e45858",
-      borderVisible: false,
-      wickUpColor: "#27c3a5",
-      wickDownColor: "#e45858",
-    });
-
-    chartInstanceRef.current = chart;
-    areaSeriesRef.current = areaSeries;
-
-    const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.resize(
-          chartContainerRef.current.clientWidth,
-          chartContainerRef.current.clientHeight
-        );
-      }
-    };
-    window.addEventListener("resize", handleResize);
-    handleResize();
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      chart.removeSeries(areaSeries);
-      chart.remove();
-      chartInstanceRef.current = null;
-      areaSeriesRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!areaSeriesRef.current) return;
-
-    const seenSeconds = new Set();
-    const chartData = [];
-
-    // 1. Process standard 1-minute OHLC K-line candles
-    for (const item of candles || []) {
-      const candleTime = Number(item.time);
-      if (Number.isNaN(candleTime)) continue;
-      if (seenSeconds.has(candleTime)) continue;
-      seenSeconds.add(candleTime);
-      chartData.push({
-        time: candleTime,
-        open: Number(item.open),
-        high: Number(item.high),
-        low: Number(item.low),
-        close: Number(item.close)
-      });
-    }
-
-    const mergedData = chartData.sort((a, b) => a.time - b.time);
-    
-    if (mergedData.length > 0) {
-      areaSeriesRef.current.setData(mergedData);
-    }
-
-    // 3. Build compact markers with strict NaN prevention.
-    const markers = [];
-    const chartStartSec = mergedData.length ? Number(mergedData[0].time) : null;
-    const chartEndSec = mergedData.length ? Number(mergedData[mergedData.length - 1].time) : null;
-    const tradesToMarker = (tradeHistory?.recent || []).filter(trade => {
-      if (!trade?.openTime || chartStartSec === null || chartEndSec === null) return false;
-      const openSec = Math.floor(Number(trade.openTime) / 1000);
-      const settleSec = trade.settleTime ? Math.floor(Number(trade.settleTime) / 1000) : openSec;
-      return (
-        Number.isFinite(openSec) &&
-        Number.isFinite(settleSec) &&
-        settleSec >= chartStartSec &&
-        openSec <= chartEndSec
-      );
-    });
-    const markerTrades = tradesToMarker.slice(0, 60);
-    for (let idx = 0; idx < markerTrades.length; idx++) {
-      const trade = markerTrades[idx];
-      if (!trade.openTime) continue;
-      const openSec = Math.floor(Number(trade.openTime) / 1000);
-      if (Number.isNaN(openSec)) continue;
-      
-      const isTablet = trade.source === "autojs";
-      const isManual = !trade.strategyId || trade.strategyId === "manual";
-      const isShadow = String(trade.source || "").startsWith("shadow:") || trade.event === "shadow_trade";
-      const prefix = isManual ? "手" : isShadow ? "影" : isTablet ? "实" : "模";
-      const markerNo = markerTrades.length - idx;
-      const direction = trade.direction === "UP" ? "涨" : "跌";
-
-      markers.push({
-        time: openSec,
-        position: trade.direction === "UP" ? "belowBar" : "aboveBar",
-        color: trade.direction === "UP" ? "#27c3a5" : "#e45858",
-        shape: trade.direction === "UP" ? "arrowUp" : "arrowDown",
-        text: `${prefix}${markerNo} ${direction} ${trade.amount}U`
-      });
-
-      // Close marker (WON, LOST, TIE)
-      if (trade.status && trade.status !== "pending" && trade.status !== "aborted" && trade.settleTime) {
-        const settleSec = Math.floor(Number(trade.settleTime) / 1000);
-        if (Number.isNaN(settleSec)) continue;
-        markers.push({
-          time: settleSec,
-          position: "inBar",
-          color: trade.status === "won" ? "#27c3a5" : trade.status === "lost" ? "#e45858" : "#f0c94a",
-          shape: "circle",
-          text: `${trade.pnl > 0 ? "+" : ""}${trade.pnl}U`
-        });
-      }
-    }
-
-    // Sort markers by time
-    markers.sort((a, b) => a.time - b.time);
-    createSeriesMarkers(areaSeriesRef.current, markers);
-
-  }, [candles, tradeHistory]);
-
   useInterval(loadSignals, 3000);
   useInterval(loadPriceFallback, 3000);
-  useInterval(loadTradeHistory, 5000);
+  useInterval(loadTradeHistory, activeTab === "current" || activeTab === "orders" ? 10000 : null);
   useInterval(loadHealth, 10000);
   useInterval(loadTablet, 15000);
   useInterval(loadRuntime, 30000);
+  useInterval(loadBalance, 30000);
   useInterval(loadConfig, 10000);
 
-  const safeConfidenceTone = Number(safeSignal?.confidence || 0) >= 60 ? "ok" : "";
-  const takerConfidenceTone = Number(takerSignal?.confidence || 0) >= 60 ? "ok" : "";
-  const priceTone = priceChange?.diff > 0 ? "ok" : priceChange?.diff < 0 ? "fail" : "";
-  const username = window.localStorage.getItem("btc_username") || "sl";
+  const routePath = window.location.pathname.replace(/\/+$/, "");
+  if (routePath === "/dashboard/normal-visual") {
+    return (
+      <Suspense fallback={<main className="app-shell loading-shell">正在加载正态分布图...</main>}>
+        <NormalVisual />
+      </Suspense>
+    );
+  }
 
   if (!isAuthenticated) {
     return <LoginGate onLoginSuccess={() => setIsAuthenticated(true)} />;
@@ -568,169 +644,89 @@ export default function App() {
 
   return (
     <>
-      <style>{`
-        @keyframes pulse-green {
-          0% { box-shadow: 0 0 0 0 rgba(39, 195, 165, 0.7); }
-          70% { box-shadow: 0 0 0 6px rgba(39, 195, 165, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(39, 195, 165, 0); }
-        }
-        @keyframes pulse-red {
-          0% { box-shadow: 0 0 0 0 rgba(228, 88, 88, 0.7); }
-          70% { box-shadow: 0 0 0 6px rgba(228, 88, 88, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(228, 88, 88, 0); }
-        }
-        .pulse-dot.green {
-          display: inline-block;
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background-color: var(--green);
-          color: transparent;
-          overflow: hidden;
-          animation: pulse-green 1.5s infinite;
-        }
-        .pulse-dot.red {
-          display: inline-block;
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background-color: var(--red);
-          color: transparent;
-          overflow: hidden;
-          animation: pulse-red 1.5s infinite;
-        }
-        .strategy-card {
-          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .strategy-card:hover {
-          transform: translateY(-2px);
-          filter: brightness(1.15);
-        }
-        .preset-btn {
-          cursor: pointer;
-        }
-        .preset-btn:hover {
-          filter: brightness(1.25);
-        }
-        /* Custom Glow Slide Toggle */
-        .slide-switch {
-          position: relative;
-          width: 40px;
-          height: 20px;
-          background-color: rgba(255, 255, 255, 0.08);
-          border: 1px solid var(--line);
-          border-radius: 10px;
-          cursor: pointer;
-          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-          padding: 0;
-          display: inline-block;
-          outline: none;
-        }
-        .slide-switch::after {
-          content: "";
-          position: absolute;
-          top: 1px;
-          left: 1px;
-          width: 16px;
-          height: 16px;
-          background-color: var(--text-2);
-          border-radius: 50%;
-          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-        }
-        .slide-switch.on {
-          background-color: var(--green-soft);
-          border-color: var(--green);
-          box-shadow: 0 0 8px rgba(39, 195, 165, 0.2);
-        }
-        .slide-switch.on::after {
-          left: 21px;
-          background-color: var(--green);
-          box-shadow: 0 0 5px var(--green);
-        }
-        .slide-switch.off {
-          background-color: rgba(255, 255, 255, 0.02);
-          border-color: var(--line);
-        }
-        .slide-switch.off::after {
-          left: 1px;
-          background-color: var(--muted);
-        }
-      `}</style>
       <div className="app-shell">
-        <header className="topbar">
-          <div className="brand">
-            <BadgeCheck size={20} />
-            <div>
-              <strong style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                BTC 实盘控制台
-                <span style={{
-                  fontSize: "9px",
-                  padding: "1px 6px",
-                  borderRadius: "3px",
-                  fontWeight: "bold",
-                  color: "var(--green)",
-                  background: "var(--green-soft)",
-                  border: "1px solid rgba(39, 195, 165, 0.25)"
-                }}>
-                  👤 {username}
-                </span>
-              </strong>
-              <span>{runtime?.managedProcessesEnabled === false ? "本地测试 API" : "服务器实时"}</span>
-            </div>
-          </div>
-          <div className="top-actions">
-            <Metric label="BTC 价格" value={fmtPrice(currentPrice)} unit="USDT" tone={priceTone} />
-            <Metric label="1分钟数据" value={compactHealth(dataHealth?.files?.klines1m?.ok, dataHealth?.files?.klines1m?.ageMs)} tone={healthTone(dataHealth?.files?.klines1m?.ok)} />
-            <Metric label="秒级采集" value={compactHealth(secondDataHealth?.ok, secondDataHealth?.ageMs)} tone={healthTone(secondDataHealth?.ok)} />
-            <Metric label="代理节点" value={secondDataHealth?.status?.node_selection?.active_proxy ? "代理" : "直连"} tone={secondDataHealth?.status?.node_selection?.active_proxy ? "ok" : ""} />
-            <Metric label="账户余额" value={realBalance?.amount !== undefined ? fmt(realBalance.amount, 2) : "--"} unit="USDT" tone={realBalance?.amount !== undefined ? "ok" : ""} />
-            <Metric label="稳健投数" value={safeVariant.amount || "--"} unit="USDT" />
-            <Metric label="资金流档位" value={takerVariantText || "--"} />
-            <button className="icon-button" type="button" onClick={refreshAll} title="刷新">
-              <RefreshCcw size={16} />
-            </button>
-          </div>
-        </header>
+        <TopBar
+          currentPrice={currentPrice}
+          priceChange={priceChange}
+          dataHealth={dataHealth}
+          secondDataHealth={secondDataHealth}
+          orderbookHealth={orderbookHealth}
+          realBalance={realBalance}
+          onRefresh={refreshAll}
+        />
 
-        <SignalBanner signalPayload={signalPayload} activeSignal={activeSignal} signalAmount={signalAmount} />
-
-        <section className="strategy-strip">
-          {visibleVariants.map(variant => (
-            <StrategyCard
-              key={variant.id}
-              title={variant.label}
-              signal={signalPayload?.[variant.id]}
-              amount={amountForSignal(variant.id, signalPayload?.[variant.id], signalPayload, configDraft)}
-              variant={variant}
-              stats={strategyStats(tradeHistory, variant.id)}
-            />
-          ))}
+        <section className="signal-strip">
+          <div>
+            <span className={`signal-dot ${directionClass(activeSignal?.signal)}`} />
+            <strong>{signalLabel(activeSignal)}</strong>
+            <small>{activeSignal?.next_signal_estimate || "策略每5秒扫描，满足假突破回归才给10分钟方向。"}</small>
+          </div>
+          <div className="signal-strip-meta">
+            <span><Clock3 size={14} /> {activeSignal?.next_check_time_shanghai || activeSignal?.time_shanghai || "--"}</span>
+            <span><AlertTriangle size={14} /> {activeSignal?.reason || "正常监控"}</span>
+          </div>
         </section>
 
-        <main className="main-grid">
-          <section className="workspace">
-            <section className="market-panel">
-              <header className="market-header">
-                <div>
-                  <span>BTC / USDT</span>
-                  <h1>{fmtPrice(currentPrice)}</h1>
-                </div>
-                <div className={`price-change ${priceTone}`}>
-                  {priceChange ? `${priceChange.diff >= 0 ? "+" : ""}${fmtPrice(priceChange.diff)} (${priceChange.pct >= 0 ? "+" : ""}${priceChange.pct.toFixed(2)}%)` : "--"}
-                </div>
-              </header>
-              <div className="chart-frame" style={{ position: "relative", width: "100%", height: "clamp(260px, 42vh, 420px)" }}>
-                <div style={{ position: "absolute", top: "10px", right: "12px", zIndex: 2, fontSize: "10px", color: "var(--muted)", background: "rgba(13,17,23,0.72)", border: "1px solid var(--line)", borderRadius: "4px", padding: "3px 6px", pointerEvents: "none" }}>
-                  {CHART_TIME_ZONE_LABEL}
-                </div>
-                <div ref={chartContainerRef} style={{ width: "100%", height: "100%" }} />
-              </div>
-            </section>
-            <TradeHistory history={tradeHistory} />
-          </section>
+        <DashboardTabs active={activeTab} counts={counts} onChange={setActiveTab} />
 
-          <aside className="side-rail">
+        {activeTab === "current" ? (
+          <main className="current-layout">
+            <section className="market-column">
+              <div className="hero-metrics">
+                <MetricCard label="当前价格" value={fmtPrice(currentPrice)} sub="BTC/USDT" tone={priceChange?.diff > 0 ? "up" : priceChange?.diff < 0 ? "down" : "neutral"} icon={BarChart3} />
+                <MetricCard label="当前信号" value={directionText(activeSignal?.signal)} sub={signalLabel(activeSignal)} tone={directionClass(activeSignal?.signal)} icon={Activity} />
+                <MetricCard label="实盘开关" value={configDraft.realTradingEnabled ? "实盘" : "影子/观察"} sub={configDraft.autoTrade_10m ? "自动下单允许" : "自动下单关闭"} tone={configDraft.realTradingEnabled ? "bad" : "warn"} icon={ShieldCheck} />
+                <MetricCard label="策略数量" value={`${visibleVariants.length}`} sub={`${visibleVariants.filter(v => v.enabled !== false && v.tradeEnabled !== false).length} 条可实盘`} tone="ok" icon={ListChecks} />
+              </div>
+              <Suspense fallback={<div className="chart-shell"><div className="chart-empty">正在加载图表...</div></div>}>
+                <MarketChart candles={candles} trades={tradeHistory?.recent || []} />
+              </Suspense>
+            </section>
+            <CurrentTradePanel
+              history={tradeHistory}
+              activeSignal={activeSignal}
+              signalAmount={signalAmount}
+              currentPrice={currentPrice}
+            />
+          </main>
+        ) : null}
+
+        {activeTab === "strategies" ? (
+          <main className="dashboard-view">
+            <StrategySnapshot
+              signalRows={signalRows}
+              tradeHistory={tradeHistory}
+              configDraft={configDraft}
+              signalPayload={signalPayload}
+            />
+          </main>
+        ) : null}
+
+        {activeTab === "orders" ? (
+          <main className="dashboard-view">
+            <TradeHistory history={tradeHistory} pageState={tradeHistoryPage} onPageChange={handleTradeHistoryPageChange} />
+          </main>
+        ) : null}
+
+        {activeTab === "data" ? (
+          <DataHealthPanel
+            dataHealth={dataHealth}
+            secondDataHealth={secondDataHealth}
+            orderbookHealth={orderbookHealth}
+            orderbookPrediction={orderbookPrediction}
+            runtime={runtime}
+            tablet={tablet}
+            onRefreshData={() => triggerAction("/api/data-update/refresh", "数据拉取", () => {
+              loadRuntime();
+              loadHealth();
+              loadSignals();
+            })}
+            onRefreshReports={() => triggerAction("/api/reports/refresh", "报告刷新")}
+          />
+        ) : null}
+
+        {activeTab === "settings" ? (
+          <main className="settings-layout">
             <ConfigPanel
               draft={configDraft}
               dirty={configDirty}
@@ -740,27 +736,13 @@ export default function App() {
               onToggle={toggleDraft}
               onSave={saveConfig}
             />
-            <ManualPanel draft={configDraft} onManualTrade={manualTrade} onAmountPreset={val => markDraft({ amount: String(val) })} />
-            <OpsPanel
-              runtime={runtime}
-              tablet={tablet}
-              dataHealth={dataHealth}
-              secondDataHealth={secondDataHealth}
-              onRefreshData={refreshDataNow}
-              onRefreshReports={refreshReportsNow}
+            <ManualPanel
+              draft={configDraft}
+              onManualTrade={manualTrade}
+              onAmountPreset={value => markDraft({ amount: String(value) })}
             />
-            <section className="panel runtime-panel">
-              <header className="panel-header">
-                <span><Wifi size={15} /> 运行状态</span>
-              </header>
-              <div className="runtime-list">
-                <span><Server size={14} /> {runtime?.serverId || "--"}</span>
-                <span><Database size={14} /> {runtime?.dataDir || "--"}</span>
-                <span><Clock size={14} /> 平板 {tablet?.checks?.heartbeatOnline ? `在线 ${ageText(tablet.latestHeartbeatAgeMs)}` : "等待"}</span>
-              </div>
-            </section>
-          </aside>
-        </main>
+          </main>
+        ) : null}
       </div>
       <Toasts items={toasts} />
     </>

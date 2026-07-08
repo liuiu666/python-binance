@@ -1,188 +1,203 @@
-import React from "react";
-import { ArrowDown, ArrowUp, Minus } from "lucide-react";
-import { directionClass, directionText, fmt, fmtPct, signalLabel } from "../utils";
+import { Activity, ArrowDown, ArrowUp, Clock, Minus, ShieldCheck } from "lucide-react";
+import {
+  dateTimeText,
+  directionClass,
+  directionText,
+  displaySignalTime,
+  fmt,
+  fmtPct,
+  signalLabel,
+  statLine
+} from "../utils";
 
-const baseBadgeStyle = {
-  background: "rgba(255,255,255,0.04)",
-  padding: "4px 8px",
-  borderRadius: "4px",
-  fontSize: "11px",
-  color: "var(--text-2)"
-};
-
-function tailText(variant, signal) {
-  const tail = Number(variant?.tailPct ?? signal?.tail_pct ?? 0.2);
-  const lower = Math.round(tail * 100);
-  return `${lower}/${100 - lower}`;
-}
-
-function normalProbability(signal) {
-  const rawUp = signal?.p_up ?? signal?.avg_prob;
-  const pUp = Number(rawUp);
-  if (!Number.isFinite(pUp)) return { up: "--", down: "--", edge: "--", zone: "等待数据" };
-  const up = Math.max(0, Math.min(1, pUp > 1 ? pUp / 100 : pUp));
-  const tailPct = Number(signal?.tail_pct ?? 0.2);
-  const upperTrigger = 1 - tailPct;
-  const lowerGap = Math.max(0, up - tailPct);
-  const upperGap = Math.max(0, upperTrigger - up);
-  return {
-    up: `${(up * 100).toFixed(1)}%`,
-    down: `${((1 - up) * 100).toFixed(1)}%`,
-    edge: signal?.signal ? "已进极端" : `${(Math.min(lowerGap, upperGap) * 100).toFixed(1)}%`,
-    zone: up <= tailPct ? "极端下行" : up >= upperTrigger ? "极端上行" : "等待极端区间"
-  };
-}
-
-function chipInfo(signal) {
-  const positionPct = Number(signal?.chip_position_pct ?? signal?.chip_distance_pct);
-  const breakPct = Number(signal?.chip_break_pct);
-  const positionValue = Number.isFinite(positionPct) ? `${(Math.max(0, positionPct) * 100).toFixed(2)}%` : "--";
-  let position = positionValue === "--" ? "--" : `距触发线 ${positionValue}`;
-  if (signal?.chip_position_label === "below_lower_trigger" || signal?.chip_state === "below") {
-    position = `低于下破线 ${positionValue}`;
-  } else if (signal?.chip_position_label === "above_upper_trigger" || signal?.chip_state === "above") {
-    position = `高于上破线 ${positionValue}`;
-  }
-  return {
-    zoneLow: signal?.chip_zone_low ?? "--",
-    zoneHigh: signal?.chip_zone_high ?? "--",
-    lowerTrigger: signal?.chip_lower_trigger ?? "--",
-    upperTrigger: signal?.chip_upper_trigger ?? "--",
-    poc: signal?.chip_poc ?? "--",
-    share: signal?.chip_zone_share !== undefined ? `${(Number(signal.chip_zone_share) * 100).toFixed(1)}%` : "--",
-    position,
-    threshold: Number.isFinite(breakPct) ? `${(breakPct * 100).toFixed(2)}%` : "--",
-    filter: ({
-      width_lte_3: "宽度≤3档",
-      width_lte_5: "宽度≤5档",
-      flow_reversal: "资金流反转",
-      none: "不过滤"
-    })[String(signal?.chip_filter || "none")] || String(signal?.chip_filter || "--"),
-    width: signal?.chip_zone_width_bins ?? "--"
-  };
-}
-
-function headlineText(signal, confidence) {
-  if (!signal?.signal) return signalLabel(signal);
-  if (signal?.model_type === "second_chip") {
-    if (signal.signal === "UP") return `下破筹码区，反向看涨 ${confidence}`;
-    if (signal.signal === "DOWN") return `上破筹码区，反向看跌 ${confidence}`;
-  }
-  if ((signal?.mode || "reversal") === "reversal" || signal?.model_type === "second_normal") {
-    if (signal.signal === "UP") return `极端下行，反转看涨 ${confidence}`;
-    if (signal.signal === "DOWN") return `极端上行，反转看跌 ${confidence}`;
-  }
-  return `${directionText(signal.signal)} ${confidence}`;
-}
-
-function takerFlowText(signal) {
-  const filter = String(signal?.taker_filter || signal?.second_filter || "none").toLowerCase();
-  if (!filter || filter === "none" || filter === "off" || filter === "false") return null;
-  if (signal?.taker_data_ok === false) return { text: "资金流延迟", tone: "warn" };
-  const ratio = Number(signal?.taker_ratio ?? signal?.second_flow_ratio_60s);
-  const ratioText = Number.isFinite(ratio) ? ` ${ratio.toFixed(2)}` : "";
-  const bias = signal?.taker_flow_bias || "unknown";
-  const biasText = { bullish: "偏多", bearish: "偏空", neutral: "中性", unknown: "未知" }[bias] || "未知";
-  if (signal?.blocked_signal && (signal?.reason === "taker_not_aligned" || signal?.reason === "flow_not_aligned")) {
-    return { text: `资金流未对齐 ${biasText}${ratioText}`, tone: "warn" };
-  }
-  if (signal?.signal && (signal?.taker_filter_ok || filter.includes("flow"))) {
-    return { text: `资金流已对齐 ${biasText}${ratioText}`, tone: bias === "bearish" ? "down" : "up" };
-  }
-  return { text: `资金流 ${biasText}${ratioText}`, tone: bias === "bullish" ? "up" : bias === "bearish" ? "down" : "neutral" };
-}
-
-function badgeStyle(tone) {
-  if (tone === "up") return { ...baseBadgeStyle, background: "var(--green-soft)", color: "var(--green)" };
-  if (tone === "down") return { ...baseBadgeStyle, background: "var(--red-soft)", color: "var(--red)" };
-  if (tone === "warn") return { ...baseBadgeStyle, background: "rgba(230, 181, 74, 0.14)", color: "#e6b54a" };
-  return baseBadgeStyle;
-}
-
-function StatBadge({ label, stat }) {
-  const pnl = Number(stat?.pnl || 0);
-  const tone = pnl > 0 ? "up" : pnl < 0 ? "down" : "neutral";
+function DirectionBadge({ signal }) {
+  const dir = signal?.signal;
+  const Icon = dir === "UP" ? ArrowUp : dir === "DOWN" ? ArrowDown : Minus;
   return (
-    <span className="badge" style={badgeStyle(tone)}>
-      {label} {fmtPct(stat?.winRate, 1)} / {pnl > 0 ? "+" : ""}{fmt(pnl, 2)}U
+    <span className={`direction-badge ${directionClass(dir)}`}>
+      <Icon size={15} />
+      {directionText(dir)}
     </span>
   );
 }
 
-function DirectionBadge({ signal }) {
-  const dir = signal?.signal;
-  const cls = directionClass(dir);
-  const Icon = dir === "UP" ? ArrowUp : dir === "DOWN" ? ArrowDown : Minus;
+function Flag({ children, tone = "neutral" }) {
+  return <span className={`flag ${tone}`}>{children}</span>;
+}
+
+function BacktestLine({ backtest }) {
+  if (!backtest) return <span>回测基准：当前参数暂无固定基准</span>;
   return (
-    <span className={`status-pill ${cls}`} style={{ display: "inline-flex", alignItems: "center", gap: "5px", minWidth: "68px", justifyContent: "center", fontSize: "12px", fontWeight: "900" }}>
-      <Icon size={14} />
-      {dir ? directionText(dir) : "等待"}
+    <span>
+      回测基准：{fmtPct(backtest.wr, 2)}，{backtest.tradesPerDay}单/天，{backtest.trades}单，最大连亏 {backtest.maxLoss}
+      {backtest.sampleHours ? `，样本 ${fmt(backtest.sampleHours, 1)}h` : ""}
     </span>
+  );
+}
+
+function DetailRows({ signal }) {
+  const condition = signal?.condition_summary || {};
+  const rows = [
+    ["当前判断", signal?.signal_detail || signalLabel(signal)],
+    ["预计信号", signal?.next_signal_estimate],
+    ["下次扫描", signal?.next_check_time_shanghai],
+    ["入场规则", condition.entry],
+    ["风控规则", condition.risk],
+    ["亏损冷却", condition.loss_density],
+    ["状态过滤", condition.state],
+    ["V19过滤", condition.veto],
+    ["间隔限制", condition.gap]
+  ].filter(([, value]) => value !== undefined && value !== null && value !== "");
+
+  if (!rows.length) return null;
+  return (
+    <div className="detail-list">
+      {rows.map(([label, value]) => (
+        <div className="detail-row" key={label}>
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FeatureGrid({ signal }) {
+  const rows = [
+    ["路由波动", signal?.route_sigma_bps != null ? `${fmt(signal.route_sigma_bps, 2)}bp` : null],
+    ["10分钟范围", signal?.r10_bps != null ? `${fmt(signal.r10_bps, 2)}bp` : null],
+    ["秒级覆盖", signal?.observed600_pct != null ? `${fmt(signal.observed600_pct, 1)}% / ${fmt(signal.min_observed_pct || 88, 0)}%` : null],
+    ["扫描间隔", signal?.scan_interval_sec != null ? `${signal.scan_interval_sec}s` : null],
+    ["Z值", signal?.z_score],
+    ["峰值Z", signal?.peak_abs_z],
+    ["离开区间", signal?.outside_sec != null ? `${signal.outside_sec}s` : null],
+    ["10分钟波动", signal?.sigma10_bps != null ? `${fmt(signal.sigma10_bps, 2)}bp` : null],
+    ["60秒资金流", signal?.flow60],
+    ["订单薄20档", signal?.ob_imb20],
+    ["微价格", signal?.ob_micro_bps != null ? `${fmt(signal.ob_micro_bps, 4)}bp` : null],
+    ["共识票", signal?.consensus_votes != null ? `${signal.consensus_votes}/${signal?.min_consensus_votes || 2}` : null],
+    ["信号年龄", signal?.signal_age_sec != null ? `${fmt(signal.signal_age_sec, 1)}s` : null],
+    ["候选数", signal?.candidate_count]
+  ].filter(([, value]) => value !== undefined && value !== null && value !== "");
+
+  if (!rows.length) return null;
+  return (
+    <div className="feature-grid">
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function routerStatusText(status) {
+  const map = {
+    ready: "可触发",
+    waiting_tail: "等尾部",
+    sigma_out_of_range: "波动不匹配",
+    insufficient_data: "数据不足",
+    flat_sigma: "波动过低",
+    blocked_filter: "资金流拦截",
+    blocked_zone: "区间拦截",
+    blocked_low_up_veto: "low+UP否决"
+  };
+  return map[status] || status || "--";
+}
+
+function routerStatusTone(status) {
+  if (status === "ready") return "ok";
+  if (status === "waiting_tail") return "warn";
+  if (String(status || "").startsWith("blocked")) return "bad";
+  return "neutral";
+}
+
+function RouterDiagnostics({ signal }) {
+  const rows = Array.isArray(signal?.router_diagnostics) ? signal.router_diagnostics : [];
+  if (!rows.length) return null;
+  return (
+    <div className="router-panel">
+      <div className="router-panel-head">
+        <strong>V21触发拆解</strong>
+        <span>任一分支进入25%尾部且通过风控才下单</span>
+      </div>
+      <div className="router-rows">
+        {rows.map((row) => (
+          <div className="router-row" key={row.branch || row.role}>
+            <div className="router-main">
+              <span>{String(row.role || "--").toUpperCase()}</span>
+              <strong>{routerStatusText(row.status)}</strong>
+              <em className={`router-tone ${routerStatusTone(row.status)}`}>{row.signal || row.nearest_signal || "--"}</em>
+            </div>
+            <div className="router-metrics">
+              {row.p_up_pct != null ? <span>p涨 {fmt(row.p_up_pct, 1)}%</span> : null}
+              {row.edge_gap_pct != null ? <span>差 {fmt(row.edge_gap_pct, 1)}pp</span> : null}
+              {row.sigma_10m_bps != null ? <span>sigma {fmt(row.sigma_10m_bps, 1)}bp</span> : null}
+              <span>范围 {fmt(row.sigma_min_bps, 0)}-{fmt(row.sigma_max_bps, 0)}bp</span>
+            </div>
+            {row.detail ? <p>{row.detail}</p> : null}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
 export default function StrategyCard({ title, signal, amount, variant, stats }) {
-  const direction = signal?.signal;
-  const duration = signal?.duration || signal?.interval_min || "10";
-  const confidence = signal?.confidence !== undefined && signal?.confidence !== null ? fmtPct(signal.confidence, 0) : "--";
-  const normal = normalProbability(signal);
-  const chip = chipInfo(signal);
-  const takerFlow = takerFlowText(signal);
-  const headline = headlineText(signal, confidence);
-  const backtest = variant?.backtest;
-  const isChip = signal?.model_type === "second_chip" || variant?.base === "SECOND_CHIP";
-
-  let cardBorder = "1px solid var(--line)";
-  let cardShadow = "none";
-  if (direction === "UP") {
-    cardBorder = "1px solid rgba(39, 195, 165, 0.45)";
-    cardShadow = "0 0 15px rgba(39, 195, 165, 0.15)";
-  } else if (direction === "DOWN") {
-    cardBorder = "1px solid rgba(228, 88, 88, 0.45)";
-    cardShadow = "0 0 15px rgba(228, 88, 88, 0.15)";
-  }
+  const active = !!signal?.signal;
+  const live = variant?.enabled !== false && variant?.tradeEnabled !== false;
+  const observed = variant?.enabled !== false;
+  const cardTone = active ? directionClass(signal.signal) : "neutral";
 
   return (
-    <div className="strategy-card" style={{ border: cardBorder, boxShadow: cardShadow, padding: "16px", borderRadius: "6px", background: "var(--surface)", position: "relative", overflow: "hidden", flex: "1 1 320px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
-        <span style={{ fontSize: "14px", fontWeight: "bold", color: "var(--text-2)" }}>{title}</span>
-        <DirectionBadge signal={signal} />
-      </div>
-      <div style={{ display: "grid", gap: "8px" }}>
-        <strong className={directionClass(direction)} style={{ fontSize: "18px", lineHeight: 1.1 }}>{headline}</strong>
-        <div className="strategy-meta" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <span className="badge" style={baseBadgeStyle}>投数 {amount || "--"}U</span>
-          <span className="badge" style={baseBadgeStyle}>周期 {duration}m</span>
-          {!isChip ? <span className="badge" style={baseBadgeStyle}>阈值 {tailText(variant, signal)}</span> : null}
-          {backtest ? <span className="badge" style={baseBadgeStyle}>回测 {fmtPct(backtest.wr, 2)} / {backtest.tradesPerDay}笔天</span> : null}
-          <StatBadge label="实盘" stat={stats?.real} />
-          <StatBadge label="影子" stat={stats?.shadow} />
-          <span className="badge" style={baseBadgeStyle}>策略 {isChip ? "秒级筹码区反转" : "正态尾部反转"}</span>
-          {isChip ? (
-            <>
-              <span className="badge" style={baseBadgeStyle}>POC {chip.poc}</span>
-              <span className="badge" style={{ ...baseBadgeStyle, background: "var(--green-soft)", color: "var(--green)" }}>区间下沿 {chip.zoneLow}</span>
-              <span className="badge" style={{ ...baseBadgeStyle, background: "var(--red-soft)", color: "var(--red)" }}>区间上沿 {chip.zoneHigh}</span>
-              <span className="badge" style={{ ...baseBadgeStyle, background: "var(--green-soft)", color: "var(--green)" }}>下破线 {chip.lowerTrigger}</span>
-              <span className="badge" style={{ ...baseBadgeStyle, background: "var(--red-soft)", color: "var(--red)" }}>上破线 {chip.upperTrigger}</span>
-              <span className="badge" style={baseBadgeStyle}>筹码占比 {chip.share}</span>
-              <span className="badge" style={baseBadgeStyle}>区宽 {chip.width}档</span>
-              <span className="badge" style={baseBadgeStyle}>筹码过滤 {chip.filter}</span>
-              <span className="badge" style={baseBadgeStyle}>位置 {chip.position}</span>
-              <span className="badge" style={baseBadgeStyle}>突破阈值 {chip.threshold}</span>
-            </>
-          ) : (
-            <>
-              <span className="badge" style={{ ...baseBadgeStyle, background: "var(--green-soft)", color: "var(--green)" }}>自然上行 {normal.up}</span>
-              <span className="badge" style={{ ...baseBadgeStyle, background: "var(--red-soft)", color: "var(--red)" }}>自然下行 {normal.down}</span>
-              <span className="badge" style={baseBadgeStyle}>触发差距 {normal.edge}</span>
-              <span className="badge" style={baseBadgeStyle}>{normal.zone}</span>
-            </>
-          )}
-          {variant?.tradeEnabled === false ? <span className="badge" style={badgeStyle("warn")}>仅影子记录</span> : null}
-          {takerFlow ? <span className="badge" style={badgeStyle(takerFlow.tone)}>{takerFlow.text}</span> : null}
+    <article className={`strategy-card ${cardTone}`}>
+      <header className="strategy-card-head">
+        <div>
+          <span className="eyebrow">策略</span>
+          <h3>{title || variant?.label || signal?.strategy_id || "未命名策略"}</h3>
+          <small>{signal?.strategy_id || variant?.id}</small>
         </div>
+        <DirectionBadge signal={signal} />
+      </header>
+
+      <div className="strategy-summary">
+        <strong className={directionClass(signal?.signal)}>{signalLabel(signal)}</strong>
+        <span>
+          <Clock size={14} />
+          信号时间 {displaySignalTime(signal)}
+        </span>
       </div>
-    </div>
+
+      <div className="flag-row">
+        <Flag tone={observed ? "ok" : "warn"}>{observed ? "已监控" : "未监控"}</Flag>
+        <Flag tone={live ? "danger" : "neutral"}>{live ? "实盘可下单" : "仅观察/影子"}</Flag>
+        <Flag>{amount || variant?.amount || "--"}U</Flag>
+        <Flag>{variant?.duration || signal?.duration || "10"}分钟</Flag>
+        {variant?.confirmationVeto ? <Flag tone={variant.confirmationVeto === "none" ? "neutral" : "ok"}>{variant.confirmationVeto}</Flag> : null}
+      </div>
+
+      <div className="strategy-footnote">
+        <ShieldCheck size={14} />
+        <BacktestLine backtest={variant?.backtest} />
+      </div>
+
+      <div className="strategy-stats">
+        <span>
+          <Activity size={14} />
+          实盘 {statLine(stats?.real)}
+        </span>
+        <span>影子 {statLine(stats?.shadow)}</span>
+      </div>
+
+      <FeatureGrid signal={signal} />
+      <DetailRows signal={signal} />
+      <RouterDiagnostics signal={signal} />
+
+      {signal?.reason ? <div className="reason-line">原因：{signal.reason}</div> : null}
+      {signal?.error ? <div className="reason-line bad">异常：{signal.error}</div> : null}
+      {signal?.actionable_time ? <div className="reason-line">可执行时间：{dateTimeText(signal.actionable_time)}</div> : null}
+    </article>
   );
 }

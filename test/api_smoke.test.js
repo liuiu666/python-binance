@@ -70,6 +70,14 @@ function startServer({ port, dataDir, token = "" }) {
   });
 }
 
+function writeFreshMinuteCandles(dataDir, now = Date.now()) {
+  let csv = "open_time,open,high,low,close,volume\n";
+  for (let i = 299; i >= 0; i -= 1) {
+    csv += `${new Date(now - i * 60_000).toISOString()},1,1,1,1,1\n`;
+  }
+  fs.writeFileSync(path.join(dataDir, "btcusdt_1m.csv"), csv, "utf8");
+}
+
 async function waitForRuntime(baseUrl) {
   const deadline = Date.now() + 10000;
   while (Date.now() < deadline) {
@@ -115,6 +123,31 @@ test("server serves React dashboard and read APIs", async () => {
   });
 });
 
+test("data health uses signal snapshot time instead of stale strategy candle time", async () => {
+  await withServer({}, async ({ baseUrl, dataDir }) => {
+    const now = Date.now();
+    writeFreshMinuteCandles(dataDir, now);
+    fs.writeFileSync(path.join(dataDir, "live_signals.json"), JSON.stringify({
+      TEST_OLD_STRATEGY_TIME: {
+        strategy_id: "TEST_OLD_STRATEGY_TIME",
+        time: "2020-01-01T00:00:00Z",
+        signal: null,
+        reason: "test_old_strategy_time"
+      },
+      _snapshot_time_ms: now,
+      _snapshot_time: new Date(now).toISOString(),
+      _snapshot_strategy_count: 1
+    }, null, 2), "utf8");
+
+    const health = await requestJson(baseUrl, "/api/data-health");
+    assert.equal(health.status, 200);
+    assert.equal(health.json.blocked, false);
+    assert.equal(health.json.signal.freshnessSource, "snapshot_time");
+    assert.match(health.json.signal.latestStrategyTime, /^2020-01-01T00:00:00/);
+    assert.ok(!health.json.reasons.includes("signal_snapshot_stale"));
+  });
+});
+
 test("server trade audit import dedupes through API", async () => {
   await withServer({}, async ({ baseUrl }) => {
     const body = {
@@ -130,6 +163,315 @@ test("server trade audit import dedupes through API", async () => {
     assert.equal(second.status, 200);
     assert.equal(second.json.imported, 0);
     assert.equal(second.json.skipped, 1);
+  });
+});
+
+test("manual orders are accepted even when strategy real trading is disabled", async () => {
+  await withServer({}, async ({ baseUrl }) => {
+    const manual = await requestJson(baseUrl, "/api/manual", {
+      method: "POST",
+      body: { direction: "UP", amount: "5", duration: "10" }
+    });
+    assert.equal(manual.status, 200);
+    assert.equal(manual.json.direction, "UP");
+    assert.equal(manual.json.amount, "5");
+
+    const pending = await requestJson(baseUrl, "/api/manual");
+    assert.equal(pending.status, 200);
+    assert.equal(pending.json.direction, "UP");
+  });
+});
+
+test("manual order command survives retryable tablet execution failure", async () => {
+  await withServer({}, async ({ baseUrl }) => {
+    const manual = await requestJson(baseUrl, "/api/manual", {
+      method: "POST",
+      body: { direction: "UP", amount: "5", duration: "10" }
+    });
+    assert.equal(manual.status, 200);
+
+    const attempt = await requestJson(baseUrl, "/api/trade-audit", {
+      method: "POST",
+      body: {
+        event: "order_attempt",
+        clientTime: manual.json.time + 1000,
+        device: "tablet",
+        strategyId: "manual",
+        direction: "UP",
+        amount: "5",
+        duration: "10"
+      }
+    });
+    assert.equal(attempt.status, 200);
+
+    const abort = await requestJson(baseUrl, "/api/trade-audit", {
+      method: "POST",
+      body: {
+        event: "order_abort",
+        clientTime: manual.json.time + 2000,
+        device: "tablet",
+        strategyId: "manual",
+        direction: "UP",
+        amount: "5",
+        duration: "10",
+        reason: "amount_failed"
+      }
+    });
+    assert.equal(abort.status, 200);
+
+    const deleted = await requestJson(baseUrl, "/api/manual", { method: "DELETE" });
+    assert.equal(deleted.status, 200);
+    assert.equal(deleted.json.cleared, false);
+    assert.equal(deleted.json.retry, true);
+    assert.equal(deleted.json.reason, "amount_failed");
+
+    const pending = await requestJson(baseUrl, "/api/manual");
+    assert.equal(pending.status, 200);
+    assert.equal(pending.json.direction, "UP");
+    assert.equal(pending.json.lastAbortReason, "amount_failed");
+  });
+});
+
+test("manual order command retries when confirm button is not found", async () => {
+  await withServer({}, async ({ baseUrl }) => {
+    const manual = await requestJson(baseUrl, "/api/manual", {
+      method: "POST",
+      body: { direction: "DOWN", amount: "5", duration: "10" }
+    });
+    assert.equal(manual.status, 200);
+
+    await requestJson(baseUrl, "/api/trade-audit", {
+      method: "POST",
+      body: {
+        event: "order_attempt",
+        clientTime: manual.json.time + 1000,
+        device: "tablet",
+        strategyId: "manual",
+        direction: "DOWN",
+        amount: "5",
+        duration: "10"
+      }
+    });
+
+    await requestJson(baseUrl, "/api/trade-audit", {
+      method: "POST",
+      body: {
+        event: "order_abort",
+        clientTime: manual.json.time + 2000,
+        device: "tablet",
+        strategyId: "manual",
+        direction: "DOWN",
+        amount: "5",
+        duration: "10",
+        reason: "confirm_not_found"
+      }
+    });
+
+    const deleted = await requestJson(baseUrl, "/api/manual", { method: "DELETE" });
+    assert.equal(deleted.status, 200);
+    assert.equal(deleted.json.cleared, false);
+    assert.equal(deleted.json.retry, true);
+    assert.equal(deleted.json.reason, "confirm_not_found");
+  });
+});
+
+test("manual order command clears after tablet reports order done", async () => {
+  await withServer({}, async ({ baseUrl }) => {
+    const manual = await requestJson(baseUrl, "/api/manual", {
+      method: "POST",
+      body: { direction: "DOWN", amount: "5", duration: "10" }
+    });
+    assert.equal(manual.status, 200);
+
+    const done = await requestJson(baseUrl, "/api/trade-audit", {
+      method: "POST",
+      body: {
+        event: "order_done",
+        clientTime: manual.json.time + 2000,
+        device: "tablet",
+        strategyId: "manual",
+        direction: "DOWN",
+        amount: "5",
+        duration: "10"
+      }
+    });
+    assert.equal(done.status, 200);
+
+    const deleted = await requestJson(baseUrl, "/api/manual", { method: "DELETE" });
+    assert.equal(deleted.status, 200);
+    assert.equal(deleted.json.cleared, true);
+
+    const pending = await requestJson(baseUrl, "/api/manual");
+    assert.equal(pending.status, 200);
+    assert.equal(pending.json, null);
+  });
+});
+
+test("shadow circuit breaker blocks after dense shadow losses", async () => {
+  await withServer({}, async ({ baseUrl }) => {
+    const strategyId = "BTC_10min_NORMAL_STATE_V21_LOSS_DENSITY_3OF6_8H";
+    const cfg = await requestJson(baseUrl, "/api/config", {
+      method: "POST",
+      body: {
+        realTradingEnabled: false,
+        autoTrade_10m: false,
+        shadowTradingEnabled: true,
+        strategyVariants: [{
+          id: strategyId,
+          base: "SECOND_NORMAL_ROUTER_V21",
+          label: "normal router v21 loss density",
+          amount: "5",
+          tailPct: 0.25,
+          enabled: true,
+          tradeEnabled: false,
+          lookbackSec: 4200,
+          horizonSec: 600,
+          gapSec: 600,
+          routeLookbackSec: 4200,
+          r10WindowSec: 600,
+          r10CapBps: 42,
+          downR10CapBps: 35,
+          midRouteSigmaCapBps: 20,
+          minObservedPct: 88,
+          lossDensityEnabled: true,
+          lossDensityWindow: 6,
+          lossDensityLosses: 3,
+          lossDensityCooldownSec: 28800,
+          lossDensityLookbackHours: 72
+        }]
+      }
+    });
+    assert.equal(cfg.status, 200);
+    const start = Date.now() - 60 * 60 * 1000;
+    const items = [];
+    const outcomes = ["lost", "lost", "lost", "won"];
+    outcomes.forEach((status, index) => {
+      const openTime = start + index * 11 * 60 * 1000;
+      const settleTime = openTime + 10 * 60 * 1000;
+      items.push({
+        event: "shadow_trade_open",
+        serverTime: openTime,
+        tradeId: index + 1,
+        source: `shadow:${strategyId}`,
+        strategyId,
+        direction: "UP",
+        amount: 5,
+        duration: 10,
+        openTime,
+        strikePrice: 100
+      });
+      items.push({
+        event: "shadow_trade_settle",
+        serverTime: settleTime,
+        tradeId: index + 1,
+        source: `shadow:${strategyId}`,
+        strategyId,
+        openTime,
+        settleTime,
+        settlePrice: status === "won" ? 101 : 99,
+        status
+      });
+    });
+
+    const imported = await requestJson(baseUrl, "/api/trade-audit/import", {
+      method: "POST",
+      body: { source: "shadow-circuit-test", items }
+    });
+    assert.equal(imported.status, 200);
+    assert.equal(imported.json.imported, 8);
+
+    const signal = await requestJson(baseUrl, "/api/signal?source=dashboard");
+    assert.equal(signal.status, 200);
+    assert.equal(signal.json._shadowCircuitGate.blocked, true);
+    assert.equal(signal.json._shadowCircuitGate.scope, "portfolio");
+    assert.equal(signal.json._shadowCircuitGate.global.lastTrigger.lossCount, 3);
+    assert.equal(signal.json._shadowCircuitGate.strategies[strategyId].lastTrigger.lossCount, 3);
+    assert.equal(signal.json._lossDensityGate.strategies[strategyId].blocked, true);
+    assert.equal(signal.json._lossDensityGate.strategies[strategyId].policy.minTrades, 4);
+    assert.equal(signal.json._lossDensityGate.strategies[strategyId].lastTrigger.lossCount, 3);
+  });
+});
+
+test("recent real execution failure blocks the next live signal", async () => {
+  await withServer({}, async ({ baseUrl, dataDir }) => {
+    const strategyId = "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2";
+    const now = Date.now();
+    writeFreshMinuteCandles(dataDir, now);
+
+    const cfg = await requestJson(baseUrl, "/api/config", {
+      method: "POST",
+      body: {
+        realTradingEnabled: true,
+        autoTrade_10m: true,
+        forceAutoTrade: true,
+        shadowTradingEnabled: false,
+        strategyVariants: [
+          {
+            id: strategyId,
+            base: "SECOND_VW_CONFIRM",
+            amount: "5",
+            tailPct: 0.2,
+            enabled: true,
+            tradeEnabled: true,
+            lookbackSec: 2700,
+            horizonSec: 600,
+            gapSec: 600,
+            etaTargetBps: 2,
+            etaMaxWaitSec: 45
+          }
+        ]
+      }
+    });
+    assert.equal(cfg.status, 200);
+    assert.equal(cfg.json.realTradingEnabled, true);
+    assert.equal(cfg.json.autoTrade_10m, true);
+
+    fs.writeFileSync(path.join(dataDir, "live_signals.json"), JSON.stringify({
+      [strategyId]: {
+        strategy_id: strategyId,
+        model_type: "test",
+        signal: "UP",
+        confidence: 88,
+        time: new Date(now).toISOString(),
+        actionable_time: new Date(now).toISOString(),
+        price: 100,
+        entry: 100,
+        duration: "10"
+      },
+      _snapshot_time_ms: now,
+      _snapshot_time: new Date(now).toISOString(),
+      _snapshot_strategy_count: 1
+    }, null, 2), "utf8");
+
+    const before = await requestJson(baseUrl, "/api/signal");
+    assert.equal(before.status, 200);
+    assert.equal(before.json[strategyId].signal, "UP");
+
+    const abort = await requestJson(baseUrl, "/api/trade-audit", {
+      method: "POST",
+      body: {
+        event: "order_abort",
+        clientTime: now + 1000,
+        device: "tablet",
+        strategyId,
+        direction: "UP",
+        amount: 5,
+        duration: "10",
+        reason: "amount_failed"
+      }
+    });
+    assert.equal(abort.status, 200);
+    assert.equal(abort.json.ok, true);
+
+    const after = await requestJson(baseUrl, "/api/signal");
+    assert.equal(after.status, 200);
+    assert.equal(after.json[strategyId].signal, null);
+    assert.equal(after.json[strategyId].reason, "recent_order_failure_cooldown");
+    assert.equal(after.json[strategyId].blocked_signal, "UP");
+    assert.equal(after.json[strategyId].execution_failure.blocked, true);
+    assert.equal(after.json[strategyId].execution_failure.mode, "amount_failed");
+    assert.equal(after.json[strategyId].execution_failure.lastReasonLabel, "金额输入失败");
+    assert.equal(after.json[strategyId].execution_failure_label, "金额输入失败");
   });
 });
 

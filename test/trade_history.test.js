@@ -79,6 +79,58 @@ test("live order history uses duration-specific payout rates", () => {
   assert.equal(thirtyMin.pnl, 8.5);
 });
 
+test("live order history restores amount from signal payload when audit amount is missing", () => {
+  const history = buildLiveOrderHistory({
+    now: 1710000000000,
+    limit: 10,
+    auditRows: [
+      {
+        event: "order_done",
+        serverTime: 1000,
+        duration: 10,
+        direction: "UP",
+        price: 100,
+        strategyId: "BTC_10min_SAFE",
+        signal: { amount: "12", fixed_amount: true }
+      }
+    ],
+    priceTicks: [
+      { time: 601000, price: 101 }
+    ]
+  });
+
+  assert.equal(history.recent[0].amount, 12);
+  assert.equal(history.recent[0].openAmount, 12);
+  assert.equal(history.recent[0].settleAmount, 21.6);
+  assert.equal(history.recent[0].pnl, 9.6);
+  assert.match(history.recent[0].amountReason, /12U/);
+});
+
+test("live order history exposes open and settlement amounts", () => {
+  const history = buildLiveOrderHistory({
+    now: 1710000000000,
+    limit: 10,
+    auditRows: [
+      { event: "order_done", serverTime: 1000, duration: 10, direction: "UP", amount: 10, price: 100, strategyId: "WIN" },
+      { event: "order_done", serverTime: 2000, duration: 10, direction: "DOWN", amount: 10, price: 100, strategyId: "LOSS" },
+      { event: "order_done", serverTime: 3000, duration: 10, direction: "UP", amount: 10, price: 100, strategyId: "TIE" }
+    ],
+    priceTicks: [
+      { time: 601000, price: 101 },
+      { time: 602000, price: 101 },
+      { time: 603000, price: 100 }
+    ]
+  });
+
+  const byStrategy = Object.fromEntries(history.recent.map(row => [row.strategyId, row]));
+  assert.equal(byStrategy.WIN.openAmount, 10);
+  assert.equal(byStrategy.WIN.settleAmount, 18);
+  assert.equal(byStrategy.LOSS.openAmount, 10);
+  assert.equal(byStrategy.LOSS.settleAmount, 0);
+  assert.equal(byStrategy.TIE.openAmount, 10);
+  assert.equal(byStrategy.TIE.settleAmount, 10);
+});
+
 test("live order history summarizes settled, pending, aborted, and server rows", () => {
   const history = buildLiveOrderHistory({
     now: 1710000000000,
@@ -107,6 +159,34 @@ test("live order history summarizes settled, pending, aborted, and server rows",
   assert.equal(history.summary.pnl, 8.5);
   assert.equal(history.active.length, 1);
   assert.equal(history.recent[0].event, "server_trade");
+});
+
+test("live order history can scope records by Shanghai day", () => {
+  const dayOne = Date.parse("2026-07-04T12:00:00+08:00");
+  const dayTwo = Date.parse("2026-07-05T12:00:00+08:00");
+  const history = buildLiveOrderHistory({
+    now: Date.parse("2026-07-05T13:00:00+08:00"),
+    mode: "day",
+    day: "2026-07-05",
+    kind: "real",
+    auditRows: [
+      { event: "order_done", serverTime: dayOne, duration: 10, direction: "UP", amount: 5, price: 100, strategyId: "OLD_DAY" },
+      { event: "order_done", serverTime: dayTwo, duration: 10, direction: "DOWN", amount: 5, price: 100, strategyId: "TARGET_DAY" }
+    ],
+    priceTicks: [
+      { time: dayOne + 600000, price: 101 },
+      { time: dayTwo + 600000, price: 99 }
+    ],
+    availableDays: ["2026-07-05", "2026-07-04"]
+  });
+
+  assert.equal(history.pagination.mode, "day");
+  assert.equal(history.pagination.day, "2026-07-05");
+  assert.equal(history.pagination.total, 1);
+  assert.deepEqual(history.pagination.availableDays, ["2026-07-05", "2026-07-04"]);
+  assert.equal(history.summary.total, 1);
+  assert.equal(history.summary.real.wins, 1);
+  assert.equal(history.recent[0].strategyId, "TARGET_DAY");
 });
 
 test("unverified autojs orders are visible but excluded from win rate and pnl", () => {
@@ -202,4 +282,56 @@ test("shadow audit rows do not merge reused trade ids after restart", () => {
   assert.equal(history.summary.shadow.wins, 1);
   assert.equal(history.summary.shadow.losses, 1);
   assert.equal(history.summary.shadow.pnl, -1);
+});
+
+test("real history summary excludes shadow losses when viewing real orders", () => {
+  const history = buildLiveOrderHistory({
+    now: 1710000000000,
+    mode: "day",
+    day: "2026-07-05",
+    kind: "real",
+    auditRows: [
+      {
+        event: "order_abort",
+        serverTime: Date.parse("2026-07-05T12:00:00+08:00"),
+        duration: 10,
+        direction: "UP",
+        amount: 10,
+        reason: "amount_failed",
+        strategyId: "BTC_10min_NORMAL_STATE_V21_LOSS_DENSITY_3OF6_8H"
+      },
+      {
+        event: "shadow_trade_open",
+        serverTime: Date.parse("2026-07-05T12:01:00+08:00"),
+        tradeId: 1,
+        source: "shadow:BTC_10min_NORMAL_STATE_V21_LOSS_DENSITY_3OF6_8H",
+        strategyId: "BTC_10min_NORMAL_STATE_V21_LOSS_DENSITY_3OF6_8H",
+        direction: "DOWN",
+        amount: 5,
+        duration: 10,
+        openTime: Date.parse("2026-07-05T12:01:00+08:00"),
+        strikePrice: 100
+      },
+      {
+        event: "shadow_trade_settle",
+        serverTime: Date.parse("2026-07-05T12:11:00+08:00"),
+        tradeId: 1,
+        source: "shadow:BTC_10min_NORMAL_STATE_V21_LOSS_DENSITY_3OF6_8H",
+        strategyId: "BTC_10min_NORMAL_STATE_V21_LOSS_DENSITY_3OF6_8H",
+        openTime: Date.parse("2026-07-05T12:01:00+08:00"),
+        settleTime: Date.parse("2026-07-05T12:11:00+08:00"),
+        settlePrice: 101,
+        status: "lost"
+      }
+    ]
+  });
+
+  assert.equal(history.summary.total, 1);
+  assert.equal(history.summary.losses, 0);
+  assert.equal(history.summary.aborted, 1);
+  assert.equal(history.summary.executionFailed, 1);
+  assert.equal(history.summary.pnl, 0);
+  assert.equal(history.summary.shadow.losses, 1);
+  assert.equal(history.breakdown.shadow.total.losses, 1);
+  assert.equal(history.recent[0].status, "aborted");
 });

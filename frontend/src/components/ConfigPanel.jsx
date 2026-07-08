@@ -1,137 +1,359 @@
-import React from "react";
-import { Save, Server } from "lucide-react";
+import { Save, SlidersHorizontal } from "lucide-react";
 import { DEFAULT_CONFIG, fmtPct } from "../utils";
 
-const inputStyle = {
-  width: "100%",
-  height: "28px",
-  background: "#0d1117",
-  border: "1px solid var(--line)",
-  color: "var(--text)",
-  borderRadius: "4px",
-  padding: "2px 6px",
-  textAlign: "right",
-  fontSize: "12px",
-  outline: "none"
-};
+const VETO_OPTIONS = [
+  ["none", "关闭旧版确认过滤"],
+  ["ob_confirm_weak", "订单薄不支持方向就跳过"],
+  ["price_confirm_weak", "价格短线不支持方向就跳过"],
+  ["ob_or_price_weak", "订单薄或价格任一不支持就跳过"]
+];
 
-function CompactToggle({ label, checked, onChange }) {
+function toInt(value, fallback, min, max) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function Toggle({ label, checked, onChange, danger }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 2px" }}>
-      <span style={{ fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>{label}</span>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-        <span style={{ fontSize: "11px", fontWeight: "bold", color: checked ? "var(--green)" : "var(--muted)" }}>
-          {checked ? "已开启" : "已关闭"}
-        </span>
-        <button className={`slide-switch ${checked ? "on" : "off"}`} type="button" onClick={onChange} />
-      </div>
-    </div>
+    <button type="button" className={`switch-row ${checked ? "on" : ""} ${danger ? "danger" : ""}`} onClick={onChange}>
+      <span>{label}</span>
+      <strong>{checked ? "开启" : "关闭"}</strong>
+    </button>
   );
 }
 
-function tailDisplay(tailPct) {
-  const lower = Math.round(Number(tailPct || 0.2) * 100);
-  return `${lower}/${100 - lower}`;
-}
-
-function NumberField({ label, value, min, max, step, onChange, suffix }) {
+function Field({ label, value, suffix, min, max, step = 1, onChange }) {
   return (
-    <label style={{ display: "grid", gap: "4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
-      {label}
-      <div style={{ display: "grid", gridTemplateColumns: suffix ? "1fr auto" : "1fr", alignItems: "center", gap: "4px" }}>
-        <input min={min} max={max} step={step} type="number" value={value} onChange={event => onChange(Number(event.target.value))} style={inputStyle} />
-        {suffix ? <span style={{ color: "var(--muted)", fontSize: "10px" }}>{suffix}</span> : null}
+    <label className="field">
+      <span>{label}</span>
+      <div>
+        <input
+          type="number"
+          value={value ?? ""}
+          min={min}
+          max={max}
+          step={step}
+          onChange={event => onChange(event.target.value)}
+        />
+        {suffix ? <em>{suffix}</em> : null}
       </div>
     </label>
   );
 }
 
-function updateVariant(variants, index, patch) {
-  return variants.map((item, i) => {
-    if (i !== index) return item;
-    const next = { ...item, ...patch, base: "SECOND_VW_CONFIRM" };
-    if (patch.horizonSec !== undefined) next.duration = String(Math.max(1, Math.round(Number(next.horizonSec || 600) / 60)));
-    return next;
-  });
+function isV21Router(variant) {
+  return variant?.base === "SECOND_NORMAL_ROUTER_V21" || String(variant?.id || "").includes("_V21_");
 }
 
-function BacktestBadge({ variant }) {
+function isV22LowVol(variant) {
+  return variant?.base === "SECOND_NORMAL_LOWVOL_V22" || String(variant?.id || "").includes("_V22_");
+}
+
+function isLegacyNormalState(variant) {
+  return variant?.base === "SECOND_NORMAL_STATE_V11";
+}
+
+function hoursFromSeconds(value, fallbackHours) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return fallbackHours;
+  return Math.max(1, Math.round(seconds / 3600));
+}
+
+function StrategySettings({ variant, onChange }) {
   const bt = variant.backtest;
-  if (!bt) return <span style={{ color: "var(--muted)", fontSize: "10px" }}>回测参数已改变</span>;
+  const v21 = isV21Router(variant);
+  const v22 = isV22LowVol(variant);
+  const router = v21 || v22;
+  const legacyNormal = isLegacyNormalState(variant);
   return (
-    <span style={{ color: "var(--muted)", fontSize: "10px" }}>
-      回测 {fmtPct(bt.wr, 2)} / {bt.tradesPerDay}笔天 / {bt.trades}笔 / 连亏{bt.maxLoss}
-      {bt.sampleHours ? ` / 样本${bt.sampleHours}h` : ""}
-    </span>
-  );
-}
-
-function StrategyConfigCard({ variant, index, onChange }) {
-  return (
-    <div style={{ border: "1px solid var(--line)", borderRadius: "6px", padding: "10px", background: "rgba(255,255,255,0.015)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", marginBottom: "8px" }}>
+    <article className="strategy-settings">
+      <header>
         <div>
-          <div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--text)" }}>{variant.label}</div>
-          <BacktestBadge variant={variant} />
+          <strong>{variant.label || variant.id}</strong>
+          <small>{variant.id}</small>
         </div>
+        <span>{bt ? `${fmtPct(bt.wr, 2)} / ${bt.tradesPerDay}单/天` : "暂无固定回测"}</span>
+      </header>
+
+      <div className="setting-grid">
+        <Field
+          label="下单金额"
+          value={variant.amount || 5}
+          min={5}
+          max={999}
+          suffix="U"
+          onChange={value => onChange({ amount: String(toInt(value, 5, 5, 999)) })}
+        />
+        <Field
+          label={router ? "最短下单间隔" : "同策略间隔"}
+          value={variant.gapSec ?? 600}
+          min={0}
+          max={21600}
+          suffix="秒"
+          onChange={value => onChange({ gapSec: toInt(value, 600, 0, 21600) })}
+        />
+        {router ? (
+          <>
+            <Field
+              label="10分钟波动上限"
+              value={variant.r10CapBps ?? 42}
+              min={5}
+              max={120}
+              step={0.5}
+              suffix="bp"
+              onChange={value => onChange({ r10CapBps: Number(value) })}
+            />
+            <Field
+              label="做空波动上限"
+              value={variant.downR10CapBps ?? 35}
+              min={5}
+              max={120}
+              step={0.5}
+              suffix="bp"
+              onChange={value => onChange({ downR10CapBps: Number(value) })}
+            />
+            <Field
+              label="中波动上限"
+              value={variant.midRouteSigmaCapBps ?? 20}
+              min={5}
+              max={80}
+              step={0.5}
+              suffix="bp"
+              onChange={value => onChange({ midRouteSigmaCapBps: Number(value) })}
+            />
+            <Field
+              label="秒级覆盖下限"
+              value={variant.minObservedPct ?? 88}
+              min={50}
+              max={100}
+              step={1}
+              suffix="%"
+              onChange={value => onChange({ minObservedPct: toInt(value, 88, 50, 100) })}
+            />
+            {v21 ? (
+              <Toggle
+                label="low+UP否决"
+                checked={variant.vetoLowUp !== false}
+                onChange={() => onChange({ vetoLowUp: variant.vetoLowUp === false })}
+              />
+            ) : null}
+            {v22 ? (
+              <>
+                <Field
+                  label="低波动上限"
+                  value={variant.lowVolRouteSigmaMaxBps ?? 10}
+                  min={1}
+                  max={100}
+                  step={0.5}
+                  suffix="bp"
+                  onChange={value => onChange({ lowVolRouteSigmaMaxBps: Number(value) })}
+                />
+                <Field
+                  label="确认窗口"
+                  value={variant.lowVolConfirmSec ?? 15}
+                  min={1}
+                  max={120}
+                  suffix="秒"
+                  onChange={value => onChange({ lowVolConfirmSec: toInt(value, 15, 1, 120) })}
+                />
+                <Field
+                  label="回归确认"
+                  value={variant.lowVolReversionBps ?? 0.5}
+                  min={0}
+                  max={20}
+                  step={0.1}
+                  suffix="bp"
+                  onChange={value => onChange({ lowVolReversionBps: Number(value) })}
+                />
+                <Field
+                  label="突破确认"
+                  value={variant.lowVolBreakoutBps ?? 1.5}
+                  min={0}
+                  max={50}
+                  step={0.1}
+                  suffix="bp"
+                  onChange={value => onChange({ lowVolBreakoutBps: Number(value) })}
+                />
+              </>
+            ) : null}
+            <Field
+              label="亏损观察笔数"
+              value={variant.lossDensityWindow ?? 6}
+              min={3}
+              max={20}
+              onChange={value => onChange({ lossDensityWindow: toInt(value, 6, 3, 20) })}
+            />
+            <Field
+              label="触发亏损笔数"
+              value={variant.lossDensityLosses ?? 3}
+              min={1}
+              max={10}
+              onChange={value => onChange({ lossDensityLosses: toInt(value, 3, 1, 10) })}
+            />
+            <Field
+              label="亏损冷却"
+              value={hoursFromSeconds(variant.lossDensityCooldownSec, 8)}
+              min={1}
+              max={24}
+              suffix="小时"
+              onChange={value => onChange({ lossDensityCooldownSec: toInt(Number(value) * 3600, 28800, 3600, 86400) })}
+            />
+            <Field
+              label="连亏冷却"
+              value={hoursFromSeconds(variant.lossStreakCooldownSec, 1)}
+              min={1}
+              max={12}
+              suffix="小时"
+              onChange={value => onChange({ lossStreakCooldownSec: toInt(Number(value) * 3600, 3600, 3600, 43200) })}
+            />
+          </>
+        ) : (
+          <>
+            <Field
+              label="确认延迟"
+              value={variant.confirmDelaySec ?? 5}
+              min={1}
+              max={60}
+              suffix="秒"
+              onChange={value => onChange({ confirmDelaySec: toInt(value, 5, 1, 60) })}
+            />
+            <Field
+              label="最大反向"
+              value={variant.maxAdverseBps ?? 5}
+              min={0}
+              max={50}
+              step={0.5}
+              suffix="bp"
+              onChange={value => onChange({ maxAdverseBps: Number(value) })}
+            />
+            <Field
+              label="Bandwalk上限"
+              value={variant.bandwalkMax ?? 6}
+              min={1}
+              max={20}
+              step={0.5}
+              onChange={value => onChange({ bandwalkMax: Number(value) })}
+            />
+            <Field
+              label="共识票数"
+              value={variant.minConsensusVotes ?? 2}
+              min={1}
+              max={5}
+              onChange={value => onChange({ minConsensusVotes: toInt(value, 2, 1, 5) })}
+            />
+          </>
+        )}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-        <NumberField label="投数" value={variant.amount || 5} min="1" max="999" step="1" suffix="U" onChange={value => onChange({ amount: String(value || 5) })} />
-        <NumberField label={`正态阈值 ${tailDisplay(variant.tailPct)}`} value={Math.round(Number(variant.tailPct || 0.2) * 100)} min="5" max="45" step="1" suffix="%" onChange={value => onChange({ tailPct: Math.max(5, Math.min(45, value || 20)) / 100 })} />
-        <NumberField label="回看秒数" value={variant.lookbackSec || 2700} min="60" max="21600" step="60" onChange={value => onChange({ lookbackSec: value || 2700 })} />
-        <NumberField label="到期秒数" value={variant.horizonSec || 600} min="60" max="7200" step="60" onChange={value => onChange({ horizonSec: value || 600 })} />
-        <NumberField label="同策略锁" value={variant.gapSec || 600} min="0" max="21600" step="60" suffix="秒" onChange={value => onChange({ gapSec: value || 0 })} />
-        <NumberField label="ETA目标" value={variant.etaTargetBps || (index === 0 ? 2 : 3)} min="0.1" max="20" step="0.1" suffix="bp" onChange={value => onChange({ etaTargetBps: value || (index === 0 ? 2 : 3) })} />
-        <NumberField label="ETA等待" value={variant.etaMaxWaitSec || 45} min="1" max="600" step="1" suffix="秒" onChange={value => onChange({ etaMaxWaitSec: value || 45 })} />
-        <div style={{ display: "grid", gap: "4px" }}>
-          <CompactToggle label="观察并记录" checked={variant.enabled !== false} onChange={() => onChange({ enabled: variant.enabled === false })} />
-          <CompactToggle label="实盘执行" checked={variant.tradeEnabled !== false} onChange={() => onChange({ tradeEnabled: variant.tradeEnabled === false })} />
+
+      {router ? (
+        <div className="settings-note">
+          {v22
+            ? "V22 是低波动处理影子策略：只在 routeSigma 低于阈值时观察 V21 尾部候选，再用短确认窗口判断回归或突破；不参与实盘下单。"
+            : "V21 当前只用秒级正态路由、10分钟波动范围、数据覆盖和亏损密度风控；旧版 V19 过滤、Bandwalk、确认延迟不参与这套策略。"}
         </div>
+      ) : legacyNormal ? (
+        <label className="field full">
+          <span>旧版V19确认过滤</span>
+          <select value={variant.confirmationVeto || "none"} onChange={event => onChange({ confirmationVeto: event.target.value })}>
+            {VETO_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+          </select>
+        </label>
+      ) : null}
+
+      <div className="switch-grid">
+        <Toggle label="策略监控" checked={variant.enabled !== false} onChange={() => onChange({ enabled: variant.enabled === false })} />
+        <Toggle label={v22 ? "允许V22实盘" : "允许实盘"} checked={variant.tradeEnabled !== false} danger onChange={() => onChange({ tradeEnabled: variant.tradeEnabled === false })} />
       </div>
-    </div>
+    </article>
   );
 }
 
 export default function ConfigPanel({ draft, dirty, apiToken, onTokenChange, onDraftChange, onToggle, onSave }) {
-  const variants = (draft.strategyVariants || DEFAULT_CONFIG.strategyVariants).filter(item => item.base === "SECOND_VW_CONFIRM");
-  const rows = variants.length ? variants : DEFAULT_CONFIG.strategyVariants;
-  const setVariant = (index, patch) => onDraftChange({ strategyVariants: updateVariant(rows, index, patch) });
+  const variants = Array.isArray(draft.strategyVariants) && draft.strategyVariants.length
+    ? draft.strategyVariants
+    : DEFAULT_CONFIG.strategyVariants;
+  const liveStrategyCount = variants.filter(variant => variant.enabled !== false && variant.tradeEnabled !== false).length;
+
+  const updateVariant = (index, patch) => {
+    onDraftChange({
+      strategyVariants: variants.map((item, i) => {
+        if (i !== index) return item;
+        const next = { ...item, ...patch };
+        if (patch.horizonSec !== undefined) {
+          next.duration = String(Math.max(1, Math.round(Number(next.horizonSec || 600) / 60)));
+        }
+        return next;
+      })
+    });
+  };
 
   return (
-    <section className="panel config-panel" style={{ display: "grid", gap: "14px", padding: "14px" }}>
-      <header className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "8px", borderBottom: "1px solid var(--line)", margin: 0, minHeight: "auto" }}>
-        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <Server size={15} style={{ color: "var(--green)" }} /> 策略控制
-        </span>
-        <em className={dirty ? "dirty" : "synced"} style={{ fontSize: "11px" }}>{dirty ? "未保存" : "已同步"}</em>
+    <section className="panel config-panel">
+      <header className="section-head">
+        <div>
+          <span className="eyebrow">配置</span>
+          <h2><SlidersHorizontal size={18} /> 策略控制</h2>
+        </div>
+        <strong className={dirty ? "dirty" : "synced"}>{dirty ? "未保存" : "已同步"}</strong>
       </header>
 
-      <div style={{ padding: "10px", borderRadius: "6px", fontSize: "12px", lineHeight: "1.4", border: draft.realTradingEnabled ? "1px solid rgba(228, 88, 88, 0.3)" : "1px solid rgba(39, 195, 165, 0.2)", background: draft.realTradingEnabled ? "var(--red-soft)" : "var(--green-soft)", color: draft.realTradingEnabled ? "var(--red)" : "var(--green)" }}>
-        <strong>{draft.realTradingEnabled ? "实盘模式：只有开启实盘执行的策略会交给平板下单，其他策略只记录。" : "影子模式：策略只记录模拟交易，不消耗真实资金。"}</strong>
+      <div className={`strategy-live-note ${liveStrategyCount ? "danger" : "safe"}`}>
+        {liveStrategyCount
+          ? `已选择 ${liveStrategyCount} 个策略允许实盘；保存后策略会自动下单。`
+          : "当前没有策略允许实盘；保存后策略只观察。手动下单不受这里影响。"}
       </div>
 
-      <div style={{ border: "1px solid var(--line)", borderRadius: "6px", padding: "10px", background: "rgba(255,255,255,0.01)" }}>
-        <div style={{ fontSize: "11px", fontWeight: "bold", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>运行开关</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-          <CompactToggle label="允许策略自动下单" checked={draft.autoTrade_10m} onChange={() => onToggle("autoTrade_10m")} />
-          <CompactToggle label="实盘资金下单" checked={draft.realTradingEnabled} onChange={() => onToggle("realTradingEnabled")} />
-        </div>
+      <div className={`mode-warning ${draft.realTradingEnabled ? "danger" : "safe"}`}>
+        {draft.realTradingEnabled
+          ? "实盘资金已开启：只有“允许实盘”的策略会交给下单端。"
+          : "当前不是实盘资金模式：策略可以监控或记录影子单，不会消耗真实资金。"}
       </div>
 
-      <div style={{ border: "1px solid var(--line)", borderRadius: "6px", padding: "10px", background: "rgba(255,255,255,0.01)", display: "grid", gap: "10px" }}>
-        <div style={{ fontSize: "11px", fontWeight: "bold", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "1px" }}>正态 + 成交量确认 + ETA</div>
-        {rows.map((item, index) => (
-          <StrategyConfigCard key={item.id} variant={item} index={index} onChange={patch => setVariant(index, patch)} />
+      <div className="setting-grid top-setting-grid">
+        <Field
+          label="默认金额"
+          value={draft.amount || DEFAULT_CONFIG.amount}
+          min={5}
+          max={999}
+          suffix="U"
+          onChange={value => onDraftChange({ amount: String(toInt(value, 5, 5, 999)) })}
+        />
+        <Field
+          label="默认周期"
+          value={draft.duration || DEFAULT_CONFIG.duration}
+          min={1}
+          max={60}
+          suffix="分钟"
+          onChange={value => onDraftChange({ duration: String(toInt(value, 10, 1, 60)) })}
+        />
+      </div>
+
+      <div className="switch-grid global-switches">
+        <Toggle label="允许策略自动下单" checked={!!draft.autoTrade_10m} danger onChange={() => onToggle("autoTrade_10m")} />
+        <Toggle label="实盘资金下单" checked={!!draft.realTradingEnabled} danger onChange={() => onToggle("realTradingEnabled")} />
+        <Toggle label="记录影子单" checked={!!draft.shadowTradingEnabled} onChange={() => onToggle("shadowTradingEnabled")} />
+      </div>
+
+      <div className="strategy-settings-list">
+        {variants.map((variant, index) => (
+          <StrategySettings key={variant.id || index} variant={variant} onChange={patch => updateVariant(index, patch)} />
         ))}
       </div>
 
-      <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", padding: "8px 4px", fontSize: "11px", color: "var(--text-2)", fontWeight: "bold" }}>
-        安全密钥
-        <input className="token-input" type="password" value={apiToken} onChange={event => onTokenChange(event.target.value)} placeholder="无限制" style={{ ...inputStyle, width: "120px" }} />
+      <label className="field token-field">
+        <span>页面密钥</span>
+        <input
+          type="password"
+          value={apiToken}
+          placeholder="登录后自动使用"
+          onChange={event => onTokenChange(event.target.value)}
+        />
       </label>
 
-      <button className="primary-button" type="button" onClick={onSave} style={{ padding: "10px", borderRadius: "4px", border: "none", background: "var(--green)", color: "#0d1117", fontWeight: "bold", fontSize: "13px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", width: "100%", marginTop: "4px" }}>
-        <Save size={14} /> 保存并下发
+      <button className="primary-action" type="button" onClick={onSave}>
+        <Save size={16} />
+        保存并下发配置
       </button>
     </section>
   );
