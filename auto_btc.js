@@ -8,7 +8,7 @@ var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
 var API_TOKEN = "";
-var SCRIPT_VERSION = "2026-06-17-keepalive-diagnostics-v2";
+var SCRIPT_VERSION = "2026-07-07-manual-confirm-v2";
 var POLL_INTERVAL = 3000;
 var SIGNAL_MAX_AGE_MS = 60000;
 var STRATEGY_COOLDOWN_MS = 10 * 60 * 1000;
@@ -25,6 +25,8 @@ var persistedOrderKeys = {};
 var isRunning = true;
 var durationSet = false;
 var durationSetTarget = "";
+var lastAmountInputProbe = null;
+var lastConfirmProbe = null;
 
 // Balance reporting state
 var lastBalanceReport = 0;
@@ -793,12 +795,211 @@ function ensureDuration() {
 }
 
 // ========== Set amount ==========
+function rectNumber(rect, name) {
+    try {
+        var value = rect && rect[name];
+        if (typeof value === "function") value = value.call(rect);
+        value = Number(value);
+        return isFinite(value) ? value : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function nodeTextSafe(node) {
+    try { return String((node.text && node.text()) || ""); } catch (e1) {}
+    return "";
+}
+
+function nodeDescSafe(node) {
+    try { return String((node.desc && node.desc()) || ""); } catch (e1) {}
+    return "";
+}
+
+function nodeIdSafe(node) {
+    try { return String((node.id && node.id()) || ""); } catch (e1) {}
+    return "";
+}
+
+function nodeClassSafe(node) {
+    try { return String((node.className && node.className()) || ""); } catch (e1) {}
+    return "";
+}
+
+function nodeBoolSafe(node, name) {
+    try {
+        if (node && typeof node[name] === "function") return node[name]() === true;
+    } catch (e) {}
+    return null;
+}
+
+function nodeBoundsSafe(node) {
+    try {
+        var b = node.bounds();
+        var left = rectNumber(b, "left");
+        var top = rectNumber(b, "top");
+        var right = rectNumber(b, "right");
+        var bottom = rectNumber(b, "bottom");
+        if (left === null || top === null || right === null || bottom === null) return null;
+        return {
+            left: left,
+            top: top,
+            right: right,
+            bottom: bottom,
+            width: Math.max(0, right - left),
+            height: Math.max(0, bottom - top)
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
+function amountCandidateInfo(node, source) {
+    var bounds = nodeBoundsSafe(node);
+    return {
+        node: node,
+        source: source,
+        bounds: bounds,
+        text: nodeTextSafe(node),
+        desc: nodeDescSafe(node),
+        id: nodeIdSafe(node),
+        className: nodeClassSafe(node),
+        clickable: nodeBoolSafe(node, "clickable"),
+        enabled: nodeBoolSafe(node, "enabled"),
+        visible: nodeBoolSafe(node, "visibleToUser")
+    };
+}
+
+function pushAmountCandidate(list, seen, node, source) {
+    if (!node) return;
+    var info = amountCandidateInfo(node, source);
+    if (!info.bounds || info.bounds.width < 20 || info.bounds.height < 20) return;
+    var key = [
+        info.id,
+        info.className,
+        info.text,
+        info.desc,
+        info.bounds.left,
+        info.bounds.top,
+        info.bounds.right,
+        info.bounds.bottom
+    ].join("|");
+    if (seen[key]) return;
+    seen[key] = true;
+    list.push(info);
+}
+
+function pushAmountCandidateList(list, seen, nodes, source) {
+    if (!nodes) return;
+    try {
+        for (var i = 0; i < nodes.length; i++) pushAmountCandidate(list, seen, nodes[i], source);
+    } catch (e) {}
+}
+
+function amountCandidateScore(info) {
+    var score = 0;
+    var idText = String(info.id || "");
+    var classText = String(info.className || "");
+    var labelText = String((info.text || "") + " " + (info.desc || ""));
+    var b = info.bounds || {};
+    var cy = (Number(b.top || 0) + Number(b.bottom || 0)) / 2;
+    var cx = (Number(b.left || 0) + Number(b.right || 0)) / 2;
+
+    if (info.source === "legacy_id" || info.source === "full_legacy_id") score += 120;
+    if (/EditText/i.test(classText)) score += 70;
+    if (/2131431885|amount|input|qty|quantity|sum|stake|money|edit/i.test(idText)) score += 60;
+    if (/\bUSDT\b|Amount|Stake|Qty|Quantity|Margin|Cost|Buy|Sell/i.test(labelText)) score += 20;
+    if (cy > device.height * 0.38 && cy < device.height * 0.88) score += 18;
+    if (cx > device.width * 0.35) score += 8;
+    if (info.enabled === false) score -= 100;
+    if (info.visible === false) score -= 80;
+    return score;
+}
+
+function findAmountInputCandidates() {
+    var list = [];
+    var seen = {};
+    try { pushAmountCandidate(list, seen, id("2131431885").findOne(700), "legacy_id"); } catch (e1) {}
+    try { pushAmountCandidate(list, seen, id(PACKAGE + ":id/2131431885").findOne(700), "full_legacy_id"); } catch (e2) {}
+    try { pushAmountCandidateList(list, seen, selector().idMatches(/2131431885|amount|input|qty|quantity|sum|stake|money|edit/i).find(), "id_matches"); } catch (e3) {}
+    try { pushAmountCandidateList(list, seen, className("android.widget.EditText").find(), "edit_text"); } catch (e4) {}
+    try { pushAmountCandidateList(list, seen, classNameMatches(/EditText|TextInput/i).find(), "class_matches"); } catch (e5) {}
+
+    list.sort(function(a, b) {
+        return amountCandidateScore(b) - amountCandidateScore(a);
+    });
+    return list;
+}
+
+function compactAmountCandidate(info) {
+    return {
+        source: info.source,
+        score: amountCandidateScore(info),
+        id: info.id,
+        className: info.className,
+        text: String(info.text || "").substring(0, 40),
+        desc: String(info.desc || "").substring(0, 40),
+        bounds: info.bounds,
+        clickable: info.clickable,
+        enabled: info.enabled,
+        visible: info.visible
+    };
+}
+
+function setTextOnAmountCandidate(info, amt) {
+    var node = info.node;
+    var target = String(amt);
+    try { node.click(); } catch (e1) {}
+    sleep(180);
+    try { node.setText(""); sleep(100); } catch (e2) {}
+    try {
+        node.setText(target);
+        sleep(300);
+        log("Amount set by " + info.source + " score=" + amountCandidateScore(info));
+        return true;
+    } catch (e3) {
+        try {
+            setText(target);
+            sleep(300);
+            log("Amount set by focused setText " + info.source + " score=" + amountCandidateScore(info));
+            return true;
+        } catch (e4) {
+            if (lastAmountInputProbe && lastAmountInputProbe.errors.length < 6) {
+                lastAmountInputProbe.errors.push({
+                    source: info.source,
+                    error: String(e3) + " | " + String(e4)
+                });
+            }
+        }
+    }
+    return false;
+}
+
 function setAmount(amt) {
-    var input = id("2131431885").findOne(3000);
-    if (!input) return false;
-    input.click(); sleep(200);
-    input.setText(amt); sleep(300);
-    return true;
+    lastAmountInputProbe = {
+        target: String(amt),
+        screen: { width: device.width, height: device.height },
+        candidates: [],
+        tried: [],
+        errors: []
+    };
+
+    var candidates = findAmountInputCandidates();
+    for (var i = 0; i < candidates.length && i < 10; i++) {
+        lastAmountInputProbe.candidates.push(compactAmountCandidate(candidates[i]));
+    }
+    if (!candidates.length) {
+        log("Amount input not found: no candidates");
+        return false;
+    }
+
+    for (var j = 0; j < candidates.length && j < 6; j++) {
+        var info = candidates[j];
+        lastAmountInputProbe.tried.push(compactAmountCandidate(info));
+        if (setTextOnAmountCandidate(info, amt)) return true;
+    }
+    log("Amount input not set after " + Math.min(candidates.length, 6) + " candidates");
+    return false;
 }
 
 // ========== Direction ==========
@@ -818,8 +1019,73 @@ function handleConfirm() {
     return handleConfirmStrict();
 }
 
+function nodeSummary(node) {
+    var b = nodeBoundsSafe(node);
+    return {
+        text: nodeTextSafe(node),
+        desc: nodeDescSafe(node),
+        id: nodeIdSafe(node),
+        className: nodeClassSafe(node),
+        clickable: nodeBoolSafe(node, "clickable"),
+        enabled: nodeBoolSafe(node, "enabled"),
+        visible: nodeBoolSafe(node, "visibleToUser"),
+        bounds: b
+    };
+}
+
+function clickNodeCenter(node) {
+    var b = nodeBoundsSafe(node);
+    if (b && b.width > 0 && b.height > 0) {
+        click(Math.round((b.left + b.right) / 2), Math.round((b.top + b.bottom) / 2));
+        return true;
+    }
+    try {
+        node.click();
+        return true;
+    } catch (e) {}
+    return false;
+}
+
+function clickNodeOrAncestor(node) {
+    var cur = node;
+    for (var i = 0; cur && i < 5; i++) {
+        try {
+            if (nodeBoolSafe(cur, "enabled") !== false && nodeBoolSafe(cur, "visibleToUser") !== false) {
+                if (nodeBoolSafe(cur, "clickable") === true) {
+                    if (clickNodeCenter(cur)) return true;
+                }
+            }
+        } catch (e) {}
+        try { cur = cur.parent(); } catch (e2) { cur = null; }
+    }
+    return clickNodeCenter(node);
+}
+
+function collectConfirmProbe(limit) {
+    var out = [];
+    var seen = {};
+    function push(node) {
+        if (!node || out.length >= limit) return;
+        var b = nodeBoundsSafe(node);
+        var key = nodeIdSafe(node) + "|" + nodeTextSafe(node) + "|" + nodeDescSafe(node) + "|" + (b ? [b.left, b.top, b.right, b.bottom].join(",") : "");
+        if (seen[key]) return;
+        seen[key] = true;
+        out.push(nodeSummary(node));
+    }
+    try {
+        var matchedText = selector().textMatches(/.*Confirm.*|.*Submit.*|.*Place.*|.*Order.*|.*Buy.*|.*Sell.*|.*\u786e\u8ba4.*|.*\u786e\u5b9a.*|.*\u4e0b\u5355.*|.*\u4e70\u5165.*|.*\u5356\u51fa.*|.*\u8d2d\u4e70.*/i).find();
+        for (var i = 0; i < matchedText.length; i++) push(matchedText[i]);
+    } catch (e1) {}
+    try {
+        var matchedDesc = selector().descMatches(/.*Confirm.*|.*Submit.*|.*Place.*|.*Order.*|.*Buy.*|.*Sell.*|.*\u786e\u8ba4.*|.*\u786e\u5b9a.*|.*\u4e0b\u5355.*|.*\u4e70\u5165.*|.*\u5356\u51fa.*|.*\u8d2d\u4e70.*/i).find();
+        for (var j = 0; j < matchedDesc.length; j++) push(matchedDesc[j]);
+    } catch (e2) {}
+    return out;
+}
+
 function handleConfirmStrict() {
     var start = Date.now();
+    var probe = [];
     sleep(800);
     while (Date.now() - start < 6000) {
         var btn = id("2131448374").findOne(800);
@@ -834,9 +1100,26 @@ function handleConfirmStrict() {
             log("Confirmed by text");
             return true;
         }
+        var textNodes = selector().textMatches(/.*Confirm.*|.*Submit.*|.*Place.*|.*Order.*|.*Buy.*|.*Sell.*|.*\u786e\u8ba4.*|.*\u786e\u5b9a.*|.*\u4e0b\u5355.*|.*\u4e70\u5165.*|.*\u5356\u51fa.*|.*\u8d2d\u4e70.*/i).find();
+        for (var j = 0; j < textNodes.length; j++) {
+            probe.push(nodeSummary(textNodes[j]));
+            if (clickNodeOrAncestor(textNodes[j])) {
+                log("Confirmed by text ancestor");
+                return true;
+            }
+        }
+        var descNodes = selector().descMatches(/.*Confirm.*|.*Submit.*|.*Place.*|.*Order.*|.*Buy.*|.*Sell.*|.*\u786e\u8ba4.*|.*\u786e\u5b9a.*|.*\u4e0b\u5355.*|.*\u4e70\u5165.*|.*\u5356\u51fa.*|.*\u8d2d\u4e70.*/i).find();
+        for (var k = 0; k < descNodes.length; k++) {
+            probe.push(nodeSummary(descNodes[k]));
+            if (clickNodeOrAncestor(descNodes[k])) {
+                log("Confirmed by desc ancestor");
+                return true;
+            }
+        }
         sleep(300);
     }
     log("Confirm button not found");
+    lastConfirmProbe = probe.length ? probe.slice(0, 12) : collectConfirmProbe(12);
     return false;
 }
 
@@ -983,7 +1266,11 @@ function placeTrade(dir, order) {
     log("step4: setAmount " + tradeConfig.amount);
     if (!setAmount(tradeConfig.amount)) {
         log(">>> ABORT: amount failed");
-        reportTradeAudit("order_abort", order, { direction: dir, reason: "amount_failed" });
+        reportTradeAudit("order_abort", order, {
+            direction: dir,
+            reason: "amount_failed",
+            amountInputProbe: lastAmountInputProbe
+        });
         tradeConfig.amount = prevAmt;
         tradeConfig.duration = prevDur;
         return false;
@@ -1025,7 +1312,8 @@ function placeTrade(dir, order) {
             direction: dir,
             reason: "confirm_not_found",
             beforeBalance: beforeBalance,
-            executionTime: executionTime
+            executionTime: executionTime,
+            confirmProbe: lastConfirmProbe
         });
         tradeConfig.amount = prevAmt;
         tradeConfig.duration = prevDur;
@@ -1082,16 +1370,10 @@ function checkManualTrade() {
         if (r.statusCode == 200) {
             var cmd = r.body.json();
             if (cmd && cmd.direction && Date.now() - cmd.time < 30000) {
-                var prevAmt = tradeConfig.amount;
-                var prevDur = tradeConfig.duration;
-                if (cmd.amount) tradeConfig.amount = cmd.amount;
-                if (cmd.duration) tradeConfig.duration = cmd.duration;
                 durationSet = false;
                 durationSetTarget = "";
-                log("MANUAL: " + cmd.direction + " " + tradeConfig.amount + "U x " + tradeConfig.duration + "min");
-                placeTrade(cmd.direction);
-                tradeConfig.amount = prevAmt;
-                tradeConfig.duration = prevDur;
+                log("MANUAL: " + cmd.direction + " " + (cmd.amount || tradeConfig.amount) + "U x " + (cmd.duration || tradeConfig.duration) + "min");
+                placeTrade(cmd.direction, cmd);
                 http.request(authUrl(MANUAL_URL), { method: "DELETE", timeout: 3000 });
                 return true;
             }

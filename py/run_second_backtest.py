@@ -20,18 +20,21 @@ from second_backtest.strategies import (
     SecondNormalConfig,
     SecondNormalDirection3mConfig,
     SecondNormalMultiframeConfig,
+    SecondNormalRouterV21Config,
     SecondNormalVwConfirmConfig,
     SecondRangeBreakoutConfirmConfig,
     SecondTrendPullbackDownConfig,
     generate_chip_signals,
     generate_normal_direction_3m_signals,
     generate_normal_multiframe_signals,
+    generate_normal_router_v21_signals,
     generate_normal_signals,
     generate_normal_vw_confirm_signals,
     generate_range_breakout_confirm_signals,
     generate_trend_pullback_down_signals,
     prod_configs_to_second_configs,
 )
+from second_backtest.normal_state_v11 import NormalStateV11Config, generate_normal_state_v11_signals
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,6 +59,41 @@ def _amount_map_from_trade_config(path: Path) -> dict:
     for key, value in (config.get("strategyAmounts") or {}).items():
         out.setdefault(key, value)
     return out
+
+
+def _merge_trade_params_into_prod_config(prod_config: dict, trade_config_path: Path) -> dict:
+    trade_config = _load_json(trade_config_path)
+    params_by_id = trade_config.get("strategyParams") or {}
+    if not params_by_id:
+        return prod_config
+
+    key_map = {
+        "tailPct": "second_tail_pct",
+        "lookbackSec": "second_lookback_sec",
+        "horizonSec": "second_horizon_sec",
+        "gapSec": "second_min_gap_sec",
+        "secondFilter": "second_filter",
+        "zoneFilter": "second_zone_filter",
+        "sigmaMinBps": "second_sigma_min_bps",
+        "sigmaMaxBps": "second_sigma_max_bps",
+        "upReversalConfirmBps": "up_reversal_confirm_bps",
+        "upReversalConfirmMaxSec": "up_reversal_confirm_max_sec",
+        "incidentFilterEnabled": "incident_filter_enabled",
+        "incidentFilterMode": "incident_filter_mode",
+        "incidentWindowSec": "incident_window_sec",
+        "incidentMinMoveBps": "incident_min_move_bps",
+        "incidentMinVolumeQuantile": "incident_min_volume_quantile",
+        "incidentMinFlowImbalance": "incident_min_flow_imbalance",
+        "incidentCooldownSec": "incident_cooldown_sec",
+    }
+    merged = {sid: dict(cfg) for sid, cfg in prod_config.items()}
+    for sid, params in params_by_id.items():
+        if sid not in merged or not isinstance(params, dict):
+            continue
+        for source_key, target_key in key_map.items():
+            if source_key in params:
+                merged[sid][target_key] = params[source_key]
+    return merged
 
 
 def _default_research_configs() -> list:
@@ -104,6 +142,8 @@ def _signals_for_config(
         return generate_normal_multiframe_signals(bars, cfg, apply_config_gap=apply_config_gap)
     if isinstance(cfg, SecondNormalVwConfirmConfig):
         return generate_normal_vw_confirm_signals(bars, cfg, apply_config_gap=True)
+    if isinstance(cfg, SecondNormalRouterV21Config):
+        return generate_normal_router_v21_signals(bars, cfg, apply_config_gap=apply_config_gap)
     if isinstance(cfg, SecondChipConfig):
         return generate_chip_signals(bars, cfg, apply_config_gap=apply_config_gap)
     if isinstance(cfg, SecondRangeBreakoutConfirmConfig):
@@ -114,6 +154,8 @@ def _signals_for_config(
             cfg,
             apply_config_gap=apply_config_gap,
         )
+    if isinstance(cfg, NormalStateV11Config):
+        return generate_normal_state_v11_signals(bars, cfg)
     raise TypeError(f"unsupported config: {cfg!r}")
 
 
@@ -364,6 +406,8 @@ def _model_type_for_config(cfg) -> str:
         return "second_normal_multiframe"
     if isinstance(cfg, SecondNormalVwConfirmConfig):
         return "second_normal_vw_confirm"
+    if isinstance(cfg, SecondNormalRouterV21Config):
+        return "second_normal_router_v21"
     if isinstance(cfg, SecondChipConfig):
         return "second_chip"
     if isinstance(cfg, SecondTrendPullbackDownConfig):
@@ -403,8 +447,12 @@ def _suppress_reversal_during_trend_down(
 
 def build_report(args) -> dict:
     bars = load_second_bars(args.csv)
-    amount_map = _amount_map_from_trade_config(Path(args.trade_config))
-    prod_config = _load_json(Path(args.prod_config))
+    trade_config_path = Path(args.trade_config)
+    amount_map = _amount_map_from_trade_config(trade_config_path)
+    prod_config = _merge_trade_params_into_prod_config(
+        _load_json(Path(args.prod_config)),
+        trade_config_path,
+    )
     configs = prod_configs_to_second_configs(prod_config, amount_map)
     if not configs or args.defaults:
         configs = _default_research_configs()

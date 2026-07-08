@@ -7,6 +7,13 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .dynamic_zone import (
+    compact_zone_context,
+    dynamic_zone_allows,
+    dynamic_zone_context_from_arrays,
+    is_dynamic_zone_filter_enabled,
+)
+
 from .execution import apply_signal_gap
 
 
@@ -22,9 +29,38 @@ class SecondNormalConfig:
     signal_gap_sec: int = 0
     tail_pct: float = 0.20
     second_filter: str = "none"
+    zone_filter: str = "none"
+    sigma_min_bps: float = 0.0
+    sigma_max_bps: float = 9999.0
     incident_filter: dict[str, Any] | None = None
     amount: float = 5.0
     label: str = "second_normal"
+
+
+@dataclass(frozen=True)
+class SecondNormalRouterV21Config:
+    strategy_id: str = "BTC_10min_NORMAL_STATE_V21_LOSS_DENSITY_3OF6_8H"
+    lookback_sec: int = 4200
+    horizon_sec: int = 600
+    signal_gap_sec: int = 600
+    route_lookback_sec: int = 4200
+    r10_window_sec: int = 600
+    r10_cap_bps: float = 42.0
+    down_r10_cap_bps: float = 35.0
+    mid_route_sigma_cap_bps: float = 20.0
+    min_observed_pct: float = 88.0
+    veto_low_up: bool = True
+    loss_density_enabled: bool = True
+    loss_density_window: int = 6
+    loss_density_losses: int = 3
+    loss_density_min_trades: int = 4
+    loss_density_cooldown_sec: int = 28800
+    loss_streak_enabled: bool = True
+    loss_streak_count: int = 2
+    loss_streak_cooldown_sec: int = 3600
+    incident_filter: dict[str, Any] | None = None
+    amount: float = 5.0
+    label: str = "second_normal_router_v21"
 
 
 @dataclass(frozen=True)
@@ -38,6 +74,7 @@ class SecondNormalVwConfirmConfig:
     eta_max_wait_sec: int = 45
     up_reversal_confirm_bps: float = 0.0
     up_reversal_confirm_max_sec: int = 20
+    zone_filter: str = "none"
     incident_filter: dict[str, Any] | None = None
     amount: float = 5.0
     label: str = "second_normal_vw_confirm"
@@ -671,6 +708,8 @@ def generate_normal_signals(
     apply_config_gap: bool = True,
 ) -> list[dict]:
     close = bars["close"].to_numpy(float)
+    buy_qty = bars["buy_qty"].to_numpy(float) if "buy_qty" in bars else None
+    sell_qty = bars["sell_qty"].to_numpy(float) if "sell_qty" in bars else None
     if len(close) <= cfg.lookback_sec + cfg.horizon_sec:
         return []
     logp = np.log(close)
@@ -686,6 +725,9 @@ def generate_normal_signals(
     for i in range(cfg.lookback_sec, len(close) - cfg.horizon_sec):
         if not np.isfinite(mu[i]) or not np.isfinite(sigma[i]) or sigma[i] < 1e-12:
             continue
+        sigma_horizon_bps = math.sqrt(cfg.horizon_sec) * float(sigma[i]) * 10000.0
+        if not (cfg.sigma_min_bps <= sigma_horizon_bps <= cfg.sigma_max_bps):
+            continue
         z = float(cfg.horizon_sec * mu[i] / (math.sqrt(cfg.horizon_sec) * sigma[i]))
         p_up = normal_cdf(z)
         signal = None
@@ -700,6 +742,17 @@ def generate_normal_signals(
         )
         if not ok:
             continue
+        zone_extra = {}
+        if is_dynamic_zone_filter_enabled(cfg.zone_filter):
+            zone_context = dynamic_zone_context_from_arrays(close, buy_qty, sell_qty, i)
+            zone_ok, zone_reason = dynamic_zone_allows(cfg.zone_filter, signal, zone_context)
+            if not zone_ok:
+                continue
+            zone_extra = {
+                "zone_filter": cfg.zone_filter,
+                "zone_filter_reason": zone_reason,
+                **compact_zone_context(zone_context),
+            }
         rows.append(
             settle_signal(
                 bars=bars,
@@ -714,6 +767,9 @@ def generate_normal_signals(
                     "z_score": round(float(z), 6),
                     "tail_pct": float(cfg.tail_pct),
                     "lookback_sec": int(cfg.lookback_sec),
+                    "sigma_10m_bps": round(float(sigma_horizon_bps), 6),
+                    "sigma_min_bps": float(cfg.sigma_min_bps),
+                    "sigma_max_bps": float(cfg.sigma_max_bps),
                     "filter": cfg.second_filter,
                     "filter_reason": reason,
                     "vol_rank_60s": None
@@ -722,10 +778,201 @@ def generate_normal_signals(
                     "flow_ratio_60s": None
                     if flow_ratio is None or not np.isfinite(flow_ratio)
                     else round(float(flow_ratio), 6),
+                    **zone_extra,
                 },
             )
         )
     return apply_signal_gap(rows, cfg.signal_gap_sec) if apply_config_gap else rows
+
+
+ROUTER_V21_BRANCHES = (
+    (
+        "low",
+        "LOW_L4200_T25_S4_18_DYN",
+        dict(lookback_sec=4200, tail_pct=0.25, sigma_min_bps=4.0, sigma_max_bps=18.0, second_filter="none", zone_filter="dynamic_v3"),
+    ),
+    (
+        "mid",
+        "MID_L4200_T25_S10_25_DYN",
+        dict(lookback_sec=4200, tail_pct=0.25, sigma_min_bps=10.0, sigma_max_bps=25.0, second_filter="none", zone_filter="dynamic_v3"),
+    ),
+    (
+        "high",
+        "HIGH_L2700_T25_S14_35_FLOW_DYN",
+        dict(lookback_sec=2700, tail_pct=0.25, sigma_min_bps=14.0, sigma_max_bps=35.0, second_filter="flow_reversal", zone_filter="dynamic_v3"),
+    ),
+)
+
+
+def _router_v21_role_order(route_sigma: float) -> list[str]:
+    if route_sigma < 9.0:
+        return ["low", "mid", "high"]
+    if route_sigma >= 16.0:
+        return ["high", "mid", "low"]
+    if route_sigma < 22.0:
+        return ["mid", "high", "low"]
+    return ["high", "mid", "low"]
+
+
+def _rolling_sigma_bps(close: np.ndarray, window: int, horizon_sec: int) -> np.ndarray:
+    logp = np.log(close)
+    lr = pd.Series(np.diff(logp, prepend=np.nan))
+    sigma = lr.rolling(window, min_periods=max(60, window // 4)).std(ddof=1).to_numpy(float)
+    return np.sqrt(float(horizon_sec)) * sigma * 10000.0
+
+
+def _rolling_range_bps(close: np.ndarray, window: int) -> np.ndarray:
+    series = pd.Series(close)
+    hi = series.rolling(window, min_periods=max(60, window // 4)).max().to_numpy(float)
+    lo = series.rolling(window, min_periods=max(60, window // 4)).min().to_numpy(float)
+    out = np.full(len(close), np.nan, dtype=float)
+    np.divide(hi - lo, close, out=out, where=close > 0)
+    return out * 10000.0
+
+
+def _observed_pct_array(bars: pd.DataFrame, window: int) -> np.ndarray:
+    if "observed" not in bars:
+        return np.full(len(bars), 100.0, dtype=float)
+    observed = bars["observed"].astype(float).to_numpy()
+    return pd.Series(observed).rolling(int(window), min_periods=1).mean().to_numpy(float) * 100.0
+
+
+def _router_v21_candidates(bars: pd.DataFrame, cfg: SecondNormalRouterV21Config) -> list[dict]:
+    close = bars["close"].to_numpy(float)
+    route_sigma = _rolling_sigma_bps(close, cfg.route_lookback_sec, cfg.horizon_sec)
+    r10 = _rolling_range_bps(close, cfg.r10_window_sec)
+    obs600 = _observed_pct_array(bars, 600)
+    obs_by_lookback = {
+        2700: _observed_pct_array(bars, 2700),
+        4200: _observed_pct_array(bars, 4200),
+    }
+    candidates: list[dict] = []
+    for role, name, branch in ROUTER_V21_BRANCHES:
+        branch_cfg = SecondNormalConfig(
+            strategy_id=name,
+            lookback_sec=int(branch["lookback_sec"]),
+            horizon_sec=cfg.horizon_sec,
+            signal_gap_sec=0,
+            tail_pct=float(branch["tail_pct"]),
+            second_filter=str(branch["second_filter"]),
+            zone_filter=str(branch["zone_filter"]),
+            sigma_min_bps=float(branch["sigma_min_bps"]),
+            sigma_max_bps=float(branch["sigma_max_bps"]),
+            incident_filter=None,
+            amount=cfg.amount,
+            label=name,
+        )
+        for sig in generate_normal_signals(bars, branch_cfg, apply_config_gap=False):
+            idx = int(sig["idx"])
+            if idx < 0 or idx >= len(close):
+                continue
+            rs = float(route_sigma[idx])
+            rr = float(r10[idx])
+            if not np.isfinite(rs) or not np.isfinite(rr):
+                continue
+            lookback = int(branch["lookback_sec"])
+            row = dict(sig)
+            row.update(
+                {
+                    "strategy_id": cfg.strategy_id,
+                    "model_type": "second_normal_router_v21",
+                    "role": role,
+                    "branch": name,
+                    "route_sigma_bps": round(rs, 6),
+                    "r10_bps": round(rr, 6),
+                    "observed600_pct": round(float(obs600[idx]), 6),
+                    "observed_lookback_pct": round(float(obs_by_lookback[lookback][idx]), 6),
+                    "veto_low_up": bool(cfg.veto_low_up),
+                    "label": cfg.label,
+                }
+            )
+            candidates.append(row)
+    return sorted(candidates, key=lambda row: (int(row["idx"]), str(row["role"])))
+
+
+def _router_v21_candidate_allowed(row: dict, cfg: SecondNormalRouterV21Config) -> tuple[bool, str]:
+    if float(row.get("observed600_pct", 0.0)) < float(cfg.min_observed_pct):
+        return False, "entry_observed_low"
+    if float(row.get("observed_lookback_pct", 0.0)) < float(cfg.min_observed_pct):
+        return False, "lookback_observed_low"
+    if float(row.get("r10_bps", 0.0)) > float(cfg.r10_cap_bps):
+        return False, "r10_cap"
+    if row.get("signal") == "DOWN" and float(row.get("r10_bps", 0.0)) > float(cfg.down_r10_cap_bps):
+        return False, "down_r10_cap"
+    if row.get("role") == "mid" and float(row.get("route_sigma_bps", 0.0)) >= float(cfg.mid_route_sigma_cap_bps):
+        return False, "mid_sigma_cap"
+    if bool(cfg.veto_low_up) and row.get("role") == "low" and row.get("signal") == "UP":
+        return False, "low_up_veto"
+    return True, "pass"
+
+
+def generate_normal_router_v21_signals(
+    bars: pd.DataFrame,
+    cfg: SecondNormalRouterV21Config,
+    *,
+    apply_config_gap: bool = True,
+) -> list[dict]:
+    candidates = _router_v21_candidates(bars, cfg)
+    by_idx: dict[int, list[dict]] = {}
+    for row in candidates:
+        by_idx.setdefault(int(row["idx"]), []).append(row)
+
+    accepted: list[dict] = []
+    rejected: list[dict] = []
+    last_idx = -10**12
+    cool_until = -10**12
+    loss_streak = 0
+    rolling: list[bool] = []
+
+    for idx in sorted(by_idx):
+        if apply_config_gap and int(cfg.signal_gap_sec) > 0 and idx - last_idx < int(cfg.signal_gap_sec):
+            rejected.append({"idx": idx, "reason": "gap"})
+            continue
+        if idx < cool_until:
+            rejected.append({"idx": idx, "reason": "loss_cooldown"})
+            continue
+
+        rows = by_idx[idx]
+        route_sigma = float(rows[0]["route_sigma_bps"])
+        selected = None
+        for role in _router_v21_role_order(route_sigma):
+            role_rows = [row for row in rows if row.get("role") == role]
+            if not role_rows:
+                continue
+            candidate = sorted(role_rows, key=lambda item: abs(float(item.get("p_up", 0.5)) - 0.5), reverse=True)[0]
+            ok, reason = _router_v21_candidate_allowed(candidate, cfg)
+            if not ok:
+                rejected.append({"idx": idx, "reason": reason, "role": role})
+                continue
+            selected = candidate
+            break
+        if selected is None:
+            continue
+
+        row = dict(selected)
+        row["router_reject_count_at_idx"] = sum(1 for item in rejected if item.get("idx") == idx)
+        accepted.append(row)
+        last_idx = idx
+
+        won = bool(row["won"])
+        if won:
+            loss_streak = 0
+        else:
+            loss_streak += 1
+            if cfg.loss_streak_enabled and loss_streak >= int(cfg.loss_streak_count):
+                cool_until = max(cool_until, idx + int(cfg.loss_streak_cooldown_sec))
+                loss_streak = 0
+
+        if cfg.loss_density_enabled:
+            rolling.append(won)
+            while len(rolling) > int(cfg.loss_density_window):
+                rolling.pop(0)
+            losses = sum(1 for item in rolling if not item)
+            if len(rolling) >= int(cfg.loss_density_min_trades) and losses >= int(cfg.loss_density_losses):
+                cool_until = max(cool_until, idx + int(cfg.loss_density_cooldown_sec))
+                rolling = []
+
+    return accepted
 
 
 def _first_eta_hit(
@@ -913,6 +1160,17 @@ def generate_normal_vw_confirm_signals(
         vw_signal = "DOWN" if vw_p_up >= threshold_hi else "UP" if vw_p_up <= cfg.tail_pct else None
         if vw_signal != signal:
             continue
+        zone_extra = {}
+        if is_dynamic_zone_filter_enabled(cfg.zone_filter):
+            zone_context = dynamic_zone_context_from_arrays(close, buy_qty, sell_qty, i)
+            zone_ok, zone_reason = dynamic_zone_allows(cfg.zone_filter, signal, zone_context)
+            if not zone_ok:
+                continue
+            zone_extra = {
+                "zone_filter": cfg.zone_filter,
+                "zone_filter_reason": zone_reason,
+                **compact_zone_context(zone_context),
+            }
         last_signal_idx = i
         eta_ok, eta_extra = _eta_forecast_ok(
             close, buy_qty, sell_qty, i, signal, cfg.eta_target_bps, cfg.eta_max_wait_sec
@@ -959,6 +1217,7 @@ def generate_normal_vw_confirm_signals(
                 "eta_delay_sec": int(hit_idx - i),
                 **eta_extra,
                 **entry_extra,
+                **zone_extra,
             }
         )
     return apply_signal_gap(rows, cfg.signal_gap_sec) if apply_config_gap else rows
@@ -1172,6 +1431,9 @@ def prod_configs_to_second_configs(config_map: dict, amount_map: dict | None = N
                     ),
                     tail_pct=float(cfg.get("second_tail_pct", 0.20)),
                     second_filter=str(cfg.get("second_filter", "none")).lower(),
+                    zone_filter=str(cfg.get("second_zone_filter", "none")).lower(),
+                    sigma_min_bps=float(cfg.get("second_sigma_min_bps", 0.0)),
+                    sigma_max_bps=float(cfg.get("second_sigma_max_bps", 9999.0)),
                     incident_filter=_incident_filter_config(cfg),
                     amount=amount,
                     label=str(cfg.get("model_label", strategy_id)),
@@ -1191,6 +1453,7 @@ def prod_configs_to_second_configs(config_map: dict, amount_map: dict | None = N
                     eta_max_wait_sec=int(cfg.get("eta_max_wait_sec", 45)),
                     up_reversal_confirm_bps=float(cfg.get("up_reversal_confirm_bps", 0.0)),
                     up_reversal_confirm_max_sec=int(cfg.get("up_reversal_confirm_max_sec", 20)),
+                    zone_filter=str(cfg.get("second_zone_filter", "none")).lower(),
                     incident_filter=_incident_filter_config(cfg),
                     amount=amount,
                     label=str(cfg.get("model_label", strategy_id)),
@@ -1269,7 +1532,66 @@ def prod_configs_to_second_configs(config_map: dict, amount_map: dict | None = N
                     label=str(cfg.get("model_label", strategy_id)),
                 )
             )
+        elif model_type == "normal_state_v11":
+            from second_backtest.normal_state_v11 import NormalStateV11Config
+
+            configs.append(
+                NormalStateV11Config(
+                    strategy_id=strategy_id,
+                    state_gate=str(cfg.get("normal_state_state_gate", "edge_persistence_lt6")),
+                    lookback_sec=int(cfg.get("normal_state_lookback_sec", 180 * 60)),
+                    horizon_sec=int(cfg.get("normal_state_horizon_sec", 600)),
+                    signal_gap_sec=int(cfg.get("normal_state_signal_gap_sec", cfg.get("normal_state_min_gap_sec", 600))),
+                    confirm_delay_sec=int(cfg.get("normal_state_confirm_delay_sec", 5)),
+                    max_adverse_bps=float(cfg.get("normal_state_max_adverse_bps", 5.0)),
+                    confirmation_veto=str(
+                        cfg.get(
+                            "normal_state_confirmation_veto",
+                            cfg.get("normalStateConfirmationVeto", "none"),
+                        )
+                    ),
+                    amount=amount,
+                    label=str(cfg.get("model_label", strategy_id)),
+                )
+            )
+        elif model_type == "second_normal_router_v21":
+            configs.append(
+                SecondNormalRouterV21Config(
+                    strategy_id=strategy_id,
+                    lookback_sec=int(cfg.get("second_lookback_sec", 4200)),
+                    horizon_sec=int(cfg.get("second_horizon_sec", 600)),
+                    signal_gap_sec=int(cfg.get("second_min_gap_sec", cfg.get("second_signal_gap_sec", 600))),
+                    route_lookback_sec=int(cfg.get("second_router_route_lookback_sec", 4200)),
+                    r10_window_sec=int(cfg.get("second_router_r10_window_sec", 600)),
+                    r10_cap_bps=float(cfg.get("second_router_r10_cap_bps", 42.0)),
+                    down_r10_cap_bps=float(cfg.get("second_router_down_r10_cap_bps", 35.0)),
+                    mid_route_sigma_cap_bps=float(cfg.get("second_router_mid_route_sigma_cap_bps", 20.0)),
+                    min_observed_pct=float(cfg.get("second_router_min_observed_pct", 88.0)),
+                    veto_low_up=_bool_cfg(cfg.get("second_router_veto_low_up", True), True),
+                    loss_density_enabled=_bool_cfg(cfg.get("normal_state_loss_density_enabled", True), True),
+                    loss_density_window=int(cfg.get("normal_state_loss_density_window", 6)),
+                    loss_density_losses=int(cfg.get("normal_state_loss_density_losses", 3)),
+                    loss_density_min_trades=int(cfg.get("normal_state_loss_density_min_trades", 4)),
+                    loss_density_cooldown_sec=int(cfg.get("normal_state_loss_density_cooldown_sec", 28800)),
+                    loss_streak_enabled=_bool_cfg(cfg.get("normal_state_loss_streak_enabled", True), True),
+                    loss_streak_count=int(cfg.get("normal_state_loss_streak_count", 2)),
+                    loss_streak_cooldown_sec=int(cfg.get("normal_state_loss_streak_cooldown_sec", 3600)),
+                    incident_filter=_incident_filter_config(cfg),
+                    amount=amount,
+                    label=str(cfg.get("model_label", strategy_id)),
+                )
+            )
     return configs
+
+
+def _bool_cfg(value, default=False) -> bool:
+    if value is None:
+        return bool(default)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() not in ("0", "false", "no", "off", "disabled")
 
 
 def _amount_for(strategy_id: str, cfg: dict, amount_map: dict) -> float:
@@ -1284,14 +1606,27 @@ def _amount_for(strategy_id: str, cfg: dict, amount_map: dict) -> float:
 
 
 def _incident_filter_config(cfg: dict) -> dict[str, Any]:
+    def pick(snake_key: str, camel_key: str, default):
+        if snake_key in cfg:
+            return cfg.get(snake_key)
+        return cfg.get(camel_key, default)
+
     return {
-        "incident_filter_enabled": cfg.get("incident_filter_enabled", False),
-        "incident_filter_mode": cfg.get("incident_filter_mode", "directional_only"),
-        "incident_window_sec": cfg.get("incident_window_sec", 10),
-        "incident_min_move_bps": cfg.get("incident_min_move_bps", 10.0),
-        "incident_min_volume_quantile": cfg.get("incident_min_volume_quantile", 0.99),
-        "incident_min_flow_imbalance": cfg.get("incident_min_flow_imbalance", 0.80),
-        "incident_cooldown_sec": cfg.get("incident_cooldown_sec", 10),
+        "incident_filter_enabled": pick("incident_filter_enabled", "incidentFilterEnabled", False),
+        "incident_filter_mode": pick("incident_filter_mode", "incidentFilterMode", "directional_only"),
+        "incident_window_sec": pick("incident_window_sec", "incidentWindowSec", 10),
+        "incident_min_move_bps": pick("incident_min_move_bps", "incidentMinMoveBps", 10.0),
+        "incident_min_volume_quantile": pick(
+            "incident_min_volume_quantile",
+            "incidentMinVolumeQuantile",
+            0.99,
+        ),
+        "incident_min_flow_imbalance": pick(
+            "incident_min_flow_imbalance",
+            "incidentMinFlowImbalance",
+            0.80,
+        ),
+        "incident_cooldown_sec": pick("incident_cooldown_sec", "incidentCooldownSec", 10),
     }
 
 
@@ -1332,6 +1667,9 @@ def _second_filter_allows(filter_name: str, signal: str, state: dict, idx: int):
             vol_ok = not np.isfinite(vol_rank) or vol_rank <= 0.8
         ok = bool(flow_ok and vol_ok)
         return ok, "flow_align" if ok else "flow_not_aligned", vol_rank, flow_ratio
+    if name == "flow_reversal":
+        ok = flow_ratio <= 0.95 if signal == "UP" else flow_ratio >= 1.05
+        return bool(ok), "flow_reversal" if ok else "flow_not_reversal", vol_rank, flow_ratio
     return False, f"unknown_second_filter_{name}", vol_rank, flow_ratio
 
 

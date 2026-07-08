@@ -67,22 +67,30 @@ import tarfile
 
 root = os.getcwd()
 out = os.environ["DEPLOY_ARCHIVE"]
-exclude_dirs = {".git", "node_modules", "__pycache__", ".pytest_cache"}
+exclude_dirs = {
+    ".git", "node_modules", "__pycache__", ".pytest_cache",
+    "tmp", "logs", ".venv"
+}
 exclude_names = {
     "codex.db", "codex.db-shm", "codex.db-wal",
     "signal_btc.lock", "price_proxy.lock",
     "trade_config.json", "prod_config.json",
     "real_balance.json",
     "current_price.json", "live_signals.json", "live_data_update_status.json",
-    "second_data_status.json"
+    "second_data_status.json", "orderbook_status.json", "orderbook_prediction_status.json",
+    "btcusdt_1s_trades.csv", "btcusdt_orderbook_1s.csv",
+    "btcusdt_1m.csv", "btcusdt_taker.csv", "btcusdt_lsratio.csv", "btcusdt_funding.csv"
 }
-exclude_suffixes = {".out", ".err", ".tmp", ".pyc"}
-exclude_prefixes = [
-    os.path.join(root, "data", "archive"),
-    os.path.join(root, "logs"),
+exclude_suffixes = {
+    ".out", ".err", ".tmp", ".pyc",
+    ".db", ".db-shm", ".db-wal", ".jsonl"
+}
+exclude_rel_prefixes = [
+    ("data",),
+    ("frontend", "src", "data"),
 ]
 include_top = {
-    "data", "docs", "frontend", "lib", "public", "py",
+    "docs", "frontend", "lib", "public", "py",
     "test", "tools"
 }
 include_files = {
@@ -97,7 +105,7 @@ def should_include(path):
     parts = rel.split(os.sep)
     if any(part in exclude_dirs for part in parts):
         return False
-    if any(path.startswith(prefix) for prefix in exclude_prefixes):
+    if any(tuple(parts[:len(prefix)]) == prefix for prefix in exclude_rel_prefixes):
         return False
     name = os.path.basename(path)
     if name in exclude_names:
@@ -145,6 +153,7 @@ Run-Step "upload and install on server" {
 import os
 import posixpath
 import sys
+import time
 import paramiko
 
 host = os.environ["DEPLOY_HOST"]
@@ -156,7 +165,26 @@ remote_archive = "/tmp/btc-binary-options-deploy.tar.gz"
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(hostname=host, username=user, password=password, timeout=30, banner_timeout=30, auth_timeout=30)
+last_error = None
+for attempt in range(1, 7):
+    try:
+        client.connect(
+            hostname=host,
+            username=user,
+            password=password,
+            timeout=30,
+            banner_timeout=60,
+            auth_timeout=30,
+        )
+        print(f"ssh connected on attempt {attempt}")
+        break
+    except Exception as exc:
+        last_error = exc
+        wait_sec = min(10 * attempt, 30)
+        print(f"ssh connect attempt {attempt}/6 failed: {exc}; retry in {wait_sec}s")
+        time.sleep(wait_sec)
+else:
+    raise last_error
 
 sftp = client.open_sftp()
 last = {"value": 0}
@@ -196,8 +224,12 @@ rm -rf "$CONFIG_BACKUP"
 cd "$APP_DIR"
 
 echo "[2/8] ensure system packages"
-apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl gnupg build-essential python3-venv python3-pip
+if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 && python3 -m venv --help >/dev/null 2>&1; then
+  echo "system packages already present; skip apt"
+else
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl gnupg build-essential python3-venv python3-pip
+fi
 
 if [ "$NODE_MAJOR" -lt 20 ]; then
   echo "[3/8] install Node.js 20 LTS"
@@ -210,20 +242,38 @@ node -v
 npm -v
 
 echo "[4/8] install Python runtime"
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install --upgrade pip wheel setuptools
-python -m pip install pandas numpy requests websocket-client python-socks scikit-learn lightgbm xgboost
+PY_RUNTIME_MARKER=".deploy-cache/python-runtime-v2"
+mkdir -p .deploy-cache
+if [ -x .venv/bin/python ] && .venv/bin/python - <<'PY' >/dev/null 2>&1
+import pandas, numpy, requests, websocket, sklearn, lightgbm, xgboost
+PY
+then
+  echo "Python runtime already ready; skip pip install"
+  [ -f "$PY_RUNTIME_MARKER" ] || date -u +"%Y-%m-%dT%H:%M:%SZ" > "$PY_RUNTIME_MARKER"
+else
+  python3 -m venv .venv
+  . .venv/bin/activate
+  python -m pip install --upgrade pip wheel setuptools
+  python -m pip install pandas numpy requests websocket-client python-socks scikit-learn lightgbm xgboost
+  date -u +"%Y-%m-%dT%H:%M:%SZ" > "$PY_RUNTIME_MARKER"
+fi
 
 echo "[5/8] install Node runtime deps"
-rm -rf node_modules
-npm ci --omit=dev
+LOCK_HASH="$(sha256sum package-lock.json | awk '{print $1}')"
+LOCK_MARKER=".deploy-cache/package-lock.sha256"
+if [ -d node_modules ] && node -e "require('better-sqlite3')" >/dev/null 2>&1 && { [ ! -f "$LOCK_MARKER" ] || [ "$(cat "$LOCK_MARKER")" = "$LOCK_HASH" ]; }; then
+  echo "Node runtime deps already match package-lock; skip npm ci"
+  echo "$LOCK_HASH" > "$LOCK_MARKER"
+else
+  npm ci --omit=dev
+  echo "$LOCK_HASH" > "$LOCK_MARKER"
+fi
 
 echo "[6/8] syntax checks"
 node --check server.js
 node --check auto_btc.js
 . .venv/bin/activate
-python -m py_compile py/signal_btc.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/backtest_enhanced.py py/run_second_backtest.py py/run_second_research.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/execution.py py/second_backtest/incident_filter.py py/second_backtest/metrics.py py/second_backtest/strategies.py py/second_backtest/research.py
+python -m py_compile py/signal_btc.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/collect_orderbook_data.py py/backtest_enhanced.py py/run_second_backtest.py py/run_second_research.py py/research_normal_state_v1.py py/research_normal_state_v6.py py/research_yellow_revert_filters.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/dynamic_zone.py py/second_backtest/execution.py py/second_backtest/incident_filter.py py/second_backtest/metrics.py py/second_backtest/strategies.py py/second_backtest/research.py py/second_backtest/normal_state_v11.py
 
 echo "[7/8] write systemd services"
 NODE_BIN="$(command -v node)"
@@ -291,14 +341,29 @@ Environment=DATA_DIR=$APP_DIR/data
 Environment=PYTHONUNBUFFERED=1
 Environment=SECOND_DATA_MARKET=futures
 Environment=SECOND_DATA_SYMBOL=BTCUSDT
-Environment=SECOND_DATA_MODE=rest
-Environment=SECOND_DATA_INTERVAL_SEC=2
+Environment=SECOND_DATA_MODE=websocket
+Environment=SECOND_DATA_INTERVAL_SEC=5
 Environment=SECOND_DATA_RETENTION_DAYS=120
 Environment=SECOND_DATA_HTTP_TIMEOUT=8
 Environment=SECOND_DATA_FAPI_BASES=https://fapi.binance.com
-Environment=SECOND_DATA_FINALIZE_DELAY_SEC=2
+Environment=SECOND_DATA_FINALIZE_DELAY_SEC=5
 Environment=SECOND_DATA_RATE_LIMIT_BACKOFF_SEC=300
 Environment=SECOND_DATA_STATUS_INTERVAL_SEC=2
+Environment=SECOND_DATA_STARTUP_BACKFILL_MINUTES=15
+Environment=SECOND_DATA_BACKFILL_SLEEP_SEC=0.03
+Environment=SECOND_DATA_WS_URL=wss://fstream.binance.com/stream?streams=btcusdt@trade/btcusdt@depth20@500ms
+Environment=SECOND_DATA_WS_FLUSH_INTERVAL_SEC=1
+Environment=SECOND_DATA_WS_FLUSH_MAX_TRADES=5000
+Environment=SECOND_DATA_WS_PING_INTERVAL_SEC=180
+Environment=SECOND_DATA_WS_PING_TIMEOUT_SEC=60
+Environment=SECOND_DATA_GAP_REPAIR_INTERVAL_SEC=120
+Environment=SECOND_DATA_GAP_REPAIR_LOOKBACK_SEC=900
+Environment=SECOND_DATA_GAP_REPAIR_MERGE_GAP_SEC=20
+Environment=SECOND_DATA_GAP_REPAIR_MAX_RANGE_SEC=240
+Environment=SECOND_DATA_GAP_REPAIR_MAX_RANGES=8
+Environment=SECOND_DATA_FILL_EMPTY_SECONDS=1
+Environment=SECOND_DATA_FILL_EMPTY_MAX_GAP_SEC=3
+Environment=SECOND_DATA_FILE_REPAIR_INTERVAL_SEC=1800
 ExecStart=$APP_DIR/.venv/bin/python py/collect_second_data.py
 Restart=always
 RestartSec=5
@@ -307,30 +372,59 @@ RestartSec=5
 WantedBy=multi-user.target
 SERVICE
 
+cat >/etc/systemd/system/btc-orderbook.service <<SERVICE
+[Unit]
+Description=BTC order-book feature collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=$APP_DIR
+Environment=APP_DIR=$APP_DIR
+Environment=DATA_DIR=$APP_DIR/data
+Environment=PYTHONUNBUFFERED=1
+Environment=ORDERBOOK_SYMBOL=BTCUSDT
+Environment=ORDERBOOK_LEVELS=20
+Environment=ORDERBOOK_UPDATE_MS=1000
+ExecStart=$APP_DIR/.venv/bin/python py/collect_orderbook_data.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
 systemctl daemon-reload
-systemctl enable btc-price.service btc-app.service btc-second-data.service
+systemctl enable btc-price.service btc-app.service btc-second-data.service btc-orderbook.service
+mkdir -p /etc/systemd/system/btc-second-data.service.d
+find /etc/systemd/system/btc-second-data.service.d -type f ! -name proxy.conf -delete
 if [ -f /etc/systemd/system/btc-price.service.d/proxy.conf ]; then
-  mkdir -p /etc/systemd/system/btc-second-data.service.d
   cp /etc/systemd/system/btc-price.service.d/proxy.conf /etc/systemd/system/btc-second-data.service.d/proxy.conf
-  systemctl daemon-reload
+  mkdir -p /etc/systemd/system/btc-orderbook.service.d
+  cp /etc/systemd/system/btc-price.service.d/proxy.conf /etc/systemd/system/btc-orderbook.service.d/proxy.conf
 fi
+systemctl daemon-reload
 systemctl restart btc-price.service
 systemctl restart btc-second-data.service
+systemctl restart btc-orderbook.service
 sleep 2
 systemctl restart btc-app.service
 
 echo "[8/8] health checks"
 sleep 10
-curl -fsS http://127.0.0.1:3000/api/config >/tmp/btc-config.json
-curl -fsS http://127.0.0.1:3000/api/data-health >/tmp/btc-data-health.json
-curl -fsS http://127.0.0.1:3000/api/second-data-health >/tmp/btc-second-data-health.json
-curl -fsS 'http://127.0.0.1:3000/api/signal?source=dashboard' >/tmp/btc-signal.json
+curl --max-time 20 -fsS http://127.0.0.1:3000/api/config >/tmp/btc-config.json
+curl --max-time 20 -fsS http://127.0.0.1:3000/api/data-health >/tmp/btc-data-health.json
+curl --max-time 20 -fsS http://127.0.0.1:3000/api/second-data-health >/tmp/btc-second-data-health.json
+curl --max-time 20 -fsS http://127.0.0.1:3000/api/orderbook-health >/tmp/btc-orderbook-health.json
+curl --max-time 20 -fsS 'http://127.0.0.1:3000/api/signal?source=dashboard' >/tmp/btc-signal.json
 python3 - <<'PY'
 import json
 for name, path in [
     ("config", "/tmp/btc-config.json"),
     ("data_health", "/tmp/btc-data-health.json"),
     ("second_data", "/tmp/btc-second-data-health.json"),
+    ("orderbook", "/tmp/btc-orderbook-health.json"),
     ("signal", "/tmp/btc-signal.json"),
 ]:
     with open(path, "r", encoding="utf-8") as f:
@@ -342,6 +436,9 @@ for name, path in [
     elif name == "second_data":
         status = obj.get("status", {})
         print("second_data ok=", obj.get("ok"), "ageMs=", obj.get("ageMs"), "rows=", status.get("rows"), "last=", status.get("last_ts"))
+    elif name == "orderbook":
+        status = obj.get("status", {})
+        print("orderbook ok=", obj.get("ok"), "ageMs=", obj.get("ageMs"), "rows=", status.get("rows"), "last=", status.get("last_ts"))
     else:
         keys = [k for k in obj.keys() if k.startswith("BTC_")]
         gate = obj.get("_autoTradeSafetyGate", {})
@@ -350,6 +447,7 @@ PY
 
 systemctl --no-pager --full status btc-price.service | sed -n '1,18p'
 systemctl --no-pager --full status btc-second-data.service | sed -n '1,18p'
+systemctl --no-pager --full status btc-orderbook.service | sed -n '1,18p'
 systemctl --no-pager --full status btc-app.service | sed -n '1,18p'
 rm -f "$ARCHIVE"
 echo "DEPLOY_OK http://$HOSTNAME:3000"

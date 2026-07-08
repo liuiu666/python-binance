@@ -127,18 +127,7 @@ def audit_second_sources(path: str | Path, include_shards: bool = True) -> dict:
     }
 
 
-def load_second_bars(path: str | Path, include_shards: bool = True) -> pd.DataFrame:
-    """Load trade/1s CSV into a dense UTC second index.
-
-    Missing seconds keep the last close and zero volume. The `observed` column
-    marks whether that second existed in the source CSV before reindexing.
-    """
-
-    path = Path(path)
-    frames = [pd.read_csv(source) for source in second_csv_sources(path, include_shards=include_shards)]
-    if not frames:
-        raise ValueError(f"{path} does not exist and no second shards were found")
-    df = pd.concat(frames, ignore_index=True)
+def _dense_second_bars_from_frame(df: pd.DataFrame, path: Path) -> pd.DataFrame:
     ts_col = _first_existing(df.columns, TIMESTAMP_CANDIDATES)
     price_col = _first_existing(df.columns, PRICE_CANDIDATES)
     if not ts_col or not price_col:
@@ -173,7 +162,12 @@ def load_second_bars(path: str | Path, include_shards: bool = True) -> pd.DataFr
         df["buy_qty"] = df["qty"] * 0.5
         df["sell_qty"] = df["qty"] * 0.5
 
-    raw = df.dropna(subset=["time", "price"]).sort_values("time")
+    raw = df.dropna(subset=["time", "price"])
+    raw = raw[np.isfinite(raw["price"]) & (raw["price"] > 0)]
+    for col in ("open", "high", "low", "close"):
+        if col in raw.columns:
+            raw = raw[raw[col].isna() | ((np.isfinite(raw[col])) & (raw[col] > 0))]
+    raw = raw.sort_values("time").drop_duplicates(subset=["time"], keep="last")
     if raw.empty:
         raise ValueError(f"{path} has no usable rows")
 
@@ -215,3 +209,84 @@ def load_second_bars(path: str | Path, include_shards: bool = True) -> pd.DataFr
     np.divide(buy, sell, out=ratio, where=sell > 0)
     dense["buy_sell_ratio"] = ratio
     return dense
+
+
+def load_second_bars(path: str | Path, include_shards: bool = True) -> pd.DataFrame:
+    """Load trade/1s CSV into a dense UTC second index.
+
+    Missing seconds keep the last close and zero volume. The `observed` column
+    marks whether that second existed in the source CSV before reindexing.
+    """
+
+    path = Path(path)
+    frames = [pd.read_csv(source) for source in second_csv_sources(path, include_shards=include_shards)]
+    if not frames:
+        raise ValueError(f"{path} does not exist and no second shards were found")
+    df = pd.concat(frames, ignore_index=True)
+    return _dense_second_bars_from_frame(df, path)
+
+
+def _date_from_daily_shard(path: Path):
+    try:
+        return pd.Timestamp(path.stem).date()
+    except Exception:
+        return None
+
+
+def load_recent_second_bars(
+    path: str | Path,
+    include_shards: bool = True,
+    tail_sec: int = 21600,
+    source_slack_days: int = 1,
+) -> pd.DataFrame:
+    """Load only the recent second bars needed by live signal calculation.
+
+    Backtests still call `load_second_bars` for full-history parity. The live
+    signal loop only needs a rolling tail, so this avoids reading every daily
+    shard on each refresh.
+    """
+
+    path = Path(path)
+    now = pd.Timestamp.now(tz="UTC")
+    cutoff = now - pd.Timedelta(seconds=max(1, int(tail_sec)))
+    cutoff_day = cutoff.date()
+    min_day = (pd.Timestamp(cutoff_day) - pd.Timedelta(days=max(0, int(source_slack_days)))).date()
+    max_day = (now + pd.Timedelta(days=1)).date()
+
+    sources = []
+    for source in second_csv_sources(path, include_shards=include_shards):
+        if source.resolve() == path.resolve():
+            sources.append(source)
+            continue
+        day = _date_from_daily_shard(source)
+        if day is None or min_day <= day <= max_day:
+            sources.append(source)
+
+    frames = []
+    for source in sources:
+        try:
+            columns = _read_csv_header(source)
+            ts_col = _first_existing(columns, TIMESTAMP_CANDIDATES)
+            if not ts_col:
+                continue
+            part = pd.read_csv(source)
+            ts = pd.to_datetime(part[ts_col], utc=True, errors="coerce")
+            valid = ts.notna()
+            recent_mask = valid & (ts >= cutoff - pd.Timedelta(hours=1))
+            recent = part.loc[recent_mask]
+            if not recent.empty:
+                frames.append(recent)
+                continue
+            before = part.loc[valid & (ts < cutoff)]
+            if not before.empty:
+                # Keep the last pre-window row so dense bars can forward-fill
+                # across collector gaps exactly like the full-history loader.
+                frames.append(before.tail(1))
+        except Exception:
+            continue
+
+    if not frames:
+        raise ValueError(f"{path} has no recent second rows")
+    dense = _dense_second_bars_from_frame(pd.concat(frames, ignore_index=True), path)
+    recent = dense.loc[dense.index >= cutoff.floor("s")]
+    return recent if not recent.empty else dense
