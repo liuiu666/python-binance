@@ -20,6 +20,8 @@ const {
 const {
   DEFAULT_PAYOUT_RATE,
   payoutRateForDuration,
+  dayKeyForTime,
+  shanghaiDayRange,
   buildLiveOrderHistory
 } = require("./lib/trade_history");
 
@@ -28,6 +30,7 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DASHBOARD_DIR = path.join(PUBLIC_DIR, "dashboard");
+const NORMAL_VISUAL_DATA_FILE = path.join(__dirname, "frontend", "src", "data", "normalRealData.json");
 app.use("/dashboard", express.static(DASHBOARD_DIR, { index: "index.html" }));
 app.get("/", (req, res) => {
   const dashboardIndex = path.join(DASHBOARD_DIR, "index.html");
@@ -55,6 +58,15 @@ app.post("/api/login", express.json(), (req, res) => {
   }
 });
 
+app.get("/api/normal-visual-data", (req, res) => {
+  if (!fs.existsSync(NORMAL_VISUAL_DATA_FILE)) {
+    res.status(404).json({ error: "normal visual data not found" });
+    return;
+  }
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.sendFile(NORMAL_VISUAL_DATA_FILE);
+});
+
 const SIGNAL_FILE = path.join(DATA_DIR, "live_signals.json");
 const SIGNAL_SCRIPT_FILE = path.join(__dirname, "py", "signal_btc.py");
 const SIGNAL_STDOUT_FILE = path.join(__dirname, ".sig.out");
@@ -67,10 +79,17 @@ const DATA_UPDATE_STDOUT_FILE = path.join(__dirname, ".data_update.out");
 const DATA_UPDATE_STDERR_FILE = path.join(__dirname, ".data_update.err");
 const SECOND_DATA_STATUS_FILE = path.join(DATA_DIR, "second_data_status.json");
 const SECOND_DATA_FILE = path.join(DATA_DIR, "btcusdt_1s_trades.csv");
+const ORDERBOOK_STATUS_FILE = path.join(DATA_DIR, "orderbook_status.json");
+const ORDERBOOK_FILE = path.join(DATA_DIR, "btcusdt_orderbook_1s.csv");
+const ORDERBOOK_PREDICTION_STATUS_FILE = path.join(DATA_DIR, "orderbook_prediction_status.json");
 const PRICE_FILE = path.join(DATA_DIR, "current_price.json");
 const CONFIG_FILE = path.join(DATA_DIR, "trade_config.json");
+const LLM_CONFIG_FILE = path.join(DATA_DIR, "llm_config.json");
+const LLM_STATUS_FILE = path.join(DATA_DIR, "llm_status.json");
+const LLM_ONCE_SCRIPT_FILE = path.join(__dirname, "py", "llm_consensus_once.py");
 const PROD_CONFIG_FILE = path.join(DATA_DIR, "prod_config.json");
 const TRADE_AUDIT_FILE = path.join(DATA_DIR, "trade_audit.jsonl");
+const LLM_TRAINING_SAMPLES_FILE = path.join(DATA_DIR, "llm_training_samples.jsonl");
 const REAL_BALANCE_FILE = path.join(DATA_DIR, "real_balance.json");
 const AUTO_SCRIPT_FILE = path.join(__dirname, "auto_btc.js");
 const PRICE_TICKS_FILE = path.join(DATA_DIR, "price_ticks.jsonl");
@@ -79,6 +98,13 @@ const BASE_STRATEGY_IDS = ["BTC_10min_SAFE", "BTC_10min_TAKER"];
 const PYTHON_EXE = process.env.PYTHON_EXE || "python";
 const SERVER_SIM_TRADING_ENABLED = process.env.SERVER_SIM_TRADING_ENABLED === "1";
 const MANAGED_PROCESSES_ENABLED = process.env.DISABLE_MANAGED_PROCESSES !== "1";
+const ENABLE_ORDERBOOK_SHADOW_TRADES = process.env.ENABLE_ORDERBOOK_SHADOW_TRADES === "1";
+const LLM_STRATEGY_ID = "BTC_10min_LLM_CONSENSUS";
+const LLM_REMOVED_RESPONSE = {
+  removed: true,
+  enabled: false,
+  message: "大模型预测功能已移除"
+};
 const DATA_UPDATE_INTERVAL_MS = Math.max(
   60 * 1000,
   Number(process.env.DATA_UPDATE_INTERVAL_MS || 5 * 60 * 1000)
@@ -149,7 +175,25 @@ let dataUpdate = {
   runs: 0,
   pid: null
 };
+let lossDensityCache = {
+  checkedAt: 0,
+  rows: []
+};
+let executionFailureCache = {
+  checkedAt: 0,
+  rows: []
+};
 let shuttingDown = false;
+
+function invalidateTradeDerivedCaches(event) {
+  const name = String(event || "");
+  if (name === "order_abort" || name === "order_unverified" || name === "order_done") {
+    executionFailureCache = { checkedAt: 0, rows: [] };
+  }
+  if (name === "order_done" || name === "shadow_trade_open" || name === "shadow_trade_settle") {
+    lossDensityCache = { checkedAt: 0, rows: [] };
+  }
+}
 
 function startSignalService(reason = "startup") {
   if (signalService.pid) return;
@@ -344,6 +388,39 @@ function signalTimeMs(sig) {
   return parseCsvTimeMs(sig.actionable_time || sig.candle_close_time || sig.time);
 }
 
+function normalizeEpochMs(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n < 1000000000000 ? n * 1000 : n;
+}
+
+function signalSnapshotTimeMs(signals) {
+  if (!signals || typeof signals !== "object") return null;
+  const directMs = (
+    signals._snapshot_time_ms ??
+    signals._snapshotTimeMs ??
+    signals._updated_at_ms ??
+    signals.updatedAtMs
+  );
+  const normalized = normalizeEpochMs(directMs);
+  if (normalized !== null) return normalized;
+  const directTime = (
+    signals._snapshot_time ??
+    signals._snapshotTime ??
+    signals._updated_at ??
+    signals.updatedAt
+  );
+  return parseCsvTimeMs(directTime);
+}
+
+function signalFileMtimeMs() {
+  try {
+    return fs.statSync(SIGNAL_FILE).mtimeMs;
+  } catch (e) {
+    return null;
+  }
+}
+
 function configuredMaxActionableLagMs() {
   return 60 * 1000;
 }
@@ -449,13 +526,22 @@ function dataHealthGate(signals) {
   const signalTimes = realSignals
     .map(([strategyId, sig]) => ({ strategyId, ms: signalTimeMs(sig), blocked: !!sig.data_health_blocked }))
     .filter(row => Number.isFinite(row.ms));
-  if (!fs.existsSync(SIGNAL_FILE)) {
+  const signalFileExists = fs.existsSync(SIGNAL_FILE);
+  const snapshotMs = signalSnapshotTimeMs(signals);
+  const fileMtimeMs = signalFileExists ? signalFileMtimeMs() : null;
+  const latestSignal = signalTimes.sort((a, b) => b.ms - a.ms)[0] || null;
+  let freshnessMs = snapshotMs ?? fileMtimeMs ?? (latestSignal ? latestSignal.ms : null);
+  let freshnessSource = null;
+  if (snapshotMs !== null) freshnessSource = "snapshot_time";
+  else if (fileMtimeMs !== null) freshnessSource = "file_mtime";
+  else if (latestSignal) freshnessSource = "signal_time";
+  const signalAgeMs = freshnessMs === null ? null : now - freshnessMs;
+
+  if (!signalFileExists) {
     reasons.push("signal_file_missing");
-  } else if (!realSignals.length || !signalTimes.length) {
+  } else if (!realSignals.length || freshnessMs === null) {
     reasons.push("signal_snapshot_missing");
   }
-  const latestSignal = signalTimes.sort((a, b) => b.ms - a.ms)[0] || null;
-  const signalAgeMs = latestSignal ? now - latestSignal.ms : null;
   if (signalAgeMs !== null && signalAgeMs > SIGNAL_SNAPSHOT_MAX_AGE_MS) reasons.push("signal_snapshot_stale");
   if (realSignals.some(([, sig]) => sig && sig.data_health_blocked)) reasons.push("signal_process_data_health_blocked");
 
@@ -477,9 +563,13 @@ function dataHealthGate(signals) {
     },
     signal: {
       strategies: realSignals.map(([strategyId]) => strategyId),
-      latestTime: latestSignal ? new Date(latestSignal.ms).toISOString() : null,
-      latestTimeMs: latestSignal ? latestSignal.ms : null,
-      latestTimeShanghai: latestSignal ? shanghaiTime(latestSignal.ms) : null,
+      latestTime: freshnessMs === null ? null : new Date(freshnessMs).toISOString(),
+      latestTimeMs: freshnessMs,
+      latestTimeShanghai: freshnessMs === null ? null : shanghaiTime(freshnessMs),
+      latestStrategyTime: latestSignal ? new Date(latestSignal.ms).toISOString() : null,
+      latestStrategyTimeMs: latestSignal ? latestSignal.ms : null,
+      latestStrategyTimeShanghai: latestSignal ? shanghaiTime(latestSignal.ms) : null,
+      freshnessSource,
       displayTimeZone: "Asia/Shanghai",
       ageMs: signalAgeMs,
       maxAgeMs: SIGNAL_SNAPSHOT_MAX_AGE_MS
@@ -487,8 +577,8 @@ function dataHealthGate(signals) {
   };
 }
 
-function autoTradeSafetyGate() {
-  const allow = !!(tradeConfig && tradeConfig.realTradingEnabled && tradeConfig.autoTrade_10m);
+function autoTradeSafetyGate(config = tradeConfig) {
+  const allow = !!(config && config.realTradingEnabled && config.autoTrade_10m);
   return {
     allow,
     blocked: !allow,
@@ -1070,19 +1160,423 @@ function applyDataHealthGate(signals, gate) {
   return { signals: out, gate };
 }
 
+function lossDensityPolicyForVariant(variant) {
+  if (
+    !variant
+    || !["SECOND_NORMAL_STATE_V11", "SECOND_NORMAL_ROUTER_V21"].includes(variant.base)
+    || variant.lossDensityEnabled !== true
+  ) return null;
+  const window = Math.max(2, Math.min(50, Number(variant.lossDensityWindow) || 6));
+  const losses = Math.max(1, Math.min(window, Number(variant.lossDensityLosses) || 3));
+  const defaultMinTrades = Math.min(window, Math.max(losses, losses + 1));
+  const minTrades = Math.max(losses, Math.min(window, Number(variant.lossDensityMinTrades) || defaultMinTrades));
+  const cooldownSec = Math.max(60, Math.min(86400, Number(variant.lossDensityCooldownSec) || 28800));
+  const lookbackHours = Math.max(1, Math.min(720, Number(variant.lossDensityLookbackHours) || 72));
+  const streakEnabled = variant.lossStreakEnabled === true || variant.base === "SECOND_NORMAL_ROUTER_V21";
+  const streakCount = Math.max(1, Math.min(20, Number(variant.lossStreakCount) || 2));
+  const streakCooldownSec = Math.max(60, Math.min(86400, Number(variant.lossStreakCooldownSec) || 3600));
+  return { window, losses, minTrades, cooldownSec, lookbackHours, streakEnabled, streakCount, streakCooldownSec };
+}
+
+function recentLossDensityRows(now, lookbackHours) {
+  const ttlMs = Number(process.env.LOSS_DENSITY_CACHE_MS || 15000);
+  if (lossDensityCache.rows.length && now - lossDensityCache.checkedAt < ttlMs) {
+    return lossDensityCache.rows;
+  }
+  const startMs = now - Math.max(1, Number(lookbackHours) || 72) * 60 * 60 * 1000;
+  const endMs = now + 2 * 60 * 1000;
+  try {
+    const auditRows = eventStore.readJsonlRange(TRADE_AUDIT_FILE, startMs, endMs);
+    const priceTicks = eventStore.readJsonlRange(PRICE_TICKS_FILE, startMs, endMs);
+    const history = buildLiveOrderHistory({
+      auditRows,
+      priceTicks,
+      serverTrades: trades,
+      currentPrice,
+      payoutRate: PAYOUT_RATE,
+      now,
+      mode: "page",
+      kind: "all",
+      limit: 300,
+      pageSize: 300
+    });
+    lossDensityCache = {
+      checkedAt: now,
+      rows: Array.isArray(history.recent) ? history.recent : []
+    };
+  } catch (e) {
+    lossDensityCache = { checkedAt: now, rows: [] };
+  }
+  return lossDensityCache.rows;
+}
+
+function isShadowHistoryRow(row) {
+  return String(row && row.source || "").startsWith("shadow:") || row && row.event === "shadow_trade";
+}
+
+function settledRowsForLossDensity(strategyId, variant, policy, now) {
+  const rows = recentLossDensityRows(now, policy.lookbackHours)
+    .filter(row => row && row.strategyId === strategyId && (row.status === "won" || row.status === "lost"))
+    .map(row => ({
+      status: row.status,
+      source: row.source || "",
+      openTime: Number(row.openTime || 0),
+      settleTime: Number(row.settleTime || row.openTime || 0)
+    }))
+    .filter(row => Number.isFinite(row.settleTime) && row.settleTime > 0)
+    .sort((a, b) => a.settleTime - b.settleTime);
+
+  const realRows = rows.filter(row => !isShadowHistoryRow(row));
+  const shadowRows = rows.filter(row => isShadowHistoryRow(row));
+  if (tradeConfig.realTradingEnabled && variant.tradeEnabled !== false) return realRows;
+  if (shadowRows.length) return shadowRows;
+  return rows;
+}
+
+function lossDensityStateForStrategy(strategyId, variant, now = Date.now()) {
+  const policy = lossDensityPolicyForVariant(variant);
+  if (!policy) return null;
+  const rows = settledRowsForLossDensity(strategyId, variant, policy, now);
+  const rolling = [];
+  let streak = 0;
+  let lastTrigger = null;
+  let lastStreakTrigger = null;
+  for (const row of rows) {
+    streak = row.status === "lost" ? streak + 1 : 0;
+    if (policy.streakEnabled && streak >= policy.streakCount) {
+      lastStreakTrigger = {
+        triggerTime: row.settleTime,
+        lossCount: streak
+      };
+      streak = 0;
+    }
+    rolling.push(row.status);
+    while (rolling.length > policy.window) rolling.shift();
+    const lossCount = rolling.filter(status => status === "lost").length;
+    if (rolling.length >= policy.minTrades && lossCount >= policy.losses) {
+      lastTrigger = {
+        triggerTime: row.settleTime,
+        lossCount,
+        windowStatuses: rolling.slice()
+      };
+      rolling.length = 0;
+    }
+  }
+  const densityUntil = lastTrigger ? lastTrigger.triggerTime + policy.cooldownSec * 1000 : 0;
+  const streakUntil = lastStreakTrigger ? lastStreakTrigger.triggerTime + policy.streakCooldownSec * 1000 : 0;
+  const cooldownUntil = Math.max(densityUntil, streakUntil);
+  const blocked = Boolean(cooldownUntil && now < cooldownUntil);
+  return {
+    enabled: true,
+    blocked,
+    policy,
+    historyCount: rows.length,
+    recentStatuses: rows.slice(-policy.window).map(row => row.status),
+    lastTrigger,
+    lastStreakTrigger,
+    cooldownUntil: blocked ? cooldownUntil : null,
+    cooldownUntilIso: blocked ? new Date(cooldownUntil).toISOString() : null,
+    cooldownUntilShanghai: blocked ? shanghaiTime(cooldownUntil) : null
+  };
+}
+
+function blockSignalForLossDensity(sig, state) {
+  const cooldownDetail = `正态回归失效冷却：最近${state.policy.window}单窗口内，已观察至少${state.policy.minTrades}单且亏损达到${state.policy.losses}单，暂停到 ${state.cooldownUntilShanghai || state.cooldownUntilIso}`;
+  return {
+    ...({
+    ...sig,
+    signal: null,
+    confidence: null,
+    high_conf: false,
+    loss_density_blocked: true,
+    loss_density: state,
+    blocked_signal: sig && (sig.blocked_signal || sig.signal) || null,
+    blocked_confidence: sig && (sig.blocked_confidence || sig.confidence) || null,
+    reason: "loss_density_cooldown",
+    signal_detail: `正态回归失效冷却：最近${state.policy.window}单内亏损达到${state.policy.losses}单，暂停到 ${state.cooldownUntilShanghai || state.cooldownUntilIso}`
+  }),
+    signal_detail: cooldownDetail
+  };
+}
+
+function applyLossDensityGate(signals) {
+  const variants = currentStrategyVariants();
+  const byId = new Map(variants.map(variant => [variant.id, variant]));
+  const out = { ...signals };
+  const states = {};
+  const now = Date.now();
+  for (const strategyId of currentObservedStrategyIds()) {
+    const variant = byId.get(strategyId);
+    const state = lossDensityStateForStrategy(strategyId, variant, now);
+    if (!state) continue;
+    states[strategyId] = state;
+    const sig = out[strategyId];
+    if (!sig || typeof sig !== "object") continue;
+    out[strategyId] = { ...sig, loss_density: state };
+    if (state.blocked && sig.signal) {
+      out[strategyId] = blockSignalForLossDensity(sig, state);
+    }
+  }
+  return { signals: out, gate: { strategies: states } };
+}
+
+function recentExecutionFailureRows(now) {
+  const ttlMs = Number(process.env.EXECUTION_FAILURE_CACHE_MS || 5000);
+  if (executionFailureCache.rows.length && now - executionFailureCache.checkedAt < ttlMs) {
+    return executionFailureCache.rows;
+  }
+  const lookbackMs = Math.max(
+    10 * 60 * 1000,
+    Number(process.env.EXECUTION_FAILURE_LOOKBACK_MS || 3 * 60 * 60 * 1000)
+  );
+  try {
+    executionFailureCache = {
+      checkedAt: now,
+      rows: eventStore.readJsonlRange(TRADE_AUDIT_FILE, now - lookbackMs, now + 60 * 1000)
+    };
+  } catch (e) {
+    executionFailureCache = { checkedAt: now, rows: [] };
+  }
+  return executionFailureCache.rows;
+}
+
+function executionFailureStateForStrategy(strategyId, now = Date.now()) {
+  const baseCooldownMs = Math.max(
+    60 * 1000,
+    Number(process.env.EXECUTION_FAILURE_COOLDOWN_MS || 10 * 60 * 1000)
+  );
+  const repeatedWindowMs = Math.max(
+    10 * 60 * 1000,
+    Number(process.env.EXECUTION_FAILURE_REPEAT_WINDOW_MS || 3 * 60 * 60 * 1000)
+  );
+  const repeatedThreshold = Math.max(
+    2,
+    Number(process.env.EXECUTION_FAILURE_REPEAT_THRESHOLD || 3)
+  );
+  const repeatedCooldownMs = Math.max(
+    baseCooldownMs,
+    Number(process.env.EXECUTION_FAILURE_REPEAT_COOLDOWN_MS || 60 * 60 * 1000)
+  );
+  const amountFailedCooldownMs = Math.max(
+    baseCooldownMs,
+    Number(process.env.EXECUTION_AMOUNT_FAILED_COOLDOWN_MS || 30 * 60 * 1000)
+  );
+  const strategyRows = recentExecutionFailureRows(now)
+    .filter(row => row && row.strategyId === strategyId)
+    .map(row => ({
+      event: row.event,
+      reason: row.reason || "unknown",
+      serverTime: Number(row.serverTime || row.clientTime || 0),
+      amount: row.amount,
+      duration: row.duration,
+      device: row.device || null
+    }))
+    .filter(row => Number.isFinite(row.serverTime) && row.serverTime > 0)
+    .sort((a, b) => a.serverTime - b.serverTime);
+  const lastSuccess = [...strategyRows].reverse().find(row => row.event === "order_done") || null;
+  const rows = strategyRows
+    .filter(row => row.event === "order_abort" || row.event === "order_unverified")
+    .filter(row => row.reason !== "stale_actionable_signal_before_click")
+    .filter(row => !lastSuccess || row.serverTime > lastSuccess.serverTime);
+  const last = rows[rows.length - 1] || null;
+  const recentSinceWindowStart = last
+    ? rows.filter(row => row.serverTime >= last.serverTime - repeatedWindowMs)
+    : [];
+  let cooldownMs = baseCooldownMs;
+  let mode = "single_failure";
+  if (last && last.reason === "amount_failed") {
+    cooldownMs = Math.max(cooldownMs, amountFailedCooldownMs);
+    mode = "amount_failed";
+  }
+  if (recentSinceWindowStart.length >= repeatedThreshold) {
+    cooldownMs = Math.max(cooldownMs, repeatedCooldownMs);
+    mode = "repeated_failure";
+  }
+  const cooldownUntil = last ? last.serverTime + cooldownMs : 0;
+  const blocked = Boolean(last && now < cooldownUntil);
+  return {
+    enabled: true,
+    blocked,
+    recentCount: rows.length,
+    recentCountInWindow: recentSinceWindowStart.length,
+    last,
+    lastReasonLabel: last ? executionFailureReasonLabel(last.reason) : null,
+    lastSuccessTime: lastSuccess ? lastSuccess.serverTime : null,
+    lastSuccessIso: lastSuccess ? new Date(lastSuccess.serverTime).toISOString() : null,
+    cooldownMs,
+    mode,
+    policy: {
+      baseCooldownMs,
+      amountFailedCooldownMs,
+      repeatedWindowMs,
+      repeatedThreshold,
+      repeatedCooldownMs
+    },
+    cooldownUntil: blocked ? cooldownUntil : null,
+    cooldownUntilIso: blocked ? new Date(cooldownUntil).toISOString() : null,
+    cooldownUntilShanghai: blocked ? shanghaiTime(cooldownUntil) : null
+  };
+}
+
+function executionFailureReasonLabel(reason) {
+  const key = String(reason || "");
+  const map = {
+    amount_failed: "金额输入失败",
+    duration_failed: "周期选择失败",
+    cannot_wake_screen: "平板屏幕唤醒失败",
+    balance_before_unavailable: "下单前余额读取失败",
+    balance_not_decreased: "余额未变化，无法确认成交",
+    confirm_not_found: "确认按钮没找到",
+    signal_time_parse_failed_before_click: "信号时间解析失败",
+    stale_actionable_signal_before_click: "点击前信号已过期",
+    order_failed: "下单执行失败",
+    unknown: "未知执行失败"
+  };
+  return map[key] || key || "未知执行失败";
+}
+
+function blockSignalForExecutionFailure(sig, state) {
+  const reason = state && state.last ? state.last.reason : "order_failed";
+  const label = executionFailureReasonLabel(reason);
+  return {
+    ...sig,
+    signal: null,
+    confidence: null,
+    execution_failure_blocked: true,
+    execution_failure: state,
+    execution_failure_label: label,
+    blocked_signal: sig && (sig.blocked_signal || sig.signal) || null,
+    blocked_confidence: sig && (sig.blocked_confidence || sig.confidence) || null,
+    reason: "recent_order_failure_cooldown",
+    signal_detail: `最近实盘下单失败：${label}，暂停到 ${state.cooldownUntilShanghai || state.cooldownUntilIso}`
+  };
+}
+
+function applyExecutionFailureGate(signals) {
+  const out = { ...signals };
+  const states = {};
+  const now = Date.now();
+  for (const strategyId of currentLiveStrategyIds()) {
+    const state = executionFailureStateForStrategy(strategyId, now);
+    states[strategyId] = state;
+    const sig = out[strategyId];
+    if (!sig || typeof sig !== "object") continue;
+    out[strategyId] = { ...sig, execution_failure: state };
+    if (state.blocked && sig.signal) {
+      out[strategyId] = blockSignalForExecutionFailure(sig, state);
+    }
+  }
+  return { signals: out, gate: { strategies: states } };
+}
+
+function shadowCircuitPolicy() {
+  return {
+    enabled: process.env.SHADOW_CIRCUIT_ENABLED !== "0",
+    window: Math.max(2, Math.min(50, Number(process.env.SHADOW_CIRCUIT_WINDOW || 6))),
+    losses: Math.max(1, Math.min(50, Number(process.env.SHADOW_CIRCUIT_LOSSES || 3))),
+    minTrades: Math.max(2, Math.min(50, Number(process.env.SHADOW_CIRCUIT_MIN_TRADES || 4))),
+    cooldownSec: Math.max(60, Math.min(86400, Number(process.env.SHADOW_CIRCUIT_COOLDOWN_SEC || 8 * 60 * 60))),
+    lookbackHours: Math.max(1, Math.min(720, Number(process.env.SHADOW_CIRCUIT_LOOKBACK_HOURS || 72)))
+  };
+}
+
+function shadowCircuitWindowState(rows, policy) {
+  const rolling = [];
+  let lastTrigger = null;
+  for (const row of rows) {
+    rolling.push(row.status);
+    while (rolling.length > policy.window) rolling.shift();
+    const lossCount = rolling.filter(status => status === "lost").length;
+    if (rolling.length >= policy.minTrades && lossCount >= policy.losses) {
+      lastTrigger = {
+        triggerTime: row.settleTime,
+        lossCount,
+        windowStatuses: rolling.slice()
+      };
+    }
+  }
+  const cooldownUntil = lastTrigger ? lastTrigger.triggerTime + policy.cooldownSec * 1000 : 0;
+  return {
+    historyCount: rows.length,
+    recentStatuses: rows.slice(-policy.window).map(row => row.status),
+    lastTrigger,
+    cooldownUntil
+  };
+}
+
+function shadowCircuitState(now = Date.now()) {
+  const policy = shadowCircuitPolicy();
+  if (!policy.enabled) return { enabled: false, blocked: false, policy };
+  if (policy.losses > policy.window) policy.losses = policy.window;
+  if (policy.minTrades > policy.window) policy.minTrades = policy.window;
+
+  const rows = recentLossDensityRows(now, policy.lookbackHours)
+    .filter(row => row && isShadowHistoryRow(row) && (row.status === "won" || row.status === "lost"))
+    .map(row => ({
+      strategyId: row.strategyId || "shadow",
+      status: row.status,
+      source: row.source || "",
+      openTime: Number(row.openTime || 0),
+      settleTime: Number(row.settleTime || row.openTime || 0)
+    }))
+    .filter(row => Number.isFinite(row.settleTime) && row.settleTime > 0)
+    .sort((a, b) => a.settleTime - b.settleTime);
+
+  const global = shadowCircuitWindowState(rows, policy);
+  const strategies = {};
+  for (const strategyId of [...new Set(rows.map(row => row.strategyId))]) {
+    strategies[strategyId] = shadowCircuitWindowState(rows.filter(row => row.strategyId === strategyId), policy);
+  }
+
+  let cooldownUntil = global.cooldownUntil || 0;
+  let scope = global.cooldownUntil ? "portfolio" : null;
+  for (const [strategyId, state] of Object.entries(strategies)) {
+    if (state.cooldownUntil > cooldownUntil) {
+      cooldownUntil = state.cooldownUntil;
+      scope = strategyId;
+    }
+  }
+  const blocked = Boolean(cooldownUntil && now < cooldownUntil);
+  return {
+    enabled: true,
+    blocked,
+    scope,
+    policy,
+    global: {
+      ...global,
+      cooldownUntil: blocked && scope === "portfolio" ? cooldownUntil : null
+    },
+    strategies,
+    cooldownUntil: blocked ? cooldownUntil : null,
+    cooldownUntilIso: blocked ? new Date(cooldownUntil).toISOString() : null,
+    cooldownUntilShanghai: blocked ? shanghaiTime(cooldownUntil) : null
+  };
+}
+
 function buildSignalResponse(source = "") {
   const rawSignals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {};
   const observedIds = currentObservedStrategyIds();
   const liveIds = currentLiveStrategyIds();
-  const liveRawSignals = Object.fromEntries(
+  const signalMeta = Object.fromEntries(
+    Object.entries(rawSignals).filter(([key]) => key.startsWith("_"))
+  );
+  const liveRawSignals = {
+    ...signalMeta,
+    ...Object.fromEntries(
     observedIds
       .filter(strategyId => rawSignals[strategyId])
       .map(strategyId => [strategyId, rawSignals[strategyId]])
-  );
+    )
+  };
   const timedSignals = applyEntryTiming(liveRawSignals);
   const freshSignals = applyExecutionFreshnessGate(timedSignals);
   const health = applyDataHealthGate(freshSignals, dataHealthGate(freshSignals));
-  const safety = applyAutoTradeSafetyGate(health.signals);
+  const lossDensity = applyLossDensityGate(health.signals);
+  const executionFailure = applyExecutionFailureGate(lossDensity.signals);
+  const shadowCircuit = shadowCircuitState();
+  const safety = source === "dashboard"
+    ? { signals: executionFailure.signals, gate: autoTradeSafetyGate() }
+    : applyAutoTradeSafetyGate(executionFailure.signals);
   
   // Clone signals to prevent modifying in-memory cache
   const signals = JSON.parse(JSON.stringify(safety.signals));
@@ -1124,8 +1618,8 @@ function buildSignalResponse(source = "") {
   }
 
   const strategyAmounts = {};
-  for (const [strategyId, sig] of Object.entries(signals)) {
-    strategyAmounts[strategyId] = amountForStrategy(strategyId, sig);
+  for (const strategyId of observedIds) {
+    if (signals[strategyId]) strategyAmounts[strategyId] = amountForStrategy(strategyId, signals[strategyId]);
   }
   const legacySig = observedIds.map(id => signals[id]).find(Boolean);
   const legacyAmount = legacySig ? amountForStrategy(legacySig.strategy_id, legacySig) : String(tradeConfig.amount);
@@ -1153,6 +1647,9 @@ function buildSignalResponse(source = "") {
       maxActionableLagMs: configuredMaxActionableLagMs()
     },
     _dataHealthGate: health.gate,
+    _lossDensityGate: lossDensity.gate,
+    _executionFailureGate: executionFailure.gate,
+    _shadowCircuitGate: shadowCircuit,
     _autoTradeSafetyGate: safety.gate
   };
 }
@@ -1217,6 +1714,76 @@ app.get("/api/second-data-health", (req, res) => {
     file
   });
 });
+
+app.get("/api/orderbook-health", (req, res) => {
+  const status = readJsonFile(ORDERBOOK_STATUS_FILE, {});
+  let file = { exists: false, size: 0, mtime: null };
+  try {
+    const stat = fs.statSync(ORDERBOOK_FILE);
+    file = { exists: true, size: stat.size, mtime: stat.mtime.toISOString() };
+  } catch (e) {}
+  const lastTs = status.last_ts ? Date.parse(status.last_ts) : null;
+  const ageMs = Number.isFinite(lastTs) ? Date.now() - lastTs : null;
+  const maxAgeMs = Number(process.env.ORDERBOOK_MAX_AGE_MS || 30000);
+  res.json({
+    ok: !!status.ok && file.exists && ageMs !== null && ageMs <= maxAgeMs,
+    ageMs,
+    maxAgeMs,
+    status: {
+      ...status,
+      last_ts_ms: status.last_ts ? Date.parse(status.last_ts) : null,
+      last_ts_shanghai: status.last_ts ? shanghaiTime(Date.parse(status.last_ts)) : null,
+      display_time_zone: "Asia/Shanghai"
+    },
+    file
+  });
+});
+
+app.get("/api/orderbook-prediction", (req, res) => {
+  const status = readJsonFile(ORDERBOOK_PREDICTION_STATUS_FILE, {});
+  const lastTs = status.last_ts ? Date.parse(status.last_ts) : null;
+  const ageMs = Number.isFinite(lastTs) ? Date.now() - lastTs : null;
+  const maxAgeMs = Number(process.env.ORDERBOOK_PREDICTION_MAX_AGE_MS || 30000);
+  res.json({
+    ok: !!status.ok && ageMs !== null && ageMs <= maxAgeMs,
+    ageMs,
+    maxAgeMs,
+    status: {
+      ...status,
+      last_ts_shanghai: status.last_ts ? shanghaiTime(Date.parse(status.last_ts)) : null,
+      display_time_zone: "Asia/Shanghai"
+    }
+  });
+});
+
+function orderbookPredictionSnapshot() {
+  const status = readJsonFile(ORDERBOOK_PREDICTION_STATUS_FILE, {});
+  const lastTs = status.last_ts ? Date.parse(status.last_ts) : null;
+  const ageMs = Number.isFinite(lastTs) ? Date.now() - lastTs : null;
+  const maxAgeMs = Number(process.env.ORDERBOOK_PREDICTION_MAX_AGE_MS || 30000);
+  return {
+    ok: !!status.ok && ageMs !== null && ageMs <= maxAgeMs,
+    ageMs,
+    maxAgeMs,
+    status
+  };
+}
+
+function orderbookConfirmForSignal(sig) {
+  const snap = orderbookPredictionSnapshot();
+  const pred = snap.status && snap.status.prediction;
+  if (!snap.ok || !pred || !sig || !sig.signal) return { ok: false, reason: "orderbook_not_ready", snap };
+  const confidence = Number(pred.confidence);
+  const direction = pred.direction;
+  const target10 = Array.isArray(pred.targets) ? pred.targets.find(t => Number(t.horizonSec) === 10) : null;
+  const predictedBps = Number(target10 && target10.predictedBps);
+  const minConfidence = Number(process.env.ORDERBOOK_SHADOW_MIN_CONFIDENCE || 55);
+  const minAbsBps = Number(process.env.ORDERBOOK_SHADOW_MIN_ABS_BPS || 0.15);
+  if (direction !== sig.signal) return { ok: false, reason: "orderbook_direction_mismatch", snap, pred };
+  if (!Number.isFinite(confidence) || confidence < minConfidence) return { ok: false, reason: "orderbook_confidence_low", snap, pred };
+  if (!Number.isFinite(predictedBps) || Math.abs(predictedBps) < minAbsBps) return { ok: false, reason: "orderbook_edge_small", snap, pred };
+  return { ok: true, snap, pred, target10, confidence, predictedBps };
+}
 
 app.post("/api/data-update/refresh", requireApiToken, (req, res) => {
   runDataUpdate("manual_api");
@@ -1310,6 +1877,8 @@ function tabletDiagnostics() {
   const latestKeepAliveFailure = [...autojsRows].reverse().find(r => r.event === "runtime_keepalive_failed") || null;
   const latestOrderDone = [...autojsRows].reverse().find(r => r.event === "order_done") || null;
   const keepAliveStatus = latestKeepAliveStatus?.keepAlive || latestHeartbeat?.keepAlive || null;
+  const runningScriptVersion = latestHeartbeat?.version || latestEvent?.version || null;
+  const scriptVersionMatches = !runtime.scriptVersion || !runningScriptVersion || runtime.scriptVersion === runningScriptVersion;
   const now = Date.now();
   const ageOf = row => row && row.serverTime ? now - Number(row.serverTime) : null;
   const heartbeatAgeMs = ageOf(latestHeartbeat);
@@ -1326,6 +1895,9 @@ function tabletDiagnostics() {
   const checks = {
     serverReachable: true,
     latestScriptServed: !!runtime.scriptVersion,
+    servedScriptVersion: runtime.scriptVersion,
+    runningScriptVersion,
+    scriptVersionMatches,
     tabletPageSeen: tabletPagePingAgeMs != null && tabletPagePingAgeMs <= 120000,
     loaderStarted: autojsRows.some(r => r.event === "autojs_loader_start"),
     loaderError: autojsRows.some(r => r.event === "autojs_loader_error"),
@@ -1340,8 +1912,12 @@ function tabletDiagnostics() {
     balanceRecent: balanceAgeMs != null && balanceAgeMs <= 120000,
     orderDoneSeen: !!latestOrderDone
   };
-  const nextAction = !checks.tabletPageSeen
-    ? `Open ${runtime.tabletPageUrl} on the tablet to confirm tablet network access.`
+  const nextAction = checks.heartbeatOnline && !checks.scriptVersionMatches
+    ? `服务器脚本已更新为 ${runtime.scriptVersion}，平板仍在运行 ${runningScriptVersion || "未知版本"}；请重启一次 AutoJS 脚本加载新版。`
+    : checks.heartbeatOnline && checks.scriptVersionMatches
+      ? `平板已运行新版 ${runningScriptVersion || runtime.scriptVersion}，等待下一次信号或手动5U测试单。`
+    : !checks.tabletPageSeen && !checks.heartbeatOnline
+      ? `Open ${runtime.tabletPageUrl} on the tablet to confirm tablet network access.`
     : checks.loaderError && !checks.autojsStarted
       ? "Loader ran but failed; check AutoJS log for autojs_loader_error and retry the loader URL."
     : !checks.loaderStarted
@@ -1383,14 +1959,30 @@ function tabletDiagnostics() {
   };
 }
 
-function liveOrderHistory(limit = 100) {
+function liveOrderHistory(options = {}) {
+  const opts = typeof options === "number" ? { limit: options } : (options || {});
+  const mode = opts.mode === "day" ? "day" : "page";
+  const dayRange = mode === "day" ? shanghaiDayRange(opts.day || dayKeyForTime(Date.now())) : null;
+  const settleBufferMs = Number(process.env.TRADE_HISTORY_SETTLE_BUFFER_MS || 90 * 60 * 1000);
+  const auditRows = dayRange
+    ? eventStore.readJsonlRange(TRADE_AUDIT_FILE, dayRange.startMs, dayRange.endMs + settleBufferMs)
+    : readJsonl(TRADE_AUDIT_FILE);
+  const priceTicks = dayRange
+    ? eventStore.readJsonlRange(PRICE_TICKS_FILE, dayRange.startMs, dayRange.endMs + settleBufferMs)
+    : readJsonl(PRICE_TICKS_FILE);
+  const availableDays = mode === "day"
+    ? [...new Set(eventStore.readTradeAuditTimes(10000).map(time => dayKeyForTime(time)))].sort((a, b) => b.localeCompare(a))
+    : undefined;
   return buildLiveOrderHistory({
-    auditRows: readJsonl(TRADE_AUDIT_FILE),
-    priceTicks: readJsonl(PRICE_TICKS_FILE),
+    auditRows,
+    priceTicks,
     serverTrades: trades,
     currentPrice,
     payoutRate: PAYOUT_RATE,
-    limit
+    mode,
+    day: dayRange ? dayRange.day : opts.day,
+    availableDays,
+    ...opts
   });
 }
 
@@ -1795,7 +2387,7 @@ function placeTrade(direction, amount, source, durationMin) {
   return trade;
 }
 
-function placeShadowTrade(strategyId, sig, variant) {
+function placeShadowTrade(strategyId, sig, variant, extra = {}) {
   if (!currentPrice || !sig || !sig.signal) return null;
   const amount = Number(amountForStrategy(strategyId, sig));
   if (!Number.isFinite(amount) || amount <= 0) return null;
@@ -1818,7 +2410,8 @@ function placeShadowTrade(strategyId, sig, variant) {
     rsi_value: sig.rsi_value,
     avg_prob: sig.avg_prob,
     signalTime: sig.time,
-    actionableTime: sig.actionable_time || sig.candle_close_time || sig.time || null
+    actionableTime: sig.actionable_time || sig.candle_close_time || sig.time || null,
+    ...extra.tradeFields
   };
   shadowTrades.push(trade);
   appendJsonl(TRADE_AUDIT_FILE, {
@@ -1836,7 +2429,8 @@ function placeShadowTrade(strategyId, sig, variant) {
     confidence: trade.confidence,
     avg_prob: trade.avg_prob,
     signalTime: trade.signalTime,
-    actionableTime: trade.actionableTime
+    actionableTime: trade.actionableTime,
+    ...extra.auditFields
   });
   broadcastTradeUpdate(trade);
   return trade;
@@ -1852,8 +2446,11 @@ function markStrategyCooldown(strategyId) {
 }
 
 function checkShadowTrades() {
+  if (!tradeConfig.shadowTradingEnabled) return;
   if (!currentPrice) return;
   try {
+    const circuit = shadowCircuitState();
+    if (circuit.blocked) return;
     const signals = buildSignalResponse("dashboard");
     const variants = currentStrategyVariants();
     for (const variant of variants) {
@@ -1879,6 +2476,86 @@ function checkShadowTrades() {
           amount: trade.amount,
           tradeId: "shadow:" + trade.id,
           mode: "shadow"
+        });
+      }
+    }
+  } catch (e) {}
+}
+
+function checkOrderbookShadowTrades() {
+  if (!ENABLE_ORDERBOOK_SHADOW_TRADES) return;
+  if (!tradeConfig.shadowTradingEnabled || !currentPrice) return;
+  try {
+    const circuit = shadowCircuitState();
+    if (circuit.blocked) return;
+    const signals = buildSignalResponse("dashboard");
+    const variants = currentStrategyVariants();
+    for (const variant of variants) {
+      const baseStrategyId = variant.id;
+      const sig = signals[baseStrategyId];
+      if (!sig || !sig.signal) continue;
+      const confirm = orderbookConfirmForSignal(sig);
+      if (!confirm.ok) continue;
+
+      const strategyId = `OB_CONFIRM_${baseStrategyId}`;
+      if (hasStrategyCooldown(strategyId)) continue;
+      if (shadowTrades.some(t => t.status === "active" && t.source === "shadow:" + strategyId)) continue;
+      const sigTime = signalActionableMs(sig);
+      if (!sigTime || Date.now() - sigTime > configuredMaxActionableLagMs()) continue;
+      const key = [
+        sig.signal,
+        sig.time || "",
+        sig.actionable_time || sig.candle_close_time || "",
+        confirm.pred && confirm.pred.timestamp || ""
+      ].join("|");
+      if (lastShadowSignals[strategyId] === key) continue;
+      const shadowSig = {
+        ...sig,
+        strategy_id: strategyId,
+        confidence: Math.min(99, Math.round(((Number(sig.confidence) || 0) + confirm.confidence) / 2)),
+        orderbook_confirmed: true,
+        orderbook_direction: confirm.pred.direction,
+        orderbook_confidence: confirm.confidence,
+        orderbook_predicted_bps_10s: Number(confirm.predictedBps.toFixed(4)),
+        orderbook_predicted_price_10s: confirm.target10 ? confirm.target10.predictedPrice : null,
+      };
+      const trade = placeShadowTrade(strategyId, shadowSig, { ...variant, tradeEnabled: false }, {
+        tradeFields: {
+          orderbookConfirmed: true,
+          baseStrategyId,
+          orderbookPrediction: {
+            timestamp: confirm.pred.timestamp,
+            direction: confirm.pred.direction,
+            confidence: confirm.confidence,
+            predictedBps10s: Number(confirm.predictedBps.toFixed(4)),
+            predictedPrice10s: confirm.target10 ? confirm.target10.predictedPrice : null,
+            mid: confirm.pred.mid
+          }
+        },
+        auditFields: {
+          shadowType: "orderbook_confirm",
+          baseStrategyId,
+          orderbookConfirmed: true,
+          orderbookDirection: confirm.pred.direction,
+          orderbookConfidence: confirm.confidence,
+          orderbookPredictedBps10s: Number(confirm.predictedBps.toFixed(4)),
+          orderbookPredictedPrice10s: confirm.target10 ? confirm.target10.predictedPrice : null,
+          orderbookMid: confirm.pred.mid,
+          orderbookTs: confirm.pred.timestamp
+        }
+      });
+      if (trade) {
+        markStrategyCooldown(strategyId);
+        lastShadowSignals[strategyId] = key;
+        autoTradeLog.push({
+          time: new Date().toISOString(),
+          strategy: strategyId,
+          signal: sig.signal,
+          confidence: shadowSig.confidence,
+          price: currentPrice,
+          amount: trade.amount,
+          tradeId: "shadow:" + trade.id,
+          mode: "orderbook_shadow"
         });
       }
     }
@@ -1929,6 +2606,7 @@ function checkAutoTrade() {
 }
 setInterval(checkAutoTrade, 3000);
 setInterval(checkShadowTrades, 3000);
+setInterval(checkOrderbookShadowTrades, 3000);
 
 function settleTrades() {
   const now = Date.now();
@@ -2059,8 +2737,281 @@ let tradeConfig = (() => {
   return normalizeTradeConfig(DEFAULT_TRADE_CONFIG);
 })();
 
+let llmConfig = {
+  enabled: false,
+  strategy: {
+    id: LLM_STRATEGY_ID,
+    base: "LLM_CONSENSUS",
+    label: "大模型共识 10分钟",
+    enabled: false,
+    tradeEnabled: false,
+    amount: "5",
+    duration: "10",
+    horizonSec: 600
+  },
+  predictionIntervalSec: 600,
+  orderbookEnabled: false,
+  providers: []
+};
+
 function saveTradeConfig() {
   try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(publicTradeConfig(tradeConfig), null, 2)); } catch (e) {}
+}
+
+function saveLlmConfig() {
+  // LLM prediction has been removed. Keep legacy config files untouched.
+}
+
+function readLlmStatus() {
+  return readJsonFile(LLM_STATUS_FILE, {
+    strategyId: LLM_STRATEGY_ID,
+    state: "idle",
+    updatedAt: null,
+    activeTrade: null,
+    lastPrediction: null,
+    lastSignal: null,
+    lastError: null
+  });
+}
+
+function writeLlmStatus(patch) {
+  const status = { ...readLlmStatus(), ...patch, strategyId: LLM_STRATEGY_ID, updatedAt: Date.now() };
+  try { fs.writeFileSync(LLM_STATUS_FILE, JSON.stringify(status, null, 2), "utf8"); } catch (e) {}
+  return status;
+}
+
+function llmSignalFromStatus(status = readLlmStatus()) {
+  const signal = status.lastSignal;
+  if (!llmConfig.enabled || !llmConfig.strategy.enabled || !signal || !signal.signal) {
+    return {
+      strategy_id: LLM_STRATEGY_ID,
+      signal: null,
+      confidence: null,
+      reason: status.state === "waiting_settle" ? "waiting_current_trade_settle" : "waiting_llm_consensus",
+      status
+    };
+  }
+  const actionMs = Number(signal.actionableMs || 0);
+  const expiresMs = Number(signal.expiresMs || 0);
+  if (!actionMs || Date.now() > expiresMs) {
+    return {
+      ...signal,
+      signal: null,
+      confidence: null,
+      reason: status.state === "waiting_settle" ? "waiting_current_trade_settle" : "signal_window_expired",
+      status
+    };
+  }
+  return { ...signal, status };
+}
+
+let llmPredictRunning = false;
+let llmNextTimer = null;
+
+function settleLlmActiveTrade(status) {
+  const active = status && status.activeTrade;
+  if (!active || Number(active.settleTimeMs || 0) > Date.now()) return false;
+  const entry = Number(active.entryPrice);
+  const settle = Number(currentPrice);
+  const direction = active.direction;
+  const decided = Number.isFinite(entry) && Number.isFinite(settle) && (direction === "UP" || direction === "DOWN");
+  const won = decided ? (direction === "UP" ? settle > entry : settle < entry) : null;
+  const sample = {
+    serverTime: Date.now(),
+    event: "llm_consensus_settle",
+    strategyId: LLM_STRATEGY_ID,
+    direction,
+    amount: active.amount,
+    signalTime: active.openSignalTimeMs,
+    settleTime: active.settleTimeMs,
+    entryPrice: Number.isFinite(entry) ? entry : null,
+    settlePrice: Number.isFinite(settle) ? settle : null,
+    retBps: decided ? Number(((settle / entry - 1) * 10000).toFixed(4)) : null,
+    won,
+    dataAgeMs: active.dataAgeMs ?? null,
+    modelLatencyMs: active.modelLatencyMs ?? null,
+    votes: active.votes || []
+  };
+  appendJsonl(TRADE_AUDIT_FILE, sample);
+  appendJsonl(LLM_TRAINING_SAMPLES_FILE, {
+    ...sample,
+    sampleType: "settled_signal",
+    modelReasons: (active.votes || []).map(v => ({
+      provider: v.provider,
+      model: v.model,
+      direction: v.direction,
+      confidence: v.confidence,
+      reason: v.reason || ""
+    }))
+  });
+  writeLlmStatus({ activeTrade: null });
+  return true;
+}
+
+function scheduleLlmPrediction(delayMs = null) {
+  clearTimeout(llmNextTimer);
+  if (!MANAGED_PROCESSES_ENABLED) return;
+  const intervalMs = Math.max(3000, Number(llmConfig.predictionIntervalSec || 5) * 1000);
+  const waitMs = delayMs === null ? intervalMs : Math.max(0, delayMs);
+  llmNextTimer = setTimeout(runLlmPredictionLoop, waitMs);
+}
+
+function runLlmPredictionLoop() {
+  if (!MANAGED_PROCESSES_ENABLED) return;
+  if (llmPredictRunning) {
+    scheduleLlmPrediction(1000);
+    return;
+  }
+  const status = readLlmStatus();
+  const active = status.activeTrade;
+  settleLlmActiveTrade(status);
+  if (!llmConfig.enabled || !llmConfig.strategy.enabled) {
+    writeLlmStatus({ state: "disabled", lastSignal: null });
+    scheduleLlmPrediction();
+    return;
+  }
+  if (active && Number(active.settleTimeMs || 0) > Date.now()) {
+    writeLlmStatus({ state: "waiting_settle", nextPredictionAt: Number(active.settleTimeMs) });
+    scheduleLlmPrediction(Number(active.settleTimeMs) - Date.now());
+    return;
+  }
+  if (!fs.existsSync(SECOND_DATA_FILE)) {
+    writeLlmStatus({ state: "waiting_data", lastSignal: null, lastError: "second_data_file_missing" });
+    scheduleLlmPrediction();
+    return;
+  }
+  llmPredictRunning = true;
+  const predictionStartedAt = Date.now();
+  const intervalMs = Math.max(3000, Number(llmConfig.predictionIntervalSec || 5) * 1000);
+  writeLlmStatus({ state: "predicting", lastSignal: null, lastError: null });
+  const args = [
+    LLM_ONCE_SCRIPT_FILE,
+    "--config", LLM_CONFIG_FILE,
+    "--csv", SECOND_DATA_FILE
+  ];
+  if (llmConfig.orderbookEnabled && fs.existsSync(ORDERBOOK_FILE)) args.push("--orderbook", ORDERBOOK_FILE);
+  const child = spawn(PYTHON_EXE, args, {
+    cwd: __dirname,
+    windowsHide: true,
+    env: { ...process.env, ...REPORT_SCRIPT_ENV, PYTHONUNBUFFERED: "1", LLM_MAX_TOKENS: process.env.LLM_MAX_TOKENS || "4096", LLM_TIMEOUT: process.env.LLM_TIMEOUT || "150" },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", chunk => { stdout += chunk.toString("utf8"); });
+  child.stderr.on("data", chunk => { stderr += chunk.toString("utf8"); });
+  child.on("exit", code => {
+    llmPredictRunning = false;
+    let nextDelayMs = intervalMs;
+    try {
+      if (code !== 0) throw new Error((stderr || `llm script exited ${code}`).slice(-1000));
+      const line = stdout.trim().split(/\r?\n/).filter(Boolean).pop() || "{}";
+      const prediction = JSON.parse(line);
+      const now = Date.now();
+      const predictionLatencyMs = now - predictionStartedAt;
+      const predictionDataMs = Number.isFinite(Date.parse(prediction.time || ""))
+        ? Date.parse(prediction.time)
+        : predictionStartedAt;
+      const predictionDataAgeMs = now - predictionDataMs;
+      const maxPredictionAgeMs = configuredMaxActionableLagMs();
+      const nextIntervalAt = Math.max(now + 3000, predictionStartedAt + intervalMs);
+      nextDelayMs = nextIntervalAt - now;
+      const base = {
+        lastPrediction: prediction,
+        activeTrade: null,
+        nextPredictionAt: nextIntervalAt
+      };
+      const predictionAudit = {
+        serverTime: now,
+        event: "llm_consensus_prediction",
+        strategyId: LLM_STRATEGY_ID,
+        ok: !!prediction.ok,
+        reason: prediction.reason || null,
+        direction: prediction.direction || null,
+        confidence: prediction.confidence == null ? null : prediction.confidence,
+        entryPrice: prediction.entryPrice,
+        dataTime: prediction.time,
+        dataTimeCn: prediction.time_cn,
+        latencyMs: predictionLatencyMs,
+        dataAgeMs: predictionDataAgeMs,
+        maxDataAgeMs: maxPredictionAgeMs,
+        votes: prediction.votes || [],
+        failed: prediction.failed || [],
+        providers: prediction.providers || [],
+        rules: prediction.rules || {}
+      };
+      appendJsonl(TRADE_AUDIT_FILE, predictionAudit);
+      appendJsonl(LLM_TRAINING_SAMPLES_FILE, { ...predictionAudit, sampleType: "prediction" });
+      if (prediction.ok && prediction.direction) {
+        const amount = Math.max(5, Math.round(Number(llmConfig.strategy.amount || 5)));
+        const signal = {
+          strategy_id: LLM_STRATEGY_ID,
+          signal: prediction.direction,
+          confidence: Math.round(Number(prediction.confidence || 0) * 100),
+          confidence_raw: prediction.confidence,
+          amount: String(amount),
+          fixed_amount: true,
+          interval_min: 10,
+          duration: "10",
+          time: isoTime(now),
+          data_time: prediction.time || null,
+          data_age_ms: predictionDataAgeMs,
+          model_latency_ms: predictionLatencyMs,
+          actionable_time: isoTime(now),
+          actionableMs: now,
+          expiresMs: now + 90 * 1000,
+          bypass_entry_timing: true,
+          signal_source: "llm_consensus",
+          reason: prediction.reason,
+          votes: prediction.votes,
+          failed: prediction.failed,
+          entry_price: prediction.entryPrice
+        };
+        const activeTrade = {
+          direction: prediction.direction,
+          amount,
+          openSignalTimeMs: now,
+          settleTimeMs: now + 600_000,
+          entryPrice: prediction.entryPrice,
+          votes: prediction.votes,
+          dataTimeMs: predictionDataMs,
+          dataAgeMs: predictionDataAgeMs,
+          modelLatencyMs: predictionLatencyMs
+        };
+        writeLlmStatus({
+          ...base,
+          state: "signal_ready",
+          lastSignal: signal,
+          activeTrade,
+          nextPredictionAt: activeTrade.settleTimeMs
+        });
+        nextDelayMs = activeTrade.settleTimeMs - now;
+        appendJsonl(TRADE_AUDIT_FILE, {
+          serverTime: now,
+          event: "llm_consensus_signal",
+          strategyId: LLM_STRATEGY_ID,
+          direction: prediction.direction,
+          confidence: prediction.confidence,
+          amount,
+          votes: prediction.votes,
+          failed: prediction.failed,
+          latencyMs: predictionLatencyMs,
+          dataAgeMs: predictionDataAgeMs
+        });
+        broadcastState();
+      } else {
+        writeLlmStatus({
+          ...base,
+          state: "no_consensus",
+          lastSignal: null,
+          lastError: null
+        });
+      }
+    } catch (e) {
+      writeLlmStatus({ state: "error", lastSignal: null, lastError: String(e && e.message ? e.message : e).slice(0, 1000) });
+    }
+    scheduleLlmPrediction(nextDelayMs);
+  });
 }
 
 function readProdConfig() {
@@ -2078,7 +3029,7 @@ function applyProdStrategyParams(baseConfig, config) {
   const safeTemplate = out.BTC_10min_SAFE || {};
   const takerTemplate = out.BTC_10min_TAKER || {};
   for (const key of Object.keys(out)) {
-    if ((key.startsWith("BTC_10min_TAKER") || key.startsWith("BTC_10min_SAFE") || key.startsWith("BTC_10min_SECOND")) && !variants.some(v => v.id === key)) delete out[key];
+    if ((key.startsWith("BTC_10min_TAKER") || key.startsWith("BTC_10min_SAFE") || key.startsWith("BTC_10min_SECOND") || key.startsWith("BTC_10min_SMART") || key.startsWith("BTC_10min_NORMAL_STATE") || key.startsWith("BTC_10min_NORMAL_LIQUIDITY") || key.startsWith("BTC_10min_V22")) && !variants.some(v => v.id === key)) delete out[key];
   }
   for (const variant of variants) {
     const current = out[variant.id] && typeof out[variant.id] === "object" ? out[variant.id] : {};
@@ -2095,6 +3046,7 @@ function applyProdStrategyParams(baseConfig, config) {
         second_horizon_sec: variant.horizonSec || 600,
         second_min_gap_sec: variant.gapSec || variant.horizonSec || 600,
         second_tail_pct: variant.tailPct,
+        second_zone_filter: variant.zoneFilter || "none",
         eta_target_bps: variant.etaTargetBps || 2,
         eta_max_wait_sec: variant.etaMaxWaitSec || 45,
         up_reversal_confirm_bps: variant.upReversalConfirmBps ?? 0.0,
@@ -2123,6 +3075,9 @@ function applyProdStrategyParams(baseConfig, config) {
         second_min_gap_sec: variant.gapSec || variant.horizonSec || 600,
         second_tail_pct: variant.tailPct,
         second_filter: variant.secondFilter || "none",
+        second_zone_filter: variant.zoneFilter || "none",
+        second_sigma_min_bps: variant.sigmaMinBps ?? 0,
+        second_sigma_max_bps: variant.sigmaMaxBps ?? 9999,
         model_label: `SECOND_${variant.lookbackSec || 1800}_${Math.round(variant.tailPct * 100)}_${100 - Math.round(variant.tailPct * 100)}`
       };
       continue;
@@ -2146,6 +3101,175 @@ function applyProdStrategyParams(baseConfig, config) {
         second_chip_direction_filter: variant.chipDirectionFilter || "breakout_up_only",
         second_chip_filter: variant.chipFilter || "none",
         model_label: `SECOND_CHIP_${variant.lookbackSec || 3600}_${Math.round(Number(variant.chipTargetShare || 0.2) * 100)}_${Math.round(Number(variant.chipBreakPct || 0.0023) * 10000)}`
+      };
+      continue;
+    }
+    if (variant.base === "SECOND_VALUE_AREA_SMART") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        model_type: "second_value_area_smart",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        second_va_lookback_sec: variant.lookbackSec || 4200,
+        second_va_horizon_sec: variant.horizonSec || 600,
+        second_va_signal_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        second_va_tail_pct: variant.tailPct ?? 0.20,
+        second_va_sigma_min_bps: variant.sigmaMinBps ?? 8,
+        second_va_sigma_max_bps: variant.sigmaMaxBps ?? 80,
+        second_va_value_area_sec: variant.valueAreaSec || 3600,
+        second_va_bin_size: variant.binSize ?? 10,
+        second_va_value_pct: variant.valuePct ?? 0.70,
+        second_va_normal_window_sec: variant.normalWindowSec || 600,
+        second_va_normal_coverage: variant.normalCoverage ?? 0.70,
+        second_va_mode: variant.mode || "failed_break_fade",
+        second_va_min_edge_bps: variant.minEdgeBps ?? 1,
+        second_va_min_flow: variant.minFlow ?? 0.05,
+        second_va_min_trend_bps: variant.minTrendBps ?? 1.0,
+        second_va_min_volume_ratio: variant.minVolumeRatio ?? 1.15,
+        second_va_min_ob_imbalance: variant.minObImbalance ?? 0.05,
+        second_va_min_micro_bps: variant.minMicroBps ?? 0.001,
+        second_va_max_against_ob_imbalance: variant.maxAgainstObImbalance ?? 0.25,
+        second_va_max_against_flow: variant.maxAgainstFlow ?? 0.35,
+        second_va_retest_sec: variant.retestSec || 180,
+        second_va_retest_bps: variant.retestBps ?? 4.0,
+        second_va_break_hold_sec: variant.breakHoldSec || 30,
+        second_va_reclaim_bps: variant.reclaimBps ?? 0.8,
+        second_va_absorption_max_progress_bps: variant.absorptionMaxProgressBps ?? 1.5,
+        second_va_loss_pause_after: variant.lossPauseAfter ?? 2,
+        second_va_loss_pause_sec: variant.lossPauseSec ?? 1800,
+        model_label: variant.label || "SMART_OBSAFE_LOSS2_VA3600_E1_R180_CD600"
+      };
+      continue;
+    }
+    if (variant.base === "SECOND_NORMAL_STATE_V11") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        model_type: "normal_state_v11",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        normal_state_lookback_sec: variant.lookbackSec || 10800,
+        normal_state_horizon_sec: variant.horizonSec || 600,
+        normal_state_min_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        normal_state_confirm_delay_sec: variant.confirmDelaySec ?? 5,
+        normal_state_max_adverse_bps: variant.maxAdverseBps ?? 5,
+        normal_state_signal_hold_sec: variant.signalHoldSec ?? 55,
+        normal_state_bandwalk_max: variant.bandwalkMax ?? 6,
+        normal_state_min_consensus_votes: variant.minConsensusVotes ?? 2,
+        normal_state_state_gate: variant.stateGate || "edge_persistence_lt6",
+        normal_state_confirmation_veto: variant.confirmationVeto || "none",
+        normal_state_loss_density_enabled: variant.lossDensityEnabled === true,
+        normal_state_loss_density_window: variant.lossDensityWindow || 6,
+        normal_state_loss_density_losses: variant.lossDensityLosses || 3,
+        normal_state_loss_density_min_trades: variant.lossDensityMinTrades || 4,
+        normal_state_loss_density_cooldown_sec: variant.lossDensityCooldownSec || 28800,
+        normal_state_loss_density_lookback_hours: variant.lossDensityLookbackHours || 72,
+        model_label: variant.label || "BTC_10min_NORMAL_STATE_V11_BANDWALK_2OF5_D5A5"
+      };
+      continue;
+    }
+    if (variant.base === "SECOND_NORMAL_ROUTER_V21") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        model_type: "second_normal_router_v21",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        second_lookback_sec: variant.lookbackSec || 4200,
+        second_horizon_sec: variant.horizonSec || 600,
+        second_min_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        second_router_route_lookback_sec: variant.routeLookbackSec || 4200,
+        second_router_r10_window_sec: variant.r10WindowSec || 600,
+        second_router_r10_cap_bps: variant.r10CapBps ?? 42,
+        second_router_down_r10_cap_bps: variant.downR10CapBps ?? 35,
+        second_router_mid_route_sigma_cap_bps: variant.midRouteSigmaCapBps ?? 20,
+        second_router_min_observed_pct: variant.minObservedPct ?? 88,
+        second_router_veto_low_up: variant.vetoLowUp !== false,
+        normal_state_loss_density_enabled: variant.lossDensityEnabled !== false,
+        normal_state_loss_density_window: variant.lossDensityWindow || 6,
+        normal_state_loss_density_losses: variant.lossDensityLosses || 3,
+        normal_state_loss_density_min_trades: variant.lossDensityMinTrades || 4,
+        normal_state_loss_density_cooldown_sec: variant.lossDensityCooldownSec || 28800,
+        normal_state_loss_density_lookback_hours: variant.lossDensityLookbackHours || 72,
+        normal_state_loss_streak_enabled: variant.lossStreakEnabled !== false,
+        normal_state_loss_streak_count: variant.lossStreakCount || 2,
+        normal_state_loss_streak_cooldown_sec: variant.lossStreakCooldownSec || 3600,
+        model_label: variant.label || "BTC_10min_NORMAL_STATE_V21_LOSS_DENSITY_3OF6_8H"
+      };
+      continue;
+    }
+    if (variant.base === "SECOND_NORMAL_LOWVOL_V22") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        trade_enabled: variant.tradeEnabled === true,
+        model_type: "second_normal_lowvol_v22",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        second_lookback_sec: variant.lookbackSec || 4200,
+        second_horizon_sec: variant.horizonSec || 600,
+        second_min_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        second_router_route_lookback_sec: variant.routeLookbackSec || 4200,
+        second_router_r10_window_sec: variant.r10WindowSec || 600,
+        second_router_r10_cap_bps: variant.r10CapBps ?? 42,
+        second_router_down_r10_cap_bps: variant.downR10CapBps ?? 35,
+        second_router_mid_route_sigma_cap_bps: variant.midRouteSigmaCapBps ?? 20,
+        second_router_min_observed_pct: variant.minObservedPct ?? 88,
+        second_router_veto_low_up: variant.vetoLowUp === true,
+        second_lowvol_route_sigma_max_bps: variant.lowVolRouteSigmaMaxBps ?? 10,
+        second_lowvol_confirm_sec: variant.lowVolConfirmSec ?? 15,
+        second_lowvol_reversion_bps: variant.lowVolReversionBps ?? 0.5,
+        second_lowvol_breakout_bps: variant.lowVolBreakoutBps ?? 1.5,
+        normal_state_loss_density_enabled: false,
+        normal_state_loss_streak_enabled: false,
+        model_label: variant.label || "正态V22 低波动确认影子"
+      };
+      continue;
+    }
+    if (variant.base === "SECOND_NORMAL_LIQUIDITY_ORDERBOOK_V1") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        trade_enabled: variant.tradeEnabled === true,
+        model_type: "second_normal_liquidity_orderbook_v1",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        second_liq_normal_window_sec: variant.normalWindowSec || 600,
+        second_liq_horizon_sec: variant.horizonSec || 600,
+        second_liq_signal_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        second_liq_z_entry: variant.zEntry ?? 1.2,
+        second_liq_z_reclaim: variant.zReclaim ?? 0.85,
+        second_liq_retest_sec: variant.retestSec || 120,
+        second_liq_inside_min: variant.insideMin ?? 0.55,
+        second_liq_observed_min_pct: variant.observedMinPct ?? 88,
+        second_liq_center_slope_sec: variant.centerSlopeSec || 300,
+        second_liq_center_slope_max_bps: variant.centerSlopeMaxBps ?? 8,
+        second_liq_sigma_min_bps: variant.sigmaMinBps ?? 5.8,
+        second_liq_sigma_max_bps: variant.sigmaMaxBps ?? 55,
+        second_liq_sigma_expand_max: variant.sigmaExpandMax ?? 1.9,
+        second_liq_orderbook_max_age_sec: variant.orderbookMaxAgeSec || 3,
+        second_liq_ob_imbalance_min: variant.obImbalanceMin ?? 0.08,
+        second_liq_micro_min_bps: variant.microMinBps ?? 0.001,
+        second_liq_wall_ratio_min: variant.wallRatioMin ?? 1.0,
+        second_liq_flow_guard: variant.flowGuard ?? 0.12,
+        second_liq_true_break_flow: variant.trueBreakFlow ?? 0.28,
+        second_liq_true_break_imbalance: variant.trueBreakImbalance ?? 0.28,
+        second_liq_bidwall_trap_enabled: variant.bidwallTrapEnabled !== false,
+        second_liq_bidwall_trap_ret300_max_bps: variant.bidwallTrapRet300MaxBps ?? -5,
+        second_liq_bidwall_trap_bid20_chg60_min: variant.bidwallTrapBid20Chg60Min ?? 2,
+        second_liq_quality_v2_enabled: variant.qualityV2Enabled !== false,
+        second_liq_quality_v2_down_bid20_chg60_min: variant.qualityV2DownBid20Chg60Min ?? -0.7,
+        second_liq_quality_v2_up_flow60_min: variant.qualityV2UpFlow60Min ?? -0.063,
+        second_liq_mode: variant.liquidityMode || "reclaim",
+        normal_state_loss_density_enabled: false,
+        normal_state_loss_streak_enabled: false,
+        model_label: variant.label || "正态流动性订单薄V1 影子"
       };
       continue;
     }
@@ -2227,8 +3351,94 @@ function strategyRestartFingerprint(config) {
     horizonSec: v.horizonSec,
     gapSec: v.gapSec,
     secondFilter: v.secondFilter,
-    etaTargetBps: v.etaTargetBps,
-    etaMaxWaitSec: v.etaMaxWaitSec,
+    zoneFilter: v.zoneFilter,
+    sigmaMinBps: v.sigmaMinBps,
+    sigmaMaxBps: v.sigmaMaxBps,
+    ...(v.base === "SECOND_VW_CONFIRM" ? {
+      etaTargetBps: v.etaTargetBps,
+      etaMaxWaitSec: v.etaMaxWaitSec
+    } : {}),
+    ...(v.base === "SECOND_VALUE_AREA_SMART" ? {
+      valueAreaSec: v.valueAreaSec,
+      binSize: v.binSize,
+      valuePct: v.valuePct,
+      normalWindowSec: v.normalWindowSec,
+      normalCoverage: v.normalCoverage,
+      mode: v.mode,
+      minEdgeBps: v.minEdgeBps,
+      minFlow: v.minFlow,
+      minTrendBps: v.minTrendBps,
+      minVolumeRatio: v.minVolumeRatio,
+      minObImbalance: v.minObImbalance,
+      minMicroBps: v.minMicroBps,
+      maxAgainstObImbalance: v.maxAgainstObImbalance,
+      maxAgainstFlow: v.maxAgainstFlow,
+      retestSec: v.retestSec,
+      retestBps: v.retestBps,
+      breakHoldSec: v.breakHoldSec,
+      reclaimBps: v.reclaimBps,
+      absorptionMaxProgressBps: v.absorptionMaxProgressBps,
+      lossPauseAfter: v.lossPauseAfter,
+      lossPauseSec: v.lossPauseSec
+    } : {}),
+    ...(v.base === "SECOND_NORMAL_STATE_V11" ? {
+      confirmDelaySec: v.confirmDelaySec,
+      maxAdverseBps: v.maxAdverseBps,
+      signalHoldSec: v.signalHoldSec,
+      bandwalkMax: v.bandwalkMax,
+      minConsensusVotes: v.minConsensusVotes,
+      stateGate: v.stateGate,
+      confirmationVeto: v.confirmationVeto
+    } : {}),
+    ...(v.base === "SECOND_NORMAL_ROUTER_V21" || v.base === "SECOND_NORMAL_LOWVOL_V22" ? {
+      routeLookbackSec: v.routeLookbackSec,
+      r10WindowSec: v.r10WindowSec,
+      r10CapBps: v.r10CapBps,
+      downR10CapBps: v.downR10CapBps,
+      midRouteSigmaCapBps: v.midRouteSigmaCapBps,
+      minObservedPct: v.minObservedPct,
+      lossDensityEnabled: v.lossDensityEnabled,
+      lossDensityWindow: v.lossDensityWindow,
+      lossDensityLosses: v.lossDensityLosses,
+      lossDensityMinTrades: v.lossDensityMinTrades,
+      lossDensityCooldownSec: v.lossDensityCooldownSec,
+      lossDensityLookbackHours: v.lossDensityLookbackHours,
+      lossStreakEnabled: v.lossStreakEnabled,
+      lossStreakCount: v.lossStreakCount,
+      lossStreakCooldownSec: v.lossStreakCooldownSec,
+      vetoLowUp: v.vetoLowUp
+    } : {}),
+    ...(v.base === "SECOND_NORMAL_LOWVOL_V22" ? {
+      lowVolRouteSigmaMaxBps: v.lowVolRouteSigmaMaxBps,
+      lowVolConfirmSec: v.lowVolConfirmSec,
+      lowVolReversionBps: v.lowVolReversionBps,
+      lowVolBreakoutBps: v.lowVolBreakoutBps
+    } : {}),
+    ...(v.base === "SECOND_NORMAL_LIQUIDITY_ORDERBOOK_V1" ? {
+      normalWindowSec: v.normalWindowSec,
+      zEntry: v.zEntry,
+      zReclaim: v.zReclaim,
+      retestSec: v.retestSec,
+      insideMin: v.insideMin,
+      observedMinPct: v.observedMinPct,
+      centerSlopeSec: v.centerSlopeSec,
+      centerSlopeMaxBps: v.centerSlopeMaxBps,
+      sigmaExpandMax: v.sigmaExpandMax,
+      orderbookMaxAgeSec: v.orderbookMaxAgeSec,
+      obImbalanceMin: v.obImbalanceMin,
+      microMinBps: v.microMinBps,
+      wallRatioMin: v.wallRatioMin,
+      flowGuard: v.flowGuard,
+      trueBreakFlow: v.trueBreakFlow,
+      trueBreakImbalance: v.trueBreakImbalance,
+      bidwallTrapEnabled: v.bidwallTrapEnabled !== false,
+      bidwallTrapRet300MaxBps: v.bidwallTrapRet300MaxBps,
+      bidwallTrapBid20Chg60Min: v.bidwallTrapBid20Chg60Min,
+      qualityV2Enabled: v.qualityV2Enabled !== false,
+      qualityV2DownBid20Chg60Min: v.qualityV2DownBid20Chg60Min,
+      qualityV2UpFlow60Min: v.qualityV2UpFlow60Min,
+      liquidityMode: v.liquidityMode
+    } : {}),
     upReversalConfirmBps: v.upReversalConfirmBps,
     upReversalConfirmMaxSec: v.upReversalConfirmMaxSec,
     incidentFilterEnabled: v.incidentFilterEnabled,
@@ -2287,25 +3497,127 @@ app.post("/api/config", requireApiToken, express.json(), (req, res) => {
   res.json({ ...publicTradeConfig(tradeConfig), safetyBlocked: result.safetyBlocked, forceAutoTrade: result.forceAutoTrade });
 });
 
+app.get("/api/llm-config", (req, res) => {
+  res.status(410).json(LLM_REMOVED_RESPONSE);
+});
+
+app.post("/api/llm-config", requireApiToken, express.json({ limit: "200kb" }), (req, res) => {
+  writeLlmStatus({ state: "removed", lastSignal: null, activeTrade: null, lastError: null });
+  res.status(410).json(LLM_REMOVED_RESPONSE);
+});
+
+app.get("/api/llm-status", (req, res) => {
+  res.status(410).json({
+    ...LLM_REMOVED_RESPONSE,
+    status: {
+      strategyId: LLM_STRATEGY_ID,
+      state: "removed",
+      activeTrade: null,
+      lastPrediction: null,
+      lastSignal: null,
+      lastError: null
+    },
+    signal: { strategy_id: LLM_STRATEGY_ID, signal: null, confidence: null, reason: "llm_removed" }
+  });
+});
+
+app.post("/api/llm-predict-now", requireApiToken, (req, res) => {
+  writeLlmStatus({ state: "removed", lastSignal: null, activeTrade: null, lastError: null });
+  res.status(410).json({ ok: false, reason: "llm_removed", ...LLM_REMOVED_RESPONSE });
+});
+
 
 // --- Manual Trade Command ---
+const MANUAL_TRADE_TTL_MS = Math.max(30000, Number(process.env.MANUAL_TRADE_TTL_MS || 30000));
+const MANUAL_TRADE_MAX_ATTEMPTS = Math.max(1, Math.min(10, Number(process.env.MANUAL_TRADE_MAX_ATTEMPTS || 3)));
+const MANUAL_RETRYABLE_ABORT_REASONS = new Set([
+  "amount_failed",
+  "duration_failed",
+  "cannot_wake_screen",
+  "balance_before_unavailable",
+  "confirm_not_found"
+]);
 let manualTrade = null; // { direction: 'UP'|'DOWN', amount: '5', duration: '30', time: Date.now() }
 
+function normalizeManualAmount(value, fallback) {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n < 5) return String(Math.max(5, Math.floor(Number(fallback) || 5)));
+  return String(n);
+}
+
+function normalizeManualDuration(value, fallback) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n) || n < 1) return String(Math.max(1, Math.round(Number(fallback) || 10)));
+  return String(n);
+}
+
+function manualAuditRowsForCommand(command) {
+  if (!command || !command.time) return [];
+  const start = Number(command.time) - 1000;
+  const direction = String(command.direction || "");
+  const amount = String(command.amount || "");
+  const duration = String(command.duration || "");
+  return tailJsonl(TRADE_AUDIT_FILE, 120)
+    .filter(row => row && row.strategyId === "manual")
+    .filter(row => ["order_attempt", "order_abort", "order_done", "order_unverified"].includes(row.event))
+    .filter(row => Number(row.clientTime || row.serverTime || 0) >= start)
+    .filter(row => !direction || row.direction === direction)
+    .filter(row => !amount || String(row.amount || "") === amount)
+    .filter(row => !duration || String(row.duration || "") === duration)
+    .sort((a, b) => Number(a.clientTime || a.serverTime || 0) - Number(b.clientTime || b.serverTime || 0));
+}
+
+function manualDeleteDecision(command) {
+  if (!command) return { clear: true, reason: "empty" };
+  const rows = manualAuditRowsForCommand(command);
+  const attempts = rows.filter(row => row.event === "order_attempt").length;
+  const terminal = rows.slice().reverse().find(row => row.event === "order_abort" || row.event === "order_done" || row.event === "order_unverified");
+  if (!terminal) return { clear: false, reason: "awaiting_execution_report", attempts };
+  if (terminal.event === "order_done" || terminal.event === "order_unverified") {
+    return { clear: true, reason: terminal.event, attempts, terminal };
+  }
+  const abortReason = String(terminal.reason || "");
+  const ageMs = Date.now() - Number(command.time || 0);
+  const retryable = MANUAL_RETRYABLE_ABORT_REASONS.has(abortReason);
+  if (retryable && attempts < MANUAL_TRADE_MAX_ATTEMPTS && ageMs < MANUAL_TRADE_TTL_MS) {
+    return { clear: false, retry: true, reason: abortReason, attempts, terminal };
+  }
+  return { clear: true, reason: abortReason || "order_abort", attempts, terminal };
+}
+
 app.get('/api/manual', (req, res) => {
+  if (manualTrade && Date.now() - Number(manualTrade.time || 0) > MANUAL_TRADE_TTL_MS) {
+    manualTrade = null;
+  }
   res.json(manualTrade);
 });
 
 app.post('/api/manual', requireApiToken, express.json(), (req, res) => {
   const { direction, amount, duration } = req.body;
   if (direction !== 'UP' && direction !== 'DOWN') { res.json({ error: 'invalid direction' }); return; }
-  manualTrade = { direction, amount: amount || tradeConfig.amount, duration: duration || tradeConfig.duration, time: Date.now() };
+  manualTrade = {
+    direction,
+    amount: normalizeManualAmount(amount, tradeConfig.amount),
+    duration: normalizeManualDuration(duration, tradeConfig.duration),
+    time: Date.now()
+  };
   console.log('[Manual] Trade command:', JSON.stringify(manualTrade));
   res.json(manualTrade);
 });
 
 app.delete('/api/manual', requireApiToken, (req, res) => {
+  const decision = manualDeleteDecision(manualTrade);
+  if (!decision.clear) {
+    if (manualTrade) {
+      manualTrade.retryCount = decision.attempts || 0;
+      manualTrade.lastAbortReason = decision.reason || null;
+      manualTrade.lastAbortTime = decision.terminal ? Number(decision.terminal.clientTime || decision.terminal.serverTime || 0) : null;
+    }
+    res.json({ cleared: false, retry: !!decision.retry, reason: decision.reason, attempts: decision.attempts || 0, manualTrade });
+    return;
+  }
   manualTrade = null;
-  res.json({ cleared: true });
+  res.json({ cleared: true, reason: decision.reason, attempts: decision.attempts || 0 });
 });
 
 // --- Trade audit reported by AutoJS tablet and server simulator ---
@@ -2315,8 +3627,12 @@ app.get('/api/trade-audit', (req, res) => {
 });
 
 app.get('/api/trade-history', (req, res) => {
-  const limit = Math.min(300, Math.max(10, Number(req.query.limit) || 100));
-  res.json(liveOrderHistory(limit));
+  const pageSize = Math.min(300, Math.max(10, Number(req.query.pageSize || req.query.limit) || 80));
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const kind = req.query.kind === "shadow" ? "shadow" : req.query.kind === "all" ? "all" : "real";
+  const mode = req.query.mode === "page" ? "page" : "day";
+  const day = String(req.query.day || dayKeyForTime(Date.now()));
+  res.json(liveOrderHistory({ limit: pageSize, page, pageSize, kind, mode, day }));
 });
 
 app.post('/api/trade-audit/import', requireApiToken, express.json({ limit: "20mb" }), (req, res) => {
@@ -2328,6 +3644,7 @@ app.post('/api/trade-audit/import', requireApiToken, express.json({ limit: "20mb
   }
   const source = body.source || body.importSource || "manual_import";
   const result = eventStore.importJsonl(TRADE_AUDIT_FILE, items, { importSource: source });
+  for (const item of items) invalidateTradeDerivedCaches(item && item.event);
   res.json({ ok: true, ...result });
 });
 
@@ -2345,6 +3662,7 @@ app.post('/api/trade-audit', requireApiToken, (req, res) => {
       realBalance
     };
     const written = appendJsonl(TRADE_AUDIT_FILE, item);
+    invalidateTradeDerivedCaches((written || item).event);
     res.json({ ok: true, item: written || item });
   });
 });
@@ -2403,7 +3721,8 @@ server.listen(PORT, '0.0.0.0', () => {
     runDataUpdate("server_listen");
     startSignalService("server_listen");
     setInterval(() => runDataUpdate("timer"), DATA_UPDATE_INTERVAL_MS);
-    refreshLightReports("server_listen");
+    // Heavy reports/backtests are manual only; never start them on server boot.
+    // refreshLightReports("server_listen");
   } else {
     console.log("[Server] Managed Python processes disabled by DISABLE_MANAGED_PROCESSES=1");
   }

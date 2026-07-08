@@ -93,6 +93,48 @@ test("public config exposes current backtest and eta params", () => {
   assert.equal(pub.strategyVariants[1].backtest.tradesPerDay, 13.27);
 });
 
+test("shadow trading switch can be enabled without enabling real trading", () => {
+  const result = applyTradeConfigPatch(DEFAULT_TRADE_CONFIG, {
+    shadowTradingEnabled: true,
+    realTradingEnabled: false,
+    autoTrade_10m: false
+  });
+  assert.equal(result.tradeConfig.shadowTradingEnabled, true);
+  assert.equal(result.tradeConfig.realTradingEnabled, false);
+  assert.equal(result.tradeConfig.autoTrade_10m, false);
+  const pub = publicTradeConfig(result.tradeConfig);
+  assert.equal(pub.shadowTradingEnabled, true);
+});
+
+test("liquidity orderbook strategy is preserved as shadow by default", () => {
+  const cfg = normalizeTradeConfig({
+    strategyVariants: [{
+      id: "BTC_10min_NORMAL_LIQUIDITY_ORDERBOOK_V1_SHADOW",
+      base: "SECOND_NORMAL_LIQUIDITY_ORDERBOOK_V1",
+      enabled: true,
+      tradeEnabled: false,
+      normalWindowSec: 600,
+      zEntry: 1.2,
+      obImbalanceMin: 0.08
+    }]
+  });
+  assert.equal(cfg.strategyVariants.length, 1);
+  assert.equal(cfg.strategyVariants[0].base, "SECOND_NORMAL_LIQUIDITY_ORDERBOOK_V1");
+  assert.equal(cfg.strategyVariants[0].tradeEnabled, false);
+  assert.equal(cfg.strategyVariants[0].normalWindowSec, 600);
+  assert.equal(cfg.strategyVariants[0].zEntry, 1.2);
+  assert.equal(cfg.strategyVariants[0].obImbalanceMin, 0.08);
+  assert.equal(cfg.strategyVariants[0].bidwallTrapEnabled, true);
+  assert.equal(cfg.strategyVariants[0].bidwallTrapRet300MaxBps, -5);
+  assert.equal(cfg.strategyVariants[0].bidwallTrapBid20Chg60Min, 2);
+  assert.equal(cfg.strategyVariants[0].qualityV2Enabled, true);
+  assert.equal(cfg.strategyVariants[0].qualityV2DownBid20Chg60Min, -0.7);
+  assert.equal(cfg.strategyVariants[0].qualityV2UpFlow60Min, -0.063);
+  assert.deepEqual(liveStrategyIds(cfg), []);
+  assert.deepEqual(observedStrategyIds(cfg), ["BTC_10min_NORMAL_LIQUIDITY_ORDERBOOK_V1_SHADOW"]);
+  assert.equal(publicTradeConfig(cfg).strategyVariants[0].backtest.wr, 77.78);
+});
+
 test("auto trade patch records blocked and forced transitions", () => {
   const blocked = applyTradeConfigPatch(DEFAULT_TRADE_CONFIG, { autoTrade: true }, {
     autoTradeSafetyGate: () => ({ blocked: true, verdict: "missing_shadow_decision" })
@@ -106,4 +148,20 @@ test("auto trade patch records blocked and forced transitions", () => {
   assert.equal(forced.tradeConfig.autoTrade_10m, true);
   assert.equal(forced.tradeConfig.realTradingEnabled, true);
   assert.equal(forced.auditEvents[0].event, "auto_trade_force_enabled_10m");
+});
+
+test("auto trade can be enabled in the same save as real trading", () => {
+  const result = applyTradeConfigPatch(DEFAULT_TRADE_CONFIG, {
+    realTradingEnabled: true,
+    autoTrade_10m: true
+  }, {
+    autoTradeSafetyGate: config => ({
+      blocked: !(config.realTradingEnabled && config.autoTrade_10m),
+      verdict: config.realTradingEnabled ? "ok" : "real_disabled"
+    })
+  });
+
+  assert.equal(result.tradeConfig.realTradingEnabled, true);
+  assert.equal(result.tradeConfig.autoTrade_10m, true);
+  assert.equal(result.safetyBlocked, null);
 });
