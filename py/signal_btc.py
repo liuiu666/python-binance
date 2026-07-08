@@ -3857,6 +3857,66 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
             and float(row["sigma_expand"]) <= self.sigma_expand_max
         )
 
+    def _normal_ready_checks(self, row):
+        def finite_value(key):
+            value = self._safe_float(row, key)
+            return value if np.isfinite(value) else None
+
+        observed = finite_value("observed_pct")
+        inside = finite_value("inside1_ratio")
+        slope = finite_value("center_slope_bps")
+        sigma = finite_value("sigma_bps")
+        expand = finite_value("sigma_expand")
+        checks = [
+            {
+                "key": "observed_pct",
+                "label": "秒级覆盖",
+                "value": None if observed is None else round(observed, 2),
+                "requirement": f">= {self.observed_min_pct:g}%",
+                "ok": observed is not None and observed >= self.observed_min_pct,
+            },
+            {
+                "key": "inside1_ratio",
+                "label": "正态区间内占比",
+                "value": None if inside is None else round(inside * 100.0, 2),
+                "requirement": f">= {self.inside_min * 100.0:g}%",
+                "ok": inside is not None and inside >= self.inside_min,
+            },
+            {
+                "key": "center_slope_bps",
+                "label": "中线斜率",
+                "value": None if slope is None else round(slope, 2),
+                "requirement": f"绝对值 <= {self.center_slope_max_bps:g}bp",
+                "ok": slope is not None and abs(slope) <= self.center_slope_max_bps,
+            },
+            {
+                "key": "sigma_bps",
+                "label": "10分钟波动",
+                "value": None if sigma is None else round(sigma, 2),
+                "requirement": f"{self.sigma_min_bps:g}-{self.sigma_max_bps:g}bp",
+                "ok": sigma is not None and self.sigma_min_bps <= sigma <= self.sigma_max_bps,
+            },
+            {
+                "key": "sigma_expand",
+                "label": "波动扩张",
+                "value": None if expand is None else round(expand, 2),
+                "requirement": f"<= {self.sigma_expand_max:g}",
+                "ok": expand is not None and expand <= self.sigma_expand_max,
+            },
+        ]
+        failed = [item for item in checks if not item["ok"]]
+        return checks, failed
+
+    def _normal_not_ready_detail(self, row):
+        checks, failed = self._normal_ready_checks(row)
+        if not failed:
+            return "正态环境检查暂未稳定，等待下一次5秒扫描。", checks
+        parts = []
+        for item in failed:
+            value = "--" if item["value"] is None else item["value"]
+            parts.append(f"{item['label']}={value}，要求{item['requirement']}")
+        return "等待重新进入短周期正态震荡；未达标：" + "；".join(parts) + "。", checks
+
     def _passive_resistance(self, row):
         ask = self._safe_float(row, "ask_qty_20")
         bid = self._safe_float(row, "bid_qty_20")
@@ -4007,7 +4067,7 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
             "rsi_extreme": True,
             "condition_summary": {
                 "entry": "600秒滚动正态区间 + 假突破回归 + 订单薄被动支撑/压力确认",
-                "risk": "订单薄延迟<=3秒，秒级覆盖>=88%，inside>=55%，sigma=5-55bp，扩张<=1.9",
+                "risk": f"订单薄延迟<=3秒，秒级覆盖>={self.observed_min_pct:g}%，inside>={self.inside_min * 100.0:g}%，sigma={self.sigma_min_bps:g}-{self.sigma_max_bps:g}bp，扩张<={self.sigma_expand_max:g}",
                 "loss_density": "V2 uses orderbook quality vetoes; live trading is controlled by the strategy switches.",
             },
         }
@@ -4017,7 +4077,7 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         )
         base["condition_summary"] = {
             "entry": "600秒滚动正态区间 + 假突破回归 + 订单薄被动支撑/压力确认",
-            "risk": "订单薄延迟<=3秒，秒级覆盖>=88%，inside>=55%，sigma=5-55bp，扩张<=1.9",
+            "risk": f"订单薄延迟<=3秒，秒级覆盖>={self.observed_min_pct:g}%，inside>={self.inside_min * 100.0:g}%，sigma={self.sigma_min_bps:g}-{self.sigma_max_bps:g}bp，扩张<={self.sigma_expand_max:g}",
             "bidwall_trap": "下沿回收做多时，如果5分钟仍下跌且60秒买盘深度突然放大>2倍，改判为DOWN",
             "live": "当前版本可实盘；是否下单仍受全局自动交易、实盘开关和执行失败保护控制",
         }
@@ -4073,14 +4133,14 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
             "z_min_retest": None if not np.isfinite(row.get("z_min_retest")) else round(float(row["z_min_retest"]), 4),
         }
         if not self._normal_ready(row):
+            not_ready_detail, normal_ready_checks = self._normal_not_ready_detail(row)
             return {
                 **base,
                 **feature_extra,
                 "signal": None,
                 "reason": "liq_normal_not_ready",
-                "signal_detail": (
-                    "等待重新进入短周期正态震荡：需要覆盖、inside比例、中心斜率、sigma范围和sigma扩张同时达标。"
-                ),
+                "normal_ready_checks": normal_ready_checks,
+                "signal_detail": not_ready_detail,
             }
 
         if self.last_emit_time is not None and (signal_time - self.last_emit_time).total_seconds() < self.min_gap_sec:
