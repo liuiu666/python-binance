@@ -1,12 +1,18 @@
 node_modules/
 var/
+tmp/
+btc-binary-options-deploy.tar.gz
 *.sqlite
+*.db
+*.db-shm
+*.db-wal
 *.err
 *.out
 *.log
 *.bak
 __pycache__/
 *.pyc
+frontend/src/data/normalRealData.json
 
 # Runtime and research artifacts
 data/*.jsonl
