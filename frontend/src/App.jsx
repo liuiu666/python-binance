@@ -28,7 +28,9 @@ import {
   healthTone,
   isShadowTrade,
   pnlText,
+  signalHumanSummary,
   signalLabel,
+  signalReasonText,
   statLine,
   statusClass,
   statusText,
@@ -104,7 +106,7 @@ function compactSignalRows(signalPayload, variants) {
   }));
 }
 
-function CurrentTradePanel({ history, activeSignal, signalAmount, currentPrice }) {
+function CurrentTradePanel({ history, activeSignal, activeVariant, signalAmount, currentPrice }) {
   const activeRows = history?.active || [];
   const realRows = activeRows.filter(row => !isShadowTrade(row));
   const shadowRows = activeRows.filter(isShadowTrade);
@@ -128,8 +130,8 @@ function CurrentTradePanel({ history, activeSignal, signalAmount, currentPrice }
       </div>
 
       <div className="hint-box">
-        <span>为什么没信号</span>
-        <p>{activeSignal?.signal_detail || activeSignal?.next_signal_estimate || "正在等待策略输出。"}</p>
+        <span>为什么现在没下单</span>
+        <p>{signalHumanSummary(activeSignal, activeVariant)}</p>
       </div>
 
       {activeSignal?.next_check_time_shanghai ? (
@@ -373,6 +375,10 @@ export default function App() {
 
   const signalRows = useMemo(() => compactSignalRows(signalPayload, visibleVariants), [signalPayload, visibleVariants]);
   const activeSignal = useMemo(() => activeSignalFromPayload(signalPayload), [signalPayload]);
+  const activeVariant = useMemo(() => {
+    if (!activeSignal) return visibleVariants[0] || null;
+    return visibleVariants.find(item => item.id === activeSignal.strategy_id) || visibleVariants[0] || null;
+  }, [activeSignal, visibleVariants]);
   const signalAmount = useMemo(() => {
     if (!activeSignal) return String(configDraft.amount || DEFAULT_CONFIG.amount);
     return amountForSignal(activeSignal.strategy_id, activeSignal, signalPayload, configDraft);
@@ -659,11 +665,11 @@ export default function App() {
           <div>
             <span className={`signal-dot ${directionClass(activeSignal?.signal)}`} />
             <strong>{signalLabel(activeSignal)}</strong>
-            <small>{activeSignal?.next_signal_estimate || "策略每5秒扫描，满足假突破回归才给10分钟方向。"}</small>
+            <small>{signalHumanSummary(activeSignal, activeVariant)}</small>
           </div>
           <div className="signal-strip-meta">
             <span><Clock3 size={14} /> {activeSignal?.next_check_time_shanghai || activeSignal?.time_shanghai || "--"}</span>
-            <span><AlertTriangle size={14} /> {activeSignal?.reason || "正常监控"}</span>
+            <span><AlertTriangle size={14} /> {signalReasonText(activeSignal)}</span>
           </div>
         </section>
 
@@ -685,6 +691,7 @@ export default function App() {
             <CurrentTradePanel
               history={tradeHistory}
               activeSignal={activeSignal}
+              activeVariant={activeVariant}
               signalAmount={signalAmount}
               currentPrice={currentPrice}
             />

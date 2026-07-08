@@ -6,7 +6,10 @@ import {
   displaySignalTime,
   fmt,
   fmtPct,
+  signalHumanSummary,
   signalLabel,
+  signalReadinessItems,
+  signalReasonText,
   statLine
 } from "../utils";
 
@@ -38,7 +41,7 @@ function BacktestLine({ backtest }) {
 function DetailRows({ signal }) {
   const condition = signal?.condition_summary || {};
   const rows = [
-    ["当前判断", signal?.signal_detail || signalLabel(signal)],
+    ["当前状态", signalHumanSummary(signal)],
     ["预计信号", signal?.next_signal_estimate],
     ["下次扫描", signal?.next_check_time_shanghai],
     ["入场规则", condition.entry],
@@ -58,6 +61,31 @@ function DetailRows({ signal }) {
           <strong>{value}</strong>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ReadinessChecklist({ signal, variant }) {
+  const items = signalReadinessItems(signal, variant);
+  if (!items.length || signal?.signal) return null;
+  return (
+    <div className="readiness-panel">
+      <div className="readiness-head">
+        <strong>为什么现在没下单</strong>
+        <span>{signalReasonText(signal)}</span>
+      </div>
+      <div className="readiness-grid">
+        {items.map(item => (
+          <div className={`readiness-item ${item.tone}`} key={item.key}>
+            <div>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+            <small>{item.target}</small>
+            <em>{item.ok === true ? "通过" : item.ok === false ? item.help : "等待数据"}</em>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -192,10 +220,11 @@ export default function StrategyCard({ title, signal, amount, variant, stats }) 
       </div>
 
       <FeatureGrid signal={signal} />
+      <ReadinessChecklist signal={signal} variant={variant} />
       <DetailRows signal={signal} />
       <RouterDiagnostics signal={signal} />
 
-      {signal?.reason ? <div className="reason-line">原因：{signal.reason}</div> : null}
+      {signal?.reason ? <div className="reason-line">状态：{signalReasonText(signal)}</div> : null}
       {signal?.error ? <div className="reason-line bad">异常：{signal.error}</div> : null}
       {signal?.actionable_time ? <div className="reason-line">可执行时间：{dateTimeText(signal.actionable_time)}</div> : null}
     </article>

@@ -218,6 +218,140 @@ export function signalLabel(signal) {
   return signal.signal_detail || signal.next_signal_estimate || "等待触发";
 }
 
+function asNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function statusTone(ok) {
+  if (ok === true) return "ok";
+  if (ok === false) return "bad";
+  return "warn";
+}
+
+export function signalReasonText(signal) {
+  if (!signal) return "等待策略数据";
+  const reason = signal?.reason;
+  const map = {
+    liq_normal_not_ready: "等待可交易的震荡区",
+    liq_wait_reclaim: "震荡区已形成，等待假突破回归",
+    liq_strategy_gap: "上一笔信号后冷却中",
+    liq_orderbook_missing: "订单薄数据缺失",
+    liq_orderbook_missing_or_stale: "订单薄数据延迟",
+    liq_feature_error: "策略指标计算异常",
+    liq_v2_skip_down_bid_fade: "做空质量不够，跳过",
+    liq_v2_skip_up_negative_flow: "做多质量不够，跳过",
+    confirmed_signal_expired: "信号过期，等待下一次",
+    no_confirmed_false_break: "等待假突破回归确认",
+    observed600_low: "秒级数据覆盖不足",
+    r10_cap: "10分钟波动过大，暂停",
+    router_metrics_unavailable: "等待行情指标"
+  };
+  return map[reason] || signalLabel(signal);
+}
+
+export function signalReadinessItems(signal, variant = {}) {
+  if (!signal) return [];
+  const observed = asNumber(signal.observed_pct ?? signal.observed600_pct);
+  const observedMin = asNumber(variant.observedMinPct ?? signal.min_observed_pct) ?? 88;
+  const inside = asNumber(signal.inside1_ratio);
+  const insidePct = inside == null ? null : inside * 100;
+  const insideMin = (asNumber(variant.insideMin) ?? 0.55) * 100;
+  const slope = asNumber(signal.center_slope_bps);
+  const slopeMax = asNumber(variant.centerSlopeMaxBps) ?? 8;
+  const sigma = asNumber(signal.sigma_bps ?? signal.sigma10_bps);
+  const sigmaMin = asNumber(variant.sigmaMinBps) ?? 5.8;
+  const sigmaMax = asNumber(variant.sigmaMaxBps) ?? 55;
+  const expand = asNumber(signal.sigma_expand);
+  const expandMax = asNumber(variant.sigmaExpandMax) ?? 1.9;
+  const obAge = asNumber(signal.ob_age_sec);
+  const obMax = asNumber(variant.orderbookMaxAgeSec) ?? 3;
+
+  const items = [
+    {
+      key: "coverage",
+      label: "数据完整",
+      ok: observed == null ? null : observed >= observedMin,
+      value: observed == null ? "--" : `${fmt(observed, 1)}%`,
+      target: `要求 >= ${fmt(observedMin, 0)}%`,
+      help: "秒级数据要够完整，否则正态区间不可信。"
+    },
+    {
+      key: "inside",
+      label: "震荡成型",
+      ok: insidePct == null ? null : insidePct >= insideMin,
+      value: insidePct == null ? "--" : `${fmt(insidePct, 1)}%`,
+      target: `要求 >= ${fmt(insideMin, 0)}%`,
+      help: "过去10分钟多数时间要在区间内，才算震荡。"
+    },
+    {
+      key: "trend",
+      label: "趋势不过强",
+      ok: slope == null ? null : Math.abs(slope) <= slopeMax,
+      value: slope == null ? "--" : `${fmt(slope, 2)}bp`,
+      target: `要求 -${fmt(slopeMax, 0)} 到 ${fmt(slopeMax, 0)}bp`,
+      help: "中线快速上移或下移时，先不做回归。"
+    },
+    {
+      key: "sigma",
+      label: "波动合适",
+      ok: sigma == null ? null : sigma >= sigmaMin && sigma <= sigmaMax,
+      value: sigma == null ? "--" : `${fmt(sigma, 2)}bp`,
+      target: `要求 ${fmt(sigmaMin, 1)}-${fmt(sigmaMax, 0)}bp`,
+      help: sigma != null && sigma < sigmaMin
+        ? "波动太小，空间不够，容易被噪声打掉。"
+        : "波动太大时可能是突破行情，暂时不做回归。"
+    },
+    {
+      key: "expand",
+      label: "没有暴走",
+      ok: expand == null ? null : expand <= expandMax,
+      value: expand == null ? "--" : `${fmt(expand, 2)}x`,
+      target: `要求 <= ${fmt(expandMax, 1)}x`,
+      help: "波动突然放大，可能正在切换行情。"
+    }
+  ];
+
+  if (obAge != null || signal.model_type === "second_normal_liquidity_orderbook_v1") {
+    items.push({
+      key: "orderbook",
+      label: "订单薄新鲜",
+      ok: obAge == null ? null : obAge <= obMax,
+      value: obAge == null ? "--" : `${fmt(obAge, 1)}秒`,
+      target: `要求 <= ${fmt(obMax, 0)}秒`,
+      help: "订单薄太旧，支撑/压力判断不可靠。"
+    });
+  }
+
+  return items.map(item => ({ ...item, tone: statusTone(item.ok) }));
+}
+
+export function signalHumanSummary(signal, variant = {}) {
+  if (!signal) return "正在等待策略数据。";
+  if (signal.signal) {
+    return `已经出现${directionText(signal.signal)}信号，按${signal.duration || variant.duration || 10}分钟到期判断。`;
+  }
+  if (signal.data_health_blocked) return "数据有延迟或缺口，策略先不下单。";
+  if (signal.safety_blocked) return "风控正在拦截，暂时不下单。";
+  if (signal.reason === "liq_wait_reclaim") {
+    return "震荡区已经基本形成，现在等价格先冲出区间、再回到区间内，才给10分钟方向。";
+  }
+  if (signal.reason === "liq_strategy_gap") {
+    return "上一笔信号后还在10分钟间隔内，避免同一段行情重复下单。";
+  }
+  if (signal.reason === "liq_orderbook_missing" || signal.reason === "liq_orderbook_missing_or_stale") {
+    return "订单薄数据不够新，暂时不根据流动性下单。";
+  }
+  if (String(signal.reason || "").startsWith("liq_v2_skip")) {
+    return signal.quality_v2_rule || "这个候选信号质量不够，已经跳过。";
+  }
+  const blocked = signalReadinessItems(signal, variant).find(item => item.ok === false);
+  if (blocked) {
+    return `当前卡在：${blocked.label}。现在 ${blocked.value}，${blocked.target}。${blocked.help}`;
+  }
+  return signalReasonText(signal);
+}
+
 export function signalTimeText(time) {
   if (!time) return "--:--:--";
   const ms = typeof time === "string" && Number.isNaN(Number(time)) ? Date.parse(time) : Number(time);
