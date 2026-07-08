@@ -16,6 +16,7 @@ frontend/src/data/normalRealData.json
 
 # Runtime and research artifacts
 data/*.jsonl
+data/llm_config.json
 data/*.csv
 data/*.csv.tmp
 data/*.pkl
