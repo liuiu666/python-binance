@@ -284,6 +284,51 @@ test("shadow audit rows do not merge reused trade ids after restart", () => {
   assert.equal(history.summary.shadow.pnl, -1);
 });
 
+test("shadow audit rows expose strategy and execution prices separately", () => {
+  const openTime = Date.parse("2026-07-09T09:17:43+08:00");
+  const executionOpenTime = openTime + 20000;
+  const history = buildLiveOrderHistory({
+    now: openTime + 11 * 60 * 1000,
+    kind: "shadow",
+    auditRows: [
+      {
+        event: "shadow_trade_open",
+        serverTime: executionOpenTime,
+        tradeId: 9,
+        source: "shadow:BTC_10min_NORMAL_LIQ_OB_V2_QUALITY",
+        strategyId: "BTC_10min_NORMAL_LIQ_OB_V2_QUALITY",
+        direction: "UP",
+        amount: 5,
+        duration: 10,
+        openTime,
+        strikePrice: 62393.4,
+        signalEntryPrice: 62393.4,
+        executionStrikePrice: 62452,
+        executionOpenTime,
+        executionDelayMs: 20000
+      },
+      {
+        event: "shadow_trade_settle",
+        serverTime: openTime + 10 * 60 * 1000,
+        tradeId: 9,
+        source: "shadow:BTC_10min_NORMAL_LIQ_OB_V2_QUALITY",
+        strategyId: "BTC_10min_NORMAL_LIQ_OB_V2_QUALITY",
+        openTime,
+        settleTime: openTime + 10 * 60 * 1000,
+        settlePrice: 62398.7,
+        status: "won"
+      }
+    ]
+  });
+
+  assert.equal(history.summary.shadow.total, 1);
+  assert.equal(history.recent[0].openPrice, 62393.4);
+  assert.equal(history.recent[0].signalEntryPrice, 62393.4);
+  assert.equal(history.recent[0].executionStrikePrice, 62452);
+  assert.equal(history.recent[0].executionDelayMs, 20000);
+  assert.equal(history.recent[0].status, "won");
+});
+
 test("real history summary excludes shadow losses when viewing real orders", () => {
   const history = buildLiveOrderHistory({
     now: 1710000000000,

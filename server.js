@@ -436,6 +436,7 @@ function signalReferencePrice(sig) {
   const timing = sig && sig.entry_timing;
   const candidates = [
     timing && timing.reference_price,
+    sig && sig.entry,
     sig && sig.price,
     timing && timing.current_price
   ];
@@ -2393,13 +2394,16 @@ function placeShadowTrade(strategyId, sig, variant, extra = {}) {
   if (!Number.isFinite(amount) || amount <= 0) return null;
   const dur = Math.max(1, Number(sig.duration || sig.interval_min || variant?.duration || tradeConfig.duration || 10));
   const now = Date.now();
+  const signalOpenTime = signalActionableMs(sig) || now;
+  const signalStrikePrice = signalReferencePrice(sig) || currentPrice;
+  const executionStrikePrice = currentPrice;
   const trade = {
     id: nextShadowTradeId++,
     direction: sig.signal,
     amount,
-    strikePrice: currentPrice,
-    openTime: now,
-    settleTime: now + dur * 60 * 1000,
+    strikePrice: signalStrikePrice,
+    openTime: signalOpenTime,
+    settleTime: signalOpenTime + dur * 60 * 1000,
     duration: String(dur),
     status: "active",
     settlePrice: null,
@@ -2411,6 +2415,9 @@ function placeShadowTrade(strategyId, sig, variant, extra = {}) {
     avg_prob: sig.avg_prob,
     signalTime: sig.time,
     actionableTime: sig.actionable_time || sig.candle_close_time || sig.time || null,
+    signalEntryPrice: signalStrikePrice,
+    executionStrikePrice,
+    executionOpenTime: now,
     ...extra.tradeFields
   };
   shadowTrades.push(trade);
@@ -2426,6 +2433,10 @@ function placeShadowTrade(strategyId, sig, variant, extra = {}) {
     duration: trade.duration,
     openTime: trade.openTime,
     strikePrice: trade.strikePrice,
+    signalEntryPrice: trade.signalEntryPrice,
+    executionStrikePrice: trade.executionStrikePrice,
+    executionOpenTime: trade.executionOpenTime,
+    executionDelayMs: trade.executionOpenTime - trade.openTime,
     confidence: trade.confidence,
     avg_prob: trade.avg_prob,
     signalTime: trade.signalTime,

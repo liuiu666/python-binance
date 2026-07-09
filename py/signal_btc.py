@@ -24,6 +24,7 @@ OUT = os.environ.get("DATA_DIR", os.path.join(APP_DIR, "data"))
 SIGNAL_FILE = os.path.join(OUT, "live_signals.json")
 CONFIG_FILE = os.path.join(OUT, "prod_config.json")
 SIGNAL_AUDIT_FILE = os.path.join(OUT, "signal_audit.jsonl")
+SIGNAL_STATE_FILE = os.path.join(OUT, "signal_state.json")
 LOCK_FILE = os.path.join(OUT, "signal_btc.lock")
 LOCK_DIR = os.path.join(OUT, "signal_btc.lockdir")
 HISTORY_1M_FILE = os.path.join(OUT, "btcusdt_1m.csv")
@@ -569,6 +570,107 @@ def write_json_atomic(path, obj):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(json_safe(obj), f, ensure_ascii=False)
     os.replace(tmp, path)
+
+
+def read_json_file(path, default=None):
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        return default
+    return default
+
+
+def tail_jsonl_rows(path, limit=2000, chunk_size=1024 * 1024):
+    try:
+        if not os.path.exists(path):
+            return []
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            pos = f.tell()
+            data = b""
+            while pos > 0 and data.count(b"\n") <= limit:
+                step = min(chunk_size, pos)
+                pos -= step
+                f.seek(pos)
+                data = f.read(step) + data
+            lines = data.splitlines()[-limit:]
+        rows = []
+        for line in lines:
+            try:
+                rows.append(json.loads(line.decode("utf-8", "ignore")))
+            except Exception:
+                continue
+        return rows
+    except Exception:
+        return []
+
+
+def load_strategy_window_state_from_audit(strategy_id):
+    for row in reversed(tail_jsonl_rows(SIGNAL_AUDIT_FILE, limit=3000)):
+        if row.get("event") != "signal_snapshot":
+            continue
+        if str(row.get("strategy_id")) != str(strategy_id):
+            continue
+        if not row.get("signal") and not row.get("quality_v2_veto"):
+            continue
+        raw_time = row.get("time")
+        if not raw_time:
+            continue
+        item = {
+            "strategy_id": str(strategy_id),
+            "signal": row.get("blocked_signal") or row.get("signal"),
+            "reason": row.get("reason"),
+            "raw_signal": row.get("raw_signal"),
+            "raw_reason": row.get("raw_reason"),
+            "quality_v2_veto": bool(row.get("quality_v2_veto")),
+            "min_gap_sec": row.get("min_gap_sec"),
+            "last_emit_time": raw_time,
+            "source": "signal_audit",
+        }
+        try:
+            ts = pd.Timestamp(raw_time)
+            if ts.tzinfo is None:
+                ts = ts.tz_localize("UTC")
+            return ts.tz_convert("UTC"), item
+        except Exception:
+            continue
+    return None, {}
+
+
+def load_strategy_window_state(strategy_id):
+    data = read_json_file(SIGNAL_STATE_FILE, {}) or {}
+    item = (data.get("strategy_windows") or {}).get(str(strategy_id)) or {}
+    raw_time = item.get("last_emit_time")
+    if not raw_time:
+        return load_strategy_window_state_from_audit(strategy_id)
+    try:
+        ts = pd.Timestamp(raw_time)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize("UTC")
+        return ts.tz_convert("UTC"), item
+    except Exception:
+        return None, item
+
+
+def persist_strategy_window_state(strategy_id, signal_time, payload=None):
+    data = read_json_file(SIGNAL_STATE_FILE, {}) or {}
+    windows = data.get("strategy_windows")
+    if not isinstance(windows, dict):
+        windows = {}
+    ts = pd.Timestamp(signal_time)
+    if ts.tzinfo is None:
+        ts = ts.tz_localize("UTC")
+    ts = ts.tz_convert("UTC")
+    windows[str(strategy_id)] = {
+        **(payload or {}),
+        "strategy_id": str(strategy_id),
+        "last_emit_time": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "updated_at": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    data["strategy_windows"] = windows
+    write_json_atomic(SIGNAL_STATE_FILE, data)
 
 
 def file_mtime(path):
@@ -3714,7 +3816,7 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         self.trade_enabled = bool(cfg.get("trade_enabled", False))
         self.interval_min = max(1, int(round(self.horizon_sec / 60)))
         self.model_label = str(cfg.get("model_label", "Orderbook V2 quality"))
-        self.last_emit_time = None
+        self.last_emit_time, self.last_emit_state = load_strategy_window_state(strategy_id)
 
     @staticmethod
     def _rolling_sum(series, window, min_periods=None):
@@ -4023,6 +4125,34 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
                 )
         return None
 
+    def _mark_window_owner(self, signal_time, signal, reason, raw_signal=None, raw_reason=None, veto=False):
+        self.last_emit_time = signal_time
+        state = {
+            "signal": signal,
+            "reason": reason,
+            "raw_signal": raw_signal,
+            "raw_reason": raw_reason,
+            "quality_v2_veto": bool(veto),
+            "min_gap_sec": int(self.min_gap_sec),
+        }
+        self.last_emit_state = state
+        try:
+            persist_strategy_window_state(self.id, signal_time, state)
+        except Exception as exc:
+            print(f"[Signal] failed to persist {self.id} window state: {exc}")
+
+    def _window_state_payload(self, signal_time):
+        if self.last_emit_time is None:
+            return {}
+        elapsed = (signal_time - self.last_emit_time).total_seconds()
+        return {
+            "last_window_owner_time": self.last_emit_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "last_window_owner_time_shanghai": self.last_emit_time.tz_convert("Asia/Shanghai").strftime("%Y/%m/%d %H:%M:%S"),
+            "window_elapsed_sec": round(float(elapsed), 3),
+            "window_remaining_sec": max(0, round(float(self.min_gap_sec - elapsed), 3)),
+            "window_state": self.last_emit_state or {},
+        }
+
     def predict(self, df5=None):
         bars = self._load_seconds()
         warmup = max(self.normal_window_sec, self.center_slope_sec, self.retest_sec, 900) + 10
@@ -4148,6 +4278,7 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
             return {
                 **base,
                 **feature_extra,
+                **self._window_state_payload(signal_time),
                 "signal": None,
                 "reason": "liq_strategy_gap",
                 "signal_detail": "V2上一个信号后处于10分钟同策略间隔，避免同一区域重复记录。",
@@ -4172,10 +4303,11 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         quality_v2_veto = self._quality_v2_veto(signal, row)
         if quality_v2_veto:
             veto_reason, veto_detail = quality_v2_veto
-            self.last_emit_time = signal_time
+            self._mark_window_owner(signal_time, signal, veto_reason, raw_signal, raw_reason, veto=True)
             return {
                 **base,
                 **feature_extra,
+                **self._window_state_payload(signal_time),
                 "signal": None,
                 "raw_signal": raw_signal,
                 "raw_reason": raw_reason,
@@ -4191,7 +4323,7 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
                 "signal_detail": veto_detail,
             }
 
-        self.last_emit_time = signal_time
+        self._mark_window_owner(signal_time, signal, reason, raw_signal, raw_reason, veto=False)
         ob_strength = abs(float(row["imbalance_20"])) + min(1.0, abs(float(row["micro_bps"])) * 500.0)
         confidence = min(95.0, 58.0 + ob_strength * 12.0 + max(0.0, float(row["inside1_ratio"]) - self.inside_min) * 20.0)
         trap_detail = None
@@ -4204,6 +4336,7 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         return {
             **base,
             **feature_extra,
+            **self._window_state_payload(signal_time),
             "signal": signal,
             "raw_signal": raw_signal,
             "raw_reason": raw_reason,
