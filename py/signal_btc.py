@@ -452,10 +452,9 @@ from signal_io import (
     csv_tail_rows,
     file_mtime,
     file_signature,
-    read_json_file,
-    tail_jsonl_rows,
     write_json_atomic,
 )
+from signal_state import load_audit_keys, load_strategy_window_state, persist_strategy_window_state
 
 MAX_5M_LIVE_MERGE_GAP = pd.Timedelta(minutes=7)
 ENABLE_SIGNAL_SHADOWS = os.environ.get("ENABLE_SIGNAL_SHADOWS", "0") == "1"
@@ -490,72 +489,6 @@ except ModuleNotFoundError as exc:
     if ENABLE_LEGACY_TWO_MINUTE_LIVE:
         raise
     print(f"[Signal] Optional legacy 2m modules unavailable: {exc}")
-
-
-def load_strategy_window_state_from_audit(strategy_id):
-    for row in reversed(tail_jsonl_rows(SIGNAL_AUDIT_FILE, limit=3000)):
-        if row.get("event") != "signal_snapshot":
-            continue
-        if str(row.get("strategy_id")) != str(strategy_id):
-            continue
-        if not row.get("signal") and not row.get("quality_v2_veto"):
-            continue
-        raw_time = row.get("time")
-        if not raw_time:
-            continue
-        item = {
-            "strategy_id": str(strategy_id),
-            "signal": row.get("blocked_signal") or row.get("signal"),
-            "reason": row.get("reason"),
-            "raw_signal": row.get("raw_signal"),
-            "raw_reason": row.get("raw_reason"),
-            "quality_v2_veto": bool(row.get("quality_v2_veto")),
-            "min_gap_sec": row.get("min_gap_sec"),
-            "last_emit_time": raw_time,
-            "source": "signal_audit",
-        }
-        try:
-            ts = pd.Timestamp(raw_time)
-            if ts.tzinfo is None:
-                ts = ts.tz_localize("UTC")
-            return ts.tz_convert("UTC"), item
-        except Exception:
-            continue
-    return None, {}
-
-
-def load_strategy_window_state(strategy_id):
-    data = read_json_file(SIGNAL_STATE_FILE, {}) or {}
-    item = (data.get("strategy_windows") or {}).get(str(strategy_id)) or {}
-    raw_time = item.get("last_emit_time")
-    if not raw_time:
-        return load_strategy_window_state_from_audit(strategy_id)
-    try:
-        ts = pd.Timestamp(raw_time)
-        if ts.tzinfo is None:
-            ts = ts.tz_localize("UTC")
-        return ts.tz_convert("UTC"), item
-    except Exception:
-        return None, item
-
-
-def persist_strategy_window_state(strategy_id, signal_time, payload=None):
-    data = read_json_file(SIGNAL_STATE_FILE, {}) or {}
-    windows = data.get("strategy_windows")
-    if not isinstance(windows, dict):
-        windows = {}
-    ts = pd.Timestamp(signal_time)
-    if ts.tzinfo is None:
-        ts = ts.tz_localize("UTC")
-    ts = ts.tz_convert("UTC")
-    windows[str(strategy_id)] = {
-        **(payload or {}),
-        "strategy_id": str(strategy_id),
-        "last_emit_time": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "updated_at": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
-    data["strategy_windows"] = windows
-    write_json_atomic(SIGNAL_STATE_FILE, data)
 
 
 def _int_cfg(cfg, key, default):
@@ -806,31 +739,6 @@ def load_orderbook_features_cached(second_index):
     cache["key"] = key
     cache["features"] = features
     return features.copy()
-
-
-def load_audit_keys(path, limit=20000):
-    if not os.path.exists(path):
-        return set()
-    keys = set()
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            lines = f.readlines()[-limit:]
-        for line in lines:
-            try:
-                row = json.loads(line)
-            except Exception:
-                continue
-            event = row.get("event")
-            if (
-                event in ("signal_snapshot", "shadow_candidate")
-                and row.get("strategy_id")
-                and row.get("time")
-                and row.get("actionable_time")
-            ):
-                keys.add(f"{event}|{row['strategy_id']}|{row['time']}")
-    except Exception:
-        return set()
-    return keys
 
 
 def load_config():
