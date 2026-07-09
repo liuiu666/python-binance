@@ -1472,7 +1472,7 @@ function applyExecutionFailureGate(signals) {
 
 function shadowCircuitPolicy() {
   return {
-    enabled: process.env.SHADOW_CIRCUIT_ENABLED !== "0",
+    enabled: process.env.SHADOW_CIRCUIT_ENABLED === "1",
     window: Math.max(2, Math.min(50, Number(process.env.SHADOW_CIRCUIT_WINDOW || 6))),
     losses: Math.max(1, Math.min(50, Number(process.env.SHADOW_CIRCUIT_LOSSES || 3))),
     minTrades: Math.max(2, Math.min(50, Number(process.env.SHADOW_CIRCUIT_MIN_TRADES || 4))),
@@ -2460,8 +2460,6 @@ function checkShadowTrades() {
   if (!tradeConfig.shadowTradingEnabled) return;
   if (!currentPrice) return;
   try {
-    const circuit = shadowCircuitState();
-    if (circuit.blocked) return;
     const signals = buildSignalResponse("dashboard");
     const variants = currentStrategyVariants();
     for (const variant of variants) {
@@ -2497,8 +2495,6 @@ function checkOrderbookShadowTrades() {
   if (!ENABLE_ORDERBOOK_SHADOW_TRADES) return;
   if (!tradeConfig.shadowTradingEnabled || !currentPrice) return;
   try {
-    const circuit = shadowCircuitState();
-    if (circuit.blocked) return;
     const signals = buildSignalResponse("dashboard");
     const variants = currentStrategyVariants();
     for (const variant of variants) {
@@ -3274,9 +3270,21 @@ function applyProdStrategyParams(baseConfig, config) {
         second_liq_bidwall_trap_enabled: variant.bidwallTrapEnabled !== false,
         second_liq_bidwall_trap_ret300_max_bps: variant.bidwallTrapRet300MaxBps ?? -5,
         second_liq_bidwall_trap_bid20_chg60_min: variant.bidwallTrapBid20Chg60Min ?? 2,
+        second_liq_bidwall_trap_ret600_min_bps: variant.bidwallTrapRet600MinBps ?? -20,
         second_liq_quality_v2_enabled: variant.qualityV2Enabled !== false,
         second_liq_quality_v2_down_bid20_chg60_min: variant.qualityV2DownBid20Chg60Min ?? -0.7,
         second_liq_quality_v2_up_flow60_min: variant.qualityV2UpFlow60Min ?? -0.063,
+        second_liq_trend_space_enabled: variant.trendSpaceEnabled === true,
+        second_liq_trend_space_sigma_expand_max: variant.trendSpaceSigmaExpandMax ?? 1.6,
+        second_liq_trend_space_center_slope_abs_max_bps: variant.trendSpaceCenterSlopeAbsMaxBps ?? 6,
+        second_liq_trend_space_inside_max: variant.trendSpaceInsideMax ?? 0.75,
+        second_liq_trend_space_trend_ret_1800_bps: variant.trendSpaceTrendRet1800Bps ?? 15,
+        second_liq_trend_space_up_pos_1800_min: variant.trendSpaceUpPos1800Min ?? 0.72,
+        second_liq_trend_space_down_pos_1800_max: variant.trendSpaceDownPos1800Max ?? 0.28,
+        second_liq_trend_space_block_countertrend: variant.trendSpaceBlockCountertrend !== false,
+        second_liq_trend_space_block_upper_fade_pullback: variant.trendSpaceBlockUpperFadePullback !== false,
+        second_liq_trend_space_short_ret_600_up_bps: variant.trendSpaceShortRet600UpBps ?? 12,
+        second_liq_trend_space_short_pos_600_min: variant.trendSpaceShortPos600Min ?? 0.65,
         second_liq_mode: variant.liquidityMode || "reclaim",
         normal_state_loss_density_enabled: false,
         normal_state_loss_streak_enabled: false,
@@ -3445,6 +3453,7 @@ function strategyRestartFingerprint(config) {
       bidwallTrapEnabled: v.bidwallTrapEnabled !== false,
       bidwallTrapRet300MaxBps: v.bidwallTrapRet300MaxBps,
       bidwallTrapBid20Chg60Min: v.bidwallTrapBid20Chg60Min,
+      bidwallTrapRet600MinBps: v.bidwallTrapRet600MinBps,
       qualityV2Enabled: v.qualityV2Enabled !== false,
       qualityV2DownBid20Chg60Min: v.qualityV2DownBid20Chg60Min,
       qualityV2UpFlow60Min: v.qualityV2UpFlow60Min,

@@ -29,12 +29,24 @@
     "second_liq_bidwall_trap_enabled": true,
     "second_liq_bidwall_trap_ret300_max_bps": -5,
     "second_liq_bidwall_trap_bid20_chg60_min": 2,
+    "second_liq_bidwall_trap_ret600_min_bps": -20,
     "second_liq_quality_v2_enabled": true,
     "second_liq_quality_v2_down_bid20_chg60_min": -0.7,
     "second_liq_quality_v2_up_flow60_min": -0.063,
+    "second_liq_trend_space_enabled": true,
+    "second_liq_trend_space_sigma_expand_max": 1.6,
+    "second_liq_trend_space_center_slope_abs_max_bps": 6,
+    "second_liq_trend_space_inside_max": 0.75,
+    "second_liq_trend_space_trend_ret_1800_bps": 15,
+    "second_liq_trend_space_up_pos_1800_min": 0.72,
+    "second_liq_trend_space_down_pos_1800_max": 0.28,
+    "second_liq_trend_space_block_countertrend": true,
+    "second_liq_trend_space_block_upper_fade_pullback": true,
+    "second_liq_trend_space_short_ret_600_up_bps": 12,
+    "second_liq_trend_space_short_pos_600_min": 0.65,
     "second_liq_mode": "reclaim",
     "normal_state_loss_density_enabled": false,
     "normal_state_loss_streak_enabled": false,
-    "model_label": "Orderbook V2 stable"
+    "model_label": "Orderbook V2 trend-space live"
   }
 }

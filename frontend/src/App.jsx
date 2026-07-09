@@ -31,6 +31,7 @@ import {
   signalHumanSummary,
   signalLabel,
   signalReasonText,
+  signalTriggerPlan,
   statLine,
   statusClass,
   statusText,
@@ -106,6 +107,46 @@ function compactSignalRows(signalPayload, variants) {
   }));
 }
 
+function TriggerPlanPanel({ signal }) {
+  const plan = signalTriggerPlan(signal);
+  if (!plan) return null;
+  const upperText = plan.upperTrigger == null ? "--" : fmtPrice(plan.upperTrigger);
+  const lowerText = plan.lowerTrigger == null ? "--" : fmtPrice(plan.lowerTrigger);
+  const upGap = plan.upGapBps == null ? "--" : `${fmt(plan.upGapBps, 1)}bp`;
+  const downGap = plan.downGapBps == null ? "--" : `${fmt(plan.downGapBps, 1)}bp`;
+  const zText = plan.z == null ? "--" : `${fmt(plan.z, 2)}σ`;
+  return (
+    <div className="trigger-plan">
+      <div className="trigger-plan-head">
+        <span>下一次可能信号</span>
+        <strong>{signal?.signal ? `已出${directionText(signal.signal)}` : plan.nextSide}</strong>
+      </div>
+      <div className="trigger-price-grid">
+        <div className="trigger-price down">
+          <span>做空观察</span>
+          <strong>{upperText}</strong>
+          <small>先上破约 +{upGap}，再回到区间并有卖压</small>
+        </div>
+        <div className="trigger-price up">
+          <span>做多观察</span>
+          <strong>{lowerText}</strong>
+          <small>先下破约 -{downGap}，再回到区间并有买盘</small>
+        </div>
+      </div>
+      <div className="trigger-state-row">
+        <span>当前价 {fmtPrice(plan.price)}</span>
+        <span>位置 {zText} / 阈值 ±{fmt(plan.zEntry, 1)}σ</span>
+        <span>{plan.obBias}</span>
+      </div>
+      <div className="trigger-state-row subtle">
+        <span>订单薄 bid {fmt(plan.bid, 3)} / ask {fmt(plan.ask, 3)}</span>
+        <span>imb {fmt(plan.imbalance, 3)}</span>
+        <span>flow60 {fmt(plan.flow60, 3)}</span>
+      </div>
+    </div>
+  );
+}
+
 function CurrentTradePanel({ history, activeSignal, activeVariant, signalAmount, currentPrice }) {
   const activeRows = history?.active || [];
   const realRows = activeRows.filter(row => !isShadowTrade(row));
@@ -133,6 +174,8 @@ function CurrentTradePanel({ history, activeSignal, activeVariant, signalAmount,
         <span>为什么现在没下单</span>
         <p>{signalHumanSummary(activeSignal, activeVariant)}</p>
       </div>
+
+      <TriggerPlanPanel signal={activeSignal} />
 
       {activeSignal?.next_check_time_shanghai ? (
         <div className="hint-box">

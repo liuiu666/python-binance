@@ -326,6 +326,56 @@ export function signalReadinessItems(signal, variant = {}) {
   return items.map(item => ({ ...item, tone: statusTone(item.ok) }));
 }
 
+export function signalTriggerPlan(signal) {
+  if (!signal) return null;
+  const price = asNumber(signal.price ?? signal.entry);
+  const z = asNumber(signal.z_score);
+  const center = asNumber(signal.normal_center);
+  const sigmaBps = asNumber(signal.sigma_bps);
+  const zEntry = asNumber(signal.z_entry) ?? 1.2;
+  const normalLow = asNumber(signal.normal_low);
+  const normalHigh = asNumber(signal.normal_high);
+  const sigmaPrice = center != null && sigmaBps != null ? center * sigmaBps / 10000 : null;
+  const lowerTrigger = center != null && sigmaPrice != null ? center - zEntry * sigmaPrice : normalLow;
+  const upperTrigger = center != null && sigmaPrice != null ? center + zEntry * sigmaPrice : normalHigh;
+  const downGapBps = price != null && lowerTrigger != null ? (price / lowerTrigger - 1) * 10000 : null;
+  const upGapBps = price != null && upperTrigger != null ? (upperTrigger / price - 1) * 10000 : null;
+  const bid = asNumber(signal.bid_qty_20);
+  const ask = asNumber(signal.ask_qty_20);
+  const imbalance = asNumber(signal.imbalance_20);
+  const micro = asNumber(signal.micro_bps);
+  const flow60 = asNumber(signal.flow_60);
+  const obBias = imbalance == null
+    ? "订单薄未确认"
+    : imbalance <= -0.08 && micro != null && micro <= -0.001
+      ? "当前偏空压"
+      : imbalance >= 0.08 && micro != null && micro >= 0.001
+        ? "当前偏多撑"
+        : "订单薄中性";
+  const nextSide = signal.signal
+    ? directionText(signal.signal)
+    : upGapBps != null && downGapBps != null
+      ? (upGapBps < downGapBps ? "更接近做空触发" : "更接近做多触发")
+      : "等待触发";
+  return {
+    price,
+    z,
+    center,
+    lowerTrigger,
+    upperTrigger,
+    downGapBps,
+    upGapBps,
+    obBias,
+    bid,
+    ask,
+    imbalance,
+    micro,
+    flow60,
+    nextSide,
+    zEntry
+  };
+}
+
 export function signalHumanSummary(signal, variant = {}) {
   if (!signal) return "正在等待策略数据。";
   if (signal.signal) {

@@ -3809,9 +3809,21 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         self.bidwall_trap_enabled = bool(cfg.get("second_liq_bidwall_trap_enabled", True))
         self.bidwall_trap_ret300_max_bps = float(cfg.get("second_liq_bidwall_trap_ret300_max_bps", -5.0))
         self.bidwall_trap_bid20_chg60_min = float(cfg.get("second_liq_bidwall_trap_bid20_chg60_min", 2.0))
+        self.bidwall_trap_ret600_min_bps = float(cfg.get("second_liq_bidwall_trap_ret600_min_bps", -20.0))
         self.quality_v2_enabled = bool(cfg.get("second_liq_quality_v2_enabled", True))
         self.quality_v2_down_bid20_chg60_min = float(cfg.get("second_liq_quality_v2_down_bid20_chg60_min", -0.7))
         self.quality_v2_up_flow60_min = float(cfg.get("second_liq_quality_v2_up_flow60_min", -0.063))
+        self.trend_space_enabled = bool(cfg.get("second_liq_trend_space_enabled", False))
+        self.trend_space_sigma_expand_max = float(cfg.get("second_liq_trend_space_sigma_expand_max", 1.6))
+        self.trend_space_center_slope_abs_max_bps = float(cfg.get("second_liq_trend_space_center_slope_abs_max_bps", 6.0))
+        self.trend_space_inside_max = float(cfg.get("second_liq_trend_space_inside_max", 0.75))
+        self.trend_space_trend_ret_1800_bps = float(cfg.get("second_liq_trend_space_trend_ret_1800_bps", 15.0))
+        self.trend_space_up_pos_1800_min = float(cfg.get("second_liq_trend_space_up_pos_1800_min", 0.72))
+        self.trend_space_down_pos_1800_max = float(cfg.get("second_liq_trend_space_down_pos_1800_max", 0.28))
+        self.trend_space_block_countertrend = bool(cfg.get("second_liq_trend_space_block_countertrend", True))
+        self.trend_space_block_upper_fade_pullback = bool(cfg.get("second_liq_trend_space_block_upper_fade_pullback", True))
+        self.trend_space_short_ret_600_up_bps = float(cfg.get("second_liq_trend_space_short_ret_600_up_bps", 12.0))
+        self.trend_space_short_pos_600_min = float(cfg.get("second_liq_trend_space_short_pos_600_min", 0.65))
         self.mode = str(cfg.get("second_liq_mode", "reclaim")).lower()
         self.trade_enabled = bool(cfg.get("trade_enabled", False))
         self.interval_min = max(1, int(round(self.horizon_sec / 60)))
@@ -3925,6 +3937,13 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         out["slope_30_bps"] = (close / close.shift(30) - 1.0) * 10000.0
         out["slope_90_bps"] = (close / close.shift(90) - 1.0) * 10000.0
         out["ret_300s_bps"] = np.log(close / close.shift(300)) * 10000.0
+        for sec in (600, 900, 1800, 3600):
+            out[f"ret_{sec}s_bps"] = np.log(close / close.shift(sec)) * 10000.0
+        for sec in (600, 1800, 3600):
+            high = close.rolling(sec, min_periods=max(60, sec // 3)).max()
+            low = close.rolling(sec, min_periods=max(60, sec // 3)).min()
+            out[f"pos_{sec}s"] = (close - low) / (high - low).replace(0, np.nan)
+            out[f"range_{sec}s_bps"] = (high / low - 1.0) * 10000.0
         out["imbalance_5"] = data["imbalance_5"].astype(float)
         out["imbalance_20"] = data["imbalance_20"].astype(float)
         out["micro_bps"] = data["microprice_edge_bps"].astype(float)
@@ -4125,6 +4144,64 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
                 )
         return None
 
+    def _trend_space_mode(self, row):
+        ret = self._safe_float(row, "ret_1800s_bps")
+        pos = self._safe_float(row, "pos_1800s")
+        if not np.isfinite(ret) or not np.isfinite(pos):
+            return "unknown"
+        if ret >= self.trend_space_trend_ret_1800_bps and pos >= self.trend_space_up_pos_1800_min:
+            return "uptrend"
+        if ret <= -self.trend_space_trend_ret_1800_bps and pos <= self.trend_space_down_pos_1800_max:
+            return "downtrend"
+        return "range"
+
+    def _trend_space_veto(self, signal, reason, row):
+        if not self.trend_space_enabled or not signal:
+            return None
+        sigma_expand = self._safe_float(row, "sigma_expand")
+        center_slope = self._safe_float(row, "center_slope_bps")
+        inside = self._safe_float(row, "inside1_ratio")
+        if np.isfinite(sigma_expand) and sigma_expand > self.trend_space_sigma_expand_max:
+            return (
+                "trend_space_sigma_expand_high",
+                f"趋势空间过滤：sigma_expand={sigma_expand:.3f} > {self.trend_space_sigma_expand_max:g}，正态区间正在扩张，跳过。",
+            )
+        if np.isfinite(center_slope) and abs(center_slope) > self.trend_space_center_slope_abs_max_bps:
+            return (
+                "trend_space_center_slope_high",
+                f"趋势空间过滤：中心斜率={center_slope:.2f}bp，超过±{self.trend_space_center_slope_abs_max_bps:g}bp，跳过。",
+            )
+        if np.isfinite(inside) and inside > self.trend_space_inside_max:
+            return (
+                "trend_space_inside_too_high",
+                f"趋势空间过滤：inside={inside:.3f} > {self.trend_space_inside_max:g}，价格困在区间内，跳过贴边单。",
+            )
+
+        mode = self._trend_space_mode(row)
+        if self.trend_space_block_countertrend:
+            if signal == "DOWN" and mode == "uptrend":
+                return (
+                    "trend_space_block_down_in_uptrend",
+                    "趋势空间过滤：30分钟上涨且价格处于高位，禁止上沿逆势做空。",
+                )
+            if signal == "UP" and mode == "downtrend":
+                return (
+                    "trend_space_block_up_in_downtrend",
+                    "趋势空间过滤：30分钟下跌且价格处于低位，禁止下沿逆势做多。",
+                )
+        if (
+            self.trend_space_block_upper_fade_pullback
+            and signal == "DOWN"
+            and reason == "upper_fake_break_reclaim"
+            and self._safe_float(row, "ret_600s_bps") > self.trend_space_short_ret_600_up_bps
+            and self._safe_float(row, "pos_600s") > self.trend_space_short_pos_600_min
+        ):
+            return (
+                "trend_space_block_short_pullback_up",
+                "趋势空间过滤：短线600秒强反抽且处于高位，不做上沿做空。",
+            )
+        return None
+
     def _mark_window_owner(self, signal_time, signal, reason, raw_signal=None, raw_reason=None, veto=False):
         self.last_emit_time = signal_time
         state = {
@@ -4155,7 +4232,8 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
 
     def predict(self, df5=None):
         bars = self._load_seconds()
-        warmup = max(self.normal_window_sec, self.center_slope_sec, self.retest_sec, 900) + 10
+        trend_warmup = 3600 if self.trend_space_enabled else 0
+        warmup = max(self.normal_window_sec, self.center_slope_sec, self.retest_sec, 900, trend_warmup) + 10
         if bars is None or len(bars) < warmup:
             return None
         recent = bars.tail(warmup + 120).copy()
@@ -4258,6 +4336,18 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
             "bid_qty_20": None if not np.isfinite(row.get("bid_qty_20")) else round(float(row["bid_qty_20"]), 6),
             "ask_qty_20": None if not np.isfinite(row.get("ask_qty_20")) else round(float(row["ask_qty_20"]), 6),
             "ret_300s_bps": None if not np.isfinite(row.get("ret_300s_bps")) else round(float(row["ret_300s_bps"]), 4),
+            "ret_600s_bps": None if not np.isfinite(row.get("ret_600s_bps")) else round(float(row["ret_600s_bps"]), 4),
+            "ret_900s_bps": None if not np.isfinite(row.get("ret_900s_bps")) else round(float(row["ret_900s_bps"]), 4),
+            "ret_1800s_bps": None if not np.isfinite(row.get("ret_1800s_bps")) else round(float(row["ret_1800s_bps"]), 4),
+            "ret_3600s_bps": None if not np.isfinite(row.get("ret_3600s_bps")) else round(float(row["ret_3600s_bps"]), 4),
+            "pos_600s": None if not np.isfinite(row.get("pos_600s")) else round(float(row["pos_600s"]), 4),
+            "pos_1800s": None if not np.isfinite(row.get("pos_1800s")) else round(float(row["pos_1800s"]), 4),
+            "pos_3600s": None if not np.isfinite(row.get("pos_3600s")) else round(float(row["pos_3600s"]), 4),
+            "range_600s_bps": None if not np.isfinite(row.get("range_600s_bps")) else round(float(row["range_600s_bps"]), 4),
+            "range_1800s_bps": None if not np.isfinite(row.get("range_1800s_bps")) else round(float(row["range_1800s_bps"]), 4),
+            "range_3600s_bps": None if not np.isfinite(row.get("range_3600s_bps")) else round(float(row["range_3600s_bps"]), 4),
+            "trend_space_enabled": bool(self.trend_space_enabled),
+            "trend_space_mode": self._trend_space_mode(row) if self.trend_space_enabled else "disabled",
             "bid20_chg_60": None if not np.isfinite(row.get("bid20_chg_60")) else round(float(row["bid20_chg_60"]), 6),
             "ob_age_sec": None if not np.isfinite(row.get("ob_age_sec")) else round(float(row["ob_age_sec"]), 3),
             "z_max_retest": None if not np.isfinite(row.get("z_max_retest")) else round(float(row["z_max_retest"]), 4),
@@ -4289,6 +4379,35 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         raw_reason = reason
         bidwall_trap = self._is_bidwall_trap(signal, reason, row)
         if bidwall_trap:
+            ret600 = self._safe_float(row, "ret_600s_bps")
+            if np.isfinite(ret600) and ret600 < self.bidwall_trap_ret600_min_bps:
+                veto_reason = "bidwall_trap_extreme_drop_skip"
+                veto_detail = (
+                    f"Bidwall trap skip: ret_600s_bps={ret600:.2f} < "
+                    f"{self.bidwall_trap_ret600_min_bps:g}; avoid chasing DOWN after an extreme 10m drop."
+                )
+                self._mark_window_owner(signal_time, "DOWN", veto_reason, raw_signal, raw_reason, veto=True)
+                return {
+                    **base,
+                    **feature_extra,
+                    **self._window_state_payload(signal_time),
+                    "signal": None,
+                    "raw_signal": raw_signal,
+                    "raw_reason": raw_reason,
+                    "bidwall_trap": True,
+                    "bidwall_trap_rule": (
+                        f"ret_300s_bps<={self.bidwall_trap_ret300_max_bps:g} "
+                        f"and bid20_chg_60>{self.bidwall_trap_bid20_chg60_min:g}"
+                    ),
+                    "bidwall_trap_extreme_drop_rule": (
+                        f"ret_600s_bps<{self.bidwall_trap_ret600_min_bps:g}"
+                    ),
+                    "quality_v2_veto": True,
+                    "quality_v2_rule": veto_detail,
+                    "reason": veto_reason,
+                    "blocked_signal": "DOWN",
+                    "signal_detail": veto_detail,
+                }
             signal = "DOWN"
             reason = "lower_reclaim_bidwall_trap_flip_down"
         if not signal:
@@ -4318,6 +4437,31 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
                 ) if bidwall_trap else None,
                 "quality_v2_veto": True,
                 "quality_v2_rule": veto_detail,
+                "reason": veto_reason,
+                "blocked_signal": signal,
+                "signal_detail": veto_detail,
+            }
+
+        trend_space_veto = self._trend_space_veto(signal, reason, row)
+        if trend_space_veto:
+            veto_reason, veto_detail = trend_space_veto
+            self._mark_window_owner(signal_time, signal, veto_reason, raw_signal, raw_reason, veto=True)
+            return {
+                **base,
+                **feature_extra,
+                **self._window_state_payload(signal_time),
+                "signal": None,
+                "raw_signal": raw_signal,
+                "raw_reason": raw_reason,
+                "bidwall_trap": bool(bidwall_trap),
+                "bidwall_trap_rule": (
+                    f"ret_300s_bps<={self.bidwall_trap_ret300_max_bps:g} "
+                    f"and bid20_chg_60>{self.bidwall_trap_bid20_chg60_min:g}"
+                ) if bidwall_trap else None,
+                "quality_v2_veto": False,
+                "quality_v2_rule": None,
+                "trend_space_veto": True,
+                "trend_space_rule": veto_detail,
                 "reason": veto_reason,
                 "blocked_signal": signal,
                 "signal_detail": veto_detail,

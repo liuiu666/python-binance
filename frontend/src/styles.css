@@ -453,6 +453,81 @@ a {
   line-height: 1.45;
 }
 
+.trigger-plan {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid rgba(79, 141, 223, 0.35);
+  border-radius: 8px;
+}
+
+.trigger-plan-head,
+.trigger-state-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trigger-plan-head span,
+.trigger-state-row span,
+.trigger-price span,
+.trigger-price small {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.trigger-plan-head strong {
+  color: var(--blue);
+  font-size: 16px;
+}
+
+.trigger-price-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.trigger-price {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.trigger-price strong {
+  display: block;
+  margin: 4px 0;
+  font-size: 22px;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.trigger-price.down strong {
+  color: var(--red);
+}
+
+.trigger-price.up strong {
+  color: var(--green);
+}
+
+.trigger-state-row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.trigger-state-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.trigger-state-row.subtle {
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+
 .sub-head {
   display: flex;
   align-items: center;
@@ -1850,6 +1925,16 @@ a {
   .hero-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  .trigger-price-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .trigger-plan-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .metric-card {
