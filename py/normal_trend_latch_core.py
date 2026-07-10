@@ -366,9 +366,6 @@ class NormalTrendLatchEngine:
             elapsed = (timestamp - self.last_emit_time).total_seconds()
             if elapsed < self.rules.base.min_gap_sec:
                 return {"event": "cooldown", "signal": None, "latched": self.latched}
-        if self.latched["kind"] == "normal" and not passive_book_valid(row, self.latched["signal"], self.rules.base):
-            return {"event": "execution_book_invalid", "signal": None, "latched": self.latched}
-
         signal = dict(self.latched)
         signal["time"] = timestamp
         signal["delay_sec"] = int((timestamp - signal["created_time"]).total_seconds())

@@ -185,7 +185,7 @@ class NormalTrendLatchCoreTests(unittest.TestCase):
             "ask20_chg_30": 0.0,
         })
 
-    def test_latched_normal_waits_for_book_to_recover(self):
+    def test_latched_normal_emits_without_execution_book_recheck(self):
         import pandas as pd
 
         engine = NormalTrendLatchEngine({"router_execution_phase": 0})
@@ -198,17 +198,11 @@ class NormalTrendLatchCoreTests(unittest.TestCase):
             "created_time": created,
             "expires_time": created + pd.Timedelta(seconds=6),
         }
-        blocked = engine.step(created, self.execution_row())
-        self.assertEqual(blocked["event"], "execution_book_invalid")
-        self.assertIsNotNone(engine.latched)
-
-        recovered = engine.step(
-            created + pd.Timedelta(seconds=5),
-            self.execution_row(imbalance=0.2, micro=0.01, bid=2.0, ask=1.0),
-        )
-        self.assertEqual(recovered["event"], "emitted")
-        self.assertEqual(recovered["signal"]["signal"], "UP")
-        self.assertEqual(recovered["signal"]["delay_sec"], 5)
+        emitted = engine.step(created, self.execution_row())
+        self.assertEqual(emitted["event"], "emitted")
+        self.assertEqual(emitted["signal"]["signal"], "UP")
+        self.assertEqual(emitted["signal"]["delay_sec"], 0)
+        self.assertIsNone(engine.latched)
 
     def test_runtime_state_round_trip_preserves_latch(self):
         import pandas as pd
