@@ -75,6 +75,29 @@ def persist_strategy_window_state(strategy_id, signal_time, payload=None):
     write_json_atomic(SIGNAL_STATE_FILE, data)
 
 
+def load_strategy_runtime_state(strategy_id):
+    data = read_json_file(SIGNAL_STATE_FILE, {}) or {}
+    runtime = data.get("strategy_runtime")
+    if not isinstance(runtime, dict):
+        return {}
+    item = runtime.get(str(strategy_id))
+    return item if isinstance(item, dict) else {}
+
+
+def persist_strategy_runtime_state(strategy_id, payload=None):
+    data = read_json_file(SIGNAL_STATE_FILE, {}) or {}
+    runtime = data.get("strategy_runtime")
+    if not isinstance(runtime, dict):
+        runtime = {}
+    runtime[str(strategy_id)] = {
+        **(payload or {}),
+        "strategy_id": str(strategy_id),
+        "updated_at": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    data["strategy_runtime"] = runtime
+    write_json_atomic(SIGNAL_STATE_FILE, data)
+
+
 def load_audit_keys(path, limit=20000):
     if not os.path.exists(path):
         return set()

@@ -273,7 +273,7 @@ echo "[6/8] syntax checks"
 node --check server.js
 node --check auto_btc.js
 . .venv/bin/activate
-python -m py_compile py/liquidity_v2_core.py py/run_liquidity_v2_backtest.py py/signal_btc.py py/signal_health.py py/signal_io.py py/signal_lock.py py/signal_paths.py py/signal_runtime_cache.py py/signal_state.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/collect_orderbook_data.py py/backtest_enhanced.py py/run_second_backtest.py py/run_second_research.py py/research_normal_state_v1.py py/research_normal_state_v6.py py/research_yellow_revert_filters.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/dynamic_zone.py py/second_backtest/execution.py py/second_backtest/incident_filter.py py/second_backtest/metrics.py py/second_backtest/strategies.py py/second_backtest/research.py py/second_backtest/normal_state_v11.py
+python -m py_compile py/liquidity_v2_core.py py/normal_trend_latch_core.py py/run_liquidity_v2_backtest.py py/signal_btc.py py/signal_health.py py/signal_io.py py/signal_lock.py py/signal_paths.py py/signal_runtime_cache.py py/signal_state.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/collect_orderbook_data.py py/backtest_enhanced.py py/run_second_backtest.py py/run_second_research.py py/research_normal_state_v1.py py/research_normal_state_v6.py py/research_yellow_revert_filters.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/dynamic_zone.py py/second_backtest/execution.py py/second_backtest/incident_filter.py py/second_backtest/metrics.py py/second_backtest/strategies.py py/second_backtest/research.py py/second_backtest/normal_state_v11.py
 
 echo "[7/8] write systemd services"
 NODE_BIN="$(command -v node)"

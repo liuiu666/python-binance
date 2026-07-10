@@ -17,6 +17,7 @@ from signal_lock import acquire_singleton_lock, process_is_alive
 import signal_paths
 from signal_runtime_cache import empty_orderbook_features
 from liquidity_v2_core import LiquidityV2Rules, evaluate_candidate, normal_ready, trend_space_veto_code
+from normal_trend_latch_core import NormalTrendLatchEngine, passive_book_valid
 from run_liquidity_v2_backtest import load_scan_times
 
 
@@ -164,6 +165,75 @@ class LiquidityV2BacktestTests(unittest.TestCase):
             scan_times = load_scan_times(path)
 
         self.assertEqual(len(scan_times), 2)
+
+
+class NormalTrendLatchCoreTests(unittest.TestCase):
+    @staticmethod
+    def execution_row(imbalance=-0.2, micro=-0.01, bid=2.0, ask=1.0):
+        import pandas as pd
+
+        return pd.Series({
+            "sigma_bps": 15.0,
+            "state": "transition",
+            "trend_direction": 1.0,
+            "data_quality_ready": True,
+            "imbalance_20": imbalance,
+            "micro_bps": micro,
+            "bid_qty_20": bid,
+            "ask_qty_20": ask,
+            "bid20_chg_30": 0.0,
+            "ask20_chg_30": 0.0,
+        })
+
+    def test_latched_normal_waits_for_book_to_recover(self):
+        import pandas as pd
+
+        engine = NormalTrendLatchEngine({"router_execution_phase": 0})
+        created = pd.Timestamp("2026-07-09T00:00:00Z")
+        engine.latched = {
+            "kind": "normal",
+            "signal": "UP",
+            "reason": "test",
+            "band": "mid",
+            "created_time": created,
+            "expires_time": created + pd.Timedelta(seconds=6),
+        }
+        blocked = engine.step(created, self.execution_row())
+        self.assertEqual(blocked["event"], "execution_book_invalid")
+        self.assertIsNotNone(engine.latched)
+
+        recovered = engine.step(
+            created + pd.Timedelta(seconds=5),
+            self.execution_row(imbalance=0.2, micro=0.01, bid=2.0, ask=1.0),
+        )
+        self.assertEqual(recovered["event"], "emitted")
+        self.assertEqual(recovered["signal"]["signal"], "UP")
+        self.assertEqual(recovered["signal"]["delay_sec"], 5)
+
+    def test_runtime_state_round_trip_preserves_latch(self):
+        import pandas as pd
+
+        engine = NormalTrendLatchEngine({})
+        created = pd.Timestamp("2026-07-09T00:00:00Z")
+        engine.latched = {
+            "kind": "normal", "signal": "DOWN", "reason": "test", "band": "low",
+            "created_time": created, "expires_time": created + pd.Timedelta(seconds=6),
+        }
+        restored = NormalTrendLatchEngine({})
+        restored.restore_state(engine.export_state())
+        self.assertEqual(restored.latched["signal"], "DOWN")
+        self.assertEqual(restored.latched["band"], "low")
+
+    def test_passive_book_requires_directional_support(self):
+        rules = LiquidityV2Rules()
+        self.assertFalse(passive_book_valid(self.execution_row(), "UP", rules))
+        self.assertTrue(
+            passive_book_valid(
+                self.execution_row(imbalance=0.2, micro=0.01, bid=2.0, ask=1.0),
+                "UP",
+                rules,
+            )
+        )
 
 
 if __name__ == "__main__":

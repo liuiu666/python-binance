@@ -64,7 +64,7 @@ def _estimate_second_tail_sec(config_map):
             horizon = _int_cfg(cfg, "second_chip_horizon_sec", cfg.get("second_horizon_sec", 600))
             hold = _int_cfg(cfg, "second_chip_signal_hold_sec", cfg.get("second_signal_hold_sec", 60))
             required = max(required, lookback + horizon + hold + 600)
-        elif model_type in ("second_range_breakout_confirm", "second_value_area_smart", "second_trend_pullback_down", "second_normal_liquidity_orderbook_v1"):
+        elif model_type in ("second_range_breakout_confirm", "second_value_area_smart", "second_trend_pullback_down", "second_normal_liquidity_orderbook_v1", "second_normal_trend_orderbook_latch_v2"):
             lookback = max(
                 _int_cfg(cfg, "second_lookback_sec", 3600),
                 _int_cfg(cfg, "value_area_sec", 3600),

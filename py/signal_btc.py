@@ -446,6 +446,7 @@ from liquidity_v2_core import (
     trend_space_mode as core_trend_space_mode,
     trend_space_veto_code,
 )
+from normal_trend_latch_core import NormalTrendLatchEngine, RouterRules, band_name, build_router_features
 from signal_io import (
     append_jsonl,
     csv_tail_rows,
@@ -461,7 +462,13 @@ from signal_runtime_cache import (
     load_second_bars_cached_for_cycle,
     update_second_tail_requirement,
 )
-from signal_state import load_audit_keys, load_strategy_window_state, persist_strategy_window_state
+from signal_state import (
+    load_audit_keys,
+    load_strategy_runtime_state,
+    load_strategy_window_state,
+    persist_strategy_runtime_state,
+    persist_strategy_window_state,
+)
 
 MAX_5M_LIVE_MERGE_GAP = pd.Timedelta(minutes=7)
 ENABLE_SIGNAL_SHADOWS = os.environ.get("ENABLE_SIGNAL_SHADOWS", "0") == "1"
@@ -3605,6 +3612,165 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         }
 
 
+class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strategy):
+    """Production wrapper for the shared normal/trend latch engine."""
+
+    def __init__(self, strategy_id, cfg):
+        super().__init__(strategy_id, cfg)
+        self.router_rules = RouterRules.from_config(cfg)
+        self.engine = NormalTrendLatchEngine(cfg, last_emit_time=self.last_emit_time)
+        runtime = load_strategy_runtime_state(strategy_id)
+        self.engine.restore_state(runtime.get("engine"))
+        raw_processed = runtime.get("last_processed_time")
+        self.last_processed_time = None
+        if raw_processed:
+            try:
+                self.last_processed_time = pd.Timestamp(raw_processed)
+                if self.last_processed_time.tzinfo is None:
+                    self.last_processed_time = self.last_processed_time.tz_localize("UTC")
+                self.last_processed_time = self.last_processed_time.tz_convert("UTC")
+            except Exception:
+                self.last_processed_time = None
+        self.runtime_fingerprint = None
+        self.max_emit_age_sec = int(cfg.get("router_max_emit_age_sec", 3))
+        self.model_label = str(cfg.get("model_label", "Normal/trend orderbook latch V2"))
+
+    def _persist_runtime(self):
+        payload = {
+            "last_processed_time": None if self.last_processed_time is None else self.last_processed_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "engine": self.engine.export_state(),
+        }
+        fingerprint = json.dumps(payload, sort_keys=True, ensure_ascii=True)
+        if fingerprint == self.runtime_fingerprint:
+            return
+        persist_strategy_runtime_state(self.id, payload)
+        self.runtime_fingerprint = fingerprint
+
+    def predict(self, df5=None):
+        bars = self._load_seconds()
+        warmup = max(self.normal_window_sec, self.center_slope_sec, self.retest_sec, 3600) + 10
+        if bars is None or len(bars) < warmup:
+            return None
+        recent = bars.tail(warmup + 180).copy()
+        recent["time"] = pd.to_datetime(recent["time"], utc=True, errors="coerce").dt.floor("s")
+        recent = recent.dropna(subset=["time"]).drop_duplicates("time", keep="last").sort_values("time")
+        if len(recent) < warmup:
+            return None
+        indexed = recent.set_index("time").sort_index()
+        orderbook = self._load_orderbook(indexed.index)
+        signal_time = indexed.index[-1]
+        price = float(indexed["close"].iloc[-1])
+        next_check_at = pd.Timestamp.now(tz="UTC") + pd.Timedelta(seconds=SIGNAL_SCAN_INTERVAL_SEC)
+        base = {
+            "strategy_id": self.id,
+            "model_type": "second_normal_trend_orderbook_latch_v2",
+            "model_label": self.model_label,
+            "interval_min": self.interval_min,
+            "duration": self.interval_min,
+            "horizon_sec": self.horizon_sec,
+            "min_gap_sec": self.min_gap_sec,
+            "time": signal_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "price": round(price, 4),
+            "entry": round(price, 4),
+            "scan_interval_sec": SIGNAL_SCAN_INTERVAL_SEC,
+            "execution_interval_sec": self.router_rules.execution_interval_sec,
+            "latch_sec": self.router_rules.latch_sec,
+            "next_check_time": next_check_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "next_check_time_shanghai": next_check_at.tz_convert("Asia/Shanghai").strftime("%Y/%m/%d %H:%M:%S"),
+            "next_signal_estimate": "Every-second detection; execute on the next 5-second slot while the order book still confirms.",
+            "bypass_entry_timing": True,
+            "shadow_only": not self.trade_enabled,
+            "trade_enabled": self.trade_enabled,
+            "rsi_value": None,
+            "agree": True,
+            "vol_ok": True,
+            "session_gate_ok": True,
+            "rsi_extreme": True,
+        }
+        if orderbook is None:
+            return {**base, "signal": None, "reason": "router_orderbook_missing"}
+        data = indexed.join(orderbook, how="left")
+        try:
+            features = build_router_features(data, self.router_rules)
+        except Exception as exc:
+            return {**base, "signal": None, "reason": "router_feature_error", "signal_detail": str(exc)[:160]}
+
+        latest = features.iloc[-1]
+        latest_extra = {
+            "router_state": str(latest.get("state") or "transition"),
+            "volatility_band": band_name(float(latest["sigma_bps"])) if np.isfinite(latest.get("sigma_bps")) else None,
+            "z_score": round(float(latest["z"]), 4) if np.isfinite(latest.get("z")) else None,
+            "sigma_bps": round(float(latest["sigma_bps"]), 4) if np.isfinite(latest.get("sigma_bps")) else None,
+            "observed_pct": round(float(latest["observed_pct"]), 3) if np.isfinite(latest.get("observed_pct")) else None,
+            "ob_coverage_60": round(float(latest["ob_coverage_60"]), 4) if np.isfinite(latest.get("ob_coverage_60")) else None,
+            "ob_age_sec": round(float(latest["ob_age_sec"]), 3) if np.isfinite(latest.get("ob_age_sec")) else None,
+            "imbalance_20": round(float(latest["imbalance_20"]), 6) if np.isfinite(latest.get("imbalance_20")) else None,
+            "micro_bps": round(float(latest["micro_bps"]), 6) if np.isfinite(latest.get("micro_bps")) else None,
+            "flow_60": round(float(latest["flow_60"]), 6) if np.isfinite(latest.get("flow_60")) else None,
+        }
+
+        if self.last_processed_time is None:
+            process_index = features.index[features.index >= signal_time - pd.Timedelta(seconds=40)]
+            bootstrap = True
+        else:
+            process_index = features.index[features.index > self.last_processed_time]
+            bootstrap = False
+        result = {"event": "waiting", "signal": None, "latched": self.engine.latched}
+        for timestamp in process_index:
+            age_from_latest = (signal_time - timestamp).total_seconds()
+            allow_emit = age_from_latest <= self.max_emit_age_sec
+            if bootstrap and timestamp < signal_time:
+                allow_emit = False
+            result = self.engine.step(timestamp, features.loc[timestamp], allow_emit=allow_emit)
+            self.last_processed_time = timestamp
+            if result.get("signal"):
+                break
+        self._persist_runtime()
+
+        latch = self.engine.latched
+        latch_extra = {
+            "latch_active": bool(latch),
+            "latch_signal": None if not latch else latch.get("signal"),
+            "latch_kind": None if not latch else latch.get("kind"),
+            "latch_band": None if not latch else latch.get("band"),
+            "latch_created_time": None if not latch else pd.Timestamp(latch["created_time"]).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "latch_expires_time": None if not latch else pd.Timestamp(latch["expires_time"]).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        emitted = result.get("signal")
+        if not emitted:
+            return {
+                **base,
+                **latest_extra,
+                **latch_extra,
+                "signal": None,
+                "reason": str(result.get("event") or "router_waiting"),
+                "signal_detail": "Waiting for a confirmed normal reclaim or mature trend; latched signals must pass execution-time order-book validation.",
+            }
+
+        emitted_time = pd.Timestamp(emitted["time"])
+        emitted_price = float(data.loc[emitted_time, "close"])
+        self.last_emit_time = emitted_time
+        self._mark_window_owner(emitted_time, emitted["signal"], emitted["reason"], veto=False)
+        self.engine.last_emit_time = emitted_time
+        self._persist_runtime()
+        return {
+            **base,
+            **latest_extra,
+            **latch_extra,
+            "time": emitted_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "price": round(emitted_price, 4),
+            "entry": round(emitted_price, 4),
+            "signal": emitted["signal"],
+            "reason": emitted["reason"],
+            "router_kind": emitted["kind"],
+            "volatility_band": emitted["band"],
+            "latch_delay_sec": emitted["delay_sec"],
+            "confidence": 80.0,
+            "high_conf": True,
+            "signal_detail": f"{emitted['kind']} {emitted['signal']} confirmed; execution-time order book remained valid after {emitted['delay_sec']}s.",
+        }
+
+
 class SecondTrendPullbackDownStrategy(SecondNormalStrategy):
     """Trade downtrend acceptance by selling the short pullback."""
 
@@ -4586,6 +4752,8 @@ def _make_strategy(sid, cfg):
         return SecondNormalLowVolV22Strategy(sid, cfg)
     if cfg.get("model_type") == "second_normal_liquidity_orderbook_v1":
         return SecondNormalLiquidityOrderbookV1Strategy(sid, cfg)
+    if cfg.get("model_type") == "second_normal_trend_orderbook_latch_v2":
+        return NormalTrendOrderbookLatchV2Strategy(sid, cfg)
     if cfg.get("model_type") == "second_normal_vw_confirm":
         return SecondNormalVwConfirmStrategy(sid, cfg)
     if cfg.get("model_type") == "normal_state_v11":
@@ -4605,7 +4773,7 @@ def build_strategies(config_map):
     return [
         _make_strategy(k, v)
         for k, v in config_map.items()
-        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal", "second_normal_router_v21", "second_normal_lowvol_v22", "second_normal_liquidity_orderbook_v1", "second_normal_vw_confirm", "normal_state_v11", "second_chip", "second_range_breakout_confirm", "second_value_area_smart", "second_trend_pullback_down") or k not in live_two_minute_ids)
+        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal", "second_normal_router_v21", "second_normal_lowvol_v22", "second_normal_liquidity_orderbook_v1", "second_normal_trend_orderbook_latch_v2", "second_normal_vw_confirm", "normal_state_v11", "second_chip", "second_range_breakout_confirm", "second_value_area_smart", "second_trend_pullback_down") or k not in live_two_minute_ids)
     ]
 
 
@@ -4621,7 +4789,7 @@ def apply_trend_mode_switch(signals):
     blocker = trend_blockers[0]
     out = {}
     for strategy_id, row in signals.items():
-        if row.get("model_type") in ("second_normal", "second_normal_router_v21", "second_normal_lowvol_v22", "second_normal_liquidity_orderbook_v1", "second_normal_vw_confirm", "normal_state_v11", "second_chip", "second_range_breakout_confirm") and row.get("signal"):
+        if row.get("model_type") in ("second_normal", "second_normal_router_v21", "second_normal_lowvol_v22", "second_normal_liquidity_orderbook_v1", "second_normal_trend_orderbook_latch_v2", "second_normal_vw_confirm", "normal_state_v11", "second_chip", "second_range_breakout_confirm") and row.get("signal"):
             blocked = dict(row)
             blocked["blocked_signal"] = blocked.get("signal")
             blocked["blocked_confidence"] = blocked.get("confidence")
@@ -4724,7 +4892,7 @@ print("[Signal] Loading BTC history...")
 df5 = load_symbol("btcusdt")
 df5_history_mtime = file_mtime(HISTORY_1M_FILE)
 print(f"[Signal] {len(df5)} 5m candles")
-print("\n[Signal] Starting BTC dual-strategy loop (every 5s)...")
+print(f"\n[Signal] Starting BTC strategy loop (every {SIGNAL_SCAN_INTERVAL_SEC:g}s)...")
 last_data_health_key = None
 
 while True:
