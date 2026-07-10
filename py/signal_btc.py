@@ -444,7 +444,6 @@ from liquidity_v2_core import (
     signal_from_row as core_signal_from_row,
     trend_space_mode as core_trend_space_mode,
     trend_space_veto_code,
-    veto_owns_window as liquidity_v2_veto_owns_window,
 )
 from signal_io import (
     append_jsonl,
@@ -3519,8 +3518,7 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         if decision.get("status") == "veto":
             veto_reason = str(decision.get("reason"))
             blocked_signal = decision.get("blocked_signal")
-            if liquidity_v2_veto_owns_window(veto_reason):
-                self._mark_window_owner(signal_time, blocked_signal, veto_reason, raw_signal, raw_reason, veto=True)
+            self._mark_window_owner(signal_time, blocked_signal, veto_reason, raw_signal, raw_reason, veto=True)
             common = {
                 **base,
                 **feature_extra,

@@ -16,7 +16,7 @@ if PY_DIR not in sys.path:
 from signal_lock import acquire_singleton_lock, process_is_alive
 import signal_paths
 from signal_runtime_cache import empty_orderbook_features
-from liquidity_v2_core import LiquidityV2Rules, evaluate_candidate, veto_owns_window
+from liquidity_v2_core import LiquidityV2Rules, evaluate_candidate
 from run_liquidity_v2_backtest import load_scan_times
 
 
@@ -137,11 +137,6 @@ class LiquidityV2CoreTests(unittest.TestCase):
         self.assertEqual(decision["status"], "veto")
         self.assertEqual(decision["reason"], "bidwall_trap_extreme_drop_skip")
         self.assertEqual(decision["blocked_signal"], "DOWN")
-
-    def test_center_slope_veto_does_not_reserve_trade_window(self):
-        self.assertFalse(veto_owns_window("trend_space_center_slope_high"))
-        self.assertTrue(veto_owns_window("liq_v2_skip_down_bid_fade"))
-
 
 class LiquidityV2BacktestTests(unittest.TestCase):
     def test_load_scan_times_accepts_audit_rows_and_deduplicates(self):

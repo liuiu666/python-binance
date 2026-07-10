@@ -286,11 +286,6 @@ def trend_space_veto_code(signal, reason, row, rules):
     return None
 
 
-def veto_owns_window(reason):
-    """Return whether a rejected candidate should reserve the 10-minute signal window."""
-    return reason != "trend_space_center_slope_high"
-
-
 def evaluate_candidate(row, rules: LiquidityV2Rules):
     signal, reason = signal_from_row(row, rules)
     result = {

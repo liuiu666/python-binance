@@ -21,7 +21,6 @@ from liquidity_v2_core import (  # noqa: E402
     build_features,
     evaluate_candidate,
     normal_ready,
-    veto_owns_window,
 )
 from second_backtest.data import load_second_bars  # noqa: E402
 
@@ -165,8 +164,7 @@ def run(args) -> dict:
         if decision["status"] == "wait":
             continue
         if decision["status"] == "veto":
-            if veto_owns_window(decision["reason"]):
-                last_emit_idx = idx
+            last_emit_idx = idx
             if in_evaluation:
                 vetoes.append({
                     "time": data.index[idx],
