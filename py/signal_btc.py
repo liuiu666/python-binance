@@ -3633,7 +3633,7 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
                 self.last_processed_time = None
         self.runtime_fingerprint = None
         self.max_emit_age_sec = int(cfg.get("router_max_emit_age_sec", 3))
-        self.model_label = str(cfg.get("model_label", "Normal/trend orderbook latch V2"))
+        self.model_label = "Dynamic normal/trend OB latch V2"
 
     def _persist_runtime(self):
         payload = {
