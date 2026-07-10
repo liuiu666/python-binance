@@ -13,6 +13,7 @@ if PY_DIR not in sys.path:
 
 from signal_lock import acquire_singleton_lock, process_is_alive
 import signal_paths
+from signal_runtime_cache import empty_orderbook_features
 
 
 class SignalLockTests(unittest.TestCase):
@@ -66,6 +67,21 @@ class SignalPathTests(unittest.TestCase):
         for path, filename in names.items():
             self.assertEqual(os.path.dirname(path), signal_paths.OUT)
             self.assertEqual(os.path.basename(path), filename)
+
+
+class SignalRuntimeCacheTests(unittest.TestCase):
+    def test_empty_orderbook_features_keep_expected_schema(self):
+        import pandas as pd
+
+        index = pd.date_range("2026-07-10T00:00:00Z", periods=3, freq="s")
+        features = empty_orderbook_features(index, "test-source")
+        self.assertEqual(list(features.index), list(index))
+        self.assertEqual(
+            list(features.columns),
+            ["ob_available", "ob_imb20", "ob_micro_bps", "ob_spread_bps", "orderbook_source"],
+        )
+        self.assertFalse(features["ob_available"].any())
+        self.assertEqual(set(features["orderbook_source"]), {"test-source"})
 
 
 if __name__ == "__main__":
