@@ -14,6 +14,32 @@ except ImportError:
     import fcntl
 
 
+def process_is_alive(pid):
+    if not pid or int(pid) <= 0:
+        return False
+    if os.name != "nt":
+        try:
+            os.kill(int(pid), 0)
+            return True
+        except PermissionError:
+            return True
+        except ProcessLookupError:
+            return False
+
+    import ctypes
+
+    process_query_limited_information = 0x1000
+    handle = ctypes.windll.kernel32.OpenProcess(
+        process_query_limited_information,
+        False,
+        int(pid),
+    )
+    if not handle:
+        return False
+    ctypes.windll.kernel32.CloseHandle(handle)
+    return True
+
+
 def acquire_singleton_lock(out_dir, lock_file, lock_dir, lock_port, label="signal_btc.py"):
     os.makedirs(out_dir, exist_ok=True)
     try:
@@ -26,9 +52,10 @@ def acquire_singleton_lock(out_dir, lock_file, lock_dir, lock_port, label="signa
         try:
             with open(pid_path, "r", encoding="utf-8") as fpid:
                 old_pid = int((fpid.read() or "0").strip())
-            os.kill(old_pid, 0)
-            print(f"[Signal] Another {label} instance is active pid={old_pid}; exiting.")
-            sys.exit(0)
+            if process_is_alive(old_pid):
+                print(f"[Signal] Another {label} instance is active pid={old_pid}; exiting.")
+                sys.exit(0)
+            raise ProcessLookupError(old_pid)
         except Exception:
             shutil.rmtree(lock_dir, ignore_errors=True)
             try:

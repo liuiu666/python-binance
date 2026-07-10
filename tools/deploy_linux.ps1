@@ -50,7 +50,7 @@ Run-Step "check local Python paramiko" {
 
 if (-not $SkipTests) {
     Run-Step "npm test" { npm test }
-    Run-Step "python second backtest tests" { python -m unittest test_second_backtest.py }
+    Run-Step "python signal and second backtest tests" { python -m unittest test_signal_modules.py test_second_backtest.py }
 }
 
 if (-not $SkipBuild) {
