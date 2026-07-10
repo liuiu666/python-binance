@@ -187,6 +187,12 @@ def build_features(data, rules: LiquidityV2Rules):
     return out
 
 
+def effective_center_slope_max_bps(rules: LiquidityV2Rules):
+    if rules.trend_space_enabled:
+        return min(rules.center_slope_max_bps, rules.trend_space_center_slope_abs_max_bps)
+    return rules.center_slope_max_bps
+
+
 def normal_ready(row, rules: LiquidityV2Rules):
     checks = [row.get(key) for key in ("z", "inside1_ratio", "observed_pct", "center_slope_bps", "sigma_bps", "sigma_expand")]
     if any(not np.isfinite(float(value)) for value in checks):
@@ -194,7 +200,7 @@ def normal_ready(row, rules: LiquidityV2Rules):
     return (
         float(row["inside1_ratio"]) >= rules.inside_min
         and float(row["observed_pct"]) >= rules.observed_min_pct
-        and abs(float(row["center_slope_bps"])) <= rules.center_slope_max_bps
+        and abs(float(row["center_slope_bps"])) <= effective_center_slope_max_bps(rules)
         and rules.sigma_min_bps <= float(row["sigma_bps"]) <= rules.sigma_max_bps
         and float(row["sigma_expand"]) <= rules.sigma_expand_max
     )
@@ -268,12 +274,9 @@ def trend_space_veto_code(signal, reason, row, rules):
     if not rules.trend_space_enabled or not signal:
         return None
     sigma_expand = safe_float(row, "sigma_expand")
-    center_slope = safe_float(row, "center_slope_bps")
     inside = safe_float(row, "inside1_ratio")
     if np.isfinite(sigma_expand) and sigma_expand > rules.trend_space_sigma_expand_max:
         return "trend_space_sigma_expand_high"
-    if np.isfinite(center_slope) and abs(center_slope) > rules.trend_space_center_slope_abs_max_bps:
-        return "trend_space_center_slope_high"
     if np.isfinite(inside) and inside > rules.trend_space_inside_max:
         return "trend_space_inside_too_high"
     mode = trend_space_mode(row, rules)

@@ -437,6 +437,7 @@ from signal_health import MAX_HISTORY_LIVE_GAP, apply_signal_data_health, build_
 from liquidity_v2_core import (
     LiquidityV2Rules,
     build_features as build_liquidity_v2_features,
+    effective_center_slope_max_bps as liquidity_v2_center_slope_limit,
     evaluate_candidate as evaluate_liquidity_v2_candidate,
     is_bidwall_trap as core_is_bidwall_trap,
     normal_ready as core_normal_ready,
@@ -3239,6 +3240,7 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         slope = finite_value("center_slope_bps")
         sigma = finite_value("sigma_bps")
         expand = finite_value("sigma_expand")
+        slope_limit = liquidity_v2_center_slope_limit(self.core_rules)
         checks = [
             {
                 "key": "observed_pct",
@@ -3258,8 +3260,8 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
                 "key": "center_slope_bps",
                 "label": "中线斜率",
                 "value": None if slope is None else round(slope, 2),
-                "requirement": f"绝对值 <= {self.center_slope_max_bps:g}bp",
-                "ok": slope is not None and abs(slope) <= self.center_slope_max_bps,
+                "requirement": f"绝对值 <= {slope_limit:g}bp",
+                "ok": slope is not None and abs(slope) <= slope_limit,
             },
             {
                 "key": "sigma_bps",
@@ -3315,9 +3317,6 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         if code == "trend_space_sigma_expand_high":
             value = self._safe_float(row, "sigma_expand")
             detail = f"趋势空间过滤：sigma_expand={value:.3f} > {self.trend_space_sigma_expand_max:g}，正态区间正在扩张，跳过。"
-        elif code == "trend_space_center_slope_high":
-            value = self._safe_float(row, "center_slope_bps")
-            detail = f"趋势空间过滤：中心斜率={value:.2f}bp，超过±{self.trend_space_center_slope_abs_max_bps:g}bp，跳过。"
         elif code == "trend_space_inside_too_high":
             value = self._safe_float(row, "inside1_ratio")
             detail = f"趋势空间过滤：inside={value:.3f} > {self.trend_space_inside_max:g}，价格困在区间内，跳过贴边单。"
