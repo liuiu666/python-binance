@@ -106,10 +106,14 @@ def run(args) -> dict:
     orderbook = read_orderbook(Path(args.orderbook), bars.index, rules.orderbook_max_age_sec)
     data = bars.join(orderbook, how="left")
     data = data[~data.index.duplicated(keep="last")].sort_index()
-    if args.start:
-        data = data[data.index >= pd.Timestamp(args.start)]
-    if args.end:
-        data = data[data.index < pd.Timestamp(args.end)]
+    requested_start = pd.Timestamp(args.start) if args.start else None
+    requested_end = pd.Timestamp(args.end) if args.end else None
+    evaluation_mask = pd.Series(True, index=data.index)
+    if requested_start is not None:
+        evaluation_mask &= data.index >= requested_start
+    if requested_end is not None:
+        evaluation_mask &= data.index < requested_end
+    evaluation_data = data.loc[evaluation_mask]
     features = build_features(data, rules)
     close = data["close"].to_numpy(float)
     warmup = max(
@@ -124,30 +128,37 @@ def run(args) -> dict:
     vetoes = []
     raw_candidates = 0
     for idx in range(warmup, max(warmup, limit)):
+        signal_time = data.index[idx]
+        if requested_end is not None and signal_time >= requested_end:
+            break
+        in_evaluation = requested_start is None or signal_time >= requested_start
         if idx - last_emit_idx < rules.min_gap_sec:
             continue
         row = features.iloc[idx]
         if not bool(data["ob_available"].iloc[idx]) or not normal_ready(row, rules):
             continue
         decision = evaluate_candidate(row, rules)
-        if decision["raw_signal"]:
+        if in_evaluation and decision["raw_signal"]:
             raw_candidates += 1
         if decision["status"] == "wait":
             continue
         if decision["status"] == "veto":
             last_emit_idx = idx
-            vetoes.append({
-                "time": data.index[idx],
-                "reason": decision["reason"],
-                "blocked_signal": decision.get("blocked_signal"),
-                "raw_signal": decision.get("raw_signal"),
-            })
+            if in_evaluation:
+                vetoes.append({
+                    "time": data.index[idx],
+                    "reason": decision["reason"],
+                    "blocked_signal": decision.get("blocked_signal"),
+                    "raw_signal": decision.get("raw_signal"),
+                })
             continue
         signal = decision["signal"]
+        last_emit_idx = idx
+        if not in_evaluation:
+            continue
         entry = float(close[idx])
         settle = float(close[idx + rules.horizon_sec])
         won = settle > entry if signal == "UP" else settle < entry
-        last_emit_idx = idx
         trades.append({
             "time": data.index[idx],
             "settle_time": data.index[idx + rules.horizon_sec],
@@ -160,15 +171,19 @@ def run(args) -> dict:
             "settle": settle,
             "won": bool(won),
         })
-    hours = (data.index.max() - data.index.min()).total_seconds() / 3600.0 if len(data) else 0.0
+    hours = (
+        (evaluation_data.index.max() - evaluation_data.index.min()).total_seconds() / 3600.0
+        if len(evaluation_data)
+        else 0.0
+    )
     result = {
         "strategyId": strategy_id,
         "modelType": cfg.get("model_type"),
         "seconds": str(Path(args.seconds).resolve()),
         "orderbook": str(Path(args.orderbook).resolve()),
-        "start": data.index.min().isoformat() if len(data) else None,
-        "end": data.index.max().isoformat() if len(data) else None,
-        "rows": int(len(data)),
+        "start": evaluation_data.index.min().isoformat() if len(evaluation_data) else None,
+        "end": evaluation_data.index.max().isoformat() if len(evaluation_data) else None,
+        "rows": int(len(evaluation_data)),
         "hours": round(hours, 4),
         "rules": asdict(rules),
         "rawCandidates": raw_candidates,
