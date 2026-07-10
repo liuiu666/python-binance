@@ -14,6 +14,7 @@ if PY_DIR not in sys.path:
 from signal_lock import acquire_singleton_lock, process_is_alive
 import signal_paths
 from signal_runtime_cache import empty_orderbook_features
+from liquidity_v2_core import LiquidityV2Rules, evaluate_candidate
 
 
 class SignalLockTests(unittest.TestCase):
@@ -82,6 +83,57 @@ class SignalRuntimeCacheTests(unittest.TestCase):
         )
         self.assertFalse(features["ob_available"].any())
         self.assertEqual(set(features["orderbook_source"]), {"test-source"})
+
+
+class LiquidityV2CoreTests(unittest.TestCase):
+    @staticmethod
+    def reclaim_up_row(**updates):
+        row = {
+            "z": -0.5,
+            "flow_60": 0.0,
+            "imbalance_20": 0.2,
+            "micro_bps": 0.01,
+            "ask_qty_20": 1.0,
+            "bid_qty_20": 2.0,
+            "bid20_chg_30": 0.0,
+            "ask20_chg_30": 0.0,
+            "z_max_retest": 0.0,
+            "z_min_retest": -1.3,
+            "ret_300s_bps": 0.0,
+            "ret_600s_bps": 0.0,
+            "bid20_chg_60": 0.0,
+            "sigma_expand": 1.0,
+            "center_slope_bps": 0.0,
+            "inside1_ratio": 0.6,
+            "ret_1800s_bps": 0.0,
+            "pos_1800s": 0.5,
+            "pos_600s": 0.5,
+        }
+        row.update(updates)
+        return row
+
+    def test_clean_reclaim_up_is_accepted(self):
+        decision = evaluate_candidate(self.reclaim_up_row(), LiquidityV2Rules(trend_space_enabled=True))
+        self.assertEqual(decision["status"], "accepted")
+        self.assertEqual(decision["signal"], "UP")
+        self.assertEqual(decision["reason"], "lower_fake_break_reclaim")
+
+    def test_negative_flow_vetoes_reclaim_up(self):
+        decision = evaluate_candidate(
+            self.reclaim_up_row(flow_60=-0.1),
+            LiquidityV2Rules(trend_space_enabled=True),
+        )
+        self.assertEqual(decision["status"], "veto")
+        self.assertEqual(decision["reason"], "liq_v2_skip_up_negative_flow")
+
+    def test_extreme_bidwall_trap_is_skipped_before_flip(self):
+        decision = evaluate_candidate(
+            self.reclaim_up_row(ret_300s_bps=-6.0, ret_600s_bps=-25.0, bid20_chg_60=2.5),
+            LiquidityV2Rules(trend_space_enabled=True),
+        )
+        self.assertEqual(decision["status"], "veto")
+        self.assertEqual(decision["reason"], "bidwall_trap_extreme_drop_skip")
+        self.assertEqual(decision["blocked_signal"], "DOWN")
 
 
 if __name__ == "__main__":

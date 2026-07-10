@@ -13,7 +13,15 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "py"))
 
-from research_normal_liquidity_orderbook import LiquidityNormalConfig, build_features, read_orderbook  # noqa: E402
+from liquidity_v2_core import (  # noqa: E402
+    LiquidityV2Rules,
+    build_features as core_build_features,
+    is_bidwall_trap as core_is_bidwall_trap,
+    normal_ready as core_normal_ready,
+    quality_v2_veto_code,
+    signal_from_row as core_signal_from_row,
+)
+from research_normal_liquidity_orderbook import read_orderbook  # noqa: E402
 from second_backtest.data import load_second_bars  # noqa: E402
 
 
@@ -48,8 +56,8 @@ def clean(value: Any) -> Any:
     return value
 
 
-def cfg() -> LiquidityNormalConfig:
-    return LiquidityNormalConfig(
+def cfg() -> LiquidityV2Rules:
+    return LiquidityV2Rules(
         normal_window_sec=600,
         z_entry=1.2,
         z_reclaim=0.85,
@@ -68,10 +76,14 @@ def cfg() -> LiquidityNormalConfig:
         flow_guard=0.12,
         true_break_flow=0.28,
         true_break_imbalance=0.28,
-        signal_gap_sec=600,
+        min_gap_sec=600,
         horizon_sec=600,
-        amount=5.0,
     )
+
+
+def build_features(data: pd.DataFrame, window: int, c: LiquidityV2Rules) -> pd.DataFrame:
+    del window
+    return core_build_features(data, c)
 
 
 def safe_float(row: pd.Series, key: str, default: float = float("nan")) -> float:
@@ -88,117 +100,20 @@ def load_data(data_dir: Path) -> pd.DataFrame:
     return data[~data.index.duplicated(keep="last")].sort_index()
 
 
-def normal_ready(row: pd.Series, c: LiquidityNormalConfig) -> bool:
-    checks = [
-        row.get("z"),
-        row.get("inside1_ratio"),
-        row.get("observed_pct"),
-        row.get("center_slope_bps"),
-        row.get("sigma_bps"),
-        row.get("sigma_expand"),
-    ]
-    if any(not np.isfinite(float(x)) for x in checks):
-        return False
-    return (
-        float(row["inside1_ratio"]) >= c.inside_min
-        and float(row["observed_pct"]) >= c.observed_min_pct
-        and abs(float(row["center_slope_bps"])) <= c.center_slope_max_bps
-        and c.sigma_min_bps <= float(row["sigma_bps"]) <= c.sigma_max_bps
-        and float(row["sigma_expand"]) <= c.sigma_expand_max
-    )
+def normal_ready(row: pd.Series, c: LiquidityV2Rules) -> bool:
+    return core_normal_ready(row, c)
 
 
-def passive_resistance(row: pd.Series, c: LiquidityNormalConfig) -> bool:
-    ask = safe_float(row, "ask_qty_20")
-    bid = safe_float(row, "bid_qty_20")
-    return (
-        np.isfinite(ask)
-        and np.isfinite(bid)
-        and float(row["imbalance_20"]) <= -c.ob_imbalance_min
-        and float(row["micro_bps"]) <= -c.micro_min_bps
-        and ask >= max(1e-9, bid * c.wall_ratio_min)
-        and safe_float(row, "ask20_chg_30", 0.0) > -0.55
-    )
-
-
-def passive_support(row: pd.Series, c: LiquidityNormalConfig) -> bool:
-    ask = safe_float(row, "ask_qty_20")
-    bid = safe_float(row, "bid_qty_20")
-    return (
-        np.isfinite(ask)
-        and np.isfinite(bid)
-        and float(row["imbalance_20"]) >= c.ob_imbalance_min
-        and float(row["micro_bps"]) >= c.micro_min_bps
-        and bid >= max(1e-9, ask * c.wall_ratio_min)
-        and safe_float(row, "bid20_chg_30", 0.0) > -0.55
-    )
-
-
-def true_break_up(row: pd.Series, c: LiquidityNormalConfig) -> bool:
-    return (
-        float(row["flow_60"]) >= c.true_break_flow
-        or float(row["imbalance_20"]) >= c.true_break_imbalance
-        or float(row["micro_bps"]) >= c.micro_min_bps * 4.0
-    )
-
-
-def true_break_down(row: pd.Series, c: LiquidityNormalConfig) -> bool:
-    return (
-        float(row["flow_60"]) <= -c.true_break_flow
-        or float(row["imbalance_20"]) <= -c.true_break_imbalance
-        or float(row["micro_bps"]) <= -c.micro_min_bps * 4.0
-    )
-
-
-def signal_from_row(row: pd.Series, c: LiquidityNormalConfig) -> tuple[str | None, str | None]:
-    z = float(row["z"])
-    flow = float(row["flow_60"])
-    resistance = passive_resistance(row, c)
-    support = passive_support(row, c)
-    up_break = true_break_up(row, c)
-    down_break = true_break_down(row, c)
-    reclaim_down = (
-        float(row["z_max_retest"]) >= c.z_entry
-        and 0.0 <= z <= c.z_reclaim
-        and resistance
-        and flow <= c.flow_guard
-        and not up_break
-    )
-    reclaim_up = (
-        float(row["z_min_retest"]) <= -c.z_entry
-        and -c.z_reclaim <= z <= 0.0
-        and support
-        and flow >= -c.flow_guard
-        and not down_break
-    )
-    if reclaim_down:
-        return "DOWN", "upper_fake_break_reclaim"
-    if reclaim_up:
-        return "UP", "lower_fake_break_reclaim"
-    return None, None
+def signal_from_row(row: pd.Series, c: LiquidityV2Rules) -> tuple[str | None, str | None]:
+    return core_signal_from_row(row, c)
 
 
 def bidwall_trap(signal: str | None, reason: str | None, row: pd.Series) -> bool:
-    return (
-        signal == "UP"
-        and reason == "lower_fake_break_reclaim"
-        and np.isfinite(safe_float(row, "ret_300s_bps"))
-        and np.isfinite(safe_float(row, "bid20_chg_60"))
-        and safe_float(row, "ret_300s_bps") <= -5.0
-        and safe_float(row, "bid20_chg_60") > 2.0
-    )
+    return core_is_bidwall_trap(signal, reason, row, cfg())
 
 
 def quality_v2_veto(signal: str | None, row: pd.Series) -> str | None:
-    if signal == "DOWN":
-        bid20_chg60 = safe_float(row, "bid20_chg_60")
-        if np.isfinite(bid20_chg60) and bid20_chg60 <= -0.7:
-            return "liq_v2_skip_down_bid_fade"
-    if signal == "UP":
-        flow60 = safe_float(row, "flow_60")
-        if np.isfinite(flow60) and flow60 <= -0.063:
-            return "liq_v2_skip_up_negative_flow"
-    return None
+    return quality_v2_veto_code(signal, row, cfg())
 
 
 def payout(won: bool) -> int:
@@ -283,7 +198,7 @@ def replay_dataset(name: str, spec: dict[str, Any]) -> tuple[dict[str, Any], lis
                 }
             )
             continue
-        if idx - last_emit_idx < c.signal_gap_sec:
+        if idx - last_emit_idx < c.min_gap_sec:
             continue
         entry = float(close[idx])
         settle = float(close[idx + c.horizon_sec])

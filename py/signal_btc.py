@@ -434,6 +434,17 @@ from xgboost import XGBClassifier
 warnings.filterwarnings("ignore")
 
 from signal_health import MAX_HISTORY_LIVE_GAP, apply_signal_data_health, build_live_data_health
+from liquidity_v2_core import (
+    LiquidityV2Rules,
+    build_features as build_liquidity_v2_features,
+    evaluate_candidate as evaluate_liquidity_v2_candidate,
+    is_bidwall_trap as core_is_bidwall_trap,
+    normal_ready as core_normal_ready,
+    quality_v2_veto_code,
+    signal_from_row as core_signal_from_row,
+    trend_space_mode as core_trend_space_mode,
+    trend_space_veto_code,
+)
 from signal_io import (
     append_jsonl,
     csv_tail_rows,
@@ -3148,14 +3159,11 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         self.trend_space_short_ret_600_up_bps = float(cfg.get("second_liq_trend_space_short_ret_600_up_bps", 12.0))
         self.trend_space_short_pos_600_min = float(cfg.get("second_liq_trend_space_short_pos_600_min", 0.65))
         self.mode = str(cfg.get("second_liq_mode", "reclaim")).lower()
+        self.core_rules = LiquidityV2Rules.from_config(cfg)
         self.trade_enabled = bool(cfg.get("trade_enabled", False))
         self.interval_min = max(1, int(round(self.horizon_sec / 60)))
         self.model_label = str(cfg.get("model_label", "Orderbook V2 quality"))
         self.last_emit_time, self.last_emit_state = load_strategy_window_state(strategy_id)
-
-    @staticmethod
-    def _rolling_sum(series, window, min_periods=None):
-        return series.rolling(int(window), min_periods=min_periods or max(30, int(window) // 3)).sum()
 
     @staticmethod
     def _safe_float(row, key, default=float("nan")):
@@ -3216,91 +3224,10 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         return aligned
 
     def _build_features(self, data):
-        close = data["close"].astype(float)
-        volume = data["volume"].astype(float).clip(lower=0.0)
-        observed = data["observed"].astype(bool).astype(float) if "observed" in data else pd.Series(1.0, index=data.index)
-        window = int(self.normal_window_sec)
-
-        sw = self._rolling_sum(volume, window)
-        sx = self._rolling_sum(close * volume, window)
-        sx2 = self._rolling_sum(close * close * volume, window)
-        mean = close.rolling(window, min_periods=max(120, window // 3)).mean()
-        std = close.rolling(window, min_periods=max(120, window // 3)).std(ddof=1)
-        vwap = sx / sw.replace(0, np.nan)
-        var = sx2 / sw.replace(0, np.nan) - vwap * vwap
-        vw_sigma = np.sqrt(var.clip(lower=0.0))
-        center = vwap.fillna(mean)
-        sigma = vw_sigma.where(vw_sigma > 1e-9, std)
-        z = (close - center) / sigma.replace(0, np.nan)
-
-        inside1 = z.abs().le(1.0).astype(float)
-        sigma_bps = sigma / close * 10000.0
-        sigma_median = sigma_bps.rolling(max(window, 900), min_periods=max(120, window // 3)).median()
-        buy_60 = data["buy_qty"].astype(float).rolling(60, min_periods=10).sum()
-        sell_60 = data["sell_qty"].astype(float).rolling(60, min_periods=10).sum()
-        flow_60 = (buy_60 - sell_60) / (buy_60 + sell_60).replace(0, np.nan)
-        bid20 = data["bid_qty_20"].astype(float)
-        ask20 = data["ask_qty_20"].astype(float)
-        bid_wall = data["bid_wall_qty"].astype(float)
-        ask_wall = data["ask_wall_qty"].astype(float)
-
-        out = pd.DataFrame(index=data.index)
-        out["close"] = close
-        out["center"] = center
-        out["sigma"] = sigma
-        out["z"] = z
-        out["normal_low"] = center - sigma
-        out["normal_high"] = center + sigma
-        out["inside1_ratio"] = inside1.rolling(window, min_periods=max(120, window // 3)).mean()
-        out["observed_pct"] = observed.rolling(min(600, window), min_periods=120).mean() * 100.0
-        out["center_slope_bps"] = (center / center.shift(self.center_slope_sec) - 1.0) * 10000.0
-        out["sigma_bps"] = sigma_bps
-        out["sigma_expand"] = sigma_bps / sigma_median.replace(0, np.nan)
-        out["flow_60"] = flow_60
-        out["slope_30_bps"] = (close / close.shift(30) - 1.0) * 10000.0
-        out["slope_90_bps"] = (close / close.shift(90) - 1.0) * 10000.0
-        out["ret_300s_bps"] = np.log(close / close.shift(300)) * 10000.0
-        for sec in (600, 900, 1800, 3600):
-            out[f"ret_{sec}s_bps"] = np.log(close / close.shift(sec)) * 10000.0
-        for sec in (600, 1800, 3600):
-            high = close.rolling(sec, min_periods=max(60, sec // 3)).max()
-            low = close.rolling(sec, min_periods=max(60, sec // 3)).min()
-            out[f"pos_{sec}s"] = (close - low) / (high - low).replace(0, np.nan)
-            out[f"range_{sec}s_bps"] = (high / low - 1.0) * 10000.0
-        out["imbalance_5"] = data["imbalance_5"].astype(float)
-        out["imbalance_20"] = data["imbalance_20"].astype(float)
-        out["micro_bps"] = data["microprice_edge_bps"].astype(float)
-        out["spread_bps"] = data["spread_bps"].astype(float)
-        out["bid_qty_20"] = bid20
-        out["ask_qty_20"] = ask20
-        out["bid20_chg_30"] = bid20 / bid20.shift(30).replace(0, np.nan) - 1.0
-        out["bid20_chg_60"] = bid20 / bid20.shift(60).replace(0, np.nan) - 1.0
-        out["ask20_chg_30"] = ask20 / ask20.shift(30).replace(0, np.nan) - 1.0
-        out["wall_balance"] = (bid_wall - ask_wall) / (bid_wall + ask_wall).replace(0, np.nan)
-        out["z_max_retest"] = z.rolling(self.retest_sec, min_periods=10).max()
-        out["z_min_retest"] = z.rolling(self.retest_sec, min_periods=10).min()
-        out["ob_available"] = data["ob_available"].astype(bool)
-        out["ob_age_sec"] = data["ob_age_sec"].astype(float)
-        return out
+        return build_liquidity_v2_features(data, self.core_rules)
 
     def _normal_ready(self, row):
-        checks = [
-            row.get("z"),
-            row.get("inside1_ratio"),
-            row.get("observed_pct"),
-            row.get("center_slope_bps"),
-            row.get("sigma_bps"),
-            row.get("sigma_expand"),
-        ]
-        if any(not np.isfinite(float(x)) for x in checks):
-            return False
-        return (
-            float(row["inside1_ratio"]) >= self.inside_min
-            and float(row["observed_pct"]) >= self.observed_min_pct
-            and abs(float(row["center_slope_bps"])) <= self.center_slope_max_bps
-            and self.sigma_min_bps <= float(row["sigma_bps"]) <= self.sigma_max_bps
-            and float(row["sigma_expand"]) <= self.sigma_expand_max
-        )
+        return core_normal_ready(row, self.core_rules)
 
     def _normal_ready_checks(self, row):
         def finite_value(key):
@@ -3362,168 +3289,45 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
             parts.append(f"{item['label']}={value}，要求{item['requirement']}")
         return "等待重新进入短周期正态震荡；未达标：" + "；".join(parts) + "。", checks
 
-    def _passive_resistance(self, row):
-        ask = self._safe_float(row, "ask_qty_20")
-        bid = self._safe_float(row, "bid_qty_20")
-        return (
-            np.isfinite(ask)
-            and np.isfinite(bid)
-            and float(row["imbalance_20"]) <= -self.ob_imbalance_min
-            and float(row["micro_bps"]) <= -self.micro_min_bps
-            and ask >= max(1e-9, bid * self.wall_ratio_min)
-            and self._safe_float(row, "ask20_chg_30", 0.0) > -0.55
-        )
-
-    def _passive_support(self, row):
-        ask = self._safe_float(row, "ask_qty_20")
-        bid = self._safe_float(row, "bid_qty_20")
-        return (
-            np.isfinite(ask)
-            and np.isfinite(bid)
-            and float(row["imbalance_20"]) >= self.ob_imbalance_min
-            and float(row["micro_bps"]) >= self.micro_min_bps
-            and bid >= max(1e-9, ask * self.wall_ratio_min)
-            and self._safe_float(row, "bid20_chg_30", 0.0) > -0.55
-        )
-
-    def _true_break_up(self, row):
-        return (
-            float(row["flow_60"]) >= self.true_break_flow
-            or float(row["imbalance_20"]) >= self.true_break_imbalance
-            or float(row["micro_bps"]) >= self.micro_min_bps * 4.0
-        )
-
-    def _true_break_down(self, row):
-        return (
-            float(row["flow_60"]) <= -self.true_break_flow
-            or float(row["imbalance_20"]) <= -self.true_break_imbalance
-            or float(row["micro_bps"]) <= -self.micro_min_bps * 4.0
-        )
-
     def _signal_from_row(self, row):
-        z = float(row["z"])
-        flow = float(row["flow_60"])
-        resistance = self._passive_resistance(row)
-        support = self._passive_support(row)
-        true_up = self._true_break_up(row)
-        true_down = self._true_break_down(row)
-
-        edge_down = z >= self.z_entry and resistance and flow <= self.flow_guard and not true_up
-        edge_up = z <= -self.z_entry and support and flow >= -self.flow_guard and not true_down
-        reclaim_down = (
-            float(row["z_max_retest"]) >= self.z_entry
-            and 0.0 <= z <= self.z_reclaim
-            and resistance
-            and flow <= self.flow_guard
-            and not true_up
-        )
-        reclaim_up = (
-            float(row["z_min_retest"]) <= -self.z_entry
-            and -self.z_reclaim <= z <= 0.0
-            and support
-            and flow >= -self.flow_guard
-            and not true_down
-        )
-        if self.mode in ("edge", "hybrid") and edge_down:
-            return "DOWN", "upper_passive_resistance_fade"
-        if self.mode in ("edge", "hybrid") and edge_up:
-            return "UP", "lower_passive_support_fade"
-        if self.mode in ("reclaim", "hybrid") and reclaim_down:
-            return "DOWN", "upper_fake_break_reclaim"
-        if self.mode in ("reclaim", "hybrid") and reclaim_up:
-            return "UP", "lower_fake_break_reclaim"
-        return None, None
+        return core_signal_from_row(row, self.core_rules)
 
     def _is_bidwall_trap(self, signal, reason, row):
-        if not self.bidwall_trap_enabled:
-            return False
-        if signal != "UP" or reason != "lower_fake_break_reclaim":
-            return False
-        ret300 = self._safe_float(row, "ret_300s_bps")
-        bid20_chg60 = self._safe_float(row, "bid20_chg_60")
-        return (
-            np.isfinite(ret300)
-            and np.isfinite(bid20_chg60)
-            and ret300 <= self.bidwall_trap_ret300_max_bps
-            and bid20_chg60 > self.bidwall_trap_bid20_chg60_min
-        )
+        return core_is_bidwall_trap(signal, reason, row, self.core_rules)
 
     def _quality_v2_veto(self, signal, row):
-        if not self.quality_v2_enabled or not signal:
-            return None
-        if signal == "DOWN":
-            bid20_chg60 = self._safe_float(row, "bid20_chg_60")
-            if np.isfinite(bid20_chg60) and bid20_chg60 <= self.quality_v2_down_bid20_chg60_min:
-                return (
-                    "liq_v2_skip_down_bid_fade",
-                    f"V2 skip DOWN: bid20_60s_chg={bid20_chg60:.3f} <= {self.quality_v2_down_bid20_chg60_min:g}",
-                )
-        if signal == "UP":
-            flow60 = self._safe_float(row, "flow_60")
-            if np.isfinite(flow60) and flow60 <= self.quality_v2_up_flow60_min:
-                return (
-                    "liq_v2_skip_up_negative_flow",
-                    f"V2 skip UP: flow_60={flow60:.3f} <= {self.quality_v2_up_flow60_min:g}",
-                )
+        code = quality_v2_veto_code(signal, row, self.core_rules)
+        if code == "liq_v2_skip_down_bid_fade":
+            value = self._safe_float(row, "bid20_chg_60")
+            return code, f"V2 skip DOWN: bid20_60s_chg={value:.3f} <= {self.quality_v2_down_bid20_chg60_min:g}"
+        if code == "liq_v2_skip_up_negative_flow":
+            value = self._safe_float(row, "flow_60")
+            return code, f"V2 skip UP: flow_60={value:.3f} <= {self.quality_v2_up_flow60_min:g}"
         return None
 
     def _trend_space_mode(self, row):
-        ret = self._safe_float(row, "ret_1800s_bps")
-        pos = self._safe_float(row, "pos_1800s")
-        if not np.isfinite(ret) or not np.isfinite(pos):
-            return "unknown"
-        if ret >= self.trend_space_trend_ret_1800_bps and pos >= self.trend_space_up_pos_1800_min:
-            return "uptrend"
-        if ret <= -self.trend_space_trend_ret_1800_bps and pos <= self.trend_space_down_pos_1800_max:
-            return "downtrend"
-        return "range"
+        return core_trend_space_mode(row, self.core_rules)
 
     def _trend_space_veto(self, signal, reason, row):
-        if not self.trend_space_enabled or not signal:
+        code = trend_space_veto_code(signal, reason, row, self.core_rules)
+        if not code:
             return None
-        sigma_expand = self._safe_float(row, "sigma_expand")
-        center_slope = self._safe_float(row, "center_slope_bps")
-        inside = self._safe_float(row, "inside1_ratio")
-        if np.isfinite(sigma_expand) and sigma_expand > self.trend_space_sigma_expand_max:
-            return (
-                "trend_space_sigma_expand_high",
-                f"趋势空间过滤：sigma_expand={sigma_expand:.3f} > {self.trend_space_sigma_expand_max:g}，正态区间正在扩张，跳过。",
-            )
-        if np.isfinite(center_slope) and abs(center_slope) > self.trend_space_center_slope_abs_max_bps:
-            return (
-                "trend_space_center_slope_high",
-                f"趋势空间过滤：中心斜率={center_slope:.2f}bp，超过±{self.trend_space_center_slope_abs_max_bps:g}bp，跳过。",
-            )
-        if np.isfinite(inside) and inside > self.trend_space_inside_max:
-            return (
-                "trend_space_inside_too_high",
-                f"趋势空间过滤：inside={inside:.3f} > {self.trend_space_inside_max:g}，价格困在区间内，跳过贴边单。",
-            )
-
-        mode = self._trend_space_mode(row)
-        if self.trend_space_block_countertrend:
-            if signal == "DOWN" and mode == "uptrend":
-                return (
-                    "trend_space_block_down_in_uptrend",
-                    "趋势空间过滤：30分钟上涨且价格处于高位，禁止上沿逆势做空。",
-                )
-            if signal == "UP" and mode == "downtrend":
-                return (
-                    "trend_space_block_up_in_downtrend",
-                    "趋势空间过滤：30分钟下跌且价格处于低位，禁止下沿逆势做多。",
-                )
-        if (
-            self.trend_space_block_upper_fade_pullback
-            and signal == "DOWN"
-            and reason == "upper_fake_break_reclaim"
-            and self._safe_float(row, "ret_600s_bps") > self.trend_space_short_ret_600_up_bps
-            and self._safe_float(row, "pos_600s") > self.trend_space_short_pos_600_min
-        ):
-            return (
-                "trend_space_block_short_pullback_up",
-                "趋势空间过滤：短线600秒强反抽且处于高位，不做上沿做空。",
-            )
-        return None
+        if code == "trend_space_sigma_expand_high":
+            value = self._safe_float(row, "sigma_expand")
+            detail = f"趋势空间过滤：sigma_expand={value:.3f} > {self.trend_space_sigma_expand_max:g}，正态区间正在扩张，跳过。"
+        elif code == "trend_space_center_slope_high":
+            value = self._safe_float(row, "center_slope_bps")
+            detail = f"趋势空间过滤：中心斜率={value:.2f}bp，超过±{self.trend_space_center_slope_abs_max_bps:g}bp，跳过。"
+        elif code == "trend_space_inside_too_high":
+            value = self._safe_float(row, "inside1_ratio")
+            detail = f"趋势空间过滤：inside={value:.3f} > {self.trend_space_inside_max:g}，价格困在区间内，跳过贴边单。"
+        elif code == "trend_space_block_down_in_uptrend":
+            detail = "趋势空间过滤：30分钟上涨且价格处于高位，禁止上沿逆势做空。"
+        elif code == "trend_space_block_up_in_downtrend":
+            detail = "趋势空间过滤：30分钟下跌且价格处于低位，禁止下沿逆势做多。"
+        else:
+            detail = "趋势空间过滤：短线600秒强反抽且处于高位，不做上沿做空。"
+        return code, detail
 
     def _mark_window_owner(self, signal_time, signal, reason, raw_signal=None, raw_reason=None, veto=False):
         self.last_emit_time = signal_time
@@ -3697,43 +3501,13 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
                 "signal_detail": "V2上一个信号后处于10分钟同策略间隔，避免同一区域重复记录。",
             }
 
-        signal, reason = self._signal_from_row(row)
-        raw_signal = signal
-        raw_reason = reason
-        bidwall_trap = self._is_bidwall_trap(signal, reason, row)
-        if bidwall_trap:
-            ret600 = self._safe_float(row, "ret_600s_bps")
-            if np.isfinite(ret600) and ret600 < self.bidwall_trap_ret600_min_bps:
-                veto_reason = "bidwall_trap_extreme_drop_skip"
-                veto_detail = (
-                    f"Bidwall trap skip: ret_600s_bps={ret600:.2f} < "
-                    f"{self.bidwall_trap_ret600_min_bps:g}; avoid chasing DOWN after an extreme 10m drop."
-                )
-                self._mark_window_owner(signal_time, "DOWN", veto_reason, raw_signal, raw_reason, veto=True)
-                return {
-                    **base,
-                    **feature_extra,
-                    **self._window_state_payload(signal_time),
-                    "signal": None,
-                    "raw_signal": raw_signal,
-                    "raw_reason": raw_reason,
-                    "bidwall_trap": True,
-                    "bidwall_trap_rule": (
-                        f"ret_300s_bps<={self.bidwall_trap_ret300_max_bps:g} "
-                        f"and bid20_chg_60>{self.bidwall_trap_bid20_chg60_min:g}"
-                    ),
-                    "bidwall_trap_extreme_drop_rule": (
-                        f"ret_600s_bps<{self.bidwall_trap_ret600_min_bps:g}"
-                    ),
-                    "quality_v2_veto": True,
-                    "quality_v2_rule": veto_detail,
-                    "reason": veto_reason,
-                    "blocked_signal": "DOWN",
-                    "signal_detail": veto_detail,
-                }
-            signal = "DOWN"
-            reason = "lower_reclaim_bidwall_trap_flip_down"
-        if not signal:
+        decision = evaluate_liquidity_v2_candidate(row, self.core_rules)
+        signal = decision.get("signal")
+        reason = decision.get("reason")
+        raw_signal = decision.get("raw_signal")
+        raw_reason = decision.get("raw_reason")
+        bidwall_trap = bool(decision.get("bidwall_trap"))
+        if decision.get("status") == "wait":
             return {
                 **base,
                 **feature_extra,
@@ -3741,55 +3515,62 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
                 "reason": "liq_wait_reclaim",
                 "signal_detail": "正态状态已满足，等待1.2σ假突破后回归，并等待订单薄被动支撑/压力确认。",
             }
-
-        quality_v2_veto = self._quality_v2_veto(signal, row)
-        if quality_v2_veto:
-            veto_reason, veto_detail = quality_v2_veto
-            self._mark_window_owner(signal_time, signal, veto_reason, raw_signal, raw_reason, veto=True)
-            return {
+        if decision.get("status") == "veto":
+            veto_reason = str(decision.get("reason"))
+            blocked_signal = decision.get("blocked_signal")
+            self._mark_window_owner(signal_time, blocked_signal, veto_reason, raw_signal, raw_reason, veto=True)
+            common = {
                 **base,
                 **feature_extra,
                 **self._window_state_payload(signal_time),
                 "signal": None,
                 "raw_signal": raw_signal,
                 "raw_reason": raw_reason,
-                "bidwall_trap": bool(bidwall_trap),
+                "bidwall_trap": bidwall_trap,
                 "bidwall_trap_rule": (
                     f"ret_300s_bps<={self.bidwall_trap_ret300_max_bps:g} "
                     f"and bid20_chg_60>{self.bidwall_trap_bid20_chg60_min:g}"
                 ) if bidwall_trap else None,
-                "quality_v2_veto": True,
-                "quality_v2_rule": veto_detail,
                 "reason": veto_reason,
-                "blocked_signal": signal,
-                "signal_detail": veto_detail,
+                "blocked_signal": blocked_signal,
             }
-
-        trend_space_veto = self._trend_space_veto(signal, reason, row)
-        if trend_space_veto:
-            veto_reason, veto_detail = trend_space_veto
-            self._mark_window_owner(signal_time, signal, veto_reason, raw_signal, raw_reason, veto=True)
+            if veto_reason == "bidwall_trap_extreme_drop_skip":
+                ret600 = self._safe_float(row, "ret_600s_bps")
+                veto_detail = (
+                    f"Bidwall trap skip: ret_600s_bps={ret600:.2f} < "
+                    f"{self.bidwall_trap_ret600_min_bps:g}; avoid chasing DOWN after an extreme 10m drop."
+                )
+                return {
+                    **common,
+                    "bidwall_trap_extreme_drop_rule": f"ret_600s_bps<{self.bidwall_trap_ret600_min_bps:g}",
+                    "quality_v2_veto": True,
+                    "quality_v2_rule": veto_detail,
+                    "signal_detail": veto_detail,
+                }
+            if decision.get("veto_type") == "quality":
+                _, veto_detail = self._quality_v2_veto(blocked_signal, row)
+                return {
+                    **common,
+                    "quality_v2_veto": True,
+                    "quality_v2_rule": veto_detail,
+                    "signal_detail": veto_detail,
+                }
+            _, veto_detail = self._trend_space_veto(
+                blocked_signal,
+                decision.get("candidate_reason"),
+                row,
+            )
             return {
-                **base,
-                **feature_extra,
-                **self._window_state_payload(signal_time),
-                "signal": None,
-                "raw_signal": raw_signal,
-                "raw_reason": raw_reason,
-                "bidwall_trap": bool(bidwall_trap),
-                "bidwall_trap_rule": (
-                    f"ret_300s_bps<={self.bidwall_trap_ret300_max_bps:g} "
-                    f"and bid20_chg_60>{self.bidwall_trap_bid20_chg60_min:g}"
-                ) if bidwall_trap else None,
+                **common,
                 "quality_v2_veto": False,
                 "quality_v2_rule": None,
                 "trend_space_veto": True,
                 "trend_space_rule": veto_detail,
-                "reason": veto_reason,
-                "blocked_signal": signal,
                 "signal_detail": veto_detail,
             }
 
+        signal = decision["signal"]
+        reason = decision["reason"]
         self._mark_window_owner(signal_time, signal, reason, raw_signal, raw_reason, veto=False)
         ob_strength = abs(float(row["imbalance_20"])) + min(1.0, abs(float(row["micro_bps"])) * 500.0)
         confidence = min(95.0, 58.0 + ob_strength * 12.0 + max(0.0, float(row["inside1_ratio"]) - self.inside_min) * 20.0)
