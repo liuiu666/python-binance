@@ -259,9 +259,6 @@ export function signalReadinessItems(signal, variant = {}) {
     const band = String(signal.volatility_band || "unknown");
     const sigma = asNumber(signal.sigma_bps);
     const z = asNumber(signal.z_score);
-    const obAge = asNumber(signal.ob_age_sec);
-    const imbalance = asNumber(signal.imbalance_20);
-    const micro = asNumber(signal.micro_bps);
     const latchActive = signal.latch_active === true;
     const latchSignal = signal.latch_signal;
     const stateLabels = {
@@ -289,10 +286,6 @@ export function signalReadinessItems(signal, variant = {}) {
       mid: 1.0,
       elevated: 1.2
     }[band];
-    const sign = latchSignal === "UP" ? 1 : latchSignal === "DOWN" ? -1 : null;
-    const bookAligned = sign == null || imbalance == null || micro == null
-      ? null
-      : sign * imbalance >= 0.08 && sign * micro >= 0.001;
     const qualityOk = observed != null && coverage != null
       ? observed >= 90 && coverage >= 0.9
       : null;
@@ -338,12 +331,12 @@ export function signalReadinessItems(signal, variant = {}) {
         help: "尚未出现满足确认次数的正态回归或成熟趋势信号。"
       },
       {
-        key: "router_execution_book",
-        label: "执行订单薄",
-        ok: latchActive ? bookAligned : (obAge == null ? null : obAge <= 3),
-        value: obAge == null ? "--" : `${fmt(obAge, 1)}秒${latchActive && bookAligned != null ? (bookAligned ? "，方向一致" : "，方向冲突") : ""}`,
-        target: latchActive ? "下单时方向同向，且数据 <= 3秒" : "等待锁存后进行方向复核",
-        help: "锁存信号在真正下单前，订单薄方向必须仍然支持该信号。"
+        key: "router_execution",
+        label: "信号执行",
+        ok: latchActive ? true : null,
+        value: latchActive ? "等待最近执行点" : "尚无可执行信号",
+        target: "锁存有效期6秒，每5秒检查一次",
+        help: "候选信号锁存后，到下一个执行点直接下单，不再进行第二次盘口否决。"
       }
     ];
     return items.map(item => ({ ...item, tone: statusTone(item.ok) }));

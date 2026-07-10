@@ -19,7 +19,6 @@ from normal_trend_latch_core import (  # noqa: E402
     NormalTrendLatchEngine,
     RouterRules,
     build_router_features,
-    passive_book_valid,
 )
 from run_liquidity_v2_backtest import read_orderbook  # noqa: E402
 from second_backtest.data import load_second_bars  # noqa: E402
@@ -86,16 +85,12 @@ def run(args):
     last_idx = min(len(work) - rules.base.horizon_sec, int(work.index.searchsorted(end)))
     rows = []
     for idx in range(first_idx, last_idx):
-        previous_emit_time = engine.last_emit_time
         result = engine.step(work.index[idx], features.iloc[idx])
         emitted = result.get("signal")
         if not emitted:
             continue
         execution_idx = idx + max(0, int(args.operational_delay_sec))
         if execution_idx + rules.base.horizon_sec >= len(work):
-            continue
-        if not passive_book_valid(features.iloc[execution_idx], emitted["signal"], rules.base):
-            engine.last_emit_time = previous_emit_time
             continue
         engine.last_emit_time = work.index[execution_idx]
         sign = 1.0 if emitted["signal"] == "UP" else -1.0
