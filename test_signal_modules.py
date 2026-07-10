@@ -1,9 +1,11 @@
+import json
 import os
 import shutil
 import socket
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -14,7 +16,8 @@ if PY_DIR not in sys.path:
 from signal_lock import acquire_singleton_lock, process_is_alive
 import signal_paths
 from signal_runtime_cache import empty_orderbook_features
-from liquidity_v2_core import LiquidityV2Rules, evaluate_candidate
+from liquidity_v2_core import LiquidityV2Rules, evaluate_candidate, veto_owns_window
+from run_liquidity_v2_backtest import load_scan_times
 
 
 class SignalLockTests(unittest.TestCase):
@@ -134,6 +137,28 @@ class LiquidityV2CoreTests(unittest.TestCase):
         self.assertEqual(decision["status"], "veto")
         self.assertEqual(decision["reason"], "bidwall_trap_extreme_drop_skip")
         self.assertEqual(decision["blocked_signal"], "DOWN")
+
+    def test_center_slope_veto_does_not_reserve_trade_window(self):
+        self.assertFalse(veto_owns_window("trend_space_center_slope_high"))
+        self.assertTrue(veto_owns_window("liq_v2_skip_down_bid_fade"))
+
+
+class LiquidityV2BacktestTests(unittest.TestCase):
+    def test_load_scan_times_accepts_audit_rows_and_deduplicates(self):
+        with tempfile.TemporaryDirectory(prefix="scan-times-test-") as temp_dir:
+            path = Path(temp_dir) / "scan_times.json"
+            path.write_text(
+                json.dumps([
+                    {"time": "2026-07-10T00:00:01Z"},
+                    "2026-07-10T00:00:02Z",
+                    {"time": "2026-07-10T00:00:01Z"},
+                    {"time": "invalid"},
+                ]),
+                encoding="utf-8",
+            )
+            scan_times = load_scan_times(path)
+
+        self.assertEqual(len(scan_times), 2)
 
 
 if __name__ == "__main__":

@@ -16,7 +16,13 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "py"))
 
-from liquidity_v2_core import LiquidityV2Rules, build_features, evaluate_candidate, normal_ready  # noqa: E402
+from liquidity_v2_core import (  # noqa: E402
+    LiquidityV2Rules,
+    build_features,
+    evaluate_candidate,
+    normal_ready,
+    veto_owns_window,
+)
 from second_backtest.data import load_second_bars  # noqa: E402
 
 
@@ -32,6 +38,19 @@ def load_strategy_config(path: Path, strategy_id: str | None) -> tuple[str, dict
         if isinstance(cfg, dict) and cfg.get("model_type") == "second_normal_liquidity_orderbook_v1":
             return str(key), cfg
     raise KeyError("no second_normal_liquidity_orderbook_v1 strategy in config")
+
+
+def load_scan_times(path: Path) -> set[pd.Timestamp]:
+    raw = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(raw, list):
+        raise ValueError("scan-times file must contain a JSON list")
+    values = []
+    for item in raw:
+        value = item.get("time") if isinstance(item, dict) else item
+        timestamp = pd.to_datetime(value, utc=True, errors="coerce")
+        if not pd.isna(timestamp):
+            values.append(pd.Timestamp(timestamp))
+    return set(values)
 
 
 def read_orderbook(path: Path, target_index: pd.DatetimeIndex, max_age_sec: int) -> pd.DataFrame:
@@ -108,6 +127,7 @@ def run(args) -> dict:
     data = data[~data.index.duplicated(keep="last")].sort_index()
     requested_start = pd.Timestamp(args.start) if args.start else None
     requested_end = pd.Timestamp(args.end) if args.end else None
+    scan_times = load_scan_times(Path(args.scan_times)) if args.scan_times else None
     evaluation_mask = pd.Series(True, index=data.index)
     if requested_start is not None:
         evaluation_mask &= data.index >= requested_start
@@ -131,6 +151,8 @@ def run(args) -> dict:
         signal_time = data.index[idx]
         if requested_end is not None and signal_time >= requested_end:
             break
+        if scan_times is not None and signal_time not in scan_times:
+            continue
         in_evaluation = requested_start is None or signal_time >= requested_start
         if idx - last_emit_idx < rules.min_gap_sec:
             continue
@@ -143,7 +165,8 @@ def run(args) -> dict:
         if decision["status"] == "wait":
             continue
         if decision["status"] == "veto":
-            last_emit_idx = idx
+            if veto_owns_window(decision["reason"]):
+                last_emit_idx = idx
             if in_evaluation:
                 vetoes.append({
                     "time": data.index[idx],
@@ -185,6 +208,8 @@ def run(args) -> dict:
         "end": evaluation_data.index.max().isoformat() if len(evaluation_data) else None,
         "rows": int(len(evaluation_data)),
         "hours": round(hours, 4),
+        "scanMode": "server_audit" if scan_times is not None else "every_second",
+        "scanTimes": len(scan_times) if scan_times is not None else None,
         "rules": asdict(rules),
         "rawCandidates": raw_candidates,
         "vetoes": len(vetoes),
@@ -204,6 +229,7 @@ def main():
     parser.add_argument("--strategy-id")
     parser.add_argument("--start")
     parser.add_argument("--end")
+    parser.add_argument("--scan-times", help="JSON list of live scan timestamps for exact server replay.")
     parser.add_argument("--no-shards", action="store_true", help="Read only the main seconds CSV.")
     parser.add_argument("--amount", type=float, default=5.0)
     parser.add_argument("--payout-rate", type=float, default=0.8)
