@@ -79,6 +79,6 @@
     "router_band_high_enabled": false,
     "normal_state_loss_density_enabled": false,
     "normal_state_loss_streak_enabled": false,
-    "model_label": "Dynamic normal/trend OB latch V2"
+    "model_label": "动态正态/趋势订单薄锁存 V2"
   }
 }

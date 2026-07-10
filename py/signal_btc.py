@@ -3633,7 +3633,7 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
                 self.last_processed_time = None
         self.runtime_fingerprint = None
         self.max_emit_age_sec = int(cfg.get("router_max_emit_age_sec", 3))
-        self.model_label = "Dynamic normal/trend OB latch V2"
+        self.model_label = "动态正态/趋势订单薄锁存 V2"
 
     def _persist_runtime(self):
         payload = {
@@ -3677,7 +3677,7 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
             "latch_sec": self.router_rules.latch_sec,
             "next_check_time": next_check_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "next_check_time_shanghai": next_check_at.tz_convert("Asia/Shanghai").strftime("%Y/%m/%d %H:%M:%S"),
-            "next_signal_estimate": "Every-second detection; execute on the next 5-second slot while the order book still confirms.",
+            "next_signal_estimate": "逐秒识别候选信号；进入6秒锁存后，在下一个5秒执行点重新确认订单薄，确认仍有效才下单。",
             "bypass_entry_timing": True,
             "shadow_only": not self.trade_enabled,
             "trade_enabled": self.trade_enabled,
@@ -3744,7 +3744,7 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
                 **latch_extra,
                 "signal": None,
                 "reason": str(result.get("event") or "router_waiting"),
-                "signal_detail": "Waiting for a confirmed normal reclaim or mature trend; latched signals must pass execution-time order-book validation.",
+                "signal_detail": "等待正态假突破回归确认，或等待趋势状态成熟；信号进入锁存后，下单时必须再次通过订单薄有效性检查。",
             }
 
         emitted_time = pd.Timestamp(emitted["time"])
@@ -3767,7 +3767,11 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
             "latch_delay_sec": emitted["delay_sec"],
             "confidence": 80.0,
             "high_conf": True,
-            "signal_detail": f"{emitted['kind']} {emitted['signal']} confirmed; execution-time order book remained valid after {emitted['delay_sec']}s.",
+            "signal_detail": (
+                f"{'正态回归' if emitted['kind'] == 'normal' else '趋势跟随'}信号已确认，"
+                f"方向为{'上涨' if emitted['signal'] == 'UP' else '下跌'}；"
+                f"锁存{emitted['delay_sec']}秒后订单薄仍然有效，允许下单。"
+            ),
         }
 
 
