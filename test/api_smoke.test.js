@@ -307,7 +307,7 @@ test("manual order command clears after tablet reports order done", async () => 
   });
 });
 
-test("shadow circuit breaker blocks after dense shadow losses", async () => {
+test("strategy loss density gate blocks after dense losses", async () => {
   await withServer({}, async ({ baseUrl }) => {
     const strategyId = "BTC_10min_NORMAL_STATE_V21_LOSS_DENSITY_3OF6_8H";
     const cfg = await requestJson(baseUrl, "/api/config", {
@@ -382,10 +382,7 @@ test("shadow circuit breaker blocks after dense shadow losses", async () => {
 
     const signal = await requestJson(baseUrl, "/api/signal?source=dashboard");
     assert.equal(signal.status, 200);
-    assert.equal(signal.json._shadowCircuitGate.blocked, true);
-    assert.equal(signal.json._shadowCircuitGate.scope, "portfolio");
-    assert.equal(signal.json._shadowCircuitGate.global.lastTrigger.lossCount, 3);
-    assert.equal(signal.json._shadowCircuitGate.strategies[strategyId].lastTrigger.lossCount, 3);
+    assert.equal(signal.json._shadowCircuitGate, undefined);
     assert.equal(signal.json._lossDensityGate.strategies[strategyId].blocked, true);
     assert.equal(signal.json._lossDensityGate.strategies[strategyId].policy.minTrades, 4);
     assert.equal(signal.json._lossDensityGate.strategies[strategyId].lastTrigger.lossCount, 3);

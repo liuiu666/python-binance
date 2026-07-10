@@ -1470,90 +1470,6 @@ function applyExecutionFailureGate(signals) {
   return { signals: out, gate: { strategies: states } };
 }
 
-function shadowCircuitPolicy() {
-  return {
-    enabled: process.env.SHADOW_CIRCUIT_ENABLED === "1",
-    window: Math.max(2, Math.min(50, Number(process.env.SHADOW_CIRCUIT_WINDOW || 6))),
-    losses: Math.max(1, Math.min(50, Number(process.env.SHADOW_CIRCUIT_LOSSES || 3))),
-    minTrades: Math.max(2, Math.min(50, Number(process.env.SHADOW_CIRCUIT_MIN_TRADES || 4))),
-    cooldownSec: Math.max(60, Math.min(86400, Number(process.env.SHADOW_CIRCUIT_COOLDOWN_SEC || 8 * 60 * 60))),
-    lookbackHours: Math.max(1, Math.min(720, Number(process.env.SHADOW_CIRCUIT_LOOKBACK_HOURS || 72)))
-  };
-}
-
-function shadowCircuitWindowState(rows, policy) {
-  const rolling = [];
-  let lastTrigger = null;
-  for (const row of rows) {
-    rolling.push(row.status);
-    while (rolling.length > policy.window) rolling.shift();
-    const lossCount = rolling.filter(status => status === "lost").length;
-    if (rolling.length >= policy.minTrades && lossCount >= policy.losses) {
-      lastTrigger = {
-        triggerTime: row.settleTime,
-        lossCount,
-        windowStatuses: rolling.slice()
-      };
-    }
-  }
-  const cooldownUntil = lastTrigger ? lastTrigger.triggerTime + policy.cooldownSec * 1000 : 0;
-  return {
-    historyCount: rows.length,
-    recentStatuses: rows.slice(-policy.window).map(row => row.status),
-    lastTrigger,
-    cooldownUntil
-  };
-}
-
-function shadowCircuitState(now = Date.now()) {
-  const policy = shadowCircuitPolicy();
-  if (!policy.enabled) return { enabled: false, blocked: false, policy };
-  if (policy.losses > policy.window) policy.losses = policy.window;
-  if (policy.minTrades > policy.window) policy.minTrades = policy.window;
-
-  const rows = recentLossDensityRows(now, policy.lookbackHours)
-    .filter(row => row && isShadowHistoryRow(row) && (row.status === "won" || row.status === "lost"))
-    .map(row => ({
-      strategyId: row.strategyId || "shadow",
-      status: row.status,
-      source: row.source || "",
-      openTime: Number(row.openTime || 0),
-      settleTime: Number(row.settleTime || row.openTime || 0)
-    }))
-    .filter(row => Number.isFinite(row.settleTime) && row.settleTime > 0)
-    .sort((a, b) => a.settleTime - b.settleTime);
-
-  const global = shadowCircuitWindowState(rows, policy);
-  const strategies = {};
-  for (const strategyId of [...new Set(rows.map(row => row.strategyId))]) {
-    strategies[strategyId] = shadowCircuitWindowState(rows.filter(row => row.strategyId === strategyId), policy);
-  }
-
-  let cooldownUntil = global.cooldownUntil || 0;
-  let scope = global.cooldownUntil ? "portfolio" : null;
-  for (const [strategyId, state] of Object.entries(strategies)) {
-    if (state.cooldownUntil > cooldownUntil) {
-      cooldownUntil = state.cooldownUntil;
-      scope = strategyId;
-    }
-  }
-  const blocked = Boolean(cooldownUntil && now < cooldownUntil);
-  return {
-    enabled: true,
-    blocked,
-    scope,
-    policy,
-    global: {
-      ...global,
-      cooldownUntil: blocked && scope === "portfolio" ? cooldownUntil : null
-    },
-    strategies,
-    cooldownUntil: blocked ? cooldownUntil : null,
-    cooldownUntilIso: blocked ? new Date(cooldownUntil).toISOString() : null,
-    cooldownUntilShanghai: blocked ? shanghaiTime(cooldownUntil) : null
-  };
-}
-
 function buildSignalResponse(source = "") {
   const rawSignals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {};
   const observedIds = currentObservedStrategyIds();
@@ -1574,7 +1490,6 @@ function buildSignalResponse(source = "") {
   const health = applyDataHealthGate(freshSignals, dataHealthGate(freshSignals));
   const lossDensity = applyLossDensityGate(health.signals);
   const executionFailure = applyExecutionFailureGate(lossDensity.signals);
-  const shadowCircuit = shadowCircuitState();
   const safety = source === "dashboard"
     ? { signals: executionFailure.signals, gate: autoTradeSafetyGate() }
     : applyAutoTradeSafetyGate(executionFailure.signals);
@@ -1650,7 +1565,6 @@ function buildSignalResponse(source = "") {
     _dataHealthGate: health.gate,
     _lossDensityGate: lossDensity.gate,
     _executionFailureGate: executionFailure.gate,
-    _shadowCircuitGate: shadowCircuit,
     _autoTradeSafetyGate: safety.gate
   };
 }
