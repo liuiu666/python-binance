@@ -252,6 +252,102 @@ export function signalReasonText(signal) {
 
 export function signalReadinessItems(signal, variant = {}) {
   if (!signal) return [];
+  if (signal.model_type === "second_normal_trend_orderbook_latch_v2") {
+    const observed = asNumber(signal.observed_pct);
+    const coverage = asNumber(signal.ob_coverage_60);
+    const state = String(signal.router_state || "transition");
+    const band = String(signal.volatility_band || "unknown");
+    const sigma = asNumber(signal.sigma_bps);
+    const z = asNumber(signal.z_score);
+    const obAge = asNumber(signal.ob_age_sec);
+    const imbalance = asNumber(signal.imbalance_20);
+    const micro = asNumber(signal.micro_bps);
+    const latchActive = signal.latch_active === true;
+    const latchSignal = signal.latch_signal;
+    const stateLabels = {
+      normal: "正态震荡",
+      trend_formation: "趋势形成",
+      transition: "行情过渡"
+    };
+    const bandLabels = {
+      ultra_low: "超低波动",
+      low: "低波动",
+      mid: "中等波动",
+      elevated: "较高波动",
+      high: "高波动"
+    };
+    const bandTargets = {
+      ultra_low: "0.8σ，5秒内2次确认",
+      low: "0.9σ，5秒内2次确认",
+      mid: "1.0σ，5秒内2次确认",
+      elevated: "1.2σ，8秒内3次确认",
+      high: "停用正态回归，只判断趋势"
+    };
+    const zTarget = {
+      ultra_low: 0.8,
+      low: 0.9,
+      mid: 1.0,
+      elevated: 1.2
+    }[band];
+    const sign = latchSignal === "UP" ? 1 : latchSignal === "DOWN" ? -1 : null;
+    const bookAligned = sign == null || imbalance == null || micro == null
+      ? null
+      : sign * imbalance >= 0.08 && sign * micro >= 0.001;
+    const qualityOk = observed != null && coverage != null
+      ? observed >= 90 && coverage >= 0.9
+      : null;
+    const items = [
+      {
+        key: "router_quality",
+        label: "秒级数据质量",
+        ok: qualityOk,
+        value: observed == null || coverage == null ? "--" : `${fmt(observed, 1)}% / ${fmt(coverage * 100, 1)}%`,
+        target: "价格覆盖 >= 90%，订单薄覆盖 >= 90%",
+        help: "秒K或订单薄覆盖不足，策略不会建立行情状态。"
+      },
+      {
+        key: "router_state",
+        label: "行情路由",
+        ok: state === "normal" || state === "trend_formation" ? true : null,
+        value: stateLabels[state] || state,
+        target: "进入正态震荡，或形成成熟趋势",
+        help: "当前处于行情切换阶段，正态回归和趋势跟随都暂不执行。"
+      },
+      {
+        key: "router_band",
+        label: "动态波动档位",
+        ok: band === "unknown" ? null : true,
+        value: sigma == null ? (bandLabels[band] || "--") : `${bandLabels[band] || band} ${fmt(sigma, 2)}bp`,
+        target: bandTargets[band] || "等待波动率数据",
+        help: "策略会根据当前波动率自动切换入场σ和确认次数。"
+      },
+      {
+        key: "router_reclaim",
+        label: "假突破回归",
+        ok: null,
+        value: z == null ? "--" : `${fmt(z, 3)}σ`,
+        target: zTarget == null ? "当前档位不做正态回归" : `先越过 ±${fmt(zTarget, 1)}σ，再回到区间`,
+        help: "只看当前Z值不够，必须先发生越界，再确认价格回到正态区间。"
+      },
+      {
+        key: "router_latch",
+        label: "信号锁存",
+        ok: latchActive ? true : null,
+        value: latchActive ? `${latchSignal === "UP" ? "上涨" : "下跌"}，剩余确认中` : "尚未锁存",
+        target: "候选信号锁存6秒，等待5秒执行点",
+        help: "尚未出现满足确认次数的正态回归或成熟趋势信号。"
+      },
+      {
+        key: "router_execution_book",
+        label: "执行订单薄",
+        ok: latchActive ? bookAligned : (obAge == null ? null : obAge <= 3),
+        value: obAge == null ? "--" : `${fmt(obAge, 1)}秒${latchActive && bookAligned != null ? (bookAligned ? "，方向一致" : "，方向冲突") : ""}`,
+        target: latchActive ? "下单时方向同向，且数据 <= 3秒" : "等待锁存后进行方向复核",
+        help: "锁存信号在真正下单前，订单薄方向必须仍然支持该信号。"
+      }
+    ];
+    return items.map(item => ({ ...item, tone: statusTone(item.ok) }));
+  }
   const observed = asNumber(signal.observed_pct ?? signal.observed600_pct);
   const observedMin = asNumber(variant.observedMinPct ?? signal.min_observed_pct) ?? 88;
   const inside = asNumber(signal.inside1_ratio);
