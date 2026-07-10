@@ -15,7 +15,12 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "py"))
 
-from normal_trend_latch_core import NormalTrendLatchEngine, RouterRules, build_router_features  # noqa: E402
+from normal_trend_latch_core import (  # noqa: E402
+    NormalTrendLatchEngine,
+    RouterRules,
+    build_router_features,
+    passive_book_valid,
+)
 from run_liquidity_v2_backtest import read_orderbook  # noqa: E402
 from second_backtest.data import load_second_bars  # noqa: E402
 
@@ -81,17 +86,26 @@ def run(args):
     last_idx = min(len(work) - rules.base.horizon_sec, int(work.index.searchsorted(end)))
     rows = []
     for idx in range(first_idx, last_idx):
+        previous_emit_time = engine.last_emit_time
         result = engine.step(work.index[idx], features.iloc[idx])
         emitted = result.get("signal")
         if not emitted:
             continue
+        execution_idx = idx + max(0, int(args.operational_delay_sec))
+        if execution_idx + rules.base.horizon_sec >= len(work):
+            continue
+        if not passive_book_valid(features.iloc[execution_idx], emitted["signal"], rules.base):
+            engine.last_emit_time = previous_emit_time
+            continue
+        engine.last_emit_time = work.index[execution_idx]
         sign = 1.0 if emitted["signal"] == "UP" else -1.0
-        entry = float(close[idx])
-        settle = float(close[idx + rules.base.horizon_sec])
+        entry = float(close[execution_idx])
+        settle = float(close[execution_idx + rules.base.horizon_sec])
         signed_bps = (settle / entry - 1.0) * 10000.0 * sign
         rows.append({
-            "time": work.index[idx],
-            "settle_time": work.index[idx + rules.base.horizon_sec],
+            "signal_time": work.index[idx],
+            "time": work.index[execution_idx],
+            "settle_time": work.index[execution_idx + rules.base.horizon_sec],
             "kind": emitted["kind"],
             "band": emitted["band"],
             "signal": emitted["signal"],
@@ -110,6 +124,7 @@ def run(args):
         "end": end,
         "hours": round(hours, 4),
         "phase": args.phase,
+        "operationalDelaySec": args.operational_delay_sec,
         "overall": metrics(rows, hours, args.amount, args.payout_rate),
         "byKind": {
             kind: metrics([row for row in rows if row["kind"] == kind], hours, args.amount, args.payout_rate)
@@ -130,6 +145,7 @@ def main():
     parser.add_argument("--start")
     parser.add_argument("--end")
     parser.add_argument("--phase", type=int, default=0)
+    parser.add_argument("--operational-delay-sec", type=int, default=0)
     parser.add_argument("--no-shards", action="store_true")
     parser.add_argument("--amount", type=float, default=5.0)
     parser.add_argument("--payout-rate", type=float, default=0.8)

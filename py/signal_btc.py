@@ -446,7 +446,13 @@ from liquidity_v2_core import (
     trend_space_mode as core_trend_space_mode,
     trend_space_veto_code,
 )
-from normal_trend_latch_core import NormalTrendLatchEngine, RouterRules, band_name, build_router_features
+from normal_trend_latch_core import (
+    NormalTrendLatchEngine,
+    RouterRules,
+    band_name,
+    build_router_features,
+    passive_book_valid,
+)
 from signal_io import (
     append_jsonl,
     csv_tail_rows,
@@ -3646,6 +3652,36 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
         persist_strategy_runtime_state(self.id, payload)
         self.runtime_fingerprint = fingerprint
 
+    def _live_execution_book(self, signal):
+        now = pd.Timestamp.now(tz="UTC").floor("s")
+        index = pd.date_range(now - pd.Timedelta(seconds=35), now, freq="s", tz="UTC")
+        orderbook = self._load_orderbook(index)
+        if orderbook is None or orderbook.empty:
+            return False, {"reason": "execution_orderbook_missing"}
+        latest = orderbook.iloc[-1]
+        if not bool(latest.get("ob_available")):
+            age = self._safe_float(latest, "ob_age_sec")
+            return False, {"reason": "execution_orderbook_stale", "ob_age_sec": age}
+        bid = pd.to_numeric(orderbook["bid_qty_20"], errors="coerce")
+        ask = pd.to_numeric(orderbook["ask_qty_20"], errors="coerce")
+        row = pd.Series({
+            "imbalance_20": self._safe_float(latest, "imbalance_20"),
+            "micro_bps": self._safe_float(latest, "microprice_edge_bps"),
+            "bid_qty_20": self._safe_float(latest, "bid_qty_20"),
+            "ask_qty_20": self._safe_float(latest, "ask_qty_20"),
+            "bid20_chg_30": float(bid.iloc[-1] / bid.iloc[-31] - 1.0) if len(bid) >= 31 and bid.iloc[-31] > 0 else float("nan"),
+            "ask20_chg_30": float(ask.iloc[-1] / ask.iloc[-31] - 1.0) if len(ask) >= 31 and ask.iloc[-31] > 0 else float("nan"),
+        })
+        valid = passive_book_valid(row, signal, self.core_rules)
+        return valid, {
+            "reason": "execution_orderbook_confirmed" if valid else "execution_orderbook_direction_changed",
+            "time": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "ob_age_sec": round(self._safe_float(latest, "ob_age_sec"), 3),
+            "imbalance_20": round(float(row["imbalance_20"]), 6),
+            "micro_bps": round(float(row["micro_bps"]), 6),
+            "mid": round(self._safe_float(latest, "mid"), 4),
+        }
+
     def predict(self, df5=None):
         bars = self._load_seconds()
         warmup = max(self.normal_window_sec, self.center_slope_sec, self.retest_sec, 3600) + 10
@@ -3715,6 +3751,7 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
         else:
             process_index = features.index[features.index > self.last_processed_time]
             bootstrap = False
+        previous_emit_time = self.engine.last_emit_time
         result = {"event": "waiting", "signal": None, "latched": self.engine.latched}
         for timestamp in process_index:
             age_from_latest = (signal_time - timestamp).total_seconds()
@@ -3747,8 +3784,23 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
                 "signal_detail": "等待正态假突破回归确认，或等待趋势状态成熟；信号进入锁存后，下单时必须再次通过订单薄有效性检查。",
             }
 
-        emitted_time = pd.Timestamp(emitted["time"])
-        emitted_price = float(data.loc[emitted_time, "close"])
+        execution_book_ok, execution_book = self._live_execution_book(emitted["signal"])
+        if not execution_book_ok:
+            self.engine.last_emit_time = previous_emit_time
+            self._persist_runtime()
+            return {
+                **base,
+                **latest_extra,
+                **latch_extra,
+                "signal": None,
+                "reason": execution_book["reason"],
+                "execution_book": execution_book,
+                "signal_detail": "候选信号已经形成，但服务器准备发单时最新订单薄不再支持该方向；本次跳过，且不占用10分钟冷却。",
+            }
+
+        detected_time = pd.Timestamp(emitted["time"])
+        emitted_time = pd.Timestamp(execution_book["time"])
+        emitted_price = execution_book.get("mid") or float(indexed["close"].iloc[-1])
         self.last_emit_time = emitted_time
         self._mark_window_owner(emitted_time, emitted["signal"], emitted["reason"], veto=False)
         self.engine.last_emit_time = emitted_time
@@ -3758,6 +3810,7 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
             **latest_extra,
             **latch_extra,
             "time": emitted_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "detected_time": detected_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "price": round(emitted_price, 4),
             "entry": round(emitted_price, 4),
             "signal": emitted["signal"],
@@ -3765,6 +3818,7 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
             "router_kind": emitted["kind"],
             "volatility_band": emitted["band"],
             "latch_delay_sec": emitted["delay_sec"],
+            "execution_book": execution_book,
             "confidence": 80.0,
             "high_conf": True,
             "signal_detail": (
