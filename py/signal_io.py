@@ -1,6 +1,7 @@
 """Small file and JSON helpers for the live signal service."""
 
 import json
+import math
 import os
 
 import pandas as pd
@@ -11,7 +12,9 @@ def json_safe(value):
         return {str(k): json_safe(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [json_safe(v) for v in value]
-    if isinstance(value, (str, int, float, bool)) or value is None:
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, (str, int, bool)) or value is None:
         return value
     if hasattr(value, "item"):
         try:

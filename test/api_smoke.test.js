@@ -148,6 +148,199 @@ test("data health uses signal snapshot time instead of stale strategy candle tim
   });
 });
 
+test("auction data health requires fresh collector status and depth stream", async () => {
+  await withServer({}, async ({ baseUrl, dataDir }) => {
+    const now = Date.now();
+    const statusPath = path.join(dataDir, "auction_data_status.json");
+    fs.writeFileSync(statusPath, JSON.stringify({
+      ok: true,
+      updated_at: new Date(now).toISOString(),
+      event_age_ms: 20,
+      streams: { depth_updates: { age_ms: 20 } },
+      trades: 12,
+      depth_updates: 9
+    }), "utf8");
+
+    const healthy = await requestJson(baseUrl, "/api/auction-data-health");
+    assert.equal(healthy.status, 200);
+    assert.equal(healthy.json.ok, true);
+    assert.equal(healthy.json.depthAgeMs, 20);
+
+    fs.writeFileSync(statusPath, JSON.stringify({
+      ok: true,
+      updated_at: new Date(now - 60_000).toISOString(),
+      event_age_ms: 0,
+      streams: { depth_updates: { age_ms: 0 } }
+    }), "utf8");
+    const staleStatus = await requestJson(baseUrl, "/api/auction-data-health");
+    assert.equal(staleStatus.status, 200);
+    assert.equal(staleStatus.json.ok, false);
+  });
+});
+
+test("tablet signal mirror records one shadow trade for repeated signal polls", async () => {
+  await withServer({}, async ({ baseUrl, dataDir }) => {
+    const now = Date.now();
+    writeFreshMinuteCandles(dataDir, now);
+    fs.writeFileSync(path.join(dataDir, "current_price.json"), JSON.stringify({ price: "100", time: now }), "utf8");
+
+    const current = await requestJson(baseUrl, "/api/config");
+    assert.equal(current.status, 200);
+    const strategy = current.json.strategyVariants[0];
+    const config = {
+      ...current.json,
+      realTradingEnabled: true,
+      autoTrade_10m: true,
+      forceAutoTrade: true,
+      shadowTradingEnabled: true,
+      strategyVariants: [strategy]
+    };
+    const saved = await requestJson(baseUrl, "/api/config", { method: "POST", body: config });
+    assert.equal(saved.status, 200);
+
+    const signalTime = new Date(Date.now() - 1000).toISOString();
+    fs.writeFileSync(path.join(dataDir, "live_signals.json"), JSON.stringify({
+      [strategy.id]: {
+        strategy_id: strategy.id,
+        time: signalTime,
+        actionable_time: signalTime,
+        signal: "UP",
+        price: 100,
+        entry: 100,
+        duration: "10",
+        confidence: 80,
+        bypass_entry_timing: true
+      },
+      _snapshot_time_ms: Date.now(),
+      _snapshot_time: new Date().toISOString(),
+      _snapshot_strategy_count: 1
+    }, null, 2), "utf8");
+
+    await new Promise(resolve => setTimeout(resolve, 2300));
+    const first = await requestJson(baseUrl, "/api/signal?source=autojs");
+    const second = await requestJson(baseUrl, "/api/signal?source=autojs");
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.equal(first.json[strategy.id].signal, "UP");
+    assert.equal(second.json[strategy.id].signal, "UP");
+
+    const audit = await requestJson(baseUrl, "/api/trade-audit?limit=100");
+    const mirrors = audit.json.items.filter(item => (
+      item.event === "shadow_trade_open"
+      && item.strategyId === strategy.id
+      && item.shadowType === "tablet_signal_mirror"
+    ));
+    assert.equal(mirrors.length, 1);
+    assert.equal(mirrors[0].direction, "UP");
+    assert.equal(mirrors[0].amount, Number(strategy.amount));
+  });
+});
+
+test("multi-normal config replaces branch vote and writes the shared-core parameters", async () => {
+  await withServer({}, async ({ baseUrl, dataDir }) => {
+    fs.writeFileSync(path.join(dataDir, "prod_config.json"), JSON.stringify({
+      BTC_10min_BRANCH_VOTE_STARTUP_V1: {
+        enabled: true,
+        model_type: "second_branch_vote_startup_v1"
+      }
+    }), "utf8");
+    const strategyId = "BTC_10min_MULTI_NORMAL_HF_STABLE_V1";
+    const response = await requestJson(baseUrl, "/api/config", {
+      method: "POST",
+      body: {
+        realTradingEnabled: true,
+        autoTrade_10m: true,
+        forceAutoTrade: true,
+        shadowTradingEnabled: true,
+        strategyVariants: [{
+          id: strategyId,
+          base: "SECOND_MULTI_NORMAL_HF_STABLE_V1",
+          label: "多周期动态正态高频稳定V1",
+          amount: "5",
+          enabled: true,
+          tradeEnabled: true,
+          lookbackSec: 7200,
+          horizonSec: 600,
+          gapSec: 600,
+          normalWindowSec: 600,
+          orderbookMaxAgeSec: 3,
+          lowVolSigmaMaxBps: 3,
+          lowVolRangeMaxBps: 20,
+          lowVolAbsRet10MaxBps: 5,
+          lowVolZMin: 1.2,
+          lowVolZMax: 1.8,
+          trendBaseZMin: 1.2,
+          trendHighVolSigmaMinBps: 8,
+          trendHighVolZMin: 0.5,
+          trendMinSignedFlow: 0.12,
+          trendMaxSignedBook: 0.08,
+          incidentFilterEnabled: true
+        }]
+      }
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.json.strategyVariants.map(item => item.id), [strategyId]);
+    assert.equal(response.json.strategyVariants[0].incidentFilterEnabled, false);
+
+    const prod = JSON.parse(fs.readFileSync(path.join(dataDir, "prod_config.json"), "utf8"));
+    assert.equal(prod.BTC_10min_BRANCH_VOTE_STARTUP_V1, undefined);
+    assert.equal(prod[strategyId].model_type, "second_multi_normal_hf_stable_v1");
+    assert.equal(prod[strategyId].multi_normal_trend_high_vol_sigma_min_bps, 8);
+    assert.equal(prod[strategyId].multi_normal_trend_high_vol_z_min, 0.5);
+    assert.equal(prod[strategyId].incident_filter_enabled, false);
+  });
+});
+
+test("multiscale phase gate replaces old high-frequency strategy", async () => {
+  await withServer({}, async ({ baseUrl, dataDir }) => {
+    fs.writeFileSync(path.join(dataDir, "prod_config.json"), JSON.stringify({
+      BTC_10min_MULTI_NORMAL_HF_STABLE_V1: {
+        enabled: true,
+        model_type: "second_multi_normal_hf_stable_v1"
+      }
+    }), "utf8");
+    const strategyId = "BTC_10min_MULTISCALE_PHASE_GATE_V1";
+    const response = await requestJson(baseUrl, "/api/config", {
+      method: "POST",
+      body: {
+        realTradingEnabled: true,
+        autoTrade_10m: true,
+        forceAutoTrade: true,
+        shadowTradingEnabled: true,
+        strategyVariants: [{
+          id: strategyId,
+          base: "SECOND_MULTISCALE_PHASE_GATE_V1",
+          label: "多周期迁移阶段 V1",
+          amount: "5",
+          enabled: true,
+          tradeEnabled: true,
+          lookbackSec: 7800,
+          horizonSec: 600,
+          gapSec: 600,
+          orderbookMaxAgeSec: 3,
+          maxEmitAgeSec: 8,
+          phaseLookbackSec: 3600,
+          maturityHistorySec: 3600,
+          maturityMinPeriods: 1800,
+          maturityQuantile: 0.75,
+          minFlow60: 0.08,
+          minImbalance20: 0.05,
+          minMicropriceBps: 0,
+          minVolumeRatio: 0.8
+        }]
+      }
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.json.strategyVariants.map(item => item.id), [strategyId]);
+    const prod = JSON.parse(fs.readFileSync(path.join(dataDir, "prod_config.json"), "utf8"));
+    assert.equal(prod.BTC_10min_MULTI_NORMAL_HF_STABLE_V1, undefined);
+    assert.equal(prod[strategyId].model_type, "second_multiscale_phase_gate_v1");
+    assert.equal(prod[strategyId].phase_gate_maturity_quantile, 0.75);
+    assert.equal(prod[strategyId].phase_gate_max_emit_age_sec, 8);
+    assert.equal(prod[strategyId].trade_enabled, true);
+  });
+});
+
 test("server trade audit import dedupes through API", async () => {
   await withServer({}, async ({ baseUrl }) => {
     const body = {

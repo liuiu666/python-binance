@@ -28,7 +28,10 @@ from signal_paths import (
     TAKER_FILE,
 )
 
-SIGNAL_SCAN_INTERVAL_SEC = max(1.0, float(os.environ.get("SIGNAL_SCAN_INTERVAL_SEC", "2")))
+SIGNAL_SCAN_INTERVAL_SEC = max(1.0, float(os.environ.get("SIGNAL_SCAN_INTERVAL_SEC", "1")))
+LIVE_1M_REFRESH_SEC = max(1.0, float(os.environ.get("LIVE_1M_REFRESH_SEC", "5")))
+LIVE_1M_RETRY_SEC = max(1.0, float(os.environ.get("LIVE_1M_RETRY_SEC", "2")))
+SIGNAL_SCAN_MIN_SLEEP_SEC = 0.05
 
 # ── 秒级 bars 内存缓存 ──────────────────────────────────────────────────────
 # 所有 SecondNormalStrategy 实例共享同一份 bars，避免每次 predict 全量读盘。
@@ -451,6 +454,25 @@ from normal_trend_latch_core import (
     RouterRules,
     band_name,
     build_router_features,
+    trend_start_score,
+)
+from branch_vote_startup_core import (
+    BranchVoteStartupConfig,
+    build_minute_snapshots as build_branch_vote_snapshots,
+    evaluate_latest as evaluate_branch_vote_latest,
+    load_rules as load_branch_vote_rules,
+)
+from multi_normal_hf_stable_core import (
+    MODEL_TYPE as MULTI_NORMAL_HF_MODEL_TYPE,
+    MultiNormalHFStableConfig,
+    build_snapshots as build_multi_normal_hf_snapshots,
+    evaluate_latest as evaluate_multi_normal_hf_latest,
+)
+from multiscale_phase_gate_core import (
+    MODEL_TYPE as MULTISCALE_PHASE_GATE_MODEL_TYPE,
+    MultiscalePhaseGateConfig,
+    build_snapshots as build_multiscale_phase_snapshots,
+    evaluate_latest as evaluate_multiscale_phase_latest,
 )
 from signal_io import (
     append_jsonl,
@@ -460,10 +482,12 @@ from signal_io import (
 )
 from signal_runtime_cache import (
     ORDERBOOK_FEATURE_TAIL_CHUNK,
+    StaleWhileRefreshCache,
     begin_second_bars_cycle,
     end_second_bars_cycle,
     load_minute_features_cached,
     load_orderbook_features_cached,
+    load_orderbook_rows_cached_for_cycle,
     load_second_bars_cached_for_cycle,
     update_second_tail_requirement,
 )
@@ -3194,7 +3218,7 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
                 self.normal_window_sec + self.center_slope_sec + self.retest_sec + 120,
                 1200,
             )
-            rows = csv_tail_rows(ORDERBOOK_FILE, limit=limit, chunk_size=ORDERBOOK_FEATURE_TAIL_CHUNK)
+            rows = load_orderbook_rows_cached_for_cycle(limit)
         except Exception as exc:
             print(f"[Signal] liquidity orderbook load failed: {exc}")
             return None
@@ -3713,6 +3737,13 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
             "micro_bps": round(float(latest["micro_bps"]), 6) if np.isfinite(latest.get("micro_bps")) else None,
             "flow_60": round(float(latest["flow_60"]), 6) if np.isfinite(latest.get("flow_60")) else None,
         }
+        startup_latest = trend_start_score(latest)
+        latest_extra.update({
+            "startup_skip_enabled": bool(self.router_rules.startup_skip_enabled),
+            "startup_score": int(startup_latest["score"]),
+            "startup_score_threshold": int(self.router_rules.startup_skip_threshold),
+            "startup_checks": startup_latest["checks"],
+        })
 
         if self.last_processed_time is None:
             process_index = features.index[features.index >= signal_time - pd.Timedelta(seconds=40)]
@@ -3743,6 +3774,22 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
         }
         emitted = result.get("signal")
         if not emitted:
+            startup_skip = result.get("startup_skip")
+            if startup_skip:
+                return {
+                    **base,
+                    **latest_extra,
+                    **latch_extra,
+                    "signal": None,
+                    "reason": "router_startup_skip",
+                    "blocked_signal": startup_skip.get("blocked_signal"),
+                    "blocked_reason": startup_skip.get("blocked_reason"),
+                    "startup_skip": startup_skip,
+                    "signal_detail": (
+                        f"趋势启动评分 {startup_skip.get('score')}/{len(startup_skip.get('checks') or {})} "
+                        f">= {startup_skip.get('threshold')}，跳过上涨启动中的反向做空，不反手做多。"
+                    ),
+                }
             return {
                 **base,
                 **latest_extra,
@@ -3779,6 +3826,501 @@ class NormalTrendOrderbookLatchV2Strategy(SecondNormalLiquidityOrderbookV1Strate
                 f"方向为{'上涨' if emitted['signal'] == 'UP' else '下跌'}；"
                 f"锁存{emitted['delay_sec']}秒后到达执行点，允许下单。"
             ),
+        }
+
+
+class BranchVoteStartupStrategy(SecondNormalLiquidityOrderbookV1Strategy):
+    """Independent minute branch-vote strategy with trend-start skip."""
+
+    _rules_cache = {"path": None, "mtime": None, "rules": None}
+
+    def __init__(self, strategy_id, cfg):
+        super().__init__(strategy_id, cfg)
+        self.branch_cfg = BranchVoteStartupConfig.from_config(cfg)
+        self.horizon_sec = self.branch_cfg.horizon_sec
+        self.min_gap_sec = self.branch_cfg.min_gap_sec
+        self.interval_min = max(1, int(round(self.horizon_sec / 60)))
+        self.model_label = str(cfg.get("model_label", "分支投票趋势启动V1"))
+        self.trade_enabled = bool(cfg.get("trade_enabled", False))
+
+    def _rules_path(self):
+        path = self.branch_cfg.rule_path
+        if os.path.isabs(path):
+            return path
+        return os.path.join(APP_DIR, path)
+
+    def _load_rules_cached(self):
+        path = self._rules_path()
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return None, path, "规则文件不存在"
+        cache = BranchVoteStartupStrategy._rules_cache
+        if cache.get("path") != path or cache.get("mtime") != mtime or cache.get("rules") is None:
+            cache["rules"] = load_branch_vote_rules(path)
+            cache["path"] = path
+            cache["mtime"] = mtime
+        return cache["rules"], path, None
+
+    def predict(self, df5=None):
+        bars = self._load_seconds()
+        warmup = max(7200, self.branch_cfg.normal_window_sec + 5400)
+        if bars is None or len(bars) < warmup:
+            return None
+        recent = bars.tail(warmup + 180).copy()
+        recent["time"] = pd.to_datetime(recent["time"], utc=True, errors="coerce").dt.floor("s")
+        recent = recent.dropna(subset=["time"]).drop_duplicates("time", keep="last").sort_values("time")
+        if len(recent) < warmup:
+            return None
+        indexed = recent.set_index("time").sort_index()
+        orderbook = self._load_orderbook(indexed.index)
+        signal_time = indexed.index[-1]
+        emitted_time = pd.Timestamp.now(tz="UTC").floor("s")
+        price = float(indexed["close"].iloc[-1])
+        next_check_at = emitted_time + pd.Timedelta(seconds=SIGNAL_SCAN_INTERVAL_SEC)
+        base = {
+            "strategy_id": self.id,
+            "model_type": "second_branch_vote_startup_v1",
+            "model_label": self.model_label,
+            "interval_min": self.interval_min,
+            "duration": self.interval_min,
+            "horizon_sec": self.horizon_sec,
+            "min_gap_sec": self.min_gap_sec,
+            "time": emitted_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "price": round(price, 4),
+            "entry": round(price, 4),
+            "scan_interval_sec": SIGNAL_SCAN_INTERVAL_SEC,
+            "next_check_time": next_check_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "next_check_time_shanghai": next_check_at.tz_convert("Asia/Shanghai").strftime("%Y/%m/%d %H:%M:%S"),
+            "next_signal_estimate": "每分钟收完后重新识别一次；至少2票同向，并通过趋势/正态/订单薄确认后才会出现10分钟信号。",
+            "bypass_entry_timing": True,
+            "shadow_only": not self.trade_enabled,
+            "trade_enabled": self.trade_enabled,
+            "agree": True,
+            "vol_ok": True,
+            "session_gate_ok": True,
+            "rsi_extreme": True,
+            "condition_summary": {
+                "entry": "分钟分支投票：趋势 + 波动 + 正态位置 + 冲刺 + 成交流 + 订单薄",
+                "confirm": "上涨冲刺做空需要成熟确认；下跌回收做多需要止跌和买盘确认",
+                "startup_skip": "上涨刚启动且评分>=4时，跳过反向做空，不反手做多",
+                "cooldown": "同策略10分钟只允许一单",
+            },
+        }
+        rules, rule_path, rule_error = self._load_rules_cached()
+        if rule_error:
+            return {**base, "signal": None, "reason": "branch_vote_rules_missing", "signal_detail": rule_error, "rule_path": rule_path}
+        if orderbook is None:
+            return {**base, "signal": None, "reason": "branch_vote_orderbook_missing", "signal_detail": "订单薄文件暂不可用，独立分支投票策略不降级交易。"}
+
+        data = indexed.join(orderbook, how="left")
+        if "ob_available" not in data:
+            return {**base, "signal": None, "reason": "branch_vote_orderbook_missing", "signal_detail": "订单薄可用性字段缺失。"}
+        data = data[data["ob_available"].fillna(False)].copy()
+        data = data[~data.index.duplicated(keep="last")].sort_index()
+        if len(data) < warmup:
+            return {
+                **base,
+                "signal": None,
+                "reason": "branch_vote_orderbook_insufficient",
+                "signal_detail": "可用订单薄覆盖不足，暂不计算独立分支投票。",
+            }
+        try:
+            snapshots = build_branch_vote_snapshots(data, "live", self.branch_cfg, include_future=False)
+            decision = evaluate_branch_vote_latest(snapshots, rules, self.branch_cfg)
+        except Exception as exc:
+            return {**base, "signal": None, "reason": "branch_vote_feature_error", "signal_detail": str(exc)[:180]}
+
+        detected_minute = pd.Timestamp(decision.get("time"))
+        if detected_minute.tzinfo is None:
+            detected_minute = detected_minute.tz_localize("UTC")
+        detected_minute = detected_minute.tz_convert("UTC")
+        latest_extra = {
+            "detected_minute_time": detected_minute.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "detected_minute_time_shanghai": detected_minute.tz_convert("Asia/Shanghai").strftime("%Y/%m/%d %H:%M:%S"),
+            "raw_signal": decision.get("raw_signal"),
+            "upVotes": int(decision.get("upVotes", 0)),
+            "downVotes": int(decision.get("downVotes", 0)),
+            "voteLayers": ";".join(vote.get("layer", "") for vote in decision.get("votes", [])),
+            "trend": decision.get("trend"),
+            "volatility": decision.get("volatility"),
+            "normal_pos": decision.get("normal_pos"),
+            "sprint": decision.get("sprint"),
+            "startupScore": decision.get("startupScore"),
+            "z_score": None if not np.isfinite(decision.get("z", np.nan)) else round(float(decision.get("z")), 4),
+            "sigma10_bps": None if not np.isfinite(decision.get("sigma10_bps", np.nan)) else round(float(decision.get("sigma10_bps")), 4),
+            "flow5": None if not np.isfinite(decision.get("flow5", np.nan)) else round(float(decision.get("flow5")), 4),
+            "imb20": None if not np.isfinite(decision.get("imb20", np.nan)) else round(float(decision.get("imb20")), 4),
+            "rule_path": rule_path,
+        }
+        if self.last_emit_time is not None and (emitted_time - self.last_emit_time).total_seconds() < self.min_gap_sec:
+            return {
+                **base,
+                **latest_extra,
+                **self._window_state_payload(emitted_time),
+                "signal": None,
+                "reason": "branch_vote_gap",
+                "signal_detail": "上一单后仍在10分钟同策略间隔内，避免同一个波段重复下单。",
+            }
+
+        signal = decision.get("signal")
+        reason = str(decision.get("reason") or "branch_vote_wait")
+        if not signal:
+            detail = "等待分支投票达到2票同向，并通过趋势/正态/订单薄确认。"
+            if reason.startswith("skip_trend_start"):
+                detail = "趋势启动评分>=4，跳过上涨启动中的反向做空，不反手做多。"
+            elif reason.startswith("skip_"):
+                detail = f"候选被确认层过滤：{reason}"
+            return {
+                **base,
+                **latest_extra,
+                "signal": None,
+                "reason": reason,
+                "signal_detail": detail,
+            }
+
+        self._mark_window_owner(emitted_time, signal, reason, decision.get("raw_signal"), None, veto=False)
+        direction_text = "上涨" if signal == "UP" else "下跌"
+        return {
+            **base,
+            **latest_extra,
+            **self._window_state_payload(emitted_time),
+            "signal": signal,
+            "reason": reason,
+            "confidence": 80.0,
+            "high_conf": True,
+            "signal_detail": (
+                f"独立分支投票信号：预测未来10分钟{direction_text}；"
+                f"票数 UP={latest_extra['upVotes']} / DOWN={latest_extra['downVotes']}；"
+                f"趋势={latest_extra['trend']}，正态位置={latest_extra['normal_pos']}，冲刺={latest_extra['sprint']}。"
+            ),
+        }
+
+
+class MultiNormalHFStableStrategy(SecondNormalLiquidityOrderbookV1Strategy):
+    """Adaptive low-volatility reversion and mature-trend exhaustion."""
+
+    def __init__(self, strategy_id, cfg):
+        super().__init__(strategy_id, cfg)
+        self.multi_cfg = MultiNormalHFStableConfig.from_config(cfg)
+        self.normal_window_sec = self.multi_cfg.normal_window_sec
+        self.horizon_sec = self.multi_cfg.horizon_sec
+        self.min_gap_sec = self.multi_cfg.min_gap_sec
+        self.orderbook_max_age_sec = self.multi_cfg.orderbook_max_age_sec
+        self.interval_min = max(1, int(round(self.horizon_sec / 60)))
+        self.model_label = str(cfg.get("model_label", "多周期动态正态高频稳定V1"))
+        self.trade_enabled = bool(cfg.get("trade_enabled", False))
+
+    @staticmethod
+    def _display_number(value, digits=4):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return round(number, digits) if np.isfinite(number) else None
+
+    def predict(self, df5=None):
+        bars = self._load_seconds()
+        warmup = max(7200, self.multi_cfg.normal_window_sec + 5400)
+        if bars is None or len(bars) < warmup:
+            return None
+        recent = bars.tail(warmup + 180).copy()
+        recent["time"] = pd.to_datetime(recent["time"], utc=True, errors="coerce").dt.floor("s")
+        recent = recent.dropna(subset=["time"]).drop_duplicates("time", keep="last").sort_values("time")
+        if len(recent) < warmup:
+            return None
+
+        indexed = recent.set_index("time").sort_index()
+        emitted_time = pd.Timestamp.now(tz="UTC").floor("s")
+        price = float(indexed["close"].iloc[-1])
+        next_check_at = emitted_time + pd.Timedelta(seconds=SIGNAL_SCAN_INTERVAL_SEC)
+        next_review_at = emitted_time.floor("min") + pd.Timedelta(seconds=59)
+        if next_review_at <= emitted_time:
+            next_review_at += pd.Timedelta(minutes=1)
+        base = {
+            "strategy_id": self.id,
+            "model_type": MULTI_NORMAL_HF_MODEL_TYPE,
+            "model_label": self.model_label,
+            "interval_min": self.interval_min,
+            "duration": self.interval_min,
+            "horizon_sec": self.horizon_sec,
+            "min_gap_sec": self.min_gap_sec,
+            "normal_window_sec": self.normal_window_sec,
+            "time": emitted_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "price": round(price, 4),
+            "entry": round(price, 4),
+            "scan_interval_sec": SIGNAL_SCAN_INTERVAL_SEC,
+            "next_check_time": next_check_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "next_check_time_shanghai": next_check_at.tz_convert("Asia/Shanghai").strftime("%Y/%m/%d %H:%M:%S"),
+            "next_review_time": next_review_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "next_review_time_shanghai": next_review_at.tz_convert("Asia/Shanghai").strftime("%Y/%m/%d %H:%M:%S"),
+            "review_interval_sec": 60,
+            "next_signal_estimate": "没有固定信号倒计时；每个完整分钟结束后重新判断，满足任一信号路径才发出10分钟方向。",
+            "bypass_entry_timing": True,
+            "shadow_only": not self.trade_enabled,
+            "trade_enabled": self.trade_enabled,
+            "agree": True,
+            "vol_ok": True,
+            "session_gate_ok": True,
+            "rsi_extreme": True,
+            "condition_summary": {
+                "lowvol": "横盘、正态质量达标、1.2σ至1.8σ尾部、5分钟成交流转向，且最近30秒已停止明显外冲",
+                "trend": "同向冲刺、成交流仍强，但订单薄支持衰减；高波动时动态降低z要求",
+                "dynamic": "sigma10>=8bp时趋势z门槛0.5，否则1.2",
+                "cooldown": "同策略10分钟只允许一单",
+            },
+        }
+
+        orderbook = self._load_orderbook(indexed.index)
+        if orderbook is None:
+            return {
+                **base,
+                "signal": None,
+                "reason": "multi_normal_orderbook_missing",
+                "signal_detail": "订单薄暂不可用，新策略不降级下单。",
+            }
+        data = indexed.join(orderbook, how="left")
+        if "ob_available" not in data:
+            return {
+                **base,
+                "signal": None,
+                "reason": "multi_normal_orderbook_missing",
+                "signal_detail": "订单薄可用性字段缺失，新策略不下单。",
+            }
+        data = data[data["ob_available"].fillna(False)].copy()
+        data = data[~data.index.duplicated(keep="last")].sort_index()
+        if len(data) < warmup:
+            return {
+                **base,
+                "signal": None,
+                "reason": "multi_normal_orderbook_insufficient",
+                "signal_detail": "秒数据或订单薄覆盖不足，等待完整窗口。",
+            }
+        try:
+            snapshots = build_multi_normal_hf_snapshots(
+                data,
+                "live",
+                self.multi_cfg,
+                include_future=False,
+                completed_only=True,
+            )
+            decision = evaluate_multi_normal_hf_latest(snapshots, self.multi_cfg)
+        except Exception as exc:
+            return {
+                **base,
+                "signal": None,
+                "reason": "multi_normal_feature_error",
+                "signal_detail": str(exc)[:180],
+            }
+
+        detected_time = decision.get("detected_time")
+        if detected_time is None:
+            return {
+                **base,
+                "signal": None,
+                "reason": str(decision.get("reason") or "no_completed_snapshot"),
+                "signal_detail": str(decision.get("reason_zh") or "等待完整分钟。"),
+            }
+        detected_time = pd.Timestamp(detected_time)
+        if detected_time.tzinfo is None:
+            detected_time = detected_time.tz_localize("UTC")
+        detected_time = detected_time.tz_convert("UTC")
+        snapshot_age_sec = max(0.0, (emitted_time - detected_time).total_seconds())
+        latest_extra = {
+            "detected_time": detected_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "detected_time_shanghai": detected_time.tz_convert("Asia/Shanghai").strftime("%Y/%m/%d %H:%M:%S"),
+            "snapshot_age_sec": round(snapshot_age_sec, 3),
+            "strategy_module": decision.get("module"),
+            "trend": decision.get("trend"),
+            "volatility": decision.get("volatility"),
+            "normal_quality": decision.get("normal_quality"),
+            "normal_pos": decision.get("normal_pos"),
+            "sprint": decision.get("sprint"),
+            "market_state_detail": decision.get("market_state_detail"),
+            "normal_band": decision.get("normal_band"),
+            "signal_paths": decision.get("signal_paths"),
+            "z_score": self._display_number(decision.get("z")),
+            "z_required": self._display_number(decision.get("z_required")),
+            "normal_center": self._display_number(decision.get("normal_center")),
+            "normal_sigma": self._display_number(decision.get("normal_sigma")),
+            "normal_low": self._display_number(decision.get("normal_low")),
+            "normal_high": self._display_number(decision.get("normal_high")),
+            "inside1_ratio": self._display_number(decision.get("inside1_ratio")),
+            "observed_pct": self._display_number(decision.get("observed_pct")),
+            "center_slope_bps": self._display_number(decision.get("center_slope_bps")),
+            "sigma_bps": self._display_number(decision.get("sigma_bps")),
+            "sigma10_bps": self._display_number(decision.get("sigma10_bps")),
+            "range10_bps": self._display_number(decision.get("range10_bps")),
+            "ret10_bps": self._display_number(decision.get("ret10_bps")),
+            "sec_ret30_bps": self._display_number(decision.get("sec_ret30_bps")),
+            "signed_ret30_bps": self._display_number(decision.get("signed_ret30_bps")),
+            "min_signed_ret30_bps": self._display_number(decision.get("min_signed_ret30_bps")),
+            "flow5": self._display_number(decision.get("flow5"), 6),
+            "imb20": self._display_number(decision.get("imb20"), 6),
+            "signed_flow": self._display_number(decision.get("signed_flow"), 6),
+            "signed_book": self._display_number(decision.get("signed_book"), 6),
+            "high_volatility": bool(decision.get("high_volatility", False)),
+        }
+        if self.last_emit_time is not None and (emitted_time - self.last_emit_time).total_seconds() < self.min_gap_sec:
+            return {
+                **base,
+                **latest_extra,
+                **self._window_state_payload(emitted_time),
+                "signal": None,
+                "reason": "multi_normal_gap",
+                "signal_detail": "上一单仍在10分钟窗口内，等待本单到期后再寻找下一次信号。",
+            }
+
+        signal = decision.get("signal")
+        reason = str(decision.get("reason") or "waiting_supported_regime")
+        if not signal:
+            return {
+                **base,
+                **latest_extra,
+                "signal": None,
+                "reason": reason,
+                "signal_detail": str(decision.get("reason_zh") or "等待符合规则的行情。"),
+            }
+
+        self._mark_window_owner(emitted_time, signal, reason, signal, reason, veto=False)
+        confidence = 82.0 if decision.get("module") == "mature_trend_exhaustion" else 74.0
+        return {
+            **base,
+            **latest_extra,
+            **self._window_state_payload(emitted_time),
+            "signal": signal,
+            "reason": reason,
+            "confidence": confidence,
+            "high_conf": True,
+            "signal_detail": str(decision.get("reason_zh") or "动态多周期正态信号已确认。"),
+        }
+
+
+class MultiscalePhaseGateStrategy(SecondNormalLiquidityOrderbookV1Strategy):
+    """Trade only countertrend pullbacks and mature migration exhaustion."""
+
+    def __init__(self, strategy_id, cfg):
+        super().__init__(strategy_id, cfg)
+        self.phase_cfg = MultiscalePhaseGateConfig.from_config(cfg)
+        self.normal_window_sec = 600
+        self.horizon_sec = self.phase_cfg.horizon_sec
+        self.min_gap_sec = self.phase_cfg.min_gap_sec
+        self.orderbook_max_age_sec = self.phase_cfg.orderbook_max_age_sec
+        self.interval_min = max(1, int(round(self.horizon_sec / 60)))
+        self.model_label = str(cfg.get("model_label", "多周期迁移阶段 V1"))
+        self.trade_enabled = bool(cfg.get("trade_enabled", False))
+        self._phase_snapshot_key = None
+        self._phase_decision_cache = None
+
+    @staticmethod
+    def _phase_number(value, digits=3):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return round(number, digits) if np.isfinite(number) else None
+
+    def predict(self, df5=None):
+        bars = self._load_seconds()
+        warmup = max(7200, self.phase_cfg.phase_lookback_sec + self.phase_cfg.maturity_history_sec + 600)
+        if bars is None or len(bars) < warmup:
+            return None
+        recent = bars.tail(warmup + 180).copy()
+        recent["time"] = pd.to_datetime(recent["time"], utc=True, errors="coerce").dt.floor("s")
+        recent = recent.dropna(subset=["time"]).drop_duplicates("time", keep="last").sort_values("time")
+        if len(recent) < warmup:
+            return None
+        indexed = recent.set_index("time").sort_index()
+        emitted_time = pd.Timestamp.now(tz="UTC").floor("s")
+        price = float(indexed["close"].iloc[-1])
+        next_review_at = emitted_time.floor("min") + pd.Timedelta(seconds=59)
+        if next_review_at <= emitted_time:
+            next_review_at += pd.Timedelta(minutes=1)
+        base = {
+            "strategy_id": self.id,
+            "model_type": MULTISCALE_PHASE_GATE_MODEL_TYPE,
+            "model_label": self.model_label,
+            "interval_min": self.interval_min,
+            "duration": self.interval_min,
+            "horizon_sec": self.horizon_sec,
+            "min_gap_sec": self.min_gap_sec,
+            "time": emitted_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "price": round(price, 4),
+            "entry": round(price, 4),
+            "scan_interval_sec": SIGNAL_SCAN_INTERVAL_SEC,
+            "next_review_time": next_review_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "next_review_time_shanghai": next_review_at.tz_convert("Asia/Shanghai").strftime("%Y/%m/%d %H:%M:%S"),
+            "next_signal_estimate": "每个完整分钟结束后判断；逆趋势回调或成熟迁移满足时产生10分钟方向信号。",
+            "bypass_entry_timing": True,
+            "shadow_only": not self.trade_enabled,
+            "trade_enabled": self.trade_enabled,
+            "agree": True,
+            "vol_ok": True,
+            "session_gate_ok": True,
+            "rsi_extreme": True,
+            "condition_summary": {
+                "candidate": "2/3/5分钟同向迁移，10分钟仍在旧区域，并由成交量、主动流和订单薄确认",
+                "countertrend": "短周期迁移与过去60分钟方向相反时，按回调衰竭反向交易",
+                "mature": "同向60分钟位移达到滚动75%分位时，按成熟拥挤衰竭反向交易",
+                "startup": "刚启动或迁移中段不交易",
+            },
+        }
+        completed_minutes = indexed.index[indexed.index.second == 59]
+        snapshot_key = completed_minutes[-1] if len(completed_minutes) else None
+        if snapshot_key is not None and snapshot_key == self._phase_snapshot_key and self._phase_decision_cache is not None:
+            decision = dict(self._phase_decision_cache)
+        else:
+            orderbook = self._load_orderbook(indexed.index)
+            if orderbook is None:
+                return {**base, "signal": None, "reason": "phase_gate_orderbook_missing", "signal_detail": "订单薄数据不可用，策略不降级下单。"}
+            try:
+                snapshots = build_multiscale_phase_snapshots(indexed.join(orderbook, how="left"), self.phase_cfg)
+                decision = evaluate_multiscale_phase_latest(snapshots)
+            except Exception as exc:
+                return {**base, "signal": None, "reason": "phase_gate_feature_error", "signal_detail": str(exc)[:180]}
+            self._phase_snapshot_key = snapshot_key
+            self._phase_decision_cache = dict(decision)
+        detected_time = decision.get("detected_time")
+        if detected_time is None:
+            return {**base, "signal": None, "reason": str(decision.get("reason") or "waiting_completed_minute"), "signal_detail": str(decision.get("reason_zh") or "等待完整分钟数据。")}
+        detected_time = pd.Timestamp(detected_time)
+        if detected_time.tzinfo is None:
+            detected_time = detected_time.tz_localize("UTC")
+        detected_time = detected_time.tz_convert("UTC")
+        snapshot_age_sec = max(0.0, (emitted_time - detected_time).total_seconds())
+        signal = decision.get("signal") if decision.get("signal") in {"UP", "DOWN"} else None
+        extra = {
+            "detected_time": detected_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "detected_time_shanghai": detected_time.tz_convert("Asia/Shanghai").strftime("%Y/%m/%d %H:%M:%S"),
+            "snapshot_age_sec": round(snapshot_age_sec, 3),
+            "phase": decision.get("phase"),
+            "migration_direction": decision.get("migration_direction"),
+            "crowd_direction": decision.get("crowd_direction"),
+            "aligned_ret3600_bps": self._phase_number(decision.get("aligned_ret3600_bps")),
+            "maturity_threshold_bps": self._phase_number(decision.get("maturity_threshold_bps")),
+            "flow60": self._phase_number(decision.get("flow60"), 6),
+            "imbalance20": self._phase_number(decision.get("imbalance20"), 6),
+            "microprice_bps": self._phase_number(decision.get("microprice_bps"), 6),
+            "volume_ratio": self._phase_number(decision.get("volume_ratio")),
+            **{f"shape_{window}m": decision.get(f"shape_{window}m") for window in (1, 2, 3, 5, 10)},
+        }
+        if signal and snapshot_age_sec > self.phase_cfg.max_emit_age_sec:
+            return {**base, **extra, "signal": None, "reason": "phase_gate_stale_snapshot", "signal_detail": f"信号已超过{self.phase_cfg.max_emit_age_sec}秒，不追单，等待下一完整分钟。"}
+        if self.last_emit_time is not None and (emitted_time - self.last_emit_time).total_seconds() < self.min_gap_sec:
+            return {**base, **extra, **self._window_state_payload(emitted_time), "signal": None, "reason": "phase_gate_gap", "signal_detail": "上一单仍在10分钟窗口内，到期后再寻找下一次信号。"}
+        if not signal:
+            return {**base, **extra, "signal": None, "reason": str(decision.get("reason") or "waiting_phase_gate"), "signal_detail": str(decision.get("reason_zh") or "等待符合规则的迁移阶段。")}
+        reason = str(decision.get("reason") or "phase_gate_signal")
+        self._mark_window_owner(emitted_time, signal, reason, signal, reason, veto=False)
+        return {
+            **base,
+            **extra,
+            **self._window_state_payload(emitted_time),
+            "signal": signal,
+            "reason": reason,
+            "confidence": 80.0 if decision.get("phase") == "mature" else 72.0,
+            "high_conf": True,
+            "signal_detail": str(decision.get("reason_zh") or "迁移阶段信号已确认。"),
         }
 
 
@@ -4765,6 +5307,12 @@ def _make_strategy(sid, cfg):
         return SecondNormalLiquidityOrderbookV1Strategy(sid, cfg)
     if cfg.get("model_type") == "second_normal_trend_orderbook_latch_v2":
         return NormalTrendOrderbookLatchV2Strategy(sid, cfg)
+    if cfg.get("model_type") == "second_branch_vote_startup_v1":
+        return BranchVoteStartupStrategy(sid, cfg)
+    if cfg.get("model_type") == MULTI_NORMAL_HF_MODEL_TYPE:
+        return MultiNormalHFStableStrategy(sid, cfg)
+    if cfg.get("model_type") == MULTISCALE_PHASE_GATE_MODEL_TYPE:
+        return MultiscalePhaseGateStrategy(sid, cfg)
     if cfg.get("model_type") == "second_normal_vw_confirm":
         return SecondNormalVwConfirmStrategy(sid, cfg)
     if cfg.get("model_type") == "normal_state_v11":
@@ -4784,7 +5332,7 @@ def build_strategies(config_map):
     return [
         _make_strategy(k, v)
         for k, v in config_map.items()
-        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal", "second_normal_router_v21", "second_normal_lowvol_v22", "second_normal_liquidity_orderbook_v1", "second_normal_trend_orderbook_latch_v2", "second_normal_vw_confirm", "normal_state_v11", "second_chip", "second_range_breakout_confirm", "second_value_area_smart", "second_trend_pullback_down") or k not in live_two_minute_ids)
+        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal", "second_normal_router_v21", "second_normal_lowvol_v22", "second_normal_liquidity_orderbook_v1", "second_normal_trend_orderbook_latch_v2", "second_branch_vote_startup_v1", MULTI_NORMAL_HF_MODEL_TYPE, MULTISCALE_PHASE_GATE_MODEL_TYPE, "second_normal_vw_confirm", "normal_state_v11", "second_chip", "second_range_breakout_confirm", "second_value_area_smart", "second_trend_pullback_down") or k not in live_two_minute_ids)
     ]
 
 
@@ -4800,7 +5348,7 @@ def apply_trend_mode_switch(signals):
     blocker = trend_blockers[0]
     out = {}
     for strategy_id, row in signals.items():
-        if row.get("model_type") in ("second_normal", "second_normal_router_v21", "second_normal_lowvol_v22", "second_normal_liquidity_orderbook_v1", "second_normal_trend_orderbook_latch_v2", "second_normal_vw_confirm", "normal_state_v11", "second_chip", "second_range_breakout_confirm") and row.get("signal"):
+        if row.get("model_type") in ("second_normal", "second_normal_router_v21", "second_normal_lowvol_v22", "second_normal_liquidity_orderbook_v1", "second_normal_trend_orderbook_latch_v2", "second_branch_vote_startup_v1", MULTI_NORMAL_HF_MODEL_TYPE, "second_normal_vw_confirm", "normal_state_v11", "second_chip", "second_range_breakout_confirm") and row.get("signal"):
             blocked = dict(row)
             blocked["blocked_signal"] = blocked.get("signal")
             blocked["blocked_confidence"] = blocked.get("confidence")
@@ -4835,6 +5383,18 @@ def apply_incident_mode_filter(signals, config_map):
         bars["time"] = pd.to_datetime(bars["time"], utc=True, errors="coerce")
         bars = bars.dropna(subset=["time"]).set_index("time").sort_index()
     return apply_incident_filter_to_live_signals(bars, signals, config_map)
+
+
+live_1m_cache = StaleWhileRefreshCache(
+    lambda: fetch_live_1m_raw(1000),
+    refresh_sec=LIVE_1M_REFRESH_SEC,
+    retry_sec=LIVE_1M_RETRY_SEC,
+)
+try:
+    live_1m_cache.prime()
+except Exception as exc:
+    print(f"[Signal] Initial live 1m fetch failed; background retry enabled: {exc}")
+last_live_1m_cache_error = None
 
 configs = load_config()
 update_second_tail_requirement(configs)
@@ -4907,6 +5467,7 @@ print(f"\n[Signal] Starting BTC strategy loop (every {SIGNAL_SCAN_INTERVAL_SEC:g
 last_data_health_key = None
 
 while True:
+    loop_started_at = time.monotonic()
     try:
         current_config_mtime = file_mtime(CONFIG_FILE)
         if current_config_mtime is not None and current_config_mtime != configs_mtime:
@@ -4923,14 +5484,23 @@ while True:
             df5 = load_symbol("btcusdt")
             df5_history_mtime = current_history_mtime
             print(f"[Signal] Reloaded 5m history after data update: {len(df5)} candles")
-        live_1m = fetch_live_1m_raw(1000)
+        live_1m = live_1m_cache.get()
+        live_cache_status = live_1m_cache.status()
+        live_cache_error = live_cache_status.get("last_error")
+        if live_cache_error != last_live_1m_cache_error:
+            if live_cache_error:
+                print(f"[Signal] Background live 1m refresh failed; using last good data: {live_cache_error}")
+            elif last_live_1m_cache_error:
+                print("[Signal] Background live 1m refresh recovered")
+            last_live_1m_cache_error = live_cache_error
         data_health = build_live_data_health(live_1m)
         data_health_key = "blocked:" + ",".join(data_health["reasons"]) if data_health["blocked"] else "ok"
         if data_health_key != last_data_health_key:
             print(f"[Signal] Data health {data_health_key}")
             last_data_health_key = data_health_key
-        live = aggregate_live_5m(live_1m)
-        df5 = merge_live(df5, live)
+        if live_1m is not None and len(live_1m) > 0:
+            live = aggregate_live_5m(live_1m)
+            df5 = merge_live(df5, live)
         begin_second_bars_cycle()
         signals = {}
         for strategy in strategies:
@@ -4944,6 +5514,8 @@ while True:
         signals = apply_trend_mode_switch(signals)
         signals = apply_incident_mode_filter(signals, configs)
         for _, strategy in live_two_minute_strategies:
+            if live_1m is None or len(live_1m) == 0:
+                continue
             if configs.get(strategy.id, {}).get("model_type") == "poc_normal": continue
             r = strategy.predict(live_1m)
             if r:
@@ -5037,6 +5609,8 @@ while True:
             if len(last_audit_keys) > 5000:
                 last_audit_keys = set(list(last_audit_keys)[-2000:])
         for shadow_meta, shadow_strategy in two_minute_shadow_strategies:
+            if live_1m is None or len(live_1m) == 0:
+                continue
             r = shadow_strategy.predict(live_1m)
             if not r:
                 continue
@@ -5085,4 +5659,5 @@ while True:
         import traceback; traceback.print_exc()
         if os.environ.get("SIGNAL_ONCE") == "1":
             raise
-    time.sleep(SIGNAL_SCAN_INTERVAL_SEC)
+    loop_elapsed_sec = time.monotonic() - loop_started_at
+    time.sleep(max(SIGNAL_SCAN_MIN_SLEEP_SEC, SIGNAL_SCAN_INTERVAL_SEC - loop_elapsed_sec))

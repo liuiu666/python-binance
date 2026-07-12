@@ -99,17 +99,9 @@ def persist_strategy_runtime_state(strategy_id, payload=None):
 
 
 def load_audit_keys(path, limit=20000):
-    if not os.path.exists(path):
-        return set()
     keys = set()
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            lines = f.readlines()[-limit:]
-        for line in lines:
-            try:
-                row = json.loads(line)
-            except Exception:
-                continue
+        for row in tail_jsonl_rows(path, limit=limit):
             event = row.get("event")
             if (
                 event in ("signal_snapshot", "shadow_candidate")

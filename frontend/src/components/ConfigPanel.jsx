@@ -54,6 +54,10 @@ function isLegacyNormalState(variant) {
   return variant?.base === "SECOND_NORMAL_STATE_V11";
 }
 
+function isMultiNormalHF(variant) {
+  return variant?.base === "SECOND_MULTI_NORMAL_HF_STABLE_V1";
+}
+
 function hoursFromSeconds(value, fallbackHours) {
   const seconds = Number(value);
   if (!Number.isFinite(seconds)) return fallbackHours;
@@ -66,6 +70,7 @@ function StrategySettings({ variant, onChange }) {
   const v22 = isV22LowVol(variant);
   const router = v21 || v22;
   const legacyNormal = isLegacyNormalState(variant);
+  const multiNormal = isMultiNormalHF(variant);
   return (
     <article className="strategy-settings">
       <header>
@@ -208,6 +213,79 @@ function StrategySettings({ variant, onChange }) {
               onChange={value => onChange({ lossStreakCooldownSec: toInt(Number(value) * 3600, 3600, 3600, 43200) })}
             />
           </>
+        ) : multiNormal ? (
+          <>
+            <Field
+              label="低波动 sigma 上限"
+              value={variant.lowVolSigmaMaxBps ?? 3}
+              min={0.1}
+              max={100}
+              step={0.1}
+              suffix="bp"
+              onChange={value => onChange({ lowVolSigmaMaxBps: Number(value) })}
+            />
+            <Field
+              label="低波动 z 下限"
+              value={variant.lowVolZMin ?? 1.2}
+              min={0.1}
+              max={4}
+              step={0.1}
+              suffix="σ"
+              onChange={value => onChange({ lowVolZMin: Number(value) })}
+            />
+            <Field
+              label="低波动 z 上限"
+              value={variant.lowVolZMax ?? 1.8}
+              min={0.1}
+              max={6}
+              step={0.1}
+              suffix="σ"
+              onChange={value => onChange({ lowVolZMax: Number(value) })}
+            />
+            <Field
+              label="高波动分档"
+              value={variant.trendHighVolSigmaMinBps ?? 8}
+              min={0.1}
+              max={100}
+              step={0.5}
+              suffix="bp"
+              onChange={value => onChange({ trendHighVolSigmaMinBps: Number(value) })}
+            />
+            <Field
+              label="普通趋势 z 门槛"
+              value={variant.trendBaseZMin ?? 1.2}
+              min={0.1}
+              max={6}
+              step={0.1}
+              suffix="σ"
+              onChange={value => onChange({ trendBaseZMin: Number(value) })}
+            />
+            <Field
+              label="高波动趋势 z 门槛"
+              value={variant.trendHighVolZMin ?? 0.5}
+              min={0.1}
+              max={6}
+              step={0.1}
+              suffix="σ"
+              onChange={value => onChange({ trendHighVolZMin: Number(value) })}
+            />
+            <Field
+              label="趋势成交流下限"
+              value={variant.trendMinSignedFlow ?? 0.12}
+              min={-1}
+              max={1}
+              step={0.01}
+              onChange={value => onChange({ trendMinSignedFlow: Number(value) })}
+            />
+            <Field
+              label="趋势订单薄支持上限"
+              value={variant.trendMaxSignedBook ?? 0.08}
+              min={-1}
+              max={1}
+              step={0.01}
+              onChange={value => onChange({ trendMaxSignedBook: Number(value) })}
+            />
+          </>
         ) : (
           <>
             <Field
@@ -251,6 +329,10 @@ function StrategySettings({ variant, onChange }) {
           {v22
             ? "V22 是低波动处理影子策略：只在 routeSigma 低于阈值时观察 V21 尾部候选，再用短确认窗口判断回归或突破；不参与实盘下单。"
             : "V21 当前只用秒级正态路由、10分钟波动范围、数据覆盖和亏损密度风控；旧版 V19 过滤、Bandwalk、确认延迟不参与这套策略。"}
+        </div>
+      ) : multiNormal ? (
+        <div className="settings-note">
+          横盘只做 1.2σ–1.8σ 可回归尾部；趋势冲刺仍有成交但订单薄支持衰减时反向。sigma10 达到高波动分档后自动降低 z 门槛。
         </div>
       ) : legacyNormal ? (
         <label className="field full">

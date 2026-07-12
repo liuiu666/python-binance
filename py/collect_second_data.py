@@ -8,9 +8,11 @@ import atexit
 import csv
 import json
 import os
+import queue
 import shutil
 import socket
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -93,6 +95,7 @@ FILE_REPAIR_INTERVAL_SEC = max(30, int(os.environ.get("SECOND_DATA_FILE_REPAIR_I
 CATCHUP_MAX_PAGES = max(1, int(os.environ.get("SECOND_DATA_CATCHUP_MAX_PAGES", "80")))
 CATCHUP_RECENT_MINUTES = max(1, int(os.environ.get("SECOND_DATA_CATCHUP_RECENT_MINUTES", str(BACKFILL_MINUTES))))
 STARTUP_FILE_REPAIR = os.environ.get("SECOND_DATA_STARTUP_FILE_REPAIR", "0").strip().lower() in ("1", "true", "yes", "on")
+CSV_WRITE_LOCK = threading.RLock()
 
 
 def websocket_cursor_matches_rest():
@@ -422,12 +425,13 @@ def read_recent_records(path, lookback_sec):
     # The hot file is usually one day. A tail read avoids scanning old shards
     # while still covering repairs appended near the end of the file.
     tail_bytes = max(4 * 1024 * 1024, min(32 * 1024 * 1024, int(lookback_sec) * 4096))
-    with open(path, "rb") as f:
-        f.seek(0, os.SEEK_END)
-        end = f.tell()
-        size = min(end, tail_bytes)
-        f.seek(end - size)
-        text = f.read(size).replace(b"\x00", b"").decode("utf-8", "replace")
+    with CSV_WRITE_LOCK:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            end = f.tell()
+            size = min(end, tail_bytes)
+            f.seek(end - size)
+            text = f.read(size).replace(b"\x00", b"").decode("utf-8", "replace")
     lines = text.splitlines()
     if end > size and lines:
         lines = lines[1:]
@@ -557,12 +561,12 @@ def synthetic_empty_bars_for_missing(missing_ranges, checked_seconds, known):
     return pd.DataFrame(rows)[CSV_COLUMNS]
 
 
-def append_repair_bars(state, bars):
+def append_repair_bars(state, bars, *, update_state=True):
     if bars is None or bars.empty:
         return 0, {"enabled": True, "dir": SHARD_DIR, "written_files": [], "rows": 0}
     added = append_csv(bars, OUT_FILE)
     shard_write = append_daily_shards(bars) if added else {"enabled": True, "dir": SHARD_DIR, "written_files": [], "rows": 0}
-    if added:
+    if added and update_state:
         state["total_rows"] = count_csv_rows(OUT_FILE)
         state["status"]["rows"] = state["total_rows"]
         current_last = parse_ts(state["status"].get("last_ts"))
@@ -573,7 +577,7 @@ def append_repair_bars(state, bars):
     return int(added), shard_write
 
 
-def repair_recent_gaps(state, force=False):
+def repair_recent_gaps(state, force=False, *, update_state=True):
     now = time.time()
     if not force and now - float(state.get("last_gap_repair") or 0) < GAP_REPAIR_INTERVAL_SEC:
         return None
@@ -631,10 +635,10 @@ def repair_recent_gaps(state, force=False):
 
     actual_bars = collapse_bars(pd.concat(actual_parts, ignore_index=True)) if actual_parts else pd.DataFrame()
     update_known_from_bars(known, actual_bars)
-    actual_added, shard_write = append_repair_bars(state, actual_bars)
+    actual_added, shard_write = append_repair_bars(state, actual_bars, update_state=update_state)
 
     synthetic_bars = synthetic_empty_bars_for_missing(missing_ranges, checked_seconds, known)
-    synthetic_added, synthetic_shard = append_repair_bars(state, synthetic_bars)
+    synthetic_added, synthetic_shard = append_repair_bars(state, synthetic_bars, update_state=update_state)
 
     repaired_seconds = int(actual_added + synthetic_added)
     after_observed = min(GAP_REPAIR_LOOKBACK_SEC, len(observed) + repaired_seconds)
@@ -653,11 +657,71 @@ def repair_recent_gaps(state, force=False):
         "shards": shard_write,
         "syntheticShards": synthetic_shard,
     }
-    state["status"]["gap_repair"] = result
-    write_status(state["status"])
-    if repaired_seconds or len(missing) > 0:
-        print(f"\n[SecondData] gap_repair={result}", flush=True)
+    if update_state:
+        state["status"]["gap_repair"] = result
+        write_status(state["status"])
+        if repaired_seconds or len(missing) > 0:
+            print(f"\n[SecondData] gap_repair={result}", flush=True)
     return result
+
+
+def schedule_gap_repair(state, force=False):
+    """Start gap repair without blocking websocket message handling."""
+    now = time.time()
+    if not force and now - float(state.get("last_gap_repair") or 0) < GAP_REPAIR_INTERVAL_SEC:
+        return False
+    worker = state.get("gap_repair_worker")
+    if worker is not None and worker.is_alive():
+        return False
+    state["last_gap_repair"] = now
+    result_queue = state.setdefault("gap_repair_results", queue.Queue())
+
+    def run():
+        try:
+            result = repair_recent_gaps(
+                {"last_gap_repair": 0.0},
+                force=True,
+                update_state=False,
+            )
+            result_queue.put({"result": result, "error": None})
+        except Exception as exc:
+            result_queue.put({"result": None, "error": str(exc)})
+
+    worker = threading.Thread(target=run, name="second-gap-repair", daemon=True)
+    state["gap_repair_worker"] = worker
+    worker.start()
+    return True
+
+
+def drain_gap_repair_results(state):
+    result_queue = state.setdefault("gap_repair_results", queue.Queue())
+    drained = 0
+    while True:
+        try:
+            item = result_queue.get_nowait()
+        except queue.Empty:
+            break
+        drained += 1
+        error = item.get("error")
+        if error:
+            state["status"]["gap_repair_error"] = error
+            write_status(state["status"])
+            print(f"\n[SecondData] background gap repair warning: {error}", flush=True)
+            continue
+        result = item.get("result") or {"enabled": True, "reason": "empty_result"}
+        repaired = int(result.get("actualAdded") or 0) + int(result.get("syntheticAdded") or 0)
+        if repaired:
+            state["total_rows"] += repaired
+            state["status"]["rows"] = state["total_rows"]
+        state["status"].pop("gap_repair_error", None)
+        state["status"]["gap_repair"] = result
+        write_status(state["status"])
+        if repaired or int(result.get("missingBefore") or 0) > 0:
+            print(f"\n[SecondData] gap_repair={result}", flush=True)
+    worker = state.get("gap_repair_worker")
+    if worker is not None and not worker.is_alive():
+        state["gap_repair_worker"] = None
+    return drained
 
 
 def count_csv_rows(path):
@@ -711,7 +775,7 @@ def format_second_bars(df):
     return out[CSV_COLUMNS]
 
 
-def append_formatted_csv(out, path, *, dedupe_timestamp=False):
+def _append_formatted_csv_unlocked(out, path, *, dedupe_timestamp=False):
     if out.empty:
         return 0
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -735,6 +799,11 @@ def append_formatted_csv(out, path, *, dedupe_timestamp=False):
         return 0
     out.to_csv(path, mode="a", index=False, header=not exists)
     return int(len(out))
+
+
+def append_formatted_csv(out, path, *, dedupe_timestamp=False):
+    with CSV_WRITE_LOCK:
+        return _append_formatted_csv_unlocked(out, path, dedupe_timestamp=dedupe_timestamp)
 
 
 def append_csv(df, path):
@@ -803,6 +872,12 @@ def make_state(status):
         "ws_rows": [],
         "last_ws_flush": time.time(),
         "last_gap_repair": time.time(),
+        "gap_repair_worker": None,
+        "gap_repair_results": queue.Queue(),
+        "last_archive_check": time.time(),
+        "archive_worker": None,
+        "archive_results": queue.Queue(),
+        "nonblocking_writes": False,
         "last_file_repair": time.time(),
     }
 
@@ -1005,7 +1080,7 @@ def aggregate_trades(rows):
     return grouped
 
 
-def flush_state(state, fetched_trades=0, force=False):
+def _flush_state_unlocked(state, fetched_trades=0, force=False):
     status = state["status"]
     pending = state["pending"]
     cutoff = pd.Timestamp.now(tz="UTC").floor("s") - pd.Timedelta(seconds=FINALIZE_DELAY_SEC)
@@ -1050,6 +1125,17 @@ def flush_state(state, fetched_trades=0, force=False):
     return added
 
 
+def flush_state(state, fetched_trades=0, force=False):
+    nonblocking = bool(state.get("nonblocking_writes")) and not force
+    acquired = CSV_WRITE_LOCK.acquire(blocking=not nonblocking)
+    if not acquired:
+        return 0
+    try:
+        return _flush_state_unlocked(state, fetched_trades=fetched_trades, force=force)
+    finally:
+        CSV_WRITE_LOCK.release()
+
+
 def flush_ws_rows(state, force=False):
     rows = state.get("ws_rows") or []
     if not rows and not force:
@@ -1071,7 +1157,7 @@ def flush_ws_rows(state, force=False):
 
 
 
-def archive_old_main_rows():
+def _archive_old_main_rows_unlocked():
     """Archive old rows from the hot CSV without loading the whole file."""
     if not os.path.exists(OUT_FILE):
         return 0
@@ -1154,6 +1240,60 @@ def archive_old_main_rows():
     os.replace(tmp, OUT_FILE)
     print(f"\n[SecondData] archived {archived} old rows to shards, main file kept {kept} rows", flush=True)
     return archived
+
+
+def archive_old_main_rows():
+    with CSV_WRITE_LOCK:
+        return _archive_old_main_rows_unlocked()
+
+
+def schedule_archive(state, force=False):
+    now = time.time()
+    if not force and now - float(state.get("last_archive_check") or 0) < 3600:
+        return False
+    worker = state.get("archive_worker")
+    if worker is not None and worker.is_alive():
+        return False
+    state["last_archive_check"] = now
+    result_queue = state.setdefault("archive_results", queue.Queue())
+
+    def run():
+        try:
+            result_queue.put({"archived": int(archive_old_main_rows()), "error": None})
+        except Exception as exc:
+            result_queue.put({"archived": 0, "error": str(exc)})
+
+    worker = threading.Thread(target=run, name="second-data-archive", daemon=True)
+    state["archive_worker"] = worker
+    worker.start()
+    return True
+
+
+def drain_archive_results(state):
+    result_queue = state.setdefault("archive_results", queue.Queue())
+    drained = 0
+    while True:
+        try:
+            item = result_queue.get_nowait()
+        except queue.Empty:
+            break
+        drained += 1
+        error = item.get("error")
+        if error:
+            state["status"]["archive_error"] = error
+            write_status(state["status"])
+            print(f"\n[SecondData] archive warning: {error}", flush=True)
+            continue
+        state["status"].pop("archive_error", None)
+        if int(item.get("archived") or 0) > 0:
+            with CSV_WRITE_LOCK:
+                state["total_rows"] = count_csv_rows(OUT_FILE)
+            state["status"]["rows"] = state["total_rows"]
+            write_status(state["status"])
+    worker = state.get("archive_worker")
+    if worker is not None and not worker.is_alive():
+        state["archive_worker"] = None
+    return drained
 
 
 def collapse_bars(bars):
@@ -1284,7 +1424,7 @@ def run_websocket_loop():
     print(f"[SecondData] Starting {SYMBOL} {MARKET} websocket collector {WS_URL} -> {OUT_FILE}")
     status = read_status()
     state = make_state(status)
-    state["last_archive_check"] = 0.0
+    state["nonblocking_writes"] = True
     state["status"].update({
         "ok": True,
         "symbol": SYMBOL,
@@ -1323,17 +1463,10 @@ def run_websocket_loop():
             state["cursor_id"] = int(row["a"] if "a" in row else row["t"])
             state["ws_rows"].append(row)
             added = flush_ws_rows(state)
-            repair_recent_gaps(state)
-            if time.time() - float(state.get("last_archive_check") or 0) >= 3600:
-                try:
-                    archived = archive_old_main_rows()
-                    if archived:
-                        state["total_rows"] = count_csv_rows(OUT_FILE)
-                        state["status"]["rows"] = state["total_rows"]
-                        write_status(state["status"])
-                except Exception as archive_exc:
-                    print(f"\n[SecondData] archive warning: {archive_exc}", flush=True)
-                state["last_archive_check"] = time.time()
+            drain_gap_repair_results(state)
+            schedule_gap_repair(state)
+            drain_archive_results(state)
+            schedule_archive(state)
             if added:
                 print(
                     f"\r[SecondData] rows={state['status'].get('rows')} last={state['status'].get('last_ts')} "
@@ -1371,6 +1504,8 @@ def run_websocket_loop():
 
     def on_close(_ws, code, reason):
         flush_ws_rows(state, force=True)
+        drain_gap_repair_results(state)
+        drain_archive_results(state)
         print(f"\n[SecondData] WebSocket closed code={code} reason={reason}", flush=True)
 
     while True:

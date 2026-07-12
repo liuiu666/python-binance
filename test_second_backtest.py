@@ -3,6 +3,8 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 import sys
+import tempfile
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -10,6 +12,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "py"))
 
 from second_backtest.execution import execute_signals
+from second_backtest.data import load_recent_second_bars, load_second_bars
 from second_backtest.metrics import max_loss_streak, summarize_trades
 from second_backtest.dynamic_zone import dynamic_zone_allows
 from second_backtest.strategies import (
@@ -22,6 +25,50 @@ from second_backtest.strategies import (
 
 
 class SecondBacktestTest(unittest.TestCase):
+    def test_recent_second_tail_loader_matches_full_loader(self):
+        now = pd.Timestamp.now(tz="UTC").floor("s")
+        index = pd.date_range(now - pd.Timedelta(seconds=499), periods=500, freq="s")
+        frame = pd.DataFrame({
+            "timestamp": index.strftime("%Y-%m-%dT%H:%M:%S.000000Z"),
+            "close": 64000.0 + pd.Series(range(len(index)), dtype=float) / 10.0,
+            "high": 64000.1 + pd.Series(range(len(index)), dtype=float) / 10.0,
+            "low": 63999.9 + pd.Series(range(len(index)), dtype=float) / 10.0,
+            "volume": 1.0,
+            "taker_buy_volume": 0.6,
+            "taker_sell_volume": 0.4,
+        })
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "btcusdt_1s_trades.csv"
+            frame.to_csv(path, index=False)
+            with patch("second_backtest.data.RECENT_TAIL_INITIAL_BYTES", 512):
+                recent = load_recent_second_bars(path, include_shards=False, tail_sec=300, now=now)
+            full = load_second_bars(path, include_shards=False)
+            cutoff = now - pd.Timedelta(seconds=300)
+            expected = full.loc[full.index >= cutoff.floor("s")]
+            pd.testing.assert_frame_equal(recent, expected)
+
+    def test_recent_second_tail_loader_supports_small_incremental_window(self):
+        start = pd.Timestamp("2026-07-10T00:00:00Z")
+        frame = pd.DataFrame({
+            "timestamp": pd.date_range(start, periods=600, freq="s"),
+            "close": range(100, 700),
+            "volume": 1.0,
+        })
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "seconds.csv"
+            frame.to_csv(path, index=False)
+            recent = load_recent_second_bars(
+                path,
+                include_shards=False,
+                tail_sec=120,
+                source_warmup_sec=30,
+                read_initial_bytes=4096,
+                now=start + pd.Timedelta(seconds=599),
+            )
+
+        self.assertEqual(recent.index[0], start + pd.Timedelta(seconds=479))
+        self.assertEqual(recent.index[-1], start + pd.Timedelta(seconds=599))
+
     def test_per_strategy_lock_does_not_dedupe_other_strategy(self):
         base = pd.Timestamp("2026-01-01T00:00:00Z")
         signals = [

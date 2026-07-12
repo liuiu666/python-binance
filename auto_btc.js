@@ -8,12 +8,23 @@ var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
 var API_TOKEN = "";
-var SCRIPT_VERSION = "2026-07-09-poll-1s";
+var SCRIPT_VERSION = "2026-07-11-order-guard-v5-confirm-ready";
 var POLL_INTERVAL = 1000;
 var SIGNAL_MAX_AGE_MS = 60000;
 var STRATEGY_COOLDOWN_MS = 10 * 60 * 1000;
 var ORDER_VERIFY_TIMEOUT_MS = 12000;
+var ORDER_VERIFY_POLL_MS = 250;
 var ORDER_BALANCE_TOLERANCE_USDT = 0.25;
+var TOUCH_NUDGE_ENABLED = true;
+var POST_TRADE_NUDGE_GUARD_MS = 120000;
+var CONFIRM_TEXT_PATTERN = /.*Confirm.*|.*Submit.*|.*Place\s+Order.*|.*\u786e\u8ba4.*|.*\u786e\u5b9a.*|.*\u63d0\u4ea4.*|.*\u4e0b\u5355\u786e\u8ba4.*/i;
+var CONFIRM_BUTTON_IDS = ["2131448753", "2131448374"];
+var UI_FAST_POLL_MS = 80;
+var AMOUNT_FIND_TIMEOUT_MS = 900;
+var DIRECTION_FIND_TIMEOUT_MS = 450;
+var CONFIRM_FIND_TIMEOUT_MS = 6000;
+var CONFIRM_MIN_SETTLE_MS = 700;
+var BALANCE_FIND_TIMEOUT_MS = 650;
 
 var tradeConfig = { amount: "5", strategyAmounts: { BTC_10min_SAFE: "5", BTC_10min_TAKER: "5" }, strategyVariants: [], duration: "10", autoTrade: false };
 var lastTradeTime = 0;
@@ -27,6 +38,8 @@ var durationSet = false;
 var durationSetTarget = "";
 var lastAmountInputProbe = null;
 var lastConfirmProbe = null;
+var lastDirectionProbe = null;
+var lastNodeClickProbe = null;
 
 // Balance reporting state
 var lastBalanceReport = 0;
@@ -38,6 +51,7 @@ var lastAuditHeartbeat = 0;
 var balanceFailCount = 0;
 var lastBalanceValue = null;
 var lastTradeInteractionMs = 0;
+var tradeInteractionActive = false;
 var BALANCE_INTERVAL_MS = 30000;
 var RUNTIME_ALIVE_INTERVAL_MS = 10000;
 var SCREEN_NUDGE_INTERVAL_MS = 60000;
@@ -232,6 +246,8 @@ function readKeepAliveStatus() {
         writeSettingsGranted: null,
         screenOffTimeoutMs: null,
         batteryOptimizationIgnored: null,
+        touchNudgeEnabled: TOUCH_NUDGE_ENABLED,
+        touchNudgeGuardMs: POST_TRADE_NUDGE_GUARD_MS,
         nudgeIntervalMs: SCREEN_NUDGE_INTERVAL_MS,
         runtimeCheckIntervalMs: RUNTIME_ALIVE_INTERVAL_MS
     };
@@ -474,10 +490,40 @@ function ensureRuntimeAlive(force) {
     return true;
 }
 
+function tradeUiBlocksNudge() {
+    if (tradeInteractionActive) return true;
+    try {
+        if (findOnceSafe(id("2131448374"))) return true;
+    } catch (e1) {}
+    try {
+        if (findOnceSafe(selector().textMatches(CONFIRM_TEXT_PATTERN))) return true;
+    } catch (e2) {}
+    try {
+        var input = findOnceSafe(className("android.widget.EditText"));
+        if (input && input.focused() === true) return true;
+    } catch (e3) {}
+    try {
+        if (findOnceSafe(classNameMatches(/Dialog|Popup/i))) return true;
+    } catch (e4) {}
+    return false;
+}
+
+function findOnceSafe(sel) {
+    try {
+        if (sel && typeof sel.findOnce === "function") return sel.findOnce();
+    } catch (e1) {}
+    try {
+        if (sel && typeof sel.findOne === "function") return sel.findOne(1);
+    } catch (e2) {}
+    return null;
+}
+
 function safeNudgeScreen(force) {
     var now = Date.now();
+    if (!TOUCH_NUDGE_ENABLED) return;
     if (!force && now - lastScreenNudge < SCREEN_NUDGE_INTERVAL_MS) return;
-    if (!force && now - lastTradeInteractionMs < 15000) return;
+    if (!force && now - lastTradeInteractionMs < POST_TRADE_NUDGE_GUARD_MS) return;
+    if (tradeUiBlocksNudge()) return;
     lastScreenNudge = now;
 
     try {
@@ -548,56 +594,87 @@ function debugDumpUI() {
 //   id=2131449794 "0 USDT"      (probably frozen, ignore)
 var BALANCE_VIEW_ID = "com.binance.dev:id/2131448004";
 
-function scanBalance() {
-    try {
-        // Strategy A: direct id hit (fastest, most stable)
-        var node = id(BALANCE_VIEW_ID).findOne(1500);
-        if (node) {
-            var t = (node.text() || "").trim();
-            var m = t.match(/([0-9]+(?:\.[0-9]+)?)/);
-            if (m) {
-                var num = parseFloat(m[1]);
-                if (!isNaN(num) && num >= 0) {
-                    log("[Balance] hit id=" + BALANCE_VIEW_ID + " text='" + t + "' -> " + num);
-                    return num;
-                }
-            }
+function parseBalanceText(text, requireUsdt) {
+    var value = String(text || "").trim();
+    if (requireUsdt && !/USDT/i.test(value)) return null;
+    var match = value.match(/([0-9]+(?:\.[0-9]+)?)/);
+    if (!match) return null;
+    var amount = parseFloat(match[1]);
+    return !isNaN(amount) && amount >= 0 ? amount : null;
+}
+
+function scanBalanceOnce(allowGenericFallback) {
+    var balanceIds = ["2131448004", BALANCE_VIEW_ID, PACKAGE + ":id/2131448004"];
+    for (var i = 0; i < balanceIds.length; i++) {
+        var direct = null;
+        try { direct = findOnceSafe(id(balanceIds[i])); } catch (e1) {}
+        if (!direct) continue;
+        var directText = nodeTextSafe(direct);
+        var directAmount = parseBalanceText(directText, false);
+        if (directAmount != null) {
+            return { amount: directAmount, method: "id:" + balanceIds[i], text: directText };
         }
-        // Strategy B: find "可用" label, take its sibling/next TextView
-        var label = selector().text("可用").findOne(1500);
-        if (label) {
-            // Try same parent's other children, or next sibling
+    }
+
+    var label = null;
+    try { label = findOnceSafe(selector().text("\u53ef\u7528")); } catch (e2) {}
+    if (label) {
+        try {
             var sib = label.nextSibling();
             while (sib) {
-                var st = (sib.text() || "").trim();
-                var mm = st.match(/([0-9]+(?:\.[0-9]+)?)\s*USDT/);
-                if (mm) { var n = parseFloat(mm[1]); if (!isNaN(n) && n >= 0) { log("[Balance] via 可用 sibling: " + st + " -> " + n); return n; } }
+                var siblingText = nodeTextSafe(sib);
+                var siblingAmount = parseBalanceText(siblingText, true);
+                if (siblingAmount != null) {
+                    return { amount: siblingAmount, method: "available_sibling", text: siblingText };
+                }
                 sib = sib.nextSibling();
             }
-            // Try parent and look for any USDT-bearing text in descendants
+        } catch (e3) {}
+        try {
             var par = label.parent();
-            if (par) {
-                var kids = par.find(selector().textMatches(/USDT/));
-                for (var k = 0; k < kids.length; k++) {
-                    var kt = (kids[k].text() || "").trim();
-                    var km = kt.match(/([0-9]+(?:\.[0-9]+)?)\s*USDT/);
-                    if (km) { var kn = parseFloat(km[1]); if (!isNaN(kn) && kn >= 0) { log("[Balance] via 可用 parent scan: " + kt + " -> " + kn); return kn; } }
+            var kids = par ? par.find(selector().textMatches(/USDT/i)) : [];
+            for (var k = 0; k < kids.length; k++) {
+                var childText = nodeTextSafe(kids[k]);
+                var childAmount = parseBalanceText(childText, true);
+                if (childAmount != null) {
+                    return { amount: childAmount, method: "available_parent", text: childText };
                 }
             }
-        }
-        // Strategy C: any TextView with "X USDT" that's the largest visible number (fallback)
-        var allUsdt = selector().textMatches(/^[0-9]+(?:\.[0-9]+)?\s*USDT$/).find();
-        var best = -1; var bestText = "";
+        } catch (e4) {}
+    }
+
+    if (allowGenericFallback === false) return null;
+
+    try {
+        var allUsdt = selector().textMatches(/^[0-9]+(?:\.[0-9]+)?\s*USDT$/i).find();
+        var best = -1;
+        var bestText = "";
         for (var j = 0; j < allUsdt.length; j++) {
-            var ut = (allUsdt[j].text() || "").trim();
-            var um = ut.match(/^([0-9]+(?:\.[0-9]+)?)\s*USDT$/);
-            if (um) {
-                var un = parseFloat(um[1]);
-                if (!isNaN(un) && un > best) { best = un; bestText = ut; }
+            var candidateText = nodeTextSafe(allUsdt[j]);
+            var candidateAmount = parseBalanceText(candidateText, true);
+            if (candidateAmount != null && candidateAmount > best) {
+                best = candidateAmount;
+                bestText = candidateText;
             }
         }
-        if (best >= 0) { log("[Balance] via largest USDT fallback: " + bestText + " -> " + best); return best; }
-        return null;
+        if (best >= 0) return { amount: best, method: "largest_usdt", text: bestText };
+    } catch (e5) {}
+    return null;
+}
+
+function scanBalance(timeoutMs, allowGenericFallback) {
+    var timeout = timeoutMs == null ? BALANCE_FIND_TIMEOUT_MS : Math.max(0, Number(timeoutMs) || 0);
+    var startedAt = Date.now();
+    try {
+        while (true) {
+            var result = scanBalanceOnce(allowGenericFallback);
+            if (result) {
+                log("[Balance] " + result.method + " text='" + result.text + "' -> " + result.amount + " in " + (Date.now() - startedAt) + "ms");
+                return result.amount;
+            }
+            if (Date.now() - startedAt >= timeout) return null;
+            sleep(UI_FAST_POLL_MS);
+        }
     } catch (e) {
         log("scanBalance err: " + e);
         return null;
@@ -700,7 +777,7 @@ function buildTradeQueue(data) {
         if (d.enabled === false) continue;
         if (d.tradeEnabled === false) continue;
         var sig = data[d.id];
-        if (!sig) continue;
+        if (!sig || !sig.signal) continue;
         var amount = amountForOrder(d.id, sig, amounts[d.id]);
         var exec = buildExecutionContext(sig);
         queue.push({
@@ -916,11 +993,11 @@ function amountCandidateScore(info) {
     return score;
 }
 
-function findAmountInputCandidates() {
+function collectAmountInputCandidatesOnce() {
     var list = [];
     var seen = {};
-    try { pushAmountCandidate(list, seen, id("2131431885").findOne(700), "legacy_id"); } catch (e1) {}
-    try { pushAmountCandidate(list, seen, id(PACKAGE + ":id/2131431885").findOne(700), "full_legacy_id"); } catch (e2) {}
+    try { pushAmountCandidate(list, seen, findOnceSafe(id("2131431885")), "legacy_id"); } catch (e1) {}
+    try { pushAmountCandidate(list, seen, findOnceSafe(id(PACKAGE + ":id/2131431885")), "full_legacy_id"); } catch (e2) {}
     try { pushAmountCandidateList(list, seen, selector().idMatches(/2131431885|amount|input|qty|quantity|sum|stake|money|edit/i).find(), "id_matches"); } catch (e3) {}
     try { pushAmountCandidateList(list, seen, className("android.widget.EditText").find(), "edit_text"); } catch (e4) {}
     try { pushAmountCandidateList(list, seen, classNameMatches(/EditText|TextInput/i).find(), "class_matches"); } catch (e5) {}
@@ -929,6 +1006,16 @@ function findAmountInputCandidates() {
         return amountCandidateScore(b) - amountCandidateScore(a);
     });
     return list;
+}
+
+function findAmountInputCandidates(timeoutMs) {
+    var timeout = timeoutMs == null ? AMOUNT_FIND_TIMEOUT_MS : Math.max(0, Number(timeoutMs) || 0);
+    var startedAt = Date.now();
+    while (true) {
+        var list = collectAmountInputCandidatesOnce();
+        if (list.length || Date.now() - startedAt >= timeout) return list;
+        sleep(UI_FAST_POLL_MS);
+    }
 }
 
 function compactAmountCandidate(info) {
@@ -949,25 +1036,37 @@ function compactAmountCandidate(info) {
 function setTextOnAmountCandidate(info, amt) {
     var node = info.node;
     var target = String(amt);
+    var startedAt = Date.now();
     try { node.click(); } catch (e1) {}
-    sleep(180);
-    try { node.setText(""); sleep(100); } catch (e2) {}
+    sleep(UI_FAST_POLL_MS);
     try {
-        node.setText(target);
-        sleep(300);
-        log("Amount set by " + info.source + " score=" + amountCandidateScore(info));
+        var directResult = node.setText(target);
+        if (directResult === false) throw new Error("node.setText returned false");
+        sleep(UI_FAST_POLL_MS);
+        if (lastAmountInputProbe) {
+            lastAmountInputProbe.setMethod = "node.setText";
+            lastAmountInputProbe.setMs = Date.now() - startedAt;
+            lastAmountInputProbe.observedText = nodeTextSafe(node);
+        }
+        log("Amount set by " + info.source + " score=" + amountCandidateScore(info) + " in " + (Date.now() - startedAt) + "ms");
         return true;
-    } catch (e3) {
+    } catch (e2) {
         try {
-            setText(target);
-            sleep(300);
-            log("Amount set by focused setText " + info.source + " score=" + amountCandidateScore(info));
+            var focusedResult = setText(target);
+            if (focusedResult === false) throw new Error("focused setText returned false");
+            sleep(UI_FAST_POLL_MS);
+            if (lastAmountInputProbe) {
+                lastAmountInputProbe.setMethod = "focused_setText";
+                lastAmountInputProbe.setMs = Date.now() - startedAt;
+                lastAmountInputProbe.observedText = nodeTextSafe(node);
+            }
+            log("Amount set by focused setText " + info.source + " score=" + amountCandidateScore(info) + " in " + (Date.now() - startedAt) + "ms");
             return true;
-        } catch (e4) {
+        } catch (e3) {
             if (lastAmountInputProbe && lastAmountInputProbe.errors.length < 6) {
                 lastAmountInputProbe.errors.push({
                     source: info.source,
-                    error: String(e3) + " | " + String(e4)
+                    error: String(e2) + " | " + String(e3)
                 });
             }
         }
@@ -976,6 +1075,7 @@ function setTextOnAmountCandidate(info, amt) {
 }
 
 function setAmount(amt) {
+    var findStartedAt = Date.now();
     lastAmountInputProbe = {
         target: String(amt),
         screen: { width: device.width, height: device.height },
@@ -984,7 +1084,8 @@ function setAmount(amt) {
         errors: []
     };
 
-    var candidates = findAmountInputCandidates();
+    var candidates = findAmountInputCandidates(AMOUNT_FIND_TIMEOUT_MS);
+    lastAmountInputProbe.findMs = Date.now() - findStartedAt;
     for (var i = 0; i < candidates.length && i < 10; i++) {
         lastAmountInputProbe.candidates.push(compactAmountCandidate(candidates[i]));
     }
@@ -1002,16 +1103,70 @@ function setAmount(amt) {
     return false;
 }
 
+function dismissAmountKeyboard() {
+    var startedAt = Date.now();
+    try {
+        var input = findOnceSafe(className("android.widget.EditText"));
+        if (!input) {
+            try { input = findOnceSafe(selector().editable(true).focused(true)); } catch (e1) {}
+        }
+        if (!input || input.focused() !== true) return false;
+        back();
+        while (Date.now() - startedAt < 400) {
+            sleep(UI_FAST_POLL_MS);
+            try {
+                if (input.focused() !== true) break;
+            } catch (e2) { break; }
+        }
+        if (lastAmountInputProbe) lastAmountInputProbe.keyboardDismissMs = Date.now() - startedAt;
+        log("Amount keyboard dismissed before direction click in " + (Date.now() - startedAt) + "ms");
+        return true;
+    } catch (e) {
+        log("Amount keyboard dismiss err: " + e);
+        return false;
+    }
+}
+
 // ========== Direction ==========
+function clickDirectionFast(direction, idValue, fallbackX, fallbackY) {
+    var startedAt = Date.now();
+    var candidates = [idValue, PACKAGE + ":id/" + idValue];
+    while (Date.now() - startedAt < DIRECTION_FIND_TIMEOUT_MS) {
+        for (var i = 0; i < candidates.length; i++) {
+            var btn = null;
+            try { btn = findOnceSafe(id(candidates[i])); } catch (e1) {}
+            if (!btn) continue;
+            var summary = nodeSummary(btn);
+            if (clickNodeOrAncestor(btn)) {
+                lastDirectionProbe = {
+                    direction: direction,
+                    method: "id:" + candidates[i],
+                    node: summary,
+                    waitedMs: Date.now() - startedAt,
+                    clickedAt: Date.now()
+                };
+                return true;
+            }
+        }
+        sleep(UI_FAST_POLL_MS);
+    }
+    click(fallbackX, fallbackY);
+    lastDirectionProbe = {
+        direction: direction,
+        method: "coordinate_fallback",
+        x: fallbackX,
+        y: fallbackY,
+        waitedMs: Date.now() - startedAt,
+        clickedAt: Date.now()
+    };
+    return true;
+}
+
 function clickUp() {
-    var btn = id("2131432526").findOne(2000);
-    if (btn) { btn.click(); return; }
-    click(1285, 1840);
+    return clickDirectionFast("UP", "2131432526", 1285, 1840);
 }
 function clickDown() {
-    var btn = id("2131432527").findOne(2000);
-    if (btn) { btn.click(); return; }
-    click(2107, 1840);
+    return clickDirectionFast("DOWN", "2131432527", 2107, 1840);
 }
 
 // ========== Confirm ==========
@@ -1034,31 +1189,79 @@ function nodeSummary(node) {
 }
 
 function clickNodeCenter(node) {
+    lastNodeClickProbe = null;
     var b = nodeBoundsSafe(node);
     if (b && b.width > 0 && b.height > 0) {
-        click(Math.round((b.left + b.right) / 2), Math.round((b.top + b.bottom) / 2));
-        return true;
+        var x = Math.round((b.left + b.right) / 2);
+        var y = Math.round((b.top + b.bottom) / 2);
+        if (x >= 0 && x < device.width && y >= 0 && y < device.height) {
+            var coordinateResult = false;
+            try { coordinateResult = click(x, y); } catch (e1) {}
+            lastNodeClickProbe = {
+                method: "screen_coordinate",
+                dispatched: coordinateResult === true,
+                x: x,
+                y: y,
+                bounds: b
+            };
+            return coordinateResult === true;
+        }
+        lastNodeClickProbe = {
+            method: "coordinate_rejected",
+            dispatched: false,
+            reason: "bounds_outside_screen",
+            screen: { width: device.width, height: device.height },
+            bounds: b
+        };
     }
     try {
-        node.click();
-        return true;
-    } catch (e) {}
+        var nodeResult = node.click();
+        lastNodeClickProbe = {
+            method: "node_accessibility_fallback",
+            dispatched: nodeResult === true,
+            bounds: b
+        };
+        return nodeResult === true;
+    } catch (e2) {}
     return false;
 }
 
 function clickNodeOrAncestor(node) {
+    lastNodeClickProbe = null;
     var cur = node;
     for (var i = 0; cur && i < 5; i++) {
         try {
             if (nodeBoolSafe(cur, "enabled") !== false && nodeBoolSafe(cur, "visibleToUser") !== false) {
                 if (nodeBoolSafe(cur, "clickable") === true) {
-                    if (clickNodeCenter(cur)) return true;
+                    var actionResult = cur.click();
+                    lastNodeClickProbe = {
+                        method: i === 0 ? "node_accessibility" : "ancestor_accessibility",
+                        dispatched: actionResult === true,
+                        ancestorDepth: i,
+                        node: nodeSummary(cur)
+                    };
+                    if (actionResult === true) return true;
                 }
             }
         } catch (e) {}
         try { cur = cur.parent(); } catch (e2) { cur = null; }
     }
     return clickNodeCenter(node);
+}
+
+function nodeCenterInsideScreen(node) {
+    var b = nodeBoundsSafe(node);
+    if (!b || b.width <= 0 || b.height <= 0) return false;
+    var x = Math.round((b.left + b.right) / 2);
+    var y = Math.round((b.top + b.bottom) / 2);
+    return x >= 0 && x < device.width && y >= 0 && y < device.height;
+}
+
+function confirmNodeReady(node) {
+    if (!node || !nodeCenterInsideScreen(node)) return false;
+    if (nodeBoolSafe(node, "enabled") === false) return false;
+    if (nodeBoolSafe(node, "visibleToUser") === false) return false;
+    return true;
 }
 
 function collectConfirmProbe(limit) {
@@ -1086,41 +1289,147 @@ function collectConfirmProbe(limit) {
 function handleConfirmStrict() {
     var start = Date.now();
     var probe = [];
-    sleep(800);
-    while (Date.now() - start < 6000) {
-        var btn = id("2131448374").findOne(800);
+    lastConfirmProbe = null;
+    sleep(CONFIRM_MIN_SETTLE_MS);
+    while (Date.now() - start < CONFIRM_FIND_TIMEOUT_MS) {
+        var btn = null;
+        var matchedId = null;
+        for (var idIndex = 0; idIndex < CONFIRM_BUTTON_IDS.length && !btn; idIndex++) {
+            var rawId = CONFIRM_BUTTON_IDS[idIndex];
+            try { btn = findOnceSafe(id(rawId)); } catch (e0) {}
+            if (btn) matchedId = rawId;
+            if (!btn) {
+                try { btn = findOnceSafe(id(PACKAGE + ":id/" + rawId)); } catch (e00) {}
+                if (btn) matchedId = PACKAGE + ":id/" + rawId;
+            }
+        }
         if (btn) {
-            btn.click();
-            log("Confirmed by id");
-            return true;
+            var idSummary = nodeSummary(btn);
+            idSummary.confirmReady = confirmNodeReady(btn);
+            probe.push(idSummary);
+            if (idSummary.confirmReady && clickNodeOrAncestor(btn)) {
+                lastConfirmProbe = {
+                    method: "id",
+                    matchedId: matchedId,
+                    dispatch: lastNodeClickProbe,
+                    node: idSummary,
+                    waitedMs: Date.now() - start,
+                    dispatchedAt: Date.now()
+                };
+                log("Confirm action dispatched by id/accessibility in " + (Date.now() - start) + "ms");
+                return true;
+            }
         }
-        var btns = selector().textMatches(/.*Confirm.*|.*OK.*|.*Place.*|.*Order.*|.*\u786e\u8ba4.*|.*\u786e\u5b9a.*/i).clickable(true).find();
+        var btns = selector().textMatches(CONFIRM_TEXT_PATTERN).clickable(true).find();
         for (var i = 0; i < btns.length; i++) {
-            btns[i].click();
-            log("Confirmed by text");
-            return true;
+            var textSummary = nodeSummary(btns[i]);
+            textSummary.confirmReady = confirmNodeReady(btns[i]);
+            probe.push(textSummary);
+            if (textSummary.confirmReady && clickNodeOrAncestor(btns[i])) {
+                lastConfirmProbe = {
+                    method: "clickable_text",
+                    dispatch: lastNodeClickProbe,
+                    node: textSummary,
+                    waitedMs: Date.now() - start,
+                    dispatchedAt: Date.now()
+                };
+                log("Confirm action dispatched by text/accessibility in " + (Date.now() - start) + "ms");
+                return true;
+            }
         }
-        var textNodes = selector().textMatches(/.*Confirm.*|.*Submit.*|.*Place.*|.*Order.*|.*Buy.*|.*Sell.*|.*\u786e\u8ba4.*|.*\u786e\u5b9a.*|.*\u4e0b\u5355.*|.*\u4e70\u5165.*|.*\u5356\u51fa.*|.*\u8d2d\u4e70.*/i).find();
+        var textNodes = selector().textMatches(CONFIRM_TEXT_PATTERN).find();
         for (var j = 0; j < textNodes.length; j++) {
-            probe.push(nodeSummary(textNodes[j]));
-            if (clickNodeOrAncestor(textNodes[j])) {
-                log("Confirmed by text ancestor");
+            var ancestorTextSummary = nodeSummary(textNodes[j]);
+            ancestorTextSummary.confirmReady = confirmNodeReady(textNodes[j]);
+            probe.push(ancestorTextSummary);
+            if (ancestorTextSummary.confirmReady && clickNodeOrAncestor(textNodes[j])) {
+                lastConfirmProbe = {
+                    method: "text_ancestor",
+                    dispatch: lastNodeClickProbe,
+                    node: ancestorTextSummary,
+                    waitedMs: Date.now() - start,
+                    dispatchedAt: Date.now()
+                };
+                log("Confirm action dispatched by text ancestor in " + (Date.now() - start) + "ms");
                 return true;
             }
         }
-        var descNodes = selector().descMatches(/.*Confirm.*|.*Submit.*|.*Place.*|.*Order.*|.*Buy.*|.*Sell.*|.*\u786e\u8ba4.*|.*\u786e\u5b9a.*|.*\u4e0b\u5355.*|.*\u4e70\u5165.*|.*\u5356\u51fa.*|.*\u8d2d\u4e70.*/i).find();
+        var descNodes = selector().descMatches(CONFIRM_TEXT_PATTERN).find();
         for (var k = 0; k < descNodes.length; k++) {
-            probe.push(nodeSummary(descNodes[k]));
-            if (clickNodeOrAncestor(descNodes[k])) {
-                log("Confirmed by desc ancestor");
+            var descSummary = nodeSummary(descNodes[k]);
+            descSummary.confirmReady = confirmNodeReady(descNodes[k]);
+            probe.push(descSummary);
+            if (descSummary.confirmReady && clickNodeOrAncestor(descNodes[k])) {
+                lastConfirmProbe = {
+                    method: "desc_ancestor",
+                    dispatch: lastNodeClickProbe,
+                    node: descSummary,
+                    waitedMs: Date.now() - start,
+                    dispatchedAt: Date.now()
+                };
+                log("Confirm action dispatched by desc ancestor in " + (Date.now() - start) + "ms");
                 return true;
             }
         }
-        sleep(300);
+        sleep(UI_FAST_POLL_MS);
     }
     log("Confirm button not found");
-    lastConfirmProbe = probe.length ? probe.slice(0, 12) : collectConfirmProbe(12);
+    lastConfirmProbe = {
+        method: null,
+        waitedMs: Date.now() - start,
+        candidates: probe.length ? probe.slice(0, 12) : collectConfirmProbe(12)
+    };
     return false;
+}
+
+function findConfirmationNode() {
+    for (var i = 0; i < CONFIRM_BUTTON_IDS.length; i++) {
+        var rawId = CONFIRM_BUTTON_IDS[i];
+        var node = null;
+        try { node = findOnceSafe(id(rawId)); } catch (e1) {}
+        if (!node) {
+            try { node = findOnceSafe(id(PACKAGE + ":id/" + rawId)); } catch (e2) {}
+        }
+        if (node) return node;
+    }
+    try { return findOnceSafe(selector().textMatches(CONFIRM_TEXT_PATTERN)); } catch (e3) {}
+    return null;
+}
+
+function recoverTradeUiAfterFailure() {
+    try {
+        var trigger = findConfirmationNode();
+        if (trigger) {
+            var summary = nodeSummary(trigger);
+            back();
+            sleep(500);
+            log("Recovered stale trade confirmation with back");
+            return { action: "back", reason: "confirmation_still_open", trigger: summary };
+        }
+        var input = className("android.widget.EditText").findOne(200);
+        if (input && input.focused() === true) {
+            back();
+            sleep(400);
+            log("Recovered focused amount input with back");
+            return { action: "back", reason: "amount_input_still_focused", trigger: nodeSummary(input) };
+        }
+    } catch (e) {
+        return { action: "none", reason: "recovery_error", error: String(e) };
+    }
+    return { action: "none", reason: "no_blocking_trade_ui_found" };
+}
+
+function closeConfirmationAfterVerifiedOrder() {
+    try {
+        var trigger = findConfirmationNode();
+        if (!trigger) return { action: "none", reason: "confirmation_closed" };
+        var summary = nodeSummary(trigger);
+        back();
+        sleep(300);
+        return { action: "back", reason: "verified_order_confirmation_still_open", trigger: summary };
+    } catch (e) {
+        return { action: "none", reason: "verified_cleanup_error", error: String(e) };
+    }
 }
 
 function handleConfirmLegacy() {
@@ -1132,7 +1441,7 @@ function handleConfirmLegacy() {
 }
 
 function readBalanceForOrder(label) {
-    var amt = scanBalance();
+    var amt = scanBalance(BALANCE_FIND_TIMEOUT_MS, false);
     if (amt == null || isNaN(amt)) {
         log("[OrderVerify] " + label + " balance unavailable");
         return null;
@@ -1153,8 +1462,10 @@ function balanceDropMatches(beforeBalance, afterBalance, amount) {
 function waitForBalanceDrop(beforeBalance, amount) {
     var start = Date.now();
     var latest = null;
+    var attempts = 0;
     while (Date.now() - start < ORDER_VERIFY_TIMEOUT_MS) {
-        sleep(1000);
+        sleep(ORDER_VERIFY_POLL_MS);
+        attempts++;
         latest = readBalanceForOrder("after");
         if (latest != null && balanceDropMatches(beforeBalance, latest, amount)) {
             return {
@@ -1162,7 +1473,8 @@ function waitForBalanceDrop(beforeBalance, amount) {
                 beforeBalance: beforeBalance,
                 afterBalance: latest,
                 balanceDelta: Number((latest - beforeBalance).toFixed(4)),
-                waitedMs: Date.now() - start
+                waitedMs: Date.now() - start,
+                attempts: attempts
             };
         }
     }
@@ -1171,7 +1483,27 @@ function waitForBalanceDrop(beforeBalance, amount) {
         beforeBalance: beforeBalance,
         afterBalance: latest,
         balanceDelta: latest == null ? null : Number((latest - beforeBalance).toFixed(4)),
-        waitedMs: Date.now() - start
+        waitedMs: Date.now() - start,
+        attempts: attempts
+    };
+}
+
+function markTradePhase(timing, name, extra) {
+    if (!timing) return;
+    var at = Date.now();
+    var phase = { at: at, elapsedMs: at - timing.startedAt };
+    if (extra) {
+        for (var key in extra) phase[key] = extra[key];
+    }
+    timing.phases[name] = phase;
+}
+
+function tradeTimingSnapshot(timing) {
+    if (!timing) return null;
+    return {
+        startedAt: timing.startedAt,
+        elapsedMs: Date.now() - timing.startedAt,
+        phases: timing.phases
     };
 }
 
@@ -1219,8 +1551,13 @@ function forceWakeForTrade() {
 
 function placeTrade(dir, order) {
     lastTradeInteractionMs = Date.now();
+    tradeInteractionActive = true;
+    var tradeStartedAt = lastTradeInteractionMs;
+    var tradeTiming = { startedAt: tradeStartedAt, phases: {} };
+    lastDirectionProbe = null;
     var prevAmt = tradeConfig.amount;
     var prevDur = tradeConfig.duration;
+    try {
     var strategyId = order && order.strategyId ? order.strategyId : "manual";
     if (order && order.amount) tradeConfig.amount = String(order.amount);
     if (order && order.duration) {
@@ -1232,6 +1569,7 @@ function placeTrade(dir, order) {
     }
     log(">>> TRADE " + strategyId + ": " + dir + " " + tradeConfig.amount + "U x " + tradeConfig.duration + "min");
     reportTradeAudit("order_attempt", order, { direction: dir });
+    markTradePhase(tradeTiming, "order_attempt_reported");
     
     // STEP 1: ensure screen is on (clicks won't work otherwise)
     if (!forceWakeForTrade()) {
@@ -1241,6 +1579,7 @@ function placeTrade(dir, order) {
         tradeConfig.duration = prevDur;
         return false;
     }
+    markTradePhase(tradeTiming, "screen_ready");
     
     // STEP 2: ensure Binance foreground
     if (currentPackage() != PACKAGE) {
@@ -1249,6 +1588,7 @@ function placeTrade(dir, order) {
     } else {
         log("step2: binance already foreground");
     }
+    markTradePhase(tradeTiming, "app_foreground_ready");
     
     // STEP 3: set duration
     log("step3: setDuration");
@@ -1261,6 +1601,7 @@ function placeTrade(dir, order) {
         durationSetTarget = "";
         return false;
     }
+    markTradePhase(tradeTiming, "duration_ready");
     
     // STEP 4: set amount
     log("step4: setAmount " + tradeConfig.amount);
@@ -1275,6 +1616,17 @@ function placeTrade(dir, order) {
         tradeConfig.duration = prevDur;
         return false;
     }
+    markTradePhase(tradeTiming, "amount_ready", {
+        findMs: lastAmountInputProbe ? lastAmountInputProbe.findMs : null,
+        setMs: lastAmountInputProbe ? lastAmountInputProbe.setMs : null,
+        source: lastAmountInputProbe && lastAmountInputProbe.tried.length ? lastAmountInputProbe.tried[0].source : null
+    });
+    var keyboardDismissed = dismissAmountKeyboard();
+    if (lastAmountInputProbe) lastAmountInputProbe.keyboardDismissed = keyboardDismissed;
+    markTradePhase(tradeTiming, "keyboard_ready", {
+        dismissed: keyboardDismissed,
+        dismissMs: lastAmountInputProbe ? lastAmountInputProbe.keyboardDismissMs : null
+    });
 
     var beforeBalance = readBalanceForOrder("before");
     if (beforeBalance == null) {
@@ -1284,6 +1636,7 @@ function placeTrade(dir, order) {
         tradeConfig.duration = prevDur;
         return false;
     }
+    markTradePhase(tradeTiming, "balance_before_ready", { balance: beforeBalance });
 
     var finalTiming = updateOrderTimingAge(order);
     if (!finalTiming.ok) {
@@ -1302,27 +1655,57 @@ function placeTrade(dir, order) {
     // STEP 5: click direction
     log("step5: click " + dir);
     if (dir == "UP") clickUp(); else clickDown();
+    markTradePhase(tradeTiming, "direction_clicked", {
+        method: lastDirectionProbe ? lastDirectionProbe.method : null,
+        locatorWaitMs: lastDirectionProbe ? lastDirectionProbe.waitedMs : null
+    });
     
     // STEP 6: confirm
     log("step6: confirm");
-    var executionTime = Date.now();
+    var executionTime = lastDirectionProbe && lastDirectionProbe.clickedAt ? lastDirectionProbe.clickedAt : Date.now();
     if (!handleConfirm()) {
+        markTradePhase(tradeTiming, "confirm_failed", {
+            confirmWaitMs: lastConfirmProbe ? lastConfirmProbe.waitedMs : null
+        });
         log(">>> ABORT: confirm failed");
+        var confirmRecovery = recoverTradeUiAfterFailure();
         reportTradeAudit("order_abort", order, {
             direction: dir,
             reason: "confirm_not_found",
             beforeBalance: beforeBalance,
             executionTime: executionTime,
-            confirmProbe: lastConfirmProbe
+            directionProbe: lastDirectionProbe,
+            confirmProbe: lastConfirmProbe,
+            uiRecovery: confirmRecovery,
+            uiTiming: tradeTimingSnapshot(tradeTiming)
         });
         tradeConfig.amount = prevAmt;
         tradeConfig.duration = prevDur;
         return false;
     }
+    markTradePhase(tradeTiming, "confirm_action_dispatched", {
+        method: lastConfirmProbe ? lastConfirmProbe.method : null,
+        confirmWaitMs: lastConfirmProbe ? lastConfirmProbe.waitedMs : null
+    });
+    reportTradeAudit("order_confirm_dispatched", order, {
+        direction: dir,
+        confirmationState: "action_dispatched_verification_pending",
+        beforeBalance: beforeBalance,
+        executionTime: executionTime,
+        directionProbe: lastDirectionProbe,
+        confirmProbe: lastConfirmProbe,
+        uiTiming: tradeTimingSnapshot(tradeTiming)
+    });
 
     var verify = waitForBalanceDrop(beforeBalance, tradeConfig.amount);
+    markTradePhase(tradeTiming, "balance_verify_finished", {
+        ok: verify.ok,
+        waitedMs: verify.waitedMs,
+        attempts: verify.attempts
+    });
     if (!verify.ok) {
         log(">>> ORDER UNVERIFIED balanceDelta=" + verify.balanceDelta);
+        var unverifiedRecovery = recoverTradeUiAfterFailure();
         reportTradeAudit("order_unverified", order, {
             direction: dir,
             reason: "balance_not_decreased",
@@ -1330,7 +1713,13 @@ function placeTrade(dir, order) {
             afterBalance: verify.afterBalance,
             balanceDelta: verify.balanceDelta,
             verifyWaitMs: verify.waitedMs,
-            executionTime: executionTime
+            verifyAttempts: verify.attempts,
+            executionTime: executionTime,
+            amountInputProbe: lastAmountInputProbe,
+            directionProbe: lastDirectionProbe,
+            confirmProbe: lastConfirmProbe,
+            uiRecovery: unverifiedRecovery,
+            uiTiming: tradeTimingSnapshot(tradeTiming)
         });
         reportBalance();
         if (order) {
@@ -1341,6 +1730,7 @@ function placeTrade(dir, order) {
     }
 
     log(">>> ORDER DONE verified balanceDelta=" + verify.balanceDelta);
+    var verifiedUiCleanup = closeConfirmationAfterVerifiedOrder();
     reportBalance();
     reportTradeAudit("order_done", order, {
         direction: dir,
@@ -1349,7 +1739,13 @@ function placeTrade(dir, order) {
         afterBalance: verify.afterBalance,
         balanceDelta: verify.balanceDelta,
         verifyWaitMs: verify.waitedMs,
-        executionTime: executionTime
+        verifyAttempts: verify.attempts,
+        executionTime: executionTime,
+        amountInputProbe: lastAmountInputProbe,
+        directionProbe: lastDirectionProbe,
+        confirmProbe: lastConfirmProbe,
+        uiCleanup: verifiedUiCleanup,
+        uiTiming: tradeTimingSnapshot(tradeTiming)
     });
     
     // STEP 7: refresh balance
@@ -1360,6 +1756,15 @@ function placeTrade(dir, order) {
         tradeConfig.duration = prevDur;
     }
     return true;
+    } finally {
+        tradeInteractionActive = false;
+        lastTradeInteractionMs = Date.now();
+        if (order) {
+            tradeConfig.amount = prevAmt;
+            tradeConfig.duration = prevDur;
+        }
+        log("trade interaction released after " + (lastTradeInteractionMs - tradeStartedAt) + "ms");
+    }
 }
 
 // ========== Main ==========

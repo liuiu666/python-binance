@@ -82,6 +82,7 @@ const SECOND_DATA_FILE = path.join(DATA_DIR, "btcusdt_1s_trades.csv");
 const ORDERBOOK_STATUS_FILE = path.join(DATA_DIR, "orderbook_status.json");
 const ORDERBOOK_FILE = path.join(DATA_DIR, "btcusdt_orderbook_1s.csv");
 const ORDERBOOK_PREDICTION_STATUS_FILE = path.join(DATA_DIR, "orderbook_prediction_status.json");
+const AUCTION_DATA_STATUS_FILE = path.join(DATA_DIR, "auction_data_status.json");
 const PRICE_FILE = path.join(DATA_DIR, "current_price.json");
 const CONFIG_FILE = path.join(DATA_DIR, "trade_config.json");
 const LLM_CONFIG_FILE = path.join(DATA_DIR, "llm_config.json");
@@ -1571,7 +1572,13 @@ function buildSignalResponse(source = "") {
 
 app.get("/api/signal", (req, res) => {
   try {
-    res.json(buildSignalResponse(req.query.source));
+    const source = String(req.query.source || "");
+    const signals = buildSignalResponse(source);
+    if (source === "autojs" || source === "tablet") {
+      try { mirrorTabletSignalsToShadow(signals); }
+      catch (e) { console.warn("[Shadow] tablet signal mirror failed:", e.message); }
+    }
+    res.json(signals);
   } catch (e) { res.json({ _config: tradeConfig, _signalAmount: String(tradeConfig.amount) }); }
 });
 app.get("/api/price", (req, res) => {
@@ -1651,6 +1658,33 @@ app.get("/api/orderbook-health", (req, res) => {
       display_time_zone: "Asia/Shanghai"
     },
     file
+  });
+});
+
+app.get("/api/auction-data-health", (req, res) => {
+  const status = readJsonFile(AUCTION_DATA_STATUS_FILE, {});
+  const streams = status && typeof status.streams === "object" ? status.streams : {};
+  const eventAgeMs = Number(status.event_age_ms);
+  const depthAgeMs = Number(streams.depth_updates && streams.depth_updates.age_ms);
+  const maxAgeMs = Number(process.env.AUCTION_DATA_MAX_AGE_MS || 15000);
+  const depthMaxAgeMs = Number(process.env.AUCTION_DEPTH_MAX_AGE_MS || 15000);
+  const statusTime = status.updated_at ? Date.parse(status.updated_at) : null;
+  const statusAgeMs = Number.isFinite(statusTime) ? Date.now() - statusTime : null;
+  res.json({
+    ok: !!status.ok
+      && Number.isFinite(eventAgeMs) && eventAgeMs <= maxAgeMs
+      && Number.isFinite(depthAgeMs) && depthAgeMs <= depthMaxAgeMs
+      && Number.isFinite(statusAgeMs) && statusAgeMs <= maxAgeMs,
+    eventAgeMs: Number.isFinite(eventAgeMs) ? eventAgeMs : null,
+    depthAgeMs: Number.isFinite(depthAgeMs) ? depthAgeMs : null,
+    statusAgeMs,
+    maxAgeMs,
+    depthMaxAgeMs,
+    status: {
+      ...status,
+      updated_at_shanghai: Number.isFinite(statusTime) ? shanghaiTime(statusTime) : null,
+      display_time_zone: "Asia/Shanghai"
+    }
   });
 });
 
@@ -2039,6 +2073,8 @@ let lastSignals = {};
 let shadowTrades = [];
 let nextShadowTradeId = 1;
 let lastShadowSignals = {};
+let shadowSignalKeys = new Set();
+let shadowSignalKeysLoaded = false;
 let lastStrategyTradeAt = {};
 let autoTradeLog = [];
 let realBalance = normalizeRealBalance(readJsonFile(REAL_BALANCE_FILE, null));
@@ -2361,6 +2397,83 @@ function placeShadowTrade(strategyId, sig, variant, extra = {}) {
   return trade;
 }
 
+function shadowSignalKey(strategyId, sig) {
+  return [
+    strategyId,
+    sig && sig.signal || "",
+    sig && sig.time || "",
+    sig && (sig.actionable_time || sig.candle_close_time || sig.time) || ""
+  ].join("|");
+}
+
+function shadowAuditSignalKey(row) {
+  if (!row || row.event !== "shadow_trade_open" || !row.strategyId) return "";
+  if (row.shadowSignalKey) return String(row.shadowSignalKey);
+  return [
+    row.strategyId,
+    row.direction || "",
+    row.signalTime || "",
+    row.actionableTime || row.signalTime || ""
+  ].join("|");
+}
+
+function loadShadowSignalKeys() {
+  if (shadowSignalKeysLoaded) return;
+  shadowSignalKeysLoaded = true;
+  for (const row of tailJsonl(TRADE_AUDIT_FILE, 2000)) {
+    const key = shadowAuditSignalKey(row);
+    if (key) shadowSignalKeys.add(key);
+  }
+}
+
+function shadowSignalAlreadyRecorded(strategyId, sig) {
+  loadShadowSignalKeys();
+  const key = shadowSignalKey(strategyId, sig);
+  return shadowSignalKeys.has(key) || lastShadowSignals[strategyId] === key;
+}
+
+function rememberShadowSignal(strategyId, sig) {
+  const key = shadowSignalKey(strategyId, sig);
+  shadowSignalKeys.add(key);
+  lastShadowSignals[strategyId] = key;
+  return key;
+}
+
+function mirrorTabletSignalsToShadow(signals) {
+  if (!tradeConfig.shadowTradingEnabled || !currentPrice) return;
+  const variants = currentStrategyVariants();
+  const liveIds = new Set(currentLiveStrategyIds());
+  for (const variant of variants) {
+    const strategyId = variant.id;
+    if (!liveIds.has(strategyId)) continue;
+    const sig = signals && signals[strategyId];
+    if (!sig || !sig.signal || shadowSignalAlreadyRecorded(strategyId, sig)) continue;
+    if (shadowTrades.some(t => t.status === "active" && t.source === "shadow:" + strategyId)) continue;
+    const sigTime = signalActionableMs(sig);
+    if (!sigTime || Date.now() - sigTime > configuredMaxActionableLagMs()) continue;
+    const key = shadowSignalKey(strategyId, sig);
+    const trade = placeShadowTrade(strategyId, sig, variant, {
+      auditFields: {
+        shadowType: "tablet_signal_mirror",
+        shadowSignalKey: key,
+        shadowSource: "api_signal_autojs"
+      }
+    });
+    if (!trade) continue;
+    rememberShadowSignal(strategyId, sig);
+    autoTradeLog.push({
+      time: new Date().toISOString(),
+      strategy: strategyId,
+      signal: sig.signal,
+      confidence: sig.confidence,
+      price: currentPrice,
+      amount: trade.amount,
+      tradeId: "shadow:" + trade.id,
+      mode: "tablet_signal_mirror"
+    });
+  }
+}
+
 function hasStrategyCooldown(strategyId) {
   const last = Number(lastStrategyTradeAt[strategyId] || 0);
   return last && Date.now() - last < STRATEGY_COOLDOWN_MS;
@@ -2376,8 +2489,10 @@ function checkShadowTrades() {
   try {
     const signals = buildSignalResponse("dashboard");
     const variants = currentStrategyVariants();
+    const liveIds = new Set(currentLiveStrategyIds());
     for (const variant of variants) {
       const strategyId = variant.id;
+      if (liveIds.has(strategyId)) continue;
       const sig = signals[strategyId];
       if (!sig || !sig.signal) continue;
       if (hasStrategyCooldown(strategyId)) continue;
@@ -2950,7 +3065,7 @@ function applyProdStrategyParams(baseConfig, config) {
   const safeTemplate = out.BTC_10min_SAFE || {};
   const takerTemplate = out.BTC_10min_TAKER || {};
   for (const key of Object.keys(out)) {
-    if ((key.startsWith("BTC_10min_TAKER") || key.startsWith("BTC_10min_SAFE") || key.startsWith("BTC_10min_SECOND") || key.startsWith("BTC_10min_SMART") || key.startsWith("BTC_10min_NORMAL_STATE") || key.startsWith("BTC_10min_NORMAL_LIQUIDITY") || key.startsWith("BTC_10min_V22")) && !variants.some(v => v.id === key)) delete out[key];
+    if ((key.startsWith("BTC_10min_TAKER") || key.startsWith("BTC_10min_SAFE") || key.startsWith("BTC_10min_SECOND") || key.startsWith("BTC_10min_SMART") || key.startsWith("BTC_10min_NORMAL_STATE") || key.startsWith("BTC_10min_NORMAL_LIQUIDITY") || key.startsWith("BTC_10min_BRANCH") || key.startsWith("BTC_10min_MULTI") || key.startsWith("BTC_10min_V22")) && !variants.some(v => v.id === key)) delete out[key];
   }
   for (const variant of variants) {
     const current = out[variant.id] && typeof out[variant.id] === "object" ? out[variant.id] : {};
@@ -3207,6 +3322,8 @@ function applyProdStrategyParams(baseConfig, config) {
         router_data_observed_min_pct: 90,
         router_orderbook_coverage_min: 0.9,
         router_trend_confirm_sec: 20,
+        router_startup_skip_enabled: variant.startupSkipEnabled === true,
+        router_startup_skip_threshold: variant.startupSkipThreshold ?? 4,
         router_band_ultra_low_z_entry: 0.8,
         router_band_ultra_low_z_reclaim: 0.8,
         router_band_ultra_low_confirm_hits: 2,
@@ -3235,6 +3352,97 @@ function applyProdStrategyParams(baseConfig, config) {
         normal_state_loss_density_enabled: false,
         normal_state_loss_streak_enabled: false,
         model_label: variant.label || "正态流动性订单薄V1 影子"
+      };
+      continue;
+    }
+    if (variant.base === "SECOND_BRANCH_VOTE_STARTUP_V1") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        trade_enabled: variant.tradeEnabled === true,
+        model_type: "second_branch_vote_startup_v1",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        second_lookback_sec: variant.lookbackSec || 7200,
+        second_horizon_sec: variant.horizonSec || 600,
+        second_min_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        branch_vote_normal_window_sec: variant.normalWindowSec || 600,
+        branch_vote_horizon_sec: variant.horizonSec || 600,
+        branch_vote_signal_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        branch_vote_orderbook_max_age_sec: variant.orderbookMaxAgeSec || 3,
+        branch_vote_min_votes: variant.minVotes || 2,
+        branch_vote_startup_skip_threshold: variant.startupSkipThreshold || 4,
+        branch_vote_rule_path: variant.rulePath || "data/branch_vote_startup_rules.json",
+        normal_state_loss_density_enabled: false,
+        normal_state_loss_streak_enabled: false,
+        model_label: variant.label || "分支投票趋势启动V1"
+      };
+      continue;
+    }
+    if (variant.base === "SECOND_MULTI_NORMAL_HF_STABLE_V1") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        trade_enabled: variant.tradeEnabled === true,
+        model_type: "second_multi_normal_hf_stable_v1",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        second_lookback_sec: variant.lookbackSec || 7200,
+        second_horizon_sec: variant.horizonSec || 600,
+        second_min_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        multi_normal_window_sec: variant.normalWindowSec || 600,
+        multi_normal_horizon_sec: variant.horizonSec || 600,
+        multi_normal_signal_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        multi_normal_orderbook_max_age_sec: variant.orderbookMaxAgeSec || 3,
+        multi_normal_lowvol_sigma_max_bps: variant.lowVolSigmaMaxBps ?? 3,
+        multi_normal_lowvol_range_max_bps: variant.lowVolRangeMaxBps ?? 20,
+        multi_normal_lowvol_abs_ret10_max_bps: variant.lowVolAbsRet10MaxBps ?? 5,
+        multi_normal_lowvol_z_min: variant.lowVolZMin ?? 1.2,
+        multi_normal_lowvol_z_max: variant.lowVolZMax ?? 1.8,
+        multi_normal_lowvol_min_signed_flow: variant.lowVolMinSignedFlow ?? 0,
+        multi_normal_lowvol_max_adverse_ret30_sigma: variant.lowVolMaxAdverseRet30Sigma ?? 0.5,
+        multi_normal_trend_base_z_min: variant.trendBaseZMin ?? 1.2,
+        multi_normal_trend_high_vol_sigma_min_bps: variant.trendHighVolSigmaMinBps ?? 8,
+        multi_normal_trend_high_vol_z_min: variant.trendHighVolZMin ?? 0.5,
+        multi_normal_trend_min_signed_flow: variant.trendMinSignedFlow ?? 0.12,
+        multi_normal_trend_max_signed_book: variant.trendMaxSignedBook ?? 0.08,
+        incident_filter_enabled: false,
+        normal_state_loss_density_enabled: false,
+        normal_state_loss_streak_enabled: false,
+        model_label: variant.label || "多周期动态正态高频稳定V1"
+      };
+      continue;
+    }
+    if (variant.base === "SECOND_MULTISCALE_PHASE_GATE_V1") {
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled,
+        trade_enabled: variant.tradeEnabled === true,
+        model_type: "second_multiscale_phase_gate_v1",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
+        second_lookback_sec: variant.lookbackSec || 7800,
+        second_horizon_sec: variant.horizonSec || 600,
+        second_min_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        phase_gate_horizon_sec: variant.horizonSec || 600,
+        phase_gate_signal_gap_sec: variant.gapSec || variant.horizonSec || 600,
+        phase_gate_orderbook_max_age_sec: variant.orderbookMaxAgeSec || 3,
+        phase_gate_max_emit_age_sec: variant.maxEmitAgeSec || 8,
+        phase_gate_lookback_sec: variant.phaseLookbackSec || 3600,
+        phase_gate_maturity_history_sec: variant.maturityHistorySec || 3600,
+        phase_gate_maturity_min_periods: variant.maturityMinPeriods || 1800,
+        phase_gate_maturity_quantile: variant.maturityQuantile ?? 0.75,
+        phase_gate_min_flow60: variant.minFlow60 ?? 0.08,
+        phase_gate_min_imbalance20: variant.minImbalance20 ?? 0.05,
+        phase_gate_min_microprice_bps: variant.minMicropriceBps ?? 0,
+        phase_gate_min_volume_ratio: variant.minVolumeRatio ?? 0.8,
+        incident_filter_enabled: false,
+        normal_state_loss_density_enabled: false,
+        normal_state_loss_streak_enabled: false,
+        model_label: variant.label || "多周期迁移阶段 V1"
       };
       continue;
     }
@@ -3403,7 +3611,44 @@ function strategyRestartFingerprint(config) {
       qualityV2Enabled: v.qualityV2Enabled !== false,
       qualityV2DownBid20Chg60Min: v.qualityV2DownBid20Chg60Min,
       qualityV2UpFlow60Min: v.qualityV2UpFlow60Min,
+      startupSkipEnabled: v.startupSkipEnabled === true,
+      startupSkipThreshold: v.startupSkipThreshold,
       liquidityMode: v.liquidityMode
+    } : {}),
+    ...(v.base === "SECOND_BRANCH_VOTE_STARTUP_V1" ? {
+      normalWindowSec: v.normalWindowSec,
+      orderbookMaxAgeSec: v.orderbookMaxAgeSec,
+      minVotes: v.minVotes,
+      startupSkipThreshold: v.startupSkipThreshold,
+      rulePath: v.rulePath
+    } : {}),
+    ...(v.base === "SECOND_MULTI_NORMAL_HF_STABLE_V1" ? {
+      normalWindowSec: v.normalWindowSec,
+      orderbookMaxAgeSec: v.orderbookMaxAgeSec,
+      lowVolSigmaMaxBps: v.lowVolSigmaMaxBps,
+      lowVolRangeMaxBps: v.lowVolRangeMaxBps,
+      lowVolAbsRet10MaxBps: v.lowVolAbsRet10MaxBps,
+      lowVolZMin: v.lowVolZMin,
+      lowVolZMax: v.lowVolZMax,
+      lowVolMinSignedFlow: v.lowVolMinSignedFlow,
+      lowVolMaxAdverseRet30Sigma: v.lowVolMaxAdverseRet30Sigma,
+      trendBaseZMin: v.trendBaseZMin,
+      trendHighVolSigmaMinBps: v.trendHighVolSigmaMinBps,
+      trendHighVolZMin: v.trendHighVolZMin,
+      trendMinSignedFlow: v.trendMinSignedFlow,
+      trendMaxSignedBook: v.trendMaxSignedBook
+    } : {}),
+    ...(v.base === "SECOND_MULTISCALE_PHASE_GATE_V1" ? {
+      orderbookMaxAgeSec: v.orderbookMaxAgeSec,
+      maxEmitAgeSec: v.maxEmitAgeSec,
+      phaseLookbackSec: v.phaseLookbackSec,
+      maturityHistorySec: v.maturityHistorySec,
+      maturityMinPeriods: v.maturityMinPeriods,
+      maturityQuantile: v.maturityQuantile,
+      minFlow60: v.minFlow60,
+      minImbalance20: v.minImbalance20,
+      minMicropriceBps: v.minMicropriceBps,
+      minVolumeRatio: v.minVolumeRatio
     } : {}),
     upReversalConfirmBps: v.upReversalConfirmBps,
     upReversalConfirmMaxSec: v.upReversalConfirmMaxSec,

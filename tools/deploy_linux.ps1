@@ -273,7 +273,7 @@ echo "[6/8] syntax checks"
 node --check server.js
 node --check auto_btc.js
 . .venv/bin/activate
-python -m py_compile py/liquidity_v2_core.py py/normal_trend_latch_core.py py/run_liquidity_v2_backtest.py py/signal_btc.py py/signal_health.py py/signal_io.py py/signal_lock.py py/signal_paths.py py/signal_runtime_cache.py py/signal_state.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/collect_orderbook_data.py py/backtest_enhanced.py py/run_second_backtest.py py/run_second_research.py py/research_normal_state_v1.py py/research_normal_state_v6.py py/research_yellow_revert_filters.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/dynamic_zone.py py/second_backtest/execution.py py/second_backtest/incident_filter.py py/second_backtest/metrics.py py/second_backtest/strategies.py py/second_backtest/research.py py/second_backtest/normal_state_v11.py
+python -m py_compile py/liquidity_v2_core.py py/normal_trend_latch_core.py py/multi_normal_hf_stable_core.py py/multiscale_phase_gate_core.py py/backtest_io.py py/run_normal_trend_latch_backtest.py py/signal_btc.py py/signal_health.py py/signal_io.py py/signal_lock.py py/signal_paths.py py/signal_runtime_cache.py py/signal_state.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/collect_orderbook_data.py py/collect_auction_data.py py/backtest_enhanced.py py/run_second_backtest.py py/run_second_research.py py/research_normal_state_v1.py py/research_normal_state_v6.py py/research_yellow_revert_filters.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/dynamic_zone.py py/second_backtest/execution.py py/second_backtest/incident_filter.py py/second_backtest/metrics.py py/second_backtest/strategies.py py/second_backtest/research.py py/second_backtest/normal_state_v11.py
 
 echo "[7/8] write systemd services"
 NODE_BIN="$(command -v node)"
@@ -315,6 +315,9 @@ Environment=SERVER_SIM_TRADING_ENABLED=0
 Environment=ENABLE_SIGNAL_SHADOWS=0
 Environment=ENABLE_LEGACY_TWO_MINUTE_LIVE=0
 Environment=PYTHONUNBUFFERED=1
+Environment=SIGNAL_SCAN_INTERVAL_SEC=1
+Environment=LIVE_1M_REFRESH_SEC=5
+Environment=LIVE_1M_RETRY_SEC=2
 Environment=OMP_NUM_THREADS=1
 Environment=OPENBLAS_NUM_THREADS=1
 Environment=MKL_NUM_THREADS=1
@@ -346,7 +349,7 @@ Environment=SECOND_DATA_INTERVAL_SEC=5
 Environment=SECOND_DATA_RETENTION_DAYS=120
 Environment=SECOND_DATA_HTTP_TIMEOUT=8
 Environment=SECOND_DATA_FAPI_BASES=https://fapi.binance.com
-Environment=SECOND_DATA_FINALIZE_DELAY_SEC=5
+Environment=SECOND_DATA_FINALIZE_DELAY_SEC=2
 Environment=SECOND_DATA_RATE_LIMIT_BACKOFF_SEC=300
 Environment=SECOND_DATA_STATUS_INTERVAL_SEC=2
 Environment=SECOND_DATA_STARTUP_BACKFILL_MINUTES=15
@@ -395,19 +398,50 @@ RestartSec=5
 WantedBy=multi-user.target
 SERVICE
 
+cat >/etc/systemd/system/btc-auction-data.service <<SERVICE
+[Unit]
+Description=BTC futures raw auction data collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=$APP_DIR
+Environment=APP_DIR=$APP_DIR
+Environment=DATA_DIR=$APP_DIR/data
+Environment=PYTHONUNBUFFERED=1
+Environment=AUCTION_SYMBOL=BTCUSDT
+Environment=AUCTION_RAW_COMPRESSION=gzip
+Environment=AUCTION_DEPTH_LIMIT=100
+Environment=AUCTION_VIEW_LEVELS=20
+Environment=AUCTION_STATUS_INTERVAL_SEC=2
+Environment=AUCTION_WS_PING_INTERVAL_SEC=60
+Environment=AUCTION_WS_PING_TIMEOUT_SEC=20
+Environment=AUCTION_HTTP_TIMEOUT_SEC=8
+ExecStart=$APP_DIR/.venv/bin/python py/collect_auction_data.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
 systemctl daemon-reload
-systemctl enable btc-price.service btc-app.service btc-second-data.service btc-orderbook.service
+systemctl enable btc-price.service btc-app.service btc-second-data.service btc-orderbook.service btc-auction-data.service
 mkdir -p /etc/systemd/system/btc-second-data.service.d
 find /etc/systemd/system/btc-second-data.service.d -type f ! -name proxy.conf -delete
 if [ -f /etc/systemd/system/btc-price.service.d/proxy.conf ]; then
   cp /etc/systemd/system/btc-price.service.d/proxy.conf /etc/systemd/system/btc-second-data.service.d/proxy.conf
   mkdir -p /etc/systemd/system/btc-orderbook.service.d
   cp /etc/systemd/system/btc-price.service.d/proxy.conf /etc/systemd/system/btc-orderbook.service.d/proxy.conf
+  mkdir -p /etc/systemd/system/btc-auction-data.service.d
+  cp /etc/systemd/system/btc-price.service.d/proxy.conf /etc/systemd/system/btc-auction-data.service.d/proxy.conf
 fi
 systemctl daemon-reload
 systemctl restart btc-price.service
 systemctl restart btc-second-data.service
 systemctl restart btc-orderbook.service
+systemctl restart btc-auction-data.service
 sleep 2
 systemctl restart btc-app.service
 
@@ -417,6 +451,7 @@ curl --max-time 20 -fsS http://127.0.0.1:3000/api/config >/tmp/btc-config.json
 curl --max-time 20 -fsS http://127.0.0.1:3000/api/data-health >/tmp/btc-data-health.json
 curl --max-time 20 -fsS http://127.0.0.1:3000/api/second-data-health >/tmp/btc-second-data-health.json
 curl --max-time 20 -fsS http://127.0.0.1:3000/api/orderbook-health >/tmp/btc-orderbook-health.json
+curl --max-time 20 -fsS http://127.0.0.1:3000/api/auction-data-health >/tmp/btc-auction-data-health.json
 curl --max-time 20 -fsS 'http://127.0.0.1:3000/api/signal?source=dashboard' >/tmp/btc-signal.json
 python3 - <<'PY'
 import json
@@ -425,6 +460,7 @@ for name, path in [
     ("data_health", "/tmp/btc-data-health.json"),
     ("second_data", "/tmp/btc-second-data-health.json"),
     ("orderbook", "/tmp/btc-orderbook-health.json"),
+    ("auction_data", "/tmp/btc-auction-data-health.json"),
     ("signal", "/tmp/btc-signal.json"),
 ]:
     with open(path, "r", encoding="utf-8") as f:
@@ -439,6 +475,9 @@ for name, path in [
     elif name == "orderbook":
         status = obj.get("status", {})
         print("orderbook ok=", obj.get("ok"), "ageMs=", obj.get("ageMs"), "rows=", status.get("rows"), "last=", status.get("last_ts"))
+    elif name == "auction_data":
+        status = obj.get("status", {})
+        print("auction_data ok=", obj.get("ok"), "eventAgeMs=", obj.get("eventAgeMs"), "depthAgeMs=", obj.get("depthAgeMs"), "trades=", status.get("trades"), "depthUpdates=", status.get("depth_updates"), "gaps=", status.get("sequence_gaps"))
     else:
         keys = [k for k in obj.keys() if k.startswith("BTC_")]
         gate = obj.get("_autoTradeSafetyGate", {})
@@ -448,6 +487,7 @@ PY
 systemctl --no-pager --full status btc-price.service | sed -n '1,18p'
 systemctl --no-pager --full status btc-second-data.service | sed -n '1,18p'
 systemctl --no-pager --full status btc-orderbook.service | sed -n '1,18p'
+systemctl --no-pager --full status btc-auction-data.service | sed -n '1,18p'
 systemctl --no-pager --full status btc-app.service | sed -n '1,18p'
 rm -f "$ARCHIVE"
 echo "DEPLOY_OK http://$HOSTNAME:3000"

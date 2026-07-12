@@ -74,7 +74,8 @@ const STRATEGY_NAMES = {
   BTC_10min_NORMAL_STATE_V19_OB_CONFIRM_D5A5: "正态V19保守实盘",
   BTC_10min_NORMAL_STATE_V19_OB_CONFIRM_HF_G60: "正态V19高频影子",
   BTC_10min_SECOND_VW_STABLE_2700_20_ETA2: "正态成交量确认 稳健",
-  BTC_10min_SECOND_VW_FAST_2700_27_ETA3: "正态成交量确认 高频"
+  BTC_10min_SECOND_VW_FAST_2700_27_ETA3: "正态成交量确认 高频",
+  BTC_10min_MULTISCALE_PHASE_GATE_V1: "多周期迁移阶段 V1"
 };
 
 export function payoutForDuration(duration) {
@@ -206,6 +207,9 @@ export function healthText(ok, ageMs) {
 export function signalLabel(signal) {
   if (!signal) return "等待数据";
   if (signal.signal) return `${directionText(signal.signal)} ${fmtPct(signal.confidence, 0)}`;
+  if (signal.model_type === "second_multi_normal_hf_stable_v1") {
+    return signal.market_state_detail?.label || "等待完整分钟判断";
+  }
   if (signal.reason === "confirmed_signal_expired") return "信号过期，等待下一次";
   if (signal.reason === "no_confirmed_false_break") return "等待假突破回归确认";
   if (signal.reason === "no_router_branch" && Array.isArray(signal.router_rejects) && signal.router_rejects.includes("low_up_veto")) return "low+UP否决";
@@ -232,6 +236,30 @@ function statusTone(ok) {
 export function signalReasonText(signal) {
   if (!signal) return "等待策略数据";
   const reason = signal?.reason;
+  if (signal?.model_type === "second_multi_normal_hf_stable_v1") {
+    const map = {
+      snapshot_incomplete: "分钟特征或订单薄不完整",
+      no_completed_snapshot: "等待第一个完整分钟",
+      lowvol_flow_not_reversed: "已到正态尾部，等待成交流转向",
+      trend_not_mature_exhaustion: "趋势存在，衰竭条件尚未同时满足",
+      flat_tail_may_be_regime_shift: "偏离超过1.8σ，警惕形成新区间",
+      waiting_supported_regime: "等待当前路径条件补齐",
+      multi_normal_gap: "上一单10分钟窗口尚未结束",
+      multi_normal_orderbook_missing: "订单薄数据不可用",
+      multi_normal_orderbook_insufficient: "秒级价格或订单薄覆盖不足",
+      multi_normal_feature_error: "策略指标计算异常"
+    };
+    return map[reason] || signal.signal_detail || "等待下一完整分钟复核";
+  }
+  if (signal?.model_type === "second_branch_vote_startup_v1") {
+    if (reason === "vote_not_enough") return "等待分支投票达到2票同向";
+    if (reason === "branch_vote_gap") return "上一单后10分钟间隔内";
+    if (reason === "branch_vote_orderbook_missing") return "订单薄数据不可用";
+    if (reason === "branch_vote_orderbook_insufficient") return "订单薄覆盖不足";
+    if (reason === "branch_vote_feature_error") return "分支投票指标计算异常";
+    if (String(reason || "").startsWith("skip_trend_start")) return "趋势刚启动，跳过反向做空";
+    if (String(reason || "").startsWith("skip_")) return "候选信号未通过确认";
+  }
   const map = {
     liq_normal_not_ready: "等待可交易的震荡区",
     liq_wait_reclaim: "震荡区已形成，等待假突破回归",
@@ -252,6 +280,108 @@ export function signalReasonText(signal) {
 
 export function signalReadinessItems(signal, variant = {}) {
   if (!signal) return [];
+  if (signal.model_type === "second_multi_normal_hf_stable_v1") {
+    const paths = Array.isArray(signal.signal_paths) ? signal.signal_paths : [];
+    const activeKey = signal.market_state_detail?.active_path;
+    const path = paths.find(item => item.key === activeKey) || paths.find(item => item.status !== "inactive") || paths[0];
+    const checks = Array.isArray(path?.checks) ? path.checks : [];
+    return checks.map(item => ({ ...item, tone: statusTone(item.ok) }));
+  }
+  if (signal.model_type === "second_branch_vote_startup_v1") {
+    const upVotes = asNumber(signal.upVotes) ?? 0;
+    const downVotes = asNumber(signal.downVotes) ?? 0;
+    const minVotes = asNumber(variant.minVotes ?? signal.minVotes) ?? 2;
+    const bestVotes = Math.max(upVotes, downVotes);
+    const hasDirection = bestVotes >= minVotes && upVotes !== downVotes;
+    const reason = String(signal.reason || "");
+    const trendLabels = {
+      trend_up: "上涨趋势",
+      trend_down: "下跌趋势",
+      drift_up: "弱上涨",
+      drift_down: "弱下跌",
+      flat: "震荡",
+      transition: "切换中"
+    };
+    const posLabels = {
+      above_upper: "上沿外",
+      upper_edge: "上沿",
+      upper_inside: "上半区",
+      center: "中轴",
+      lower_inside: "下半区",
+      lower_edge: "下沿",
+      below_lower: "下沿外"
+    };
+    const sprintLabels = {
+      up_sprint: "上涨冲刺",
+      down_sprint: "下跌冲刺",
+      up_walk: "连续上涨",
+      down_walk: "连续下跌",
+      none: "无冲刺"
+    };
+    const startupScore = asNumber(signal.startupScore);
+    const startupThreshold = asNumber(variant.startupSkipThreshold) ?? 4;
+    const flow5 = asNumber(signal.flow5);
+    const imb20 = asNumber(signal.imb20);
+    const branchText = [
+      trendLabels[signal.trend] || signal.trend,
+      signal.volatility,
+      posLabels[signal.normal_pos] || signal.normal_pos,
+      sprintLabels[signal.sprint] || signal.sprint
+    ].filter(Boolean).join(" / ");
+    const items = [
+      {
+        key: "branch_votes",
+        label: "分支投票",
+        ok: hasDirection,
+        value: `${upVotes}涨 / ${downVotes}跌`,
+        target: `要求至少 ${minVotes} 票同向`,
+        help: "当前历史分支规则还没有形成足够同向共识，所以不下单。"
+      },
+      {
+        key: "branch_state",
+        label: "行情分支",
+        ok: branchText ? true : null,
+        value: branchText || "--",
+        target: "趋势 + 波动 + 正态位置 + 短线形态",
+        help: "独立策略按分钟归类行情，再用固定历史规则投票。"
+      },
+      {
+        key: "normal_position",
+        label: "正态位置",
+        ok: signal.normal_pos ? true : null,
+        value: posLabels[signal.normal_pos] || signal.normal_pos || "--",
+        target: "判断价格在区间内、贴边还是突破",
+        help: "这不是旧V2的5.8-55bp过滤，新策略允许低波动分支参与投票。"
+      },
+      {
+        key: "sprint",
+        label: "短线形态",
+        ok: signal.sprint ? true : null,
+        value: sprintLabels[signal.sprint] || signal.sprint || "--",
+        target: "识别冲刺、连续行走或无冲刺",
+        help: "上涨冲刺做空需要额外成熟确认，刚启动会跳过。"
+      },
+      {
+        key: "startup_guard",
+        label: "启动保护",
+        ok: reason.startsWith("skip_trend_start") ? false : startupScore == null ? null : startupScore < startupThreshold,
+        value: startupScore == null ? "--" : `${startupScore}/6`,
+        target: `上涨启动评分 < ${startupThreshold} 才允许反向做空`,
+        help: reason.startsWith("skip_trend_start")
+          ? "上涨刚启动，历史上反向做空容易被继续拉升打掉，所以跳过。"
+          : "只有上涨冲刺做空场景才需要这个保护。"
+      },
+      {
+        key: "flow_book",
+        label: "资金流/订单薄",
+        ok: flow5 == null && imb20 == null ? null : true,
+        value: flow5 == null && imb20 == null ? "--" : `flow ${flow5 == null ? "--" : fmt(flow5, 3)} / imb ${imb20 == null ? "--" : fmt(imb20, 3)}`,
+        target: "用于确认反弹或衰竭质量",
+        help: "订单薄和主动成交流只作为分支确认，不是旧V2的正态成型卡片。"
+      }
+    ];
+    return items.map(item => ({ ...item, tone: statusTone(item.ok) }));
+  }
   if (signal.model_type === "second_normal_trend_orderbook_latch_v2") {
     const observed = asNumber(signal.observed_pct);
     const coverage = asNumber(signal.ob_coverage_60);
@@ -469,6 +599,11 @@ export function signalHumanSummary(signal, variant = {}) {
   if (!signal) return "正在等待策略数据。";
   if (signal.signal) {
     return `已经出现${directionText(signal.signal)}信号，按${signal.duration || variant.duration || 10}分钟到期判断。`;
+  }
+  if (signal.model_type === "second_multi_normal_hf_stable_v1") {
+    const state = signal.market_state_detail;
+    if (state?.label && state?.detail) return `${state.label}。${state.detail}`;
+    return signal.signal_detail || "等待下一完整分钟复核两条信号路径。";
   }
   if (signal.data_health_blocked) return "数据有延迟或缺口，策略先不下单。";
   if (signal.safety_blocked) return "风控正在拦截，暂时不下单。";

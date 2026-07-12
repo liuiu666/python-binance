@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from pathlib import Path
 from typing import Iterable
 
@@ -9,6 +10,8 @@ import pandas as pd
 
 TIMESTAMP_CANDIDATES = ("timestamp", "ts", "time", "open_time")
 PRICE_CANDIDATES = ("close", "price")
+RECENT_TAIL_INITIAL_BYTES = 8 * 1024 * 1024
+RECENT_TAIL_MIN_COVERAGE = 0.75
 
 
 def _first_existing(columns: Iterable[str], candidates: Iterable[str]) -> str | None:
@@ -233,11 +236,64 @@ def _date_from_daily_shard(path: Path):
         return None
 
 
+def _read_recent_source_tail(
+    source: Path,
+    ts_col: str,
+    target: pd.Timestamp,
+    now: pd.Timestamp,
+    initial_bytes: int = RECENT_TAIL_INITIAL_BYTES,
+) -> pd.DataFrame:
+    """Read enough of an append-only CSV tail to cover the live window."""
+    size = source.stat().st_size
+    with source.open("rb") as stream:
+        header = stream.readline()
+        header_end = stream.tell()
+    if size <= header_end:
+        return pd.DataFrame()
+
+    read_size = min(size - header_end, max(4096, int(initial_bytes)))
+    while True:
+        data_start = max(header_end, size - read_size)
+        with source.open("rb") as stream:
+            stream.seek(data_start)
+            raw = stream.read(size - data_start)
+        if data_start > header_end:
+            newline = raw.find(b"\n")
+            raw = raw[newline + 1:] if newline >= 0 else b""
+        try:
+            frame = pd.read_csv(io.BytesIO(header + raw)) if raw else pd.DataFrame()
+        except Exception:
+            frame = pd.DataFrame()
+
+        if not frame.empty and ts_col in frame.columns:
+            ts = pd.to_datetime(frame[ts_col], utc=True, errors="coerce")
+            valid = ts.dropna()
+            if not valid.empty:
+                if data_start <= header_end or valid.max() < target:
+                    return frame
+                recent = valid[(valid >= target) & (valid <= now + pd.Timedelta(days=1))]
+                if not recent.empty:
+                    end = min(now, recent.max())
+                    expected = max(1, int((end - target).total_seconds()) + 1)
+                    unique_seconds = recent.dt.floor("s").nunique()
+                    coverage = unique_seconds / expected
+                    starts_near_target = recent.min() <= target
+                    if starts_near_target and coverage >= RECENT_TAIL_MIN_COVERAGE:
+                        return frame
+
+        if data_start <= header_end:
+            return frame
+        read_size = min(size - header_end, read_size * 2)
+
+
 def load_recent_second_bars(
     path: str | Path,
     include_shards: bool = True,
     tail_sec: int = 21600,
     source_slack_days: int = 1,
+    source_warmup_sec: int = 3600,
+    read_initial_bytes: int = RECENT_TAIL_INITIAL_BYTES,
+    now: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     """Load only the recent second bars needed by live signal calculation.
 
@@ -247,11 +303,15 @@ def load_recent_second_bars(
     """
 
     path = Path(path)
-    now = pd.Timestamp.now(tz="UTC")
-    cutoff = now - pd.Timedelta(seconds=max(1, int(tail_sec)))
+    now_ts = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now)
+    if now_ts.tzinfo is None:
+        now_ts = now_ts.tz_localize("UTC")
+    else:
+        now_ts = now_ts.tz_convert("UTC")
+    cutoff = now_ts - pd.Timedelta(seconds=max(1, int(tail_sec)))
     cutoff_day = cutoff.date()
     min_day = (pd.Timestamp(cutoff_day) - pd.Timedelta(days=max(0, int(source_slack_days)))).date()
-    max_day = (now + pd.Timedelta(days=1)).date()
+    max_day = (now_ts + pd.Timedelta(days=1)).date()
 
     sources = []
     for source in second_csv_sources(path, include_shards=include_shards):
@@ -263,16 +323,25 @@ def load_recent_second_bars(
             sources.append(source)
 
     frames = []
+    target = cutoff - pd.Timedelta(seconds=max(1, int(source_warmup_sec)))
     for source in sources:
         try:
             columns = _read_csv_header(source)
             ts_col = _first_existing(columns, TIMESTAMP_CANDIDATES)
             if not ts_col:
                 continue
-            part = pd.read_csv(source)
+            part = _read_recent_source_tail(
+                source,
+                ts_col,
+                target,
+                now_ts,
+                initial_bytes=read_initial_bytes,
+            )
+            if part.empty:
+                continue
             ts = pd.to_datetime(part[ts_col], utc=True, errors="coerce")
             valid = ts.notna()
-            recent_mask = valid & (ts >= cutoff - pd.Timedelta(hours=1))
+            recent_mask = valid & (ts >= target)
             recent = part.loc[recent_mask]
             if not recent.empty:
                 frames.append(recent)

@@ -31,6 +31,8 @@ class RouterRules:
     data_observed_min_pct: float = 90.0
     orderbook_coverage_min: float = 0.90
     trend_confirm_sec: int = 20
+    startup_skip_enabled: bool = False
+    startup_skip_threshold: int = 4
 
     @classmethod
     def from_config(cls, cfg):
@@ -42,6 +44,8 @@ class RouterRules:
             data_observed_min_pct=float(cfg.get("router_data_observed_min_pct", 90.0)),
             orderbook_coverage_min=float(cfg.get("router_orderbook_coverage_min", 0.90)),
             trend_confirm_sec=int(cfg.get("router_trend_confirm_sec", 20)),
+            startup_skip_enabled=bool(cfg.get("router_startup_skip_enabled", False)),
+            startup_skip_threshold=int(cfg.get("router_startup_skip_threshold", 4)),
         )
 
 
@@ -84,12 +88,30 @@ def band_params(cfg, band: str) -> BandParams:
 def build_router_features(data: pd.DataFrame, rules: RouterRules) -> pd.DataFrame:
     out = build_features(data, rules.base)
     close = data["close"].astype(float)
+    volume = data["volume"].astype(float).clip(lower=0.0)
+    buy = data["buy_qty"].astype(float).clip(lower=0.0)
+    sell = data["sell_qty"].astype(float).clip(lower=0.0)
+    bid20 = data["bid_qty_20"].astype(float)
+    ask20 = data["ask_qty_20"].astype(float)
     one_sec_path = np.log(close / close.shift(1)).abs() * 10000.0
     path_600 = one_sec_path.rolling(600, min_periods=300).sum()
+    out["ret_15s_bps"] = np.log(close / close.shift(15)) * 10000.0
+    out["ret_30s_bps"] = np.log(close / close.shift(30)) * 10000.0
+    out["prev_ret_30s_bps"] = np.log(close.shift(30) / close.shift(60)) * 10000.0
     out["ret_60s_bps"] = np.log(close / close.shift(60)) * 10000.0
     out["ret_600s_bps"] = np.log(close / close.shift(600)) * 10000.0
     out["ret_1800s_bps"] = np.log(close / close.shift(1800)) * 10000.0
+    out["ret_3600s_bps"] = np.log(close / close.shift(3600)) * 10000.0
     out["efficiency_600"] = out["ret_600s_bps"].abs() / path_600.replace(0.0, np.nan)
+    buy_30 = buy.rolling(30, min_periods=10).sum()
+    sell_30 = sell.rolling(30, min_periods=10).sum()
+    prev_buy_30 = buy.shift(30).rolling(30, min_periods=10).sum()
+    prev_sell_30 = sell.shift(30).rolling(30, min_periods=10).sum()
+    out["flow_30"] = (buy_30 - sell_30) / (buy_30 + sell_30).replace(0.0, np.nan)
+    prev_flow_30 = (prev_buy_30 - prev_sell_30) / (prev_buy_30 + prev_sell_30).replace(0.0, np.nan)
+    out["flow_30_delta"] = out["flow_30"] - prev_flow_30
+    out["bid_ask20_ratio"] = bid20 / ask20.replace(0.0, np.nan)
+    out["vol_ratio_30m"] = volume / volume.rolling(1800, min_periods=300).mean().replace(0.0, np.nan)
     upper_walk = out["z"].gt(1.0).astype(float).rolling(120, min_periods=60).mean()
     lower_walk = out["z"].lt(-1.0).astype(float).rolling(120, min_periods=60).mean()
     out["bandwalk_signed"] = upper_walk - lower_walk
@@ -179,6 +201,35 @@ def trend_entry_ready(row, direction: str) -> bool:
         )
     )
     return hot_votes <= 1
+
+
+def trend_start_score(row) -> dict:
+    checks = {
+        "multi_period_up": (
+            float(row["ret_600s_bps"]) >= 12.0
+            and float(row["ret_1800s_bps"]) >= 18.0
+            and float(row["ret_3600s_bps"]) >= 20.0
+        ),
+        "short_accelerating": (
+            float(row["ret_15s_bps"]) >= 1.0
+            and float(row["ret_30s_bps"]) >= float(row["prev_ret_30s_bps"])
+        ),
+        "buy_flow_strong": (
+            float(row["flow_30"]) >= 0.35
+            or float(row["flow_30_delta"]) >= 0.15
+        ),
+        "book_buy_strong": (
+            float(row["imbalance_20"]) >= 0.10
+            or float(row["bid_ask20_ratio"]) >= 1.10
+        ),
+        "not_low_volume": float(row["vol_ratio_30m"]) >= 0.70,
+        "not_mature_upper": float(row["pos_600s"]) < 0.95 or float(row["bandwalk_signed"]) < 0.50,
+    }
+    clean_checks = {key: bool(value) for key, value in checks.items()}
+    return {
+        "score": int(sum(1 for value in clean_checks.values() if value)),
+        "checks": clean_checks,
+    }
 
 
 class NormalTrendLatchEngine:
@@ -336,6 +387,27 @@ class NormalTrendLatchEngine:
                 and sign * float(row["flow_120_mean"]) >= params.flow120_min
             )
             if confirmed and filtered and (self.latched is None or self.latched["kind"] != "trend"):
+                startup = trend_start_score(row)
+                if (
+                    self.rules.startup_skip_enabled
+                    and candidate_direction == "DOWN"
+                    and startup["score"] >= self.rules.startup_skip_threshold
+                ):
+                    event = f"startup_skip_{startup['score']}of6"
+                    self.normal_direction = None
+                    self.normal_band = None
+                    self.normal_hits.clear()
+                    return {
+                        "event": event,
+                        "signal": None,
+                        "latched": self.latched,
+                        "startup_skip": {
+                            **startup,
+                            "threshold": self.rules.startup_skip_threshold,
+                            "blocked_signal": candidate_direction,
+                            "blocked_reason": str(candidate["reason"]),
+                        },
+                    }
                 self._latch(timestamp, "normal", candidate_direction, str(candidate["reason"]), band)
                 event = "latched"
 

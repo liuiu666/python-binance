@@ -135,6 +135,80 @@ test("liquidity orderbook strategy is preserved as shadow by default", () => {
   assert.equal(publicTradeConfig(cfg).strategyVariants[0].backtest.wr, 77.78);
 });
 
+test("multi-normal stable strategy preserves dynamic thresholds without extra incident filtering", () => {
+  const cfg = normalizeTradeConfig({
+    strategyVariants: [{
+      id: "BTC_10min_MULTI_NORMAL_HF_STABLE_V1",
+      base: "SECOND_MULTI_NORMAL_HF_STABLE_V1",
+      label: "多周期动态正态高频稳定V1",
+      amount: "5",
+      enabled: true,
+      tradeEnabled: true,
+      lookbackSec: 7200,
+      horizonSec: 600,
+      gapSec: 600,
+      normalWindowSec: 600,
+      lowVolSigmaMaxBps: 3,
+      lowVolZMin: 1.2,
+      lowVolZMax: 1.8,
+      trendHighVolSigmaMinBps: 8,
+      trendHighVolZMin: 0.5,
+      trendBaseZMin: 1.2,
+      trendMinSignedFlow: 0.12,
+      trendMaxSignedBook: 0.08,
+      incidentFilterEnabled: true
+    }]
+  });
+  const variant = cfg.strategyVariants[0];
+  assert.equal(variant.base, "SECOND_MULTI_NORMAL_HF_STABLE_V1");
+  assert.equal(variant.tradeEnabled, true);
+  assert.equal(variant.trendHighVolSigmaMinBps, 8);
+  assert.equal(variant.trendHighVolZMin, 0.5);
+  assert.equal(variant.incidentFilterEnabled, false);
+  assert.equal(variant.lowVolMaxAdverseRet30Sigma, 0.5);
+  assert.equal(variant.backtest.wr, 70.51);
+  assert.equal(variant.backtest.maxDrawdownU, 15);
+  assert.equal(publicTradeConfig(cfg).strategyParams[variant.id].lowVolZMax, 1.8);
+  assert.equal(publicTradeConfig(cfg).strategyParams[variant.id].lowVolMaxAdverseRet30Sigma, 0.5);
+});
+
+test("multiscale phase gate preserves causal phase parameters", () => {
+  const cfg = normalizeTradeConfig({
+    strategyVariants: [{
+      id: "BTC_10min_MULTISCALE_PHASE_GATE_V1",
+      base: "SECOND_MULTISCALE_PHASE_GATE_V1",
+      label: "多周期迁移阶段 V1",
+      amount: "5",
+      enabled: true,
+      tradeEnabled: true,
+      lookbackSec: 7800,
+      horizonSec: 600,
+      gapSec: 600,
+      orderbookMaxAgeSec: 3,
+      maxEmitAgeSec: 8,
+      phaseLookbackSec: 3600,
+      maturityHistorySec: 3600,
+      maturityMinPeriods: 1800,
+      maturityQuantile: 0.75,
+      minFlow60: 0.08,
+      minImbalance20: 0.05,
+      minMicropriceBps: 0,
+      minVolumeRatio: 0.8
+    }]
+  });
+  const variant = cfg.strategyVariants[0];
+  assert.equal(variant.base, "SECOND_MULTISCALE_PHASE_GATE_V1");
+  assert.equal(variant.tradeEnabled, true);
+  assert.equal(variant.maturityQuantile, 0.75);
+  assert.equal(variant.maxEmitAgeSec, 8);
+  assert.equal(variant.incidentFilterEnabled, false);
+  assert.equal(variant.backtest.wr, 73.33);
+  assert.equal(variant.backtest.maxDrawdownU, 10);
+  const params = publicTradeConfig(cfg).strategyParams[variant.id];
+  assert.equal(params.phaseLookbackSec, 3600);
+  assert.equal(params.minVolumeRatio, 0.8);
+});
+
 test("auto trade patch records blocked and forced transitions", () => {
   const blocked = applyTradeConfigPatch(DEFAULT_TRADE_CONFIG, { autoTrade: true }, {
     autoTradeSafetyGate: () => ({ blocked: true, verdict: "missing_shadow_decision" })

@@ -2,6 +2,8 @@
 
 import math
 import os
+import threading
+import time
 
 import numpy as np
 import pandas as pd
@@ -14,6 +16,9 @@ from signal_paths import HISTORY_1M_FILE, ORDERBOOK_FILE, SECOND_TRADES_FILE
 
 SECOND_BARS_DEFAULT_TAIL_SEC = int(os.environ.get("SECOND_SIGNAL_TAIL_SEC", str(6 * 60 * 60)))
 SECOND_BARS_CACHE_TTL = 1.0
+SECOND_BARS_INCREMENTAL_TAIL_SEC = max(60, int(os.environ.get("SECOND_SIGNAL_INCREMENTAL_TAIL_SEC", "180")))
+SECOND_BARS_INCREMENTAL_WARMUP_SEC = max(60, int(os.environ.get("SECOND_SIGNAL_INCREMENTAL_WARMUP_SEC", "120")))
+SECOND_BARS_INCREMENTAL_INITIAL_BYTES = max(4096, int(os.environ.get("SECOND_SIGNAL_INCREMENTAL_INITIAL_BYTES", str(512 * 1024))))
 ORDERBOOK_FEATURE_TAIL_ROWS = int(os.environ.get("ORDERBOOK_FEATURE_TAIL_ROWS", "18000"))
 ORDERBOOK_FEATURE_TAIL_CHUNK = int(os.environ.get("ORDERBOOK_FEATURE_TAIL_CHUNK", str(12 * 1024 * 1024)))
 
@@ -22,6 +27,87 @@ _SECOND_BARS_CACHE = {"bars": None, "file_size": 0, "last_check": 0.0, "tail_sec
 _SECOND_BARS_CYCLE_CACHE = {"active": False, "bars": None}
 _MINUTE_FEATURE_CACHE = {"signature": None, "features": None}
 _ORDERBOOK_FEATURE_CACHE = {"key": None, "features": None}
+_ORDERBOOK_ROWS_CACHE = {"signature": None, "rows": None, "limit": 0}
+_ORDERBOOK_ROWS_CYCLE_CACHE = {"active": False, "rows": None, "limit": 0}
+
+
+class StaleWhileRefreshCache:
+    """Keep the last good value while a single daemon thread refreshes it."""
+
+    def __init__(self, fetcher, refresh_sec=5.0, retry_sec=2.0, clock=None):
+        self.fetcher = fetcher
+        self.refresh_sec = max(0.1, float(refresh_sec))
+        self.retry_sec = max(0.1, float(retry_sec))
+        self.clock = clock or time.monotonic
+        self._lock = threading.Lock()
+        self._value = None
+        self._last_success = 0.0
+        self._last_attempt = 0.0
+        self._last_error = None
+        self._thread = None
+
+    def _store_success(self, value):
+        with self._lock:
+            self._value = value
+            self._last_success = float(self.clock())
+            self._last_attempt = self._last_success
+            self._last_error = None
+
+    def prime(self):
+        value = self.fetcher()
+        self._store_success(value)
+        return value
+
+    def _refresh_worker(self):
+        try:
+            value = self.fetcher()
+        except Exception as exc:
+            with self._lock:
+                self._last_attempt = float(self.clock())
+                self._last_error = str(exc)
+        else:
+            self._store_success(value)
+        finally:
+            with self._lock:
+                self._thread = None
+
+    def get(self):
+        now = float(self.clock())
+        thread = None
+        with self._lock:
+            value = self._value
+            reference = self._last_success if self._last_error is None else self._last_attempt
+            interval = self.refresh_sec if self._last_error is None else self.retry_sec
+            due = reference <= 0.0 or now - reference >= interval
+            if due and self._thread is None:
+                thread = threading.Thread(target=self._refresh_worker, name="live-1m-refresh", daemon=True)
+                self._thread = thread
+        if thread is not None:
+            thread.start()
+        return value
+
+    def wait(self, timeout=None):
+        with self._lock:
+            thread = self._thread
+        if thread is not None:
+            thread.join(timeout)
+        return self.get_without_refresh()
+
+    def get_without_refresh(self):
+        with self._lock:
+            return self._value
+
+    def status(self):
+        with self._lock:
+            return {
+                "has_value": self._value is not None,
+                "refreshing": self._thread is not None,
+                "last_success": self._last_success,
+                "last_attempt": self._last_attempt,
+                "last_error": self._last_error,
+                "refresh_sec": self.refresh_sec,
+                "retry_sec": self.retry_sec,
+            }
 
 
 def _int_cfg(cfg, key, default):
@@ -64,12 +150,14 @@ def _estimate_second_tail_sec(config_map):
             horizon = _int_cfg(cfg, "second_chip_horizon_sec", cfg.get("second_horizon_sec", 600))
             hold = _int_cfg(cfg, "second_chip_signal_hold_sec", cfg.get("second_signal_hold_sec", 60))
             required = max(required, lookback + horizon + hold + 600)
-        elif model_type in ("second_range_breakout_confirm", "second_value_area_smart", "second_trend_pullback_down", "second_normal_liquidity_orderbook_v1", "second_normal_trend_orderbook_latch_v2"):
+        elif model_type in ("second_range_breakout_confirm", "second_value_area_smart", "second_trend_pullback_down", "second_normal_liquidity_orderbook_v1", "second_normal_trend_orderbook_latch_v2", "second_branch_vote_startup_v1", "second_multi_normal_hf_stable_v1"):
             lookback = max(
                 _int_cfg(cfg, "second_lookback_sec", 3600),
                 _int_cfg(cfg, "value_area_sec", 3600),
                 _int_cfg(cfg, "trend_lookback_sec", 3600),
                 _int_cfg(cfg, "second_liq_normal_window_sec", 600),
+                _int_cfg(cfg, "branch_vote_normal_window_sec", 600) + 5400,
+                _int_cfg(cfg, "multi_normal_window_sec", 600) + 5400,
                 _int_cfg(cfg, "second_liq_center_slope_sec", 300),
                 _int_cfg(cfg, "second_liq_retest_sec", 120),
             )
@@ -92,17 +180,37 @@ def update_second_tail_requirement(config_map):
 def begin_second_bars_cycle():
     _SECOND_BARS_CYCLE_CACHE["active"] = True
     _SECOND_BARS_CYCLE_CACHE["bars"] = None
+    _ORDERBOOK_ROWS_CYCLE_CACHE["active"] = True
+    _ORDERBOOK_ROWS_CYCLE_CACHE["rows"] = None
+    _ORDERBOOK_ROWS_CYCLE_CACHE["limit"] = 0
 
 
 def end_second_bars_cycle():
     _SECOND_BARS_CYCLE_CACHE["active"] = False
     _SECOND_BARS_CYCLE_CACHE["bars"] = None
+    _ORDERBOOK_ROWS_CYCLE_CACHE["active"] = False
+    _ORDERBOOK_ROWS_CYCLE_CACHE["rows"] = None
+    _ORDERBOOK_ROWS_CYCLE_CACHE["limit"] = 0
 
 
 def remember_second_bars_for_cycle(bars):
     if _SECOND_BARS_CYCLE_CACHE.get("active") and bars is not None:
         _SECOND_BARS_CYCLE_CACHE["bars"] = bars
     return bars
+
+
+def _merge_second_bar_tail(existing, latest, tail_sec):
+    """Replace the recent overlap while retaining the configured live window."""
+
+    if existing is None or existing.empty:
+        return latest
+    if latest is None or latest.empty:
+        return existing
+    merged = pd.concat([existing, latest], ignore_index=True)
+    merged["time"] = pd.to_datetime(merged["time"], utc=True, errors="coerce")
+    merged = merged.dropna(subset=["time"]).sort_values("time").drop_duplicates("time", keep="last")
+    cutoff = merged["time"].iloc[-1] - pd.Timedelta(seconds=max(1, int(tail_sec)))
+    return merged.loc[merged["time"] >= cutoff].reset_index(drop=True)
 
 
 def load_second_bars_cached_for_cycle():
@@ -132,22 +240,67 @@ def load_second_bars_cached_for_cycle():
     ):
         return remember_second_bars_for_cycle(cache["bars"])
 
+    incremental = (
+        cache["bars"] is not None
+        and not cache["bars"].empty
+        and cur_size > int(cache.get("file_size") or 0)
+        and int(cache.get("tail_sec") or 0) == required_tail_sec
+    )
     try:
-        sec = load_recent_second_bars(
-            SECOND_TRADES_FILE,
-            include_shards=True,
-            tail_sec=required_tail_sec,
-        )
+        if incremental:
+            recent = load_recent_second_bars(
+                SECOND_TRADES_FILE,
+                include_shards=True,
+                tail_sec=min(required_tail_sec, SECOND_BARS_INCREMENTAL_TAIL_SEC),
+                source_warmup_sec=SECOND_BARS_INCREMENTAL_WARMUP_SEC,
+                read_initial_bytes=SECOND_BARS_INCREMENTAL_INITIAL_BYTES,
+            ).reset_index().rename(columns={"index": "time"})
+            sec = _merge_second_bar_tail(cache["bars"], recent, required_tail_sec)
+        else:
+            sec = load_recent_second_bars(
+                SECOND_TRADES_FILE,
+                include_shards=True,
+                tail_sec=required_tail_sec,
+            ).reset_index().rename(columns={"index": "time"})
     except Exception as exc:
         print(f"[Signal] second data load failed: {exc}")
         return remember_second_bars_for_cycle(cache["bars"])
     if sec.empty:
         return remember_second_bars_for_cycle(cache["bars"])
 
-    cache["bars"] = sec.reset_index().rename(columns={"index": "time"})
+    cache["bars"] = sec
     cache["file_size"] = cur_size
     cache["tail_sec"] = required_tail_sec
     return remember_second_bars_for_cycle(cache["bars"])
+
+
+def load_orderbook_rows_cached_for_cycle(limit):
+    requested = max(1, int(limit))
+    cycle = _ORDERBOOK_ROWS_CYCLE_CACHE
+    if cycle.get("active") and cycle.get("rows") is not None and int(cycle.get("limit") or 0) >= requested:
+        return cycle["rows"][-requested:]
+
+    signature = file_signature(ORDERBOOK_FILE)
+    cache = _ORDERBOOK_ROWS_CACHE
+    fetch_limit = max(requested, ORDERBOOK_FEATURE_TAIL_ROWS)
+    if (
+        cache.get("rows") is None
+        or cache.get("signature") != signature
+        or int(cache.get("limit") or 0) < requested
+    ):
+        cache["rows"] = csv_tail_rows(
+            ORDERBOOK_FILE,
+            limit=fetch_limit,
+            chunk_size=ORDERBOOK_FEATURE_TAIL_CHUNK,
+        )
+        cache["signature"] = signature
+        cache["limit"] = fetch_limit
+
+    rows = cache.get("rows") or []
+    if cycle.get("active"):
+        cycle["rows"] = rows
+        cycle["limit"] = int(cache.get("limit") or 0)
+    return rows[-requested:]
 
 
 def load_minute_features_cached(second_index):
@@ -235,7 +388,7 @@ def load_orderbook_features_cached(second_index):
         return features.copy()
     try:
         limit = max(ORDERBOOK_FEATURE_TAIL_ROWS, len(second_index) + 60)
-        rows = csv_tail_rows(ORDERBOOK_FILE, limit=limit, chunk_size=ORDERBOOK_FEATURE_TAIL_CHUNK)
+        rows = load_orderbook_rows_cached_for_cycle(limit)
         if not rows:
             features = empty_orderbook_features(second_index, ORDERBOOK_FILE)
         else:

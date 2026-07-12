@@ -5,7 +5,7 @@
       "id": "BTC_10min_NORMAL_LIQ_OB_V2_QUALITY",
       "base": "SECOND_NORMAL_LIQUIDITY_ORDERBOOK_V1",
       "label": "Orderbook V2 trend-space live",
-      "amount": "5",
+      "amount": "10",
       "duration": "10",
       "enabled": true,
       "tradeEnabled": true,
@@ -48,6 +48,8 @@
       "trendSpaceBlockUpperFadePullback": true,
       "trendSpaceShortRet600UpBps": 12,
       "trendSpaceShortPos600Min": 0.65,
+      "startupSkipEnabled": false,
+      "startupSkipThreshold": 4,
       "liquidityMode": "reclaim",
       "lossDensityEnabled": false,
       "lossStreakEnabled": false,
@@ -59,6 +61,39 @@
         "maxDrawdownU": 5,
         "sampleHours": 89.17
       }
+    },
+    {
+      "id": "BTC_10min_MULTISCALE_PHASE_GATE_V1",
+      "base": "SECOND_MULTISCALE_PHASE_GATE_V1",
+      "label": "多周期迁移阶段 V1",
+      "amount": "5",
+      "duration": "10",
+      "enabled": true,
+      "tradeEnabled": true,
+      "lookbackSec": 7800,
+      "horizonSec": 600,
+      "gapSec": 600,
+      "orderbookMaxAgeSec": 3,
+      "maxEmitAgeSec": 8,
+      "phaseLookbackSec": 3600,
+      "maturityHistorySec": 3600,
+      "maturityMinPeriods": 1800,
+      "maturityQuantile": 0.75,
+      "minFlow60": 0.08,
+      "minImbalance20": 0.05,
+      "minMicropriceBps": 0,
+      "minVolumeRatio": 0.8,
+      "incidentFilterEnabled": false,
+      "lossDensityEnabled": false,
+      "lossStreakEnabled": false,
+      "backtest": {
+        "wr": 73.33,
+        "tradesPerDay": 15.62,
+        "trades": 90,
+        "maxLoss": 2,
+        "maxDrawdownU": 10,
+        "sampleHours": 138.25
+      }
     }
   ],
   "duration": "10",
@@ -66,7 +101,8 @@
   "realTradingEnabled": true,
   "shadowTradingEnabled": true,
   "strategyAmounts": {
-    "BTC_10min_NORMAL_LIQ_OB_V2_QUALITY": "5"
+    "BTC_10min_NORMAL_LIQ_OB_V2_QUALITY": "10",
+    "BTC_10min_MULTISCALE_PHASE_GATE_V1": "5"
   },
   "strategyParams": {
     "BTC_10min_NORMAL_LIQ_OB_V2_QUALITY": {
@@ -110,7 +146,26 @@
       "trendSpaceBlockUpperFadePullback": true,
       "trendSpaceShortRet600UpBps": 12,
       "trendSpaceShortPos600Min": 0.65,
+      "startupSkipEnabled": false,
+      "startupSkipThreshold": 4,
       "liquidityMode": "reclaim"
+    },
+    "BTC_10min_MULTISCALE_PHASE_GATE_V1": {
+      "tradeEnabled": true,
+      "lookbackSec": 7800,
+      "horizonSec": 600,
+      "gapSec": 600,
+      "orderbookMaxAgeSec": 3,
+      "maxEmitAgeSec": 8,
+      "phaseLookbackSec": 3600,
+      "maturityHistorySec": 3600,
+      "maturityMinPeriods": 1800,
+      "maturityQuantile": 0.75,
+      "minFlow60": 0.08,
+      "minImbalance20": 0.05,
+      "minMicropriceBps": 0,
+      "minVolumeRatio": 0.8,
+      "incidentFilterEnabled": false
     }
   }
 }

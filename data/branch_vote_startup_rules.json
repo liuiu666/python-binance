@@ -1,0 +1,483 @@
+{
+  "version": 1,
+  "ruleSet": "balanced",
+  "layers": [
+    {
+      "layer": "trend_vol_sprint",
+      "keys": [
+        "trend",
+        "volatility",
+        "sprint"
+      ],
+      "rules": {
+        "flat|sigma_mid|none": {
+          "signal": "DOWN",
+          "trainSamples": 114,
+          "trainWinRate": 65.79,
+          "trainPnlU": 105,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 23,
+              "signal": "DOWN",
+              "rate": 60.87,
+              "pnl": 11
+            },
+            "2026-07-08_09": {
+              "n": 41,
+              "signal": "DOWN",
+              "rate": 80.49,
+              "pnl": 92
+            },
+            "2026-07-09_10": {
+              "n": 50,
+              "signal": "DOWN",
+              "rate": 56.0,
+              "pnl": 2
+            }
+          }
+        },
+        "trend_up|sigma_mid|up_sprint": {
+          "signal": "DOWN",
+          "trainSamples": 73,
+          "trainWinRate": 63.01,
+          "trainPnlU": 49,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 18,
+              "signal": "DOWN",
+              "rate": 66.67,
+              "pnl": 18
+            },
+            "2026-07-08_09": {
+              "n": 17,
+              "signal": "DOWN",
+              "rate": 58.82,
+              "pnl": 5
+            },
+            "2026-07-09_10": {
+              "n": 38,
+              "signal": "DOWN",
+              "rate": 63.16,
+              "pnl": 26
+            }
+          }
+        }
+      }
+    },
+    {
+      "layer": "trend_vol_pos",
+      "keys": [
+        "trend",
+        "volatility",
+        "normal_pos"
+      ],
+      "rules": {
+        "drift_up|sigma_midlow|upper_edge": {
+          "signal": "DOWN",
+          "trainSamples": 57,
+          "trainWinRate": 66.67,
+          "trainPnlU": 57,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 17,
+              "signal": "DOWN",
+              "rate": 70.59,
+              "pnl": 23
+            },
+            "2026-07-08_09": {
+              "n": 16,
+              "signal": "DOWN",
+              "rate": 75.0,
+              "pnl": 28
+            },
+            "2026-07-09_10": {
+              "n": 24,
+              "signal": "DOWN",
+              "rate": 58.33,
+              "pnl": 6
+            }
+          }
+        },
+        "flat|sigma_low|upper_edge": {
+          "signal": "UP",
+          "trainSamples": 63,
+          "trainWinRate": 68.25,
+          "trainPnlU": 72,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 33,
+              "signal": "UP",
+              "rate": 63.64,
+              "pnl": 24
+            },
+            "2026-07-08_09": {
+              "n": 6,
+              "signal": "UP",
+              "rate": 66.67,
+              "pnl": 6
+            },
+            "2026-07-09_10": {
+              "n": 24,
+              "signal": "UP",
+              "rate": 75.0,
+              "pnl": 42
+            }
+          }
+        },
+        "trend_down|sigma_high|lower_inside": {
+          "signal": "UP",
+          "trainSamples": 61,
+          "trainWinRate": 60.66,
+          "trainPnlU": 28,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 11,
+              "signal": "UP",
+              "rate": 63.64,
+              "pnl": 8
+            },
+            "2026-07-08_09": {
+              "n": 32,
+              "signal": "UP",
+              "rate": 56.25,
+              "pnl": 2
+            },
+            "2026-07-09_10": {
+              "n": 18,
+              "signal": "UP",
+              "rate": 66.67,
+              "pnl": 18
+            }
+          }
+        },
+        "trend_down|sigma_midlow|below_lower": {
+          "signal": "UP",
+          "trainSamples": 82,
+          "trainWinRate": 62.2,
+          "trainPnlU": 49,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 16,
+              "signal": "UP",
+              "rate": 62.5,
+              "pnl": 10
+            },
+            "2026-07-08_09": {
+              "n": 21,
+              "signal": "UP",
+              "rate": 61.9,
+              "pnl": 12
+            },
+            "2026-07-09_10": {
+              "n": 45,
+              "signal": "UP",
+              "rate": 62.22,
+              "pnl": 27
+            }
+          }
+        },
+        "trend_up|sigma_mid|above_upper": {
+          "signal": "DOWN",
+          "trainSamples": 123,
+          "trainWinRate": 60.98,
+          "trainPnlU": 60,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 32,
+              "signal": "DOWN",
+              "rate": 68.75,
+              "pnl": 38
+            },
+            "2026-07-08_09": {
+              "n": 40,
+              "signal": "DOWN",
+              "rate": 60.0,
+              "pnl": 16
+            },
+            "2026-07-09_10": {
+              "n": 51,
+              "signal": "DOWN",
+              "rate": 56.86,
+              "pnl": 6
+            }
+          }
+        }
+      }
+    },
+    {
+      "layer": "trend_pos_sprint",
+      "keys": [
+        "trend",
+        "normal_pos",
+        "sprint"
+      ],
+      "rules": {
+        "transition|below_lower|down_sprint": {
+          "signal": "DOWN",
+          "trainSamples": 35,
+          "trainWinRate": 65.71,
+          "trainPnlU": 32,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 10,
+              "signal": "DOWN",
+              "rate": 60.0,
+              "pnl": 4
+            },
+            "2026-07-08_09": {
+              "n": 6,
+              "signal": "DOWN",
+              "rate": 66.67,
+              "pnl": 6
+            },
+            "2026-07-09_10": {
+              "n": 19,
+              "signal": "DOWN",
+              "rate": 68.42,
+              "pnl": 22
+            }
+          }
+        },
+        "transition|below_lower|none": {
+          "signal": "DOWN",
+          "trainSamples": 57,
+          "trainWinRate": 68.42,
+          "trainPnlU": 66,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 13,
+              "signal": "DOWN",
+              "rate": 61.54,
+              "pnl": 7
+            },
+            "2026-07-08_09": {
+              "n": 11,
+              "signal": "DOWN",
+              "rate": 72.73,
+              "pnl": 17
+            },
+            "2026-07-09_10": {
+              "n": 33,
+              "signal": "DOWN",
+              "rate": 69.7,
+              "pnl": 42
+            }
+          }
+        },
+        "transition|lower_inside|none": {
+          "signal": "DOWN",
+          "trainSamples": 51,
+          "trainWinRate": 66.67,
+          "trainPnlU": 51,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 13,
+              "signal": "DOWN",
+              "rate": 69.23,
+              "pnl": 16
+            },
+            "2026-07-08_09": {
+              "n": 17,
+              "signal": "DOWN",
+              "rate": 70.59,
+              "pnl": 23
+            },
+            "2026-07-09_10": {
+              "n": 21,
+              "signal": "DOWN",
+              "rate": 61.9,
+              "pnl": 12
+            }
+          }
+        },
+        "trend_up|above_upper|up_sprint": {
+          "signal": "DOWN",
+          "trainSamples": 112,
+          "trainWinRate": 63.39,
+          "trainPnlU": 79,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 29,
+              "signal": "DOWN",
+              "rate": 62.07,
+              "pnl": 17
+            },
+            "2026-07-08_09": {
+              "n": 21,
+              "signal": "DOWN",
+              "rate": 61.9,
+              "pnl": 12
+            },
+            "2026-07-09_10": {
+              "n": 62,
+              "signal": "DOWN",
+              "rate": 64.52,
+              "pnl": 50
+            }
+          }
+        }
+      }
+    },
+    {
+      "layer": "trend_vol_pos_flow_book",
+      "keys": [
+        "trend",
+        "volatility",
+        "normal_pos",
+        "flow",
+        "book"
+      ],
+      "rules": {
+        "drift_down|sigma_mid|below_lower|flow_down|book_down": {
+          "signal": "UP",
+          "trainSamples": 45,
+          "trainWinRate": 64.44,
+          "trainPnlU": 36,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 11,
+              "signal": "UP",
+              "rate": 81.82,
+              "pnl": 26
+            },
+            "2026-07-08_09": {
+              "n": 13,
+              "signal": "UP",
+              "rate": 61.54,
+              "pnl": 7
+            },
+            "2026-07-09_10": {
+              "n": 21,
+              "signal": "UP",
+              "rate": 57.14,
+              "pnl": 3
+            }
+          }
+        },
+        "trend_down|sigma_mid|below_lower|flow_neutral|book_down": {
+          "signal": "UP",
+          "trainSamples": 26,
+          "trainWinRate": 69.23,
+          "trainPnlU": 32,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 8,
+              "signal": "UP",
+              "rate": 87.5,
+              "pnl": 23
+            },
+            "2026-07-08_09": {
+              "n": 14,
+              "signal": "UP",
+              "rate": 57.14,
+              "pnl": 2
+            },
+            "2026-07-09_10": {
+              "n": 4,
+              "signal": "UP",
+              "rate": 75.0,
+              "pnl": 7
+            }
+          }
+        },
+        "trend_up|sigma_mid|above_upper|flow_neutral|book_up": {
+          "signal": "DOWN",
+          "trainSamples": 31,
+          "trainWinRate": 67.74,
+          "trainPnlU": 34,
+          "sourceStats": {
+            "2026-07-05_06": {
+              "n": 7,
+              "signal": "DOWN",
+              "rate": 71.43,
+              "pnl": 10
+            },
+            "2026-07-08_09": {
+              "n": 10,
+              "signal": "DOWN",
+              "rate": 80.0,
+              "pnl": 22
+            },
+            "2026-07-09_10": {
+              "n": 14,
+              "signal": "DOWN",
+              "rate": 57.14,
+              "pnl": 2
+            }
+          }
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "method": "fixed balanced branch-vote rules for second_branch_vote_startup_v1",
+    "includeExtra": false,
+    "sources": {
+      "2026-07-05_06": {
+        "seconds": "E:\\python-binance\\tmp\\latest_pull_20260706_2130\\data\\btcusdt_1s_trades.csv",
+        "orderbook": "E:\\python-binance\\tmp\\latest_pull_20260706_2130\\data\\btcusdt_orderbook_1s.csv",
+        "start": "2026-07-05T05:04:45+00:00",
+        "end": "2026-07-06T13:32:05+00:00",
+        "hours": 32.4556,
+        "snapshots": 1846
+      },
+      "2026-07-08_09": {
+        "seconds": "E:\\python-binance\\tmp\\latest_live_pull_20260709_101331\\data\\btcusdt_1s_trades.csv",
+        "orderbook": "E:\\python-binance\\tmp\\latest_live_pull_20260709_101331\\data\\btcusdt_orderbook_1s.csv",
+        "start": "2026-07-08T00:00:00+00:00",
+        "end": "2026-07-09T02:13:28+00:00",
+        "hours": 26.2244,
+        "snapshots": 1500
+      },
+      "2026-07-09_10": {
+        "seconds": "E:\\python-binance\\tmp\\latest_pull_20260710_203217\\data\\btcusdt_1s_trades.csv",
+        "orderbook": "E:\\python-binance\\tmp\\latest_pull_20260710_203217\\data\\btcusdt_orderbook_1s.csv",
+        "start": "2026-07-09T00:00:00+00:00",
+        "end": "2026-07-10T20:21:25+00:00",
+        "hours": 44.3569,
+        "snapshots": 2589
+      }
+    },
+    "snapshots": 5935,
+    "layers": [
+      {
+        "layer": "trend_vol_sprint",
+        "keys": [
+          "trend",
+          "volatility",
+          "sprint"
+        ],
+        "rules": 2
+      },
+      {
+        "layer": "trend_vol_pos",
+        "keys": [
+          "trend",
+          "volatility",
+          "normal_pos"
+        ],
+        "rules": 5
+      },
+      {
+        "layer": "trend_pos_sprint",
+        "keys": [
+          "trend",
+          "normal_pos",
+          "sprint"
+        ],
+        "rules": 4
+      },
+      {
+        "layer": "trend_vol_pos_flow_book",
+        "keys": [
+          "trend",
+          "volatility",
+          "normal_pos",
+          "flow",
+          "book"
+        ],
+        "rules": 3
+      }
+    ]
+  }
+}

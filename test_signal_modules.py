@@ -4,8 +4,11 @@ import shutil
 import socket
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -14,11 +17,35 @@ if PY_DIR not in sys.path:
     sys.path.insert(0, PY_DIR)
 
 from signal_lock import acquire_singleton_lock, process_is_alive
+from signal_state import load_audit_keys
+from signal_io import json_safe
 import signal_paths
-from signal_runtime_cache import empty_orderbook_features
+from signal_runtime_cache import StaleWhileRefreshCache, empty_orderbook_features
 from liquidity_v2_core import LiquidityV2Rules, evaluate_candidate, normal_ready, trend_space_veto_code
 from normal_trend_latch_core import NormalTrendLatchEngine, passive_book_valid
-from run_liquidity_v2_backtest import load_scan_times
+from multi_normal_hf_stable_core import MultiNormalHFStableConfig, evaluate_snapshot as evaluate_multi_normal
+from multiscale_phase_gate_core import evaluate_latest as evaluate_multiscale_phase_latest
+from backtest_io import load_scan_times
+import collect_second_data as second_data_collector
+
+
+class MultiscalePhaseGateTests(unittest.TestCase):
+    def test_non_finite_values_are_serialized_as_null(self):
+        self.assertIsNone(json_safe(float("nan")))
+        self.assertIsNone(json_safe(float("inf")))
+
+    def test_nan_signal_is_never_emitted(self):
+        import numpy as np
+        import pandas as pd
+
+        decision = evaluate_multiscale_phase_latest(pd.DataFrame([{
+            "detected_time": pd.Timestamp("2026-07-12T00:00:59Z"),
+            "signal": np.nan,
+            "phase": "startup_or_middle",
+            "reason": "phase_gate_startup_middle_skip",
+        }]))
+        self.assertIsNone(decision["signal"])
+        self.assertEqual(decision["phase"], "startup_or_middle")
 
 
 class SignalLockTests(unittest.TestCase):
@@ -75,6 +102,56 @@ class SignalPathTests(unittest.TestCase):
 
 
 class SignalRuntimeCacheTests(unittest.TestCase):
+    def test_audit_key_loader_reads_only_the_tail(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "signal_audit.jsonl"
+            rows = [
+                {"event": "signal_snapshot", "strategy_id": "old", "time": "2026-07-10T00:00:00Z", "actionable_time": "2026-07-10T00:00:00Z"},
+                {"event": "signal_snapshot", "strategy_id": "keep", "time": "2026-07-10T00:00:01Z", "actionable_time": "2026-07-10T00:00:01Z"},
+                {"event": "ignored", "strategy_id": "ignored", "time": "2026-07-10T00:00:02Z", "actionable_time": "2026-07-10T00:00:02Z"},
+            ]
+            path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+            keys = load_audit_keys(str(path), limit=2)
+
+        self.assertEqual(keys, {"signal_snapshot|keep|2026-07-10T00:00:01Z"})
+
+    def test_stale_while_refresh_returns_last_good_value(self):
+        now = [100.0]
+        calls = []
+
+        def fetch():
+            calls.append(len(calls) + 1)
+            return {"version": calls[-1]}
+
+        cache = StaleWhileRefreshCache(fetch, refresh_sec=5.0, retry_sec=2.0, clock=lambda: now[0])
+        self.assertEqual(cache.prime(), {"version": 1})
+        now[0] = 104.0
+        self.assertEqual(cache.get(), {"version": 1})
+        self.assertEqual(calls, [1])
+
+        now[0] = 106.0
+        self.assertEqual(cache.get(), {"version": 1})
+        self.assertEqual(cache.wait(1.0), {"version": 2})
+        self.assertEqual(calls, [1, 2])
+        self.assertIsNone(cache.status()["last_error"])
+
+    def test_stale_while_refresh_keeps_value_after_fetch_error(self):
+        now = [200.0]
+        calls = [0]
+
+        def fetch():
+            calls[0] += 1
+            if calls[0] > 1:
+                raise RuntimeError("network down")
+            return "healthy"
+
+        cache = StaleWhileRefreshCache(fetch, refresh_sec=5.0, retry_sec=2.0, clock=lambda: now[0])
+        cache.prime()
+        now[0] = 206.0
+        self.assertEqual(cache.get(), "healthy")
+        self.assertEqual(cache.wait(1.0), "healthy")
+        self.assertEqual(cache.status()["last_error"], "network down")
+
     def test_empty_orderbook_features_keep_expected_schema(self):
         import pandas as pd
 
@@ -87,6 +164,172 @@ class SignalRuntimeCacheTests(unittest.TestCase):
         )
         self.assertFalse(features["ob_available"].any())
         self.assertEqual(set(features["orderbook_source"]), {"test-source"})
+
+    def test_orderbook_rows_are_read_once_per_signal_cycle(self):
+        rows = [{"timestamp": str(i)} for i in range(300)]
+        import signal_runtime_cache as runtime_cache
+
+        runtime_cache._ORDERBOOK_ROWS_CACHE.update({"signature": None, "rows": None, "limit": 0})
+        runtime_cache.end_second_bars_cycle()
+        with patch.object(runtime_cache, "file_signature", return_value=(1, 2)), patch.object(
+            runtime_cache,
+            "csv_tail_rows",
+            return_value=rows,
+        ) as read_tail:
+            runtime_cache.begin_second_bars_cycle()
+            first = runtime_cache.load_orderbook_rows_cached_for_cycle(100)
+            second = runtime_cache.load_orderbook_rows_cached_for_cycle(200)
+            runtime_cache.end_second_bars_cycle()
+
+        self.assertEqual(first, rows[-100:])
+        self.assertEqual(second, rows[-200:])
+        read_tail.assert_called_once()
+
+    def test_incremental_second_tail_replaces_overlap_without_duplicates(self):
+        import pandas as pd
+        import signal_runtime_cache as runtime_cache
+
+        initial = pd.DataFrame({
+            "time": pd.date_range("2026-07-10T00:00:00Z", periods=3, freq="s"),
+            "close": [100.0, 101.0, 102.0],
+        })
+        latest = pd.DataFrame({
+            "time": pd.date_range("2026-07-10T00:00:02Z", periods=2, freq="s"),
+            "close": [102.5, 103.0],
+        })
+        merged = runtime_cache._merge_second_bar_tail(initial, latest, tail_sec=10)
+
+        self.assertEqual(list(merged["time"]), list(pd.date_range("2026-07-10T00:00:00Z", periods=4, freq="s")))
+        self.assertEqual(float(merged.iloc[2]["close"]), 102.5)
+        self.assertEqual(float(merged.iloc[-1]["close"]), 103.0)
+
+
+class SecondDataMaintenanceTests(unittest.TestCase):
+    def test_gap_repair_scheduler_does_not_block_websocket_caller(self):
+        started = threading.Event()
+        release = threading.Event()
+        state = {
+            "last_gap_repair": 0.0,
+            "gap_repair_worker": None,
+            "status": {},
+            "total_rows": 10,
+        }
+
+        def slow_repair(*_args, **_kwargs):
+            started.set()
+            release.wait(1.0)
+            return {
+                "enabled": True,
+                "actualAdded": 1,
+                "syntheticAdded": 1,
+                "missingBefore": 2,
+            }
+
+        with patch.object(second_data_collector, "repair_recent_gaps", side_effect=slow_repair):
+            before = time.perf_counter()
+            self.assertTrue(second_data_collector.schedule_gap_repair(state, force=True))
+            elapsed = time.perf_counter() - before
+            self.assertLess(elapsed, 0.1)
+            self.assertTrue(started.wait(0.5))
+            self.assertFalse(second_data_collector.schedule_gap_repair(state, force=True))
+            release.set()
+            state["gap_repair_worker"].join(1.0)
+
+        with patch.object(second_data_collector, "write_status"):
+            self.assertEqual(second_data_collector.drain_gap_repair_results(state), 1)
+        self.assertEqual(state["total_rows"], 12)
+        self.assertEqual(state["status"]["rows"], 12)
+        self.assertEqual(state["status"]["gap_repair"]["missingBefore"], 2)
+
+    def test_websocket_flush_does_not_wait_for_maintenance_file_lock(self):
+        locked = threading.Event()
+        release = threading.Event()
+
+        def hold_lock():
+            with second_data_collector.CSV_WRITE_LOCK:
+                locked.set()
+                release.wait(1.0)
+
+        worker = threading.Thread(target=hold_lock)
+        worker.start()
+        self.assertTrue(locked.wait(0.5))
+        before = time.perf_counter()
+        self.assertEqual(
+            second_data_collector.flush_state({"nonblocking_writes": True}),
+            0,
+        )
+        self.assertLess(time.perf_counter() - before, 0.1)
+        release.set()
+        worker.join(1.0)
+
+    def test_websocket_rows_remain_pending_when_maintenance_lock_is_busy(self):
+        locked = threading.Event()
+        release = threading.Event()
+        now_ms = int(time.time() * 1000)
+        state = {
+            "status": {},
+            "pending": second_data_collector.pd.DataFrame(),
+            "ws_rows": [{"a": 123, "p": "64000", "q": "0.01", "T": now_ms, "m": False}],
+            "last_ws_flush": 0.0,
+            "last_flush": 0.0,
+            "total_rows": 0,
+            "nonblocking_writes": True,
+        }
+
+        def hold_lock():
+            with second_data_collector.CSV_WRITE_LOCK:
+                locked.set()
+                release.wait(1.0)
+
+        worker = threading.Thread(target=hold_lock)
+        worker.start()
+        self.assertTrue(locked.wait(0.5))
+        try:
+            self.assertEqual(second_data_collector.flush_ws_rows(state), 0)
+            self.assertEqual(len(state["ws_rows"]), 0)
+            self.assertEqual(len(state["pending"]), 1)
+            self.assertEqual(int(state["pending"].iloc[0]["last_agg_trade_id"]), 123)
+        finally:
+            release.set()
+            worker.join(1.0)
+
+        observed = []
+
+        def capture_flush(current, **_kwargs):
+            observed.append(len(current["pending"]))
+            return 1
+
+        with patch.object(second_data_collector, "_flush_state_unlocked", side_effect=capture_flush):
+            self.assertEqual(second_data_collector.flush_state(state), 1)
+        self.assertEqual(observed, [1])
+
+    def test_archive_scheduler_does_not_block_websocket_caller(self):
+        started = threading.Event()
+        release = threading.Event()
+        state = {
+            "last_archive_check": 0.0,
+            "archive_worker": None,
+            "status": {},
+            "total_rows": 10,
+        }
+
+        def slow_archive():
+            started.set()
+            release.wait(1.0)
+            return 0
+
+        with patch.object(second_data_collector, "archive_old_main_rows", side_effect=slow_archive):
+            before = time.perf_counter()
+            self.assertTrue(second_data_collector.schedule_archive(state, force=True))
+            self.assertLess(time.perf_counter() - before, 0.1)
+            self.assertTrue(started.wait(0.5))
+            self.assertFalse(second_data_collector.schedule_archive(state, force=True))
+            release.set()
+            state["archive_worker"].join(1.0)
+
+        with patch.object(second_data_collector, "write_status"):
+            self.assertEqual(second_data_collector.drain_archive_results(state), 1)
+        self.assertIsNone(state["archive_worker"])
 
 
 class LiquidityV2CoreTests(unittest.TestCase):
@@ -228,6 +471,41 @@ class NormalTrendLatchCoreTests(unittest.TestCase):
                 rules,
             )
         )
+
+
+class MultiNormalHFStableCoreTests(unittest.TestCase):
+    @staticmethod
+    def row(**updates):
+        row = {
+            "trend": "trend_up",
+            "volatility": "sigma_high",
+            "range": "range_wide",
+            "normal_quality": "normal_weak",
+            "normal_pos": "upper_edge",
+            "sprint": "up_sprint",
+            "volume": "vol_normal",
+            "z": 0.6,
+            "sigma10_bps": 8.0,
+            "range10_bps": 35.0,
+            "ret10_bps": 18.0,
+            "ret30_bps": 25.0,
+            "ret60_bps": 30.0,
+            "flow5": 0.2,
+            "imb20": 0.05,
+            "sigma_expand": 1.5,
+        }
+        row.update(updates)
+        return row
+
+    def test_high_volatility_uses_dynamic_z_and_fades_exhaustion(self):
+        decision = evaluate_multi_normal(self.row(), MultiNormalHFStableConfig())
+        self.assertEqual(decision["signal"], "DOWN")
+        self.assertEqual(decision["module"], "mature_trend_exhaustion")
+        self.assertEqual(decision["z_required"], 0.5)
+
+    def test_orderbook_still_supporting_trend_blocks_signal(self):
+        decision = evaluate_multi_normal(self.row(imb20=0.081), MultiNormalHFStableConfig())
+        self.assertIsNone(decision["signal"])
 
 
 if __name__ == "__main__":
