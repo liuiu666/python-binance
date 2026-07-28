@@ -8,6 +8,10 @@ const VETO_OPTIONS = [
   ["ob_or_price_weak", "订单薄或价格任一不支持就跳过"]
 ];
 
+const RETIRED_STRATEGY_IDS = new Set([
+  "BTC_30min_SHADOW_CANDIDATE"
+]);
+
 function toInt(value, fallback, min, max) {
   const n = Math.round(Number(value));
   if (!Number.isFinite(n)) return fallback;
@@ -355,6 +359,9 @@ export default function ConfigPanel({ draft, dirty, apiToken, onTokenChange, onD
   const variants = Array.isArray(draft.strategyVariants) && draft.strategyVariants.length
     ? draft.strategyVariants
     : DEFAULT_CONFIG.strategyVariants;
+  const visibleVariants = variants
+    .map((variant, index) => ({ variant, index }))
+    .filter(({ variant }) => !RETIRED_STRATEGY_IDS.has(variant.id));
   const liveStrategyCount = variants.filter(variant => variant.enabled !== false && variant.tradeEnabled !== false).length;
 
   const updateVariant = (index, patch) => {
@@ -418,7 +425,7 @@ export default function ConfigPanel({ draft, dirty, apiToken, onTokenChange, onD
       </div>
 
       <div className="strategy-settings-list">
-        {variants.map((variant, index) => (
+        {visibleVariants.map(({ variant, index }) => (
           <StrategySettings key={variant.id || index} variant={variant} onChange={patch => updateVariant(index, patch)} />
         ))}
       </div>

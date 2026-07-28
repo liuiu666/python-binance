@@ -43,6 +43,13 @@ function Flag({ children, tone = "neutral" }) {
 
 function BacktestLine({ backtest }) {
   if (!backtest) return <span>回测基准：当前参数暂无固定基准</span>;
+  if (backtest.invalidated) {
+    return (
+      <span className="backtest-invalid">
+        历史回测已失效；前向实盘 {backtest.forwardTrades || 0}单 / {fmtPct(backtest.forwardWr, 2)} / {fmt(backtest.forwardPnlU, 0)}U
+      </span>
+    );
+  }
   return (
     <span>
       回测基准：{fmtPct(backtest.wr, 2)}，{backtest.tradesPerDay}单/天，{backtest.trades}单，最大连亏 {backtest.maxLoss}
@@ -158,6 +165,55 @@ function remainingText(seconds) {
   const minutes = Math.floor(value / 60);
   const rest = value % 60;
   return minutes > 0 ? `${minutes}分${rest}秒` : `${rest}秒`;
+}
+
+function ThirtyMinuteStatus({ signal }) {
+  const probabilities = Array.isArray(signal?.probs) ? signal.probs : [];
+  const average = Number(signal?.avg_prob);
+  const threshold = Number(signal?.threshold ?? 0.55);
+  const lower = 1 - threshold;
+  const averageText = Number.isFinite(average) ? fmtPct(average * 100, 1) : "--";
+  const directionState = !Number.isFinite(average)
+    ? "等待模型概率"
+    : average >= threshold
+      ? "达到看涨阈值"
+      : average <= lower
+        ? "达到看跌阈值"
+        : "仍在中性区间";
+  const probabilityText = probabilities.length
+    ? probabilities.map(value => fmtPct(Number(value) * 100, 1)).join(" / ")
+    : "--";
+  const trendLabel = {
+    strong_downtrend: "强下跌",
+    downtrend: "下跌",
+    neutral: "中性",
+    uptrend: "上涨",
+    strong_uptrend: "强上涨"
+  }[signal?.trend_label] || signal?.trend_label || "--";
+
+  return (
+    <section className="thirty-minute-status">
+      <div className="thirty-minute-summary">
+        <div>
+          <span>模型均值</span>
+          <strong>{averageText}</strong>
+          <small>{directionState}</small>
+        </div>
+        <p>
+          看涨需 ≥ {fmtPct(threshold * 100, 0)}，看跌需 ≤ {fmtPct(lower * 100, 0)}；
+          当前只做影子观察，不会真实下单。
+        </p>
+      </div>
+      <div className="thirty-minute-grid">
+        <div><span>三模型概率</span><strong>{probabilityText}</strong></div>
+        <div><span>一致规则</span><strong>{signal?.agree_mode || "majority"}</strong></div>
+        <div><span>RSI</span><strong>{signal?.rsi_value == null ? "--" : fmt(signal.rsi_value, 1)}</strong></div>
+        <div><span>短线趋势</span><strong>{trendLabel}</strong></div>
+        <div><span>高周期评分</span><strong>{signal?.htf_score == null ? "--" : fmt(signal.htf_score, 0)}</strong></div>
+        <div><span>可执行时间</span><strong>{signal?.actionable_time_shanghai || dateTimeText(signal?.actionable_time)}</strong></div>
+      </div>
+    </section>
+  );
 }
 
 function MultiNormalStatus({ signal }) {
@@ -495,6 +551,7 @@ export default function StrategyCard({ title, signal, amount, variant, stats }) 
   const active = !!signal?.signal;
   const multiNormal = signal?.model_type === "second_multi_normal_hf_stable_v1";
   const phaseGate = signal?.model_type === "second_multiscale_phase_gate_v1";
+  const thirtyMinute = String(signal?.strategy_id || variant?.id || "").startsWith("BTC_30min_");
   const live = variant?.enabled !== false && variant?.tradeEnabled !== false;
   const observed = variant?.enabled !== false;
   const cardTone = active ? directionClass(signal.signal) : "neutral";
@@ -539,7 +596,9 @@ export default function StrategyCard({ title, signal, amount, variant, stats }) 
         <span>影子 {statLine(stats?.shadow)}</span>
       </div>
 
-      {phaseGate ? (
+      {thirtyMinute ? (
+        <ThirtyMinuteStatus signal={signal} />
+      ) : phaseGate ? (
         <PhaseGateStatus signal={signal} variant={variant} />
       ) : multiNormal ? (
         <MultiNormalStatus signal={signal} />
@@ -554,7 +613,7 @@ export default function StrategyCard({ title, signal, amount, variant, stats }) 
 
       {!multiNormal && !phaseGate && signal?.reason ? <div className="reason-line">状态：{signalReasonText(signal)}</div> : null}
       {signal?.error ? <div className="reason-line bad">异常：{signal.error}</div> : null}
-      {signal?.actionable_time ? <div className="reason-line">可执行时间：{dateTimeText(signal.actionable_time)}</div> : null}
+      {!thirtyMinute && signal?.actionable_time ? <div className="reason-line">可执行时间：{dateTimeText(signal.actionable_time)}</div> : null}
     </article>
   );
 }

@@ -1,0 +1,125 @@
+- generic [ref=e20]:
+  - banner [ref=e21]:
+    - generic [ref=e22]:
+      - generic [ref=e23]: B
+      - generic [ref=e24]:
+        - strong [ref=e25]: BTC 实盘控制台
+        - generic [ref=e26]: 策略、数据、订单分层监控
+    - generic [ref=e27]:
+      - article [ref=e28]:
+        - generic [ref=e29]:
+          - text: BTC
+          - strong [ref=e30]: "65338.89"
+          - text: "-37.11 (-0.06%)"
+      - article [ref=e31]:
+        - generic [ref=e32]:
+          - text: 秒级
+          - strong [ref=e33]: 正常 3s
+      - article [ref=e34]:
+        - generic [ref=e35]:
+          - text: 订单薄
+          - strong [ref=e36]: 正常 1s
+      - article [ref=e37]:
+        - generic [ref=e38]:
+          - text: 1分钟
+          - strong [ref=e39]: 正常 4m 40s
+      - article [ref=e40]:
+        - generic [ref=e41]:
+          - text: 余额
+          - strong [ref=e42]: "0.38"
+          - text: USDT
+      - button "刷新" [ref=e43] [cursor=pointer]
+  - generic [ref=e49]:
+    - generic [ref=e50]:
+      - strong [ref=e52]: 等待重新进入短周期正态震荡；未达标：中线斜率=11.07，要求绝对值 <= 6bp。
+      - generic [ref=e53]: 当前卡在：趋势不过强。现在 11.07bp，要求 -8 到 8bp。中线快速上移或下移时，先不做回归。
+    - generic [ref=e54]:
+      - generic [ref=e55]: 2026/07/15 21:09:40
+      - generic [ref=e59]: 等待可交易的震荡区
+  - navigation "控制台分页" [ref=e62]:
+    - button "当前交易" [ref=e63] [cursor=pointer]
+    - button "策略" [ref=e66] [cursor=pointer]
+    - button "订单" [ref=e70] [cursor=pointer]
+    - button "数据" [ref=e74] [cursor=pointer]
+    - button "设置" [ref=e79] [cursor=pointer]
+  - main [ref=e83]:
+    - generic [ref=e84]:
+      - generic [ref=e85]:
+        - article [ref=e86]:
+          - generic [ref=e87]:
+            - text: 当前价格
+            - strong [ref=e88]: "65338.89"
+            - text: BTC/USDT
+        - article [ref=e91]:
+          - generic [ref=e92]:
+            - text: 当前信号
+            - strong [ref=e93]: 等待
+            - text: 等待重新进入短周期正态震荡；未达标：中线斜率=11.07，要求绝对值 <= 6bp。
+        - article [ref=e96]:
+          - generic [ref=e97]:
+            - text: 实盘开关
+            - strong [ref=e98]: 影子/观察
+            - text: 自动下单关闭
+        - article [ref=e102]:
+          - generic [ref=e103]:
+            - text: 策略数量
+            - strong [ref=e104]: "1"
+            - text: 0 条可实盘
+      - generic [ref=e108]:
+        - generic [ref=e109]:
+          - generic [ref=e110]: BTC / USDT
+          - strong [ref=e111]: 北京时间
+        - table [ref=e114]:
+          - row [ref=e115]:
+            - cell
+            - cell [ref=e116]:
+              - link "Charting by TradingView" [ref=e120] [cursor=pointer]:
+                - /url: https://www.tradingview.com/?utm_medium=lwc-link&utm_campaign=lwc-chart&utm_source=115.190.218.128/
+            - cell [ref=e125]
+          - row [ref=e129]:
+            - cell
+            - cell [ref=e130]
+            - cell [ref=e134]
+    - generic [ref=e137]:
+      - generic [ref=e138]:
+        - generic [ref=e139]:
+          - text: 当前
+          - heading "交易状态" [level=2] [ref=e140]
+        - strong [ref=e141]: 0 实 / 0 影
+      - generic [ref=e142]:
+        - generic [ref=e143]: 等待
+        - generic [ref=e144]:
+          - strong [ref=e145]: 等待重新进入短周期正态震荡；未达标：中线斜率=11.07，要求绝对值 <= 6bp。
+          - generic [ref=e146]: 金额 5U / 当前价 65338.89
+      - generic [ref=e147]:
+        - text: 为什么现在没下单
+        - paragraph [ref=e148]: 当前卡在：趋势不过强。现在 11.07bp，要求 -8 到 8bp。中线快速上移或下移时，先不做回归。
+      - generic [ref=e149]:
+        - generic [ref=e150]:
+          - generic [ref=e151]: 下一次可能信号
+          - strong [ref=e152]: 更接近做空触发
+        - generic [ref=e153]:
+          - generic [ref=e154]:
+            - text: 做空观察
+            - strong [ref=e155]: "65390.58"
+            - generic [ref=e156]: 先上破约 +7.7bp，再回到区间并有卖压
+          - generic [ref=e157]:
+            - text: 做多观察
+            - strong [ref=e158]: "65222.01"
+            - generic [ref=e159]: 先下破约 -18.2bp，再回到区间并有买盘
+        - generic [ref=e160]:
+          - generic [ref=e161]: 当前价 65340.40
+          - generic [ref=e162]: 位置 0.49σ / 阈值 ±1.2σ
+          - generic [ref=e163]: 订单薄中性
+        - generic [ref=e164]:
+          - generic [ref=e165]: 订单薄 bid 3.967 / ask 5.233
+          - generic [ref=e166]: imb -0.138
+          - generic [ref=e167]: flow60 -0.128
+      - generic [ref=e168]:
+        - text: 下次扫描
+        - paragraph [ref=e169]: 2026/07/15 21:09:40
+      - generic [ref=e170]:
+        - generic [ref=e171]:
+          - heading "持仓" [level=3] [ref=e172]
+          - generic [ref=e173]: 0 单
+        - generic [ref=e174]: 当前没有持仓，等待下一次策略信号。

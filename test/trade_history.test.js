@@ -5,6 +5,7 @@ const {
   fallbackSettlePrice,
   payoutRateForDuration,
   priceAtOrAfter,
+  realExecutionTime,
   settleStatus,
   statusPnl
 } = require("../lib/trade_history");
@@ -14,6 +15,70 @@ test("priceAtOrAfter returns the first tick at or after target", () => {
   assert.equal(priceAtOrAfter(ticks, 1), 100);
   assert.equal(priceAtOrAfter(ticks, 20), 101);
   assert.equal(priceAtOrAfter(ticks, 30), null);
+});
+
+test("real execution time uses confirm dispatch and corrects the tablet clock", () => {
+  const row = {
+    serverTime: 9_000,
+    clientTime: 10_200,
+    executionTime: 6_000,
+    confirmProbe: { dispatchedAt: 7_000 }
+  };
+  assert.deepEqual(realExecutionTime(row), { time: 5_800, source: "confirm_probe" });
+});
+
+test("real history opens at corrected confirmation time and settles 10 minutes later", () => {
+  const signalTime = new Date(1_000).toISOString();
+  const history = buildLiveOrderHistory({
+    now: 700_000,
+    limit: 10,
+    auditRows: [{
+      event: "order_done",
+      serverTime: 8_000,
+      clientTime: 9_000,
+      executionTime: 5_000,
+      confirmProbe: { dispatchedAt: 6_000 },
+      actionableTime: signalTime,
+      duration: 10,
+      direction: "UP",
+      amount: 5,
+      price: 110,
+      strategyId: "TEST"
+    }],
+    priceTicks: [
+      { time: 5_000, price: 100 },
+      { time: 605_000, price: 101 }
+    ]
+  });
+
+  const row = history.recent[0];
+  assert.equal(row.openTime, 5_000);
+  assert.equal(row.openTimeSource, "confirm_probe");
+  assert.equal(row.openPrice, 100);
+  assert.equal(row.settleTime, 605_000);
+  assert.equal(row.closePrice, 101);
+  assert.equal(row.signalToOpenMs, 4_000);
+  assert.equal(row.status, "won");
+});
+
+test("real history does not settle from a price far beyond expiry", () => {
+  const history = buildLiveOrderHistory({
+    now: 700_000,
+    auditRows: [{
+      event: "order_done",
+      serverTime: 1_000,
+      duration: 10,
+      direction: "UP",
+      amount: 5,
+      price: 100,
+      strategyId: "TEST"
+    }],
+    priceTicks: [{ time: 650_000, price: 101 }],
+    currentPrice: 102
+  });
+
+  assert.equal(history.recent[0].closePrice, null);
+  assert.equal(history.recent[0].status, "pending");
 });
 
 test("expired orders settle with current price when tick history is missing", () => {
@@ -314,7 +379,7 @@ test("shadow audit rows expose strategy and execution prices separately", () => 
         source: "shadow:BTC_10min_NORMAL_LIQ_OB_V2_QUALITY",
         strategyId: "BTC_10min_NORMAL_LIQ_OB_V2_QUALITY",
         openTime,
-        settleTime: openTime + 10 * 60 * 1000,
+        settleTime: executionOpenTime + 10 * 60 * 1000,
         settlePrice: 62398.7,
         status: "won"
       }
@@ -322,7 +387,10 @@ test("shadow audit rows expose strategy and execution prices separately", () => 
   });
 
   assert.equal(history.summary.shadow.total, 1);
-  assert.equal(history.recent[0].openPrice, 62393.4);
+  assert.equal(history.recent[0].openTime, executionOpenTime);
+  assert.equal(history.recent[0].openTimeSource, "shadow_execution");
+  assert.equal(history.recent[0].settleTime, executionOpenTime + 10 * 60 * 1000);
+  assert.equal(history.recent[0].openPrice, 62452);
   assert.equal(history.recent[0].signalEntryPrice, 62393.4);
   assert.equal(history.recent[0].executionStrikePrice, 62452);
   assert.equal(history.recent[0].executionDelayMs, 20000);

@@ -61,6 +61,7 @@ function startServer({ port, dataDir, token = "" }) {
       DISABLE_MANAGED_PROCESSES: "1",
       SERVER_ID: `api-smoke-${port}`,
       PUBLIC_BASE_URL: "",
+      SHADOW_EXECUTION_DELAY_MS: "20",
       API_TOKEN: token,
       CODEX_API_TOKEN: "",
       TRADE_API_TOKEN: ""
@@ -145,6 +146,9 @@ test("data health uses signal snapshot time instead of stale strategy candle tim
     assert.equal(health.json.signal.freshnessSource, "snapshot_time");
     assert.match(health.json.signal.latestStrategyTime, /^2020-01-01T00:00:00/);
     assert.ok(!health.json.reasons.includes("signal_snapshot_stale"));
+    assert.ok(health.json.files.openInterest);
+    assert.ok(health.json.files.globalLsratio);
+    assert.ok(health.json.files.topAccountLsratio);
   });
 });
 
@@ -223,6 +227,7 @@ test("tablet signal mirror records one shadow trade for repeated signal polls", 
     assert.equal(second.status, 200);
     assert.equal(first.json[strategy.id].signal, "UP");
     assert.equal(second.json[strategy.id].signal, "UP");
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     const audit = await requestJson(baseUrl, "/api/trade-audit?limit=100");
     const mirrors = audit.json.items.filter(item => (
@@ -233,6 +238,63 @@ test("tablet signal mirror records one shadow trade for repeated signal polls", 
     assert.equal(mirrors.length, 1);
     assert.equal(mirrors[0].direction, "UP");
     assert.equal(mirrors[0].amount, Number(strategy.amount));
+    assert.ok(mirrors[0].shadowQueueDelayMs >= 20);
+    assert.equal(mirrors[0].strikePrice, mirrors[0].executionStrikePrice);
+  });
+});
+
+test("shadow-only strategy records a trade while global real trading is disabled", async () => {
+  await withServer({}, async ({ baseUrl, dataDir }) => {
+    const now = Date.now();
+    writeFreshMinuteCandles(dataDir, now);
+    fs.writeFileSync(path.join(dataDir, "current_price.json"), JSON.stringify({ price: "100", time: now }), "utf8");
+
+    const current = await requestJson(baseUrl, "/api/config");
+    const strategy = { ...current.json.strategyVariants[0], enabled: true, tradeEnabled: false };
+    const saved = await requestJson(baseUrl, "/api/config", {
+      method: "POST",
+      body: {
+        ...current.json,
+        realTradingEnabled: false,
+        autoTrade_10m: false,
+        shadowTradingEnabled: true,
+        strategyVariants: [strategy]
+      }
+    });
+    assert.equal(saved.status, 200);
+    assert.equal(saved.json.realTradingEnabled, false);
+    assert.equal(saved.json.strategyVariants[0].tradeEnabled, false);
+
+    const signalTime = new Date(Date.now() - 1000).toISOString();
+    fs.writeFileSync(path.join(dataDir, "live_signals.json"), JSON.stringify({
+      [strategy.id]: {
+        strategy_id: strategy.id,
+        time: signalTime,
+        actionable_time: signalTime,
+        signal: "UP",
+        price: 100,
+        entry: 100,
+        duration: "10",
+        confidence: 80,
+        bypass_entry_timing: true,
+        shadow_only: true,
+        trade_enabled: false
+      },
+      _snapshot_time_ms: Date.now(),
+      _snapshot_time: new Date().toISOString(),
+      _snapshot_strategy_count: 1
+    }, null, 2), "utf8");
+
+    await new Promise(resolve => setTimeout(resolve, 3300));
+    const audit = await requestJson(baseUrl, "/api/trade-audit?limit=100");
+    const opens = audit.json.items.filter(item => (
+      item.event === "shadow_trade_open" && item.strategyId === strategy.id
+    ));
+    assert.equal(opens.length, 1);
+    assert.equal(opens[0].tradeEnabled, false);
+
+    const configAfter = await requestJson(baseUrl, "/api/config");
+    assert.equal(configAfter.json.realTradingEnabled, false);
   });
 });
 
@@ -338,6 +400,55 @@ test("multiscale phase gate replaces old high-frequency strategy", async () => {
     assert.equal(prod[strategyId].phase_gate_maturity_quantile, 0.75);
     assert.equal(prod[strategyId].phase_gate_max_emit_age_sec, 8);
     assert.equal(prod[strategyId].trade_enabled, true);
+  });
+});
+
+test("augmented V9 replaces old strategies and maps to the shared liquidity core", async () => {
+  await withServer({}, async ({ baseUrl, dataDir }) => {
+    fs.writeFileSync(path.join(dataDir, "prod_config.json"), JSON.stringify({
+      BTC_10min_NORMAL_LIQ_OB_V2_QUALITY: { enabled: true, model_type: "second_normal_trend_orderbook_latch_v2" },
+      BTC_10min_MULTISCALE_PHASE_GATE_V1: { enabled: true, model_type: "second_multiscale_phase_gate_v1" }
+    }), "utf8");
+    const strategyId = "BTC_10min_NORMAL_LIQ_OB_V2_AUGMENTED_V9";
+    const response = await requestJson(baseUrl, "/api/config", {
+      method: "POST",
+      body: {
+        realTradingEnabled: false,
+        autoTrade_10m: false,
+        shadowTradingEnabled: true,
+        strategyVariants: [{
+          id: strategyId,
+          base: "SECOND_NORMAL_LIQUIDITY_ORDERBOOK_V1",
+          label: "当前V2增强 V9（影子观察）",
+          amount: "5",
+          enabled: true,
+          tradeEnabled: false,
+          lookbackSec: 7200,
+          horizonSec: 600,
+          gapSec: 600,
+          v9AugmentedEnabled: true,
+          v9EfficiencyMin: 0.6,
+          v9TrendStrengthMin: 1.25,
+          v9OpposingMinBps: 2,
+          v9Z30Min: 1,
+          v9VolumeRatioMin: 0.8,
+          v9BookCoverageMin: 0.9,
+          v9BookVotesMin: 2,
+          v9MaxEmitAgeSec: 8
+        }]
+      }
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.json.strategyVariants.map(item => item.id), [strategyId]);
+    assert.equal(response.json.strategyVariants[0].tradeEnabled, false);
+    assert.equal(response.json.strategyVariants[0].v9AugmentedEnabled, true);
+    const prod = JSON.parse(fs.readFileSync(path.join(dataDir, "prod_config.json"), "utf8"));
+    assert.equal(prod.BTC_10min_NORMAL_LIQ_OB_V2_QUALITY, undefined);
+    assert.equal(prod.BTC_10min_MULTISCALE_PHASE_GATE_V1, undefined);
+    assert.equal(prod[strategyId].model_type, "second_normal_liquidity_orderbook_v1");
+    assert.equal(prod[strategyId].v9_augmented_enabled, true);
+    assert.equal(prod[strategyId].v9_book_votes_min, 2);
+    assert.equal(prod[strategyId].trade_enabled, false);
   });
 });
 

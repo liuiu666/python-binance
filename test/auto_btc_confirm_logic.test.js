@@ -110,3 +110,14 @@ test("balance verification rejects payout text and accepts the configured stake 
   assert.equal(context.balanceDropMatches(102.35, 102.35, 5), false);
   assert.equal(context.balanceDropMatches(102.35, 97.36, 5), true);
 });
+
+test("pre-dispatch balance guard accepts exact funds and rejects insufficient funds", () => {
+  const context = { isFinite };
+  vm.createContext(context);
+  vm.runInContext(functionSource("hasSufficientBalanceForOrder", "markTradePhase"), context);
+
+  assert.equal(context.hasSufficientBalanceForOrder(5.83, 5), true);
+  assert.equal(context.hasSufficientBalanceForOrder(5, 5), true);
+  assert.equal(context.hasSufficientBalanceForOrder(4.99, 5), false);
+  assert.equal(context.hasSufficientBalanceForOrder(null, 5), false);
+});

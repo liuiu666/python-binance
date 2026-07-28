@@ -1,0 +1,55 @@
+- generic [ref=e19]:
+  - banner [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]: B
+      - generic [ref=e23]:
+        - strong [ref=e24]: BTC 策略控制台
+        - generic [ref=e25]: 行情、策略、模拟单与数据状态
+    - generic [ref=e26]:
+      - article [ref=e27]:
+        - generic [ref=e28]:
+          - text: BTC
+          - strong [ref=e29]: "63418.00"
+          - text: +27.87 (+0.04%)
+      - article [ref=e30]:
+        - generic [ref=e31]:
+          - text: 秒级
+          - strong [ref=e32]: 正常 2s
+      - article [ref=e33]:
+        - generic [ref=e34]:
+          - text: 订单薄
+          - strong [ref=e35]: 正常 1s
+      - article [ref=e36]:
+        - generic [ref=e37]:
+          - text: 1分钟
+          - strong [ref=e38]: 正常 6m 7s
+      - article [ref=e39]:
+        - generic [ref=e40]:
+          - text: 余额
+          - strong [ref=e41]: "4.79"
+          - text: USDT
+      - button "刷新" [ref=e42] [cursor=pointer]
+  - generic [ref=e48]:
+    - generic [ref=e49]:
+      - strong [ref=e51]: 等待数据
+      - generic [ref=e52]: 正在等待策略数据。
+    - generic [ref=e53]:
+      - generic [ref=e54]: "--"
+      - generic [ref=e58]: 等待策略数据
+  - navigation "控制台分页" [ref=e61]:
+    - button "当前交易" [ref=e62] [cursor=pointer]
+    - button "策略" [active] [ref=e65] [cursor=pointer]
+    - button "订单" [ref=e69] [cursor=pointer]
+    - button "数据" [ref=e73] [cursor=pointer]:
+      - text: 数据
+      - generic [ref=e78]: 异常
+    - button "设置" [ref=e79] [cursor=pointer]
+  - main [ref=e154]:
+    - generic [ref=e155]:
+      - generic [ref=e156]:
+        - generic [ref=e157]:
+          - text: 运行状态
+          - heading "启用中的策略" [level=2] [ref=e158]
+          - paragraph [ref=e159]: 这里只展示正在计算信号的策略；已停用模型仍可在设置中查看和管理。
+        - strong [ref=e160]: 0 运行 / 2 停用
+      - generic [ref=e161]: 当前没有启用的策略。

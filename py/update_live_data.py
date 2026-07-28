@@ -452,6 +452,48 @@ def update_symbol(symbol):
         result["lsratio_error"] = str(e)
         errors.append({"dataset": "lsratio", "error": str(e)})
 
+    open_interest_path = os.path.join(OUT, f"{symbol}_open_interest.csv")
+    try:
+        result["open_interest"] = fetch_period_data(
+            symbol,
+            read_existing(open_interest_path, "timestamp"),
+            "open_interest",
+            "/futures/data/openInterestHist",
+            ["timestamp", "sumOpenInterest", "sumOpenInterestValue"],
+            ["timestamp", "sumOpenInterest", "sumOpenInterestValue"],
+        )
+    except Exception as e:
+        result["open_interest_error"] = str(e)
+        errors.append({"dataset": "open_interest", "error": str(e)})
+
+    global_ls_path = os.path.join(OUT, f"{symbol}_global_lsratio.csv")
+    try:
+        result["global_lsratio"] = fetch_period_data(
+            symbol,
+            read_existing(global_ls_path, "timestamp"),
+            "global_lsratio",
+            "/futures/data/globalLongShortAccountRatio",
+            ["timestamp", "longAccount", "shortAccount", "longShortRatio"],
+            ["timestamp", "longAccount", "shortAccount", "longShortRatio"],
+        )
+    except Exception as e:
+        result["global_lsratio_error"] = str(e)
+        errors.append({"dataset": "global_lsratio", "error": str(e)})
+
+    top_account_path = os.path.join(OUT, f"{symbol}_top_account_lsratio.csv")
+    try:
+        result["top_account_lsratio"] = fetch_period_data(
+            symbol,
+            read_existing(top_account_path, "timestamp"),
+            "top_account_lsratio",
+            "/futures/data/topLongShortAccountRatio",
+            ["timestamp", "longAccount", "shortAccount", "longShortRatio"],
+            ["timestamp", "longAccount", "shortAccount", "longShortRatio"],
+        )
+    except Exception as e:
+        result["top_account_lsratio_error"] = str(e)
+        errors.append({"dataset": "top_account_lsratio", "error": str(e)})
+
     funding_path = os.path.join(OUT, f"{symbol}_funding.csv")
     try:
         result["funding"] = fetch_funding(symbol, read_existing(funding_path, "fundingTime"))

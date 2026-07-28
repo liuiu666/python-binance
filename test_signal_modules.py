@@ -25,8 +25,63 @@ from liquidity_v2_core import LiquidityV2Rules, evaluate_candidate, normal_ready
 from normal_trend_latch_core import NormalTrendLatchEngine, passive_book_valid
 from multi_normal_hf_stable_core import MultiNormalHFStableConfig, evaluate_snapshot as evaluate_multi_normal
 from multiscale_phase_gate_core import evaluate_latest as evaluate_multiscale_phase_latest
+from position_build_up_core import evaluate_snapshot as evaluate_position_build_up
+from evaluate_frozen_position_build_up_v1 import verify_rule_fingerprint
+from research_position_auction_v1 import metrics as position_metrics
 from backtest_io import load_scan_times
+from external_period_data import add_period_available_time
 import collect_second_data as second_data_collector
+import update_live_data
+
+
+class ExternalPeriodDataTests(unittest.TestCase):
+    def test_period_row_is_available_only_after_bucket_close(self):
+        import pandas as pd
+
+        frame = pd.DataFrame({
+            "timestamp": ["2026-07-13T10:30:00Z"],
+            "buySellRatio": [1.25],
+        })
+        shifted = add_period_available_time(frame)
+        self.assertEqual(
+            shifted.iloc[0]["available_time"],
+            pd.Timestamp("2026-07-13T10:35:00Z"),
+        )
+
+    def test_open_interest_period_rows_keep_numeric_fields(self):
+        rows = [{
+            "timestamp": 1783911000000,
+            "sumOpenInterest": "12345.5",
+            "sumOpenInterestValue": "780000000.25",
+        }]
+        frame = update_live_data.period_rows_to_df(
+            rows,
+            ["timestamp", "sumOpenInterest", "sumOpenInterestValue"],
+            ["timestamp", "sumOpenInterest", "sumOpenInterestValue"],
+        )
+        self.assertEqual(float(frame.iloc[0]["sumOpenInterest"]), 12345.5)
+        self.assertEqual(float(frame.iloc[0]["sumOpenInterestValue"]), 780000000.25)
+
+
+class PositionBuildUpCoreTests(unittest.TestCase):
+    def test_emits_up_only_when_price_and_open_interest_both_build(self):
+        self.assertEqual(evaluate_position_build_up(3.0, 0.002)["signal"], "UP")
+        self.assertIsNone(evaluate_position_build_up(-3.0, 0.002)["signal"])
+        self.assertIsNone(evaluate_position_build_up(3.0, -0.002)["signal"])
+
+    def test_zero_change_never_emits(self):
+        self.assertIsNone(evaluate_position_build_up(0.0, 0.01)["signal"])
+        self.assertIsNone(evaluate_position_build_up(1.0, 0.0)["signal"])
+
+    def test_frozen_rule_fingerprint_matches_committed_config(self):
+        config = json.loads((Path(ROOT) / "data" / "frozen_position_build_up_v1.json").read_text(encoding="utf-8"))
+        self.assertEqual(verify_rule_fingerprint(config), config["ruleFingerprintSha256"])
+
+    def test_all_win_equity_has_zero_drawdown(self):
+        import pandas as pd
+
+        frame = pd.DataFrame({"signal": ["UP"], "raw_move_bps_d6": [2.0]})
+        self.assertEqual(position_metrics(frame, 6)["maxDrawdownU"], 0.0)
 
 
 class MultiscalePhaseGateTests(unittest.TestCase):

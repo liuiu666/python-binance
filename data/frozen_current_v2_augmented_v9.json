@@ -1,0 +1,47 @@
+{
+  "strategyId": "BTC_10min_NORMAL_LIQ_OB_V2_QUALITY",
+  "researchVersion": "CURRENT_V2_AUGMENTED_V9",
+  "status": "frozen_research_candidate_not_for_live",
+  "forwardValidation": {
+    "frozenDataEnd": "2026-07-15T11:09:37Z",
+    "minimumNewContinuousHours": 48,
+    "minimumNewIndependentSignals": 20,
+    "parameterChangesAllowedBeforeValidation": false,
+    "latestReadinessAudit": {
+      "serverDataEnd": "2026-07-15T12:20:23Z",
+      "newHoursAvailable": 1.18,
+      "ready": false
+    }
+  },
+  "architecture": {
+    "currentCore": "liquidity_v2_core with all existing accepted/veto rules unchanged",
+    "originalAdmission": "accepted current-V2 signals require trailing-60s active flow, depth imbalance and microprice 2-of-3 alignment",
+    "supplement": "one-sided path-exhaustion reclaim with the same order-book 2-of-3 alignment",
+    "cooldownSec": 600,
+    "amountU": 5,
+    "singleStrategyId": true
+  },
+  "combinedEvidence": {
+    "signals": 52,
+    "delay0": {"winRatePct": 67.31, "pnlU": 55, "maxDrawdownU": 19, "maxLossStreak": 3},
+    "delay5": {"winRatePct": 65.38, "pnlU": 46, "maxDrawdownU": 19, "maxLossStreak": 3},
+    "delay6": {"winRatePct": 65.38, "pnlU": 46, "maxDrawdownU": 19, "maxLossStreak": 3},
+    "delay10": {"winRatePct": 63.46, "pnlU": 37, "maxDrawdownU": 28, "maxLossStreak": 3}
+  },
+  "periodsDelay6": {
+    "developmentJuly5To10": {"trades": 30, "winRatePct": 66.67, "pnlU": 30, "maxDrawdownU": 19, "tradesPerDay": 5.0},
+    "validationJuly11To13": {"trades": 6, "winRatePct": 66.67, "pnlU": 6, "maxDrawdownU": 10, "tradesPerDay": 2.0},
+    "forwardJuly14To15": {"trades": 16, "winRatePct": 62.5, "pnlU": 10, "maxDrawdownU": 16, "tradesPerDay": 10.92}
+  },
+  "failedRequirements": [
+    "historical frequency is below 10 independent signals per day",
+    "delay10 combined maximum drawdown is 28U, above the 20U limit",
+    "all periods are reused research evidence rather than untouched forward proof"
+  ],
+  "sourceHashesSha256": {
+    "py/liquidity_v2_core.py": "2F533F085A2C3349879FC0B710C2053B89AC720BEF4DC402B824690E0D25D819",
+    "py/research_exhaustion_post_confirmation_cooldown_v7.py": "56F6BF476652BDC009823B68CD9158DAEEA01558562F8B3F01DE157ADA937990",
+    "py/research_current_v2_confirmed_augmented_v9.py": "1D2A474B19C25734D177B9E871761A6502C8E216CA5CCAD40951117D91FB2E1D",
+    "py/research_current_v2_augmented_multiperiod_v9.py": "16BEF10C6E45E0A149C7C4BAF572CAF5418E4D3DC6D7B9C3F72F1663C90D97A0"
+  }
+}

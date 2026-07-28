@@ -132,6 +132,27 @@ const DATA_HEALTH_FILES = {
     intervalMs: 5 * 60 * 1000,
     maxRecentGapMs: Number(process.env.DATA_HEALTH_5M_MAX_GAP_MS || 8 * 60 * 1000)
   },
+  openInterest: {
+    file: path.join(DATA_DIR, "btcusdt_open_interest.csv"),
+    timeCol: "timestamp",
+    maxAgeMs: Number(process.env.DATA_HEALTH_OPEN_INTEREST_MAX_AGE_MS || 30 * 60 * 1000),
+    intervalMs: 5 * 60 * 1000,
+    maxRecentGapMs: Number(process.env.DATA_HEALTH_5M_MAX_GAP_MS || 8 * 60 * 1000)
+  },
+  globalLsratio: {
+    file: path.join(DATA_DIR, "btcusdt_global_lsratio.csv"),
+    timeCol: "timestamp",
+    maxAgeMs: Number(process.env.DATA_HEALTH_GLOBAL_LSRATIO_MAX_AGE_MS || 30 * 60 * 1000),
+    intervalMs: 5 * 60 * 1000,
+    maxRecentGapMs: Number(process.env.DATA_HEALTH_5M_MAX_GAP_MS || 8 * 60 * 1000)
+  },
+  topAccountLsratio: {
+    file: path.join(DATA_DIR, "btcusdt_top_account_lsratio.csv"),
+    timeCol: "timestamp",
+    maxAgeMs: Number(process.env.DATA_HEALTH_TOP_ACCOUNT_LSRATIO_MAX_AGE_MS || 30 * 60 * 1000),
+    intervalMs: 5 * 60 * 1000,
+    maxRecentGapMs: Number(process.env.DATA_HEALTH_5M_MAX_GAP_MS || 8 * 60 * 1000)
+  },
   funding: {
     file: path.join(DATA_DIR, "btcusdt_funding.csv"),
     timeCol: "fundingTime",
@@ -2062,6 +2083,7 @@ const AUTO_TRADE_AMOUNT = 100;  // Auto-trade 100 USDT per signal
 const AUTO_TRADE_ENABLED = SERVER_SIM_TRADING_ENABLED;
 const SIGNAL_EXPIRY_MS = 120 * 1000;  // Signal valid for 2 minutes
 const STRATEGY_COOLDOWN_MS = 10 * 60 * 1000;
+const SHADOW_EXECUTION_DELAY_MS = Math.max(0, Number(process.env.SHADOW_EXECUTION_DELAY_MS || 5000));
 
 let currentPrice = null;
 let priceHistory = [];
@@ -2346,16 +2368,15 @@ function placeShadowTrade(strategyId, sig, variant, extra = {}) {
   const now = Date.now();
   const signalOpenTime = signalActionableMs(sig) || now;
   const signalStrikePrice = signalReferencePrice(sig) || currentPrice;
-  const executionStrikePrice = currentPrice;
   const trade = {
     id: nextShadowTradeId++,
     direction: sig.signal,
     amount,
-    strikePrice: signalStrikePrice,
-    openTime: signalOpenTime,
-    settleTime: signalOpenTime + dur * 60 * 1000,
+    strikePrice: null,
+    openTime: null,
+    settleTime: null,
     duration: String(dur),
-    status: "active",
+    status: "pending",
     settlePrice: null,
     payout: null,
     payoutRate: payoutRateForDuration(dur, PAYOUT_RATE),
@@ -2366,34 +2387,55 @@ function placeShadowTrade(strategyId, sig, variant, extra = {}) {
     signalTime: sig.time,
     actionableTime: sig.actionable_time || sig.candle_close_time || sig.time || null,
     signalEntryPrice: signalStrikePrice,
-    executionStrikePrice,
-    executionOpenTime: now,
+    executionStrikePrice: null,
+    executionOpenTime: null,
+    shadowRequestedAt: now,
+    shadowExecutionDelayMs: SHADOW_EXECUTION_DELAY_MS,
     ...extra.tradeFields
   };
   shadowTrades.push(trade);
-  appendJsonl(TRADE_AUDIT_FILE, {
-    event: "shadow_trade_open",
-    serverTime: now,
-    tradeId: trade.id,
-    source: trade.source,
-    strategyId,
-    tradeEnabled: variant ? variant.tradeEnabled !== false : null,
-    direction: trade.direction,
-    amount: trade.amount,
-    duration: trade.duration,
-    openTime: trade.openTime,
-    strikePrice: trade.strikePrice,
-    signalEntryPrice: trade.signalEntryPrice,
-    executionStrikePrice: trade.executionStrikePrice,
-    executionOpenTime: trade.executionOpenTime,
-    executionDelayMs: trade.executionOpenTime - trade.openTime,
-    confidence: trade.confidence,
-    avg_prob: trade.avg_prob,
-    signalTime: trade.signalTime,
-    actionableTime: trade.actionableTime,
-    ...extra.auditFields
-  });
   broadcastTradeUpdate(trade);
+  setTimeout(() => {
+    if (trade.status !== "pending") return;
+    if (!currentPrice) {
+      trade.status = "cancelled";
+      trade.cancelReason = "shadow_execution_price_missing";
+      broadcastTradeUpdate(trade);
+      return;
+    }
+    const executionOpenTime = Date.now();
+    const executionStrikePrice = currentPrice;
+    trade.status = "active";
+    trade.strikePrice = executionStrikePrice;
+    trade.openTime = executionOpenTime;
+    trade.settleTime = executionOpenTime + dur * 60 * 1000;
+    trade.executionStrikePrice = executionStrikePrice;
+    trade.executionOpenTime = executionOpenTime;
+    appendJsonl(TRADE_AUDIT_FILE, {
+      event: "shadow_trade_open",
+      serverTime: executionOpenTime,
+      tradeId: trade.id,
+      source: trade.source,
+      strategyId,
+      tradeEnabled: variant ? variant.tradeEnabled !== false : null,
+      direction: trade.direction,
+      amount: trade.amount,
+      duration: trade.duration,
+      openTime: trade.openTime,
+      strikePrice: trade.strikePrice,
+      signalEntryPrice: trade.signalEntryPrice,
+      executionStrikePrice: trade.executionStrikePrice,
+      executionOpenTime: trade.executionOpenTime,
+      executionDelayMs: trade.executionOpenTime - signalOpenTime,
+      shadowQueueDelayMs: trade.executionOpenTime - trade.shadowRequestedAt,
+      confidence: trade.confidence,
+      avg_prob: trade.avg_prob,
+      signalTime: trade.signalTime,
+      actionableTime: trade.actionableTime,
+      ...extra.auditFields
+    });
+    broadcastTradeUpdate(trade);
+  }, SHADOW_EXECUTION_DELAY_MS);
   return trade;
 }
 
@@ -2448,7 +2490,7 @@ function mirrorTabletSignalsToShadow(signals) {
     if (!liveIds.has(strategyId)) continue;
     const sig = signals && signals[strategyId];
     if (!sig || !sig.signal || shadowSignalAlreadyRecorded(strategyId, sig)) continue;
-    if (shadowTrades.some(t => t.status === "active" && t.source === "shadow:" + strategyId)) continue;
+    if (shadowTrades.some(t => ["pending", "active"].includes(t.status) && t.source === "shadow:" + strategyId)) continue;
     const sigTime = signalActionableMs(sig);
     if (!sigTime || Date.now() - sigTime > configuredMaxActionableLagMs()) continue;
     const key = shadowSignalKey(strategyId, sig);
@@ -2496,7 +2538,7 @@ function checkShadowTrades() {
       const sig = signals[strategyId];
       if (!sig || !sig.signal) continue;
       if (hasStrategyCooldown(strategyId)) continue;
-      if (shadowTrades.some(t => t.status === "active" && t.source === "shadow:" + strategyId)) continue;
+      if (shadowTrades.some(t => ["pending", "active"].includes(t.status) && t.source === "shadow:" + strategyId)) continue;
       const sigTime = signalActionableMs(sig);
       if (!sigTime || Date.now() - sigTime > configuredMaxActionableLagMs()) continue;
       const key = [sig.signal, sig.time || "", sig.actionable_time || sig.candle_close_time || ""].join("|");
@@ -2535,7 +2577,7 @@ function checkOrderbookShadowTrades() {
 
       const strategyId = `OB_CONFIRM_${baseStrategyId}`;
       if (hasStrategyCooldown(strategyId)) continue;
-      if (shadowTrades.some(t => t.status === "active" && t.source === "shadow:" + strategyId)) continue;
+      if (shadowTrades.some(t => ["pending", "active"].includes(t.status) && t.source === "shadow:" + strategyId)) continue;
       const sigTime = signalActionableMs(sig);
       if (!sigTime || Date.now() - sigTime > configuredMaxActionableLagMs()) continue;
       const key = [
@@ -3065,7 +3107,7 @@ function applyProdStrategyParams(baseConfig, config) {
   const safeTemplate = out.BTC_10min_SAFE || {};
   const takerTemplate = out.BTC_10min_TAKER || {};
   for (const key of Object.keys(out)) {
-    if ((key.startsWith("BTC_10min_TAKER") || key.startsWith("BTC_10min_SAFE") || key.startsWith("BTC_10min_SECOND") || key.startsWith("BTC_10min_SMART") || key.startsWith("BTC_10min_NORMAL_STATE") || key.startsWith("BTC_10min_NORMAL_LIQUIDITY") || key.startsWith("BTC_10min_BRANCH") || key.startsWith("BTC_10min_MULTI") || key.startsWith("BTC_10min_V22")) && !variants.some(v => v.id === key)) delete out[key];
+    if ((key.startsWith("BTC_10min_TAKER") || key.startsWith("BTC_10min_SAFE") || key.startsWith("BTC_10min_SECOND") || key.startsWith("BTC_10min_SMART") || key.startsWith("BTC_10min_NORMAL_STATE") || key.startsWith("BTC_10min_NORMAL_LIQ") || key.startsWith("BTC_10min_BRANCH") || key.startsWith("BTC_10min_MULTI") || key.startsWith("BTC_10min_V22")) && !variants.some(v => v.id === key)) delete out[key];
   }
   for (const variant of variants) {
     const current = out[variant.id] && typeof out[variant.id] === "object" ? out[variant.id] : {};
@@ -3272,7 +3314,9 @@ function applyProdStrategyParams(baseConfig, config) {
         ...current,
         enabled: variant.enabled,
         trade_enabled: variant.tradeEnabled === true,
-        model_type: "second_normal_trend_orderbook_latch_v2",
+        model_type: variant.v9AugmentedEnabled === true
+          ? "second_normal_liquidity_orderbook_v1"
+          : "second_normal_trend_orderbook_latch_v2",
         symbol: "btcusdt",
         interval_min: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
         horizon: Math.max(1, Math.round(Number(variant.horizonSec || 600) / 60)),
@@ -3315,6 +3359,23 @@ function applyProdStrategyParams(baseConfig, config) {
         second_liq_trend_space_short_ret_600_up_bps: variant.trendSpaceShortRet600UpBps ?? 12,
         second_liq_trend_space_short_pos_600_min: variant.trendSpaceShortPos600Min ?? 0.65,
         second_liq_mode: variant.liquidityMode || "reclaim",
+        v9_augmented_enabled: variant.v9AugmentedEnabled === true,
+        v9_efficiency_min: variant.v9EfficiencyMin ?? 0.60,
+        v9_trend_strength_min: variant.v9TrendStrengthMin ?? 1.25,
+        v9_opposing_min_bps: variant.v9OpposingMinBps ?? 2.0,
+        v9_z30_min: variant.v9Z30Min ?? 1.0,
+        v9_volume_ratio_min: variant.v9VolumeRatioMin ?? 0.80,
+        v9_book_coverage_min: variant.v9BookCoverageMin ?? 0.90,
+        v9_book_votes_min: variant.v9BookVotesMin ?? 2,
+        v9_max_emit_age_sec: variant.v9MaxEmitAgeSec ?? 8,
+        v9_supplement_min_abs_normal_z: variant.v9SupplementMinAbsNormalZ ?? 0,
+        v9_original_regime_veto_enabled: variant.v9OriginalRegimeVetoEnabled === true,
+        v9_original_veto_mature_downtrend: variant.v9OriginalVetoMatureDowntrend !== false,
+        v9_original_veto_short_migration_up_down: variant.v9OriginalVetoShortMigrationUpDown !== false,
+        v9_original_allow_mature_downtrend_down_flow_min: variant.v9OriginalAllowMatureDowntrendDownFlowMin ?? null,
+        v9_supplement_loose_short_migration_reversion_enabled: variant.v9SupplementLooseShortMigrationReversionEnabled === true,
+        v9_supplement_loose_mature_uptrend_down_enabled: variant.v9SupplementLooseMatureUptrendDownEnabled === true,
+        v9_supplement_mature_uptrend_down_flow_min: variant.v9SupplementMatureUptrendDownFlowMin ?? -0.3,
         router_latch_sec: 6,
         router_execution_interval_sec: 5,
         router_execution_phase: 0,

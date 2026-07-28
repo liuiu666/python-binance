@@ -9,6 +9,7 @@ Model: 3x XGBoost ensemble with agreement filter
 import pandas as pd, numpy as np, json, time, warnings, os
 warnings.filterwarnings("ignore")
 from xgboost import XGBClassifier
+from external_period_data import add_period_available_time
 
 APP_DIR = os.environ.get("APP_DIR", "E:/codex")
 OUT = os.environ.get("DATA_DIR", os.path.join(APP_DIR, "data"))
@@ -98,38 +99,42 @@ def load_symbol(sym):
     # Long/short ratio
     ls = read_external(os.path.join(OUT, f"{sym}_lsratio.csv"), "timestamp")
     if ls is not None:
+        ls = add_period_available_time(ls)
         for col in ["longShortRatio", "longAccount", "shortAccount"]:
             ls[col] = pd.to_numeric(ls[col], errors="coerce")
         df5 = pd.merge_asof(
             df5.sort_values("time"),
-            ls[["timestamp", "longShortRatio", "longAccount", "shortAccount"]],
+            ls[["available_time", "longShortRatio", "longAccount", "shortAccount"]],
             left_on="time",
-            right_on="timestamp",
+            right_on="available_time",
             direction="backward",
         )
-        stale = stale_asof_mask(df5, "timestamp", LS_RATIO_MAX_AGE)
+        stale_frame = df5.assign(timestamp=df5["available_time"])
+        stale = stale_asof_mask(stale_frame, "timestamp", LS_RATIO_MAX_AGE)
         df5["ls_ratio"] = df5["longShortRatio"].where(~stale, 1.0).fillna(1.0)
         df5["ls_long"] = df5["longAccount"].where(~stale, 0.5).fillna(0.5)
         df5["ls_short"] = df5["shortAccount"].where(~stale, 0.5).fillna(0.5)
-        df5 = df5.drop(columns=[c for c in ["timestamp", "longShortRatio", "longAccount", "shortAccount"] if c in df5.columns])
+        df5 = df5.drop(columns=[c for c in ["available_time", "longShortRatio", "longAccount", "shortAccount"] if c in df5.columns])
 
     # Taker buy/sell
     tk = read_external(os.path.join(OUT, f"{sym}_taker.csv"), "timestamp")
     if tk is not None:
+        tk = add_period_available_time(tk)
         for col in ["buySellRatio", "buyVol", "sellVol"]:
             tk[col] = pd.to_numeric(tk[col], errors="coerce")
         df5 = pd.merge_asof(
             df5.sort_values("time"),
-            tk[["timestamp", "buySellRatio", "buyVol", "sellVol"]],
+            tk[["available_time", "buySellRatio", "buyVol", "sellVol"]],
             left_on="time",
-            right_on="timestamp",
+            right_on="available_time",
             direction="backward",
         )
-        stale = stale_asof_mask(df5, "timestamp", TAKER_MAX_AGE)
+        stale_frame = df5.assign(timestamp=df5["available_time"])
+        stale = stale_asof_mask(stale_frame, "timestamp", TAKER_MAX_AGE)
         df5["taker_ratio"] = df5["buySellRatio"].where(~stale, 1.0).fillna(1.0)
         df5["taker_buy"] = df5["buyVol"].where(~stale, 0.0).fillna(0.0)
         df5["taker_sell"] = df5["sellVol"].where(~stale, 0.0).fillna(0.0)
-        df5 = df5.drop(columns=[c for c in ["timestamp", "buySellRatio", "buyVol", "sellVol"] if c in df5.columns])
+        df5 = df5.drop(columns=[c for c in ["available_time", "buySellRatio", "buyVol", "sellVol"] if c in df5.columns])
 
     return df5
 

@@ -1,0 +1,11 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - heading "BTC 实盘控制台" [level=1] [ref=e10]
+    - paragraph [ref=e11]: 登录后查看策略、数据采集和下单记录。
+    - generic [ref=e12]:
+      - generic [ref=e13]: 用户名
+      - textbox "用户名" [active] [ref=e14]
+    - generic [ref=e15]:
+      - generic [ref=e16]: 密码
+      - textbox "密码" [ref=e17]
+    - button "登录" [ref=e18] [cursor=pointer]

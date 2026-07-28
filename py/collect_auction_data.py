@@ -34,8 +34,9 @@ DEPTH_LIMIT = max(20, min(1000, int(os.environ.get("AUCTION_DEPTH_LIMIT", "100")
 DEPTH_VIEW_LEVELS = max(5, min(DEPTH_LIMIT, int(os.environ.get("AUCTION_VIEW_LEVELS", "20"))))
 NEAR_TOUCH_BPS = max(0.5, min(50.0, float(os.environ.get("AUCTION_NEAR_TOUCH_BPS", "5"))))
 STATUS_INTERVAL_SEC = max(1.0, float(os.environ.get("AUCTION_STATUS_INTERVAL_SEC", "2")))
-PING_INTERVAL_SEC = max(10, int(os.environ.get("AUCTION_WS_PING_INTERVAL_SEC", "60")))
-PING_TIMEOUT_SEC = max(5, int(os.environ.get("AUCTION_WS_PING_TIMEOUT_SEC", "20")))
+PING_INTERVAL_SEC = max(10, int(os.environ.get("AUCTION_WS_PING_INTERVAL_SEC", "10")))
+PING_TIMEOUT_SEC = max(5, int(os.environ.get("AUCTION_WS_PING_TIMEOUT_SEC", "5")))
+STALE_RECONNECT_SEC = max(10.0, float(os.environ.get("AUCTION_STALE_RECONNECT_SEC", "12")))
 HTTP_TIMEOUT_SEC = max(2.0, float(os.environ.get("AUCTION_HTTP_TIMEOUT_SEC", "8")))
 LOCK_PORT = int(os.environ.get("AUCTION_LOCK_PORT", "39874"))
 
@@ -312,6 +313,8 @@ class AuctionCollector:
         self.last_status_write = 0.0
         self.last_flush = 0.0
         self.last_event_ms: dict[str, int] = {}
+        self.last_message_wall = time.time()
+        self.last_effective_event_wall = self.last_message_wall
 
     def write_status(self, *, force: bool = False) -> None:
         now = time.time()
@@ -363,6 +366,7 @@ class AuctionCollector:
     def _append(self, stream: str, event_time_ms: int, payload: dict[str, Any]) -> None:
         self.writer.append(stream, event_time_ms, payload)
         self.last_event_ms[stream] = event_time_ms
+        self.last_effective_event_wall = time.time()
         if time.time() - self.last_flush >= 1.0:
             self.writer.flush()
             self.last_flush = time.time()
@@ -447,6 +451,7 @@ class AuctionCollector:
         self.status["depth_updates"] += 1
 
     def handle_message(self, message: str) -> None:
+        self.last_message_wall = time.time()
         raw = json.loads(message)
         event = raw.get("data") if isinstance(raw, dict) and isinstance(raw.get("data"), dict) else raw
         if not isinstance(event, dict):
@@ -465,6 +470,8 @@ class AuctionCollector:
         print(f"[Auction] Starting {SYMBOL} auction collector {WS_URL}", flush=True)
         while True:
             def on_open(_ws):
+                self.last_message_wall = time.time()
+                self.last_effective_event_wall = self.last_message_wall
                 self.status.update({"ok": True, "error": None, "reconnects": self.status["reconnects"] + 1})
                 self.write_status(force=True)
                 print("[Auction] WebSocket connected", flush=True)
@@ -472,6 +479,18 @@ class AuctionCollector:
             def on_message(_ws, message):
                 try:
                     self.handle_message(message)
+                    effective_idle = time.time() - self.last_effective_event_wall
+                    if effective_idle > STALE_RECONNECT_SEC:
+                        self.book.last_update_id = None
+                        self.book.needs_bridge = True
+                        self.status.update({"ok": False, "error": f"stale_effective_event_{effective_idle:.1f}s"})
+                        self.write_status(force=True)
+                        print(
+                            f"[Auction] stale effective event in message callback "
+                            f"idle={effective_idle:.1f}s; reconnecting",
+                            flush=True,
+                        )
+                        _ws.close()
                 except Exception as exc:
                     self.status.update({"ok": False, "error": f"message_failed: {exc}"})
                     self.write_status(force=True)
@@ -482,7 +501,41 @@ class AuctionCollector:
                 self.write_status(force=True)
                 print(f"[Auction] websocket error: {error}", flush=True)
 
+            def on_close(_ws, code, reason):
+                print(f"[Auction] WebSocket closed code={code} reason={reason}", flush=True)
+
             ws = websocket.WebSocketApp(WS_URL, on_open=on_open, on_message=on_message, on_error=on_error)
+
+            def stale_watchdog():
+                while True:
+                    time.sleep(max(2.0, min(5.0, STALE_RECONNECT_SEC / 4.0)))
+                    if not getattr(ws, "sock", None) or not ws.sock.connected:
+                        return
+                    now = time.time()
+                    raw_idle = now - self.last_message_wall
+                    effective_idle = now - self.last_effective_event_wall
+                    if raw_idle > STALE_RECONNECT_SEC or effective_idle > STALE_RECONNECT_SEC:
+                        if effective_idle > STALE_RECONNECT_SEC:
+                            self.book.last_update_id = None
+                            self.book.needs_bridge = True
+                        reason = (
+                            f"stale_effective_event_{effective_idle:.1f}s"
+                            if effective_idle > STALE_RECONNECT_SEC
+                            else f"stale_websocket_no_message_{raw_idle:.1f}s"
+                        )
+                        self.status.update({"ok": False, "error": reason})
+                        self.write_status(force=True)
+                        print(
+                            f"[Auction] stale websocket raw_idle={raw_idle:.1f}s "
+                            f"effective_idle={effective_idle:.1f}s; reconnecting",
+                            flush=True,
+                        )
+                        ws.close()
+                        return
+
+            watcher = threading.Thread(target=stale_watchdog, daemon=True)
+            watcher.start()
+            ws.on_close = on_close
             ws.run_forever(ping_interval=PING_INTERVAL_SEC, ping_timeout=PING_TIMEOUT_SEC, **proxy_args())
             self.writer.flush()
             time.sleep(3)

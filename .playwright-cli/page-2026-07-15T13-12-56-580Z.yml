@@ -1,0 +1,87 @@
+- generic [ref=f1e3]:
+  - banner [ref=f1e4]:
+    - generic [ref=f1e5]:
+      - generic [ref=f1e6]: B
+      - generic [ref=f1e7]:
+        - strong [ref=f1e8]: BTC 实盘控制台
+        - generic [ref=f1e9]: 策略、数据、订单分层监控
+    - generic [ref=f1e10]:
+      - article [ref=f1e11]:
+        - generic [ref=f1e12]:
+          - text: BTC
+          - strong [ref=f1e13]: "0.00"
+          - text: "--"
+      - article [ref=f1e14]:
+        - generic [ref=f1e15]:
+          - text: 秒级
+          - strong [ref=f1e16]: 未知
+      - article [ref=f1e17]:
+        - generic [ref=f1e18]:
+          - text: 订单薄
+          - strong [ref=f1e19]: 未知
+      - article [ref=f1e20]:
+        - generic [ref=f1e21]:
+          - text: 1分钟
+          - strong [ref=f1e22]: 未知
+      - article [ref=f1e23]:
+        - generic [ref=f1e24]:
+          - text: 余额
+          - strong [ref=f1e25]: "--"
+          - text: USDT
+      - button "刷新" [ref=f1e26] [cursor=pointer]
+  - generic [ref=f1e32]:
+    - generic [ref=f1e33]:
+      - strong [ref=f1e35]: 等待数据
+      - generic [ref=f1e36]: 正在等待策略数据。
+    - generic [ref=f1e37]:
+      - generic [ref=f1e38]: "--"
+      - generic [ref=f1e42]: 等待策略数据
+  - navigation "控制台分页" [ref=f1e45]:
+    - button "当前交易" [ref=f1e46] [cursor=pointer]
+    - button "策略" [ref=f1e49] [cursor=pointer]
+    - button "订单" [ref=f1e53] [cursor=pointer]
+    - button "数据" [ref=f1e57] [cursor=pointer]
+    - button "设置" [ref=f1e62] [cursor=pointer]
+  - main [ref=f1e66]:
+    - generic [ref=f1e67]:
+      - generic [ref=f1e68]:
+        - article [ref=f1e69]:
+          - generic [ref=f1e70]:
+            - text: 当前价格
+            - strong [ref=f1e71]: "0.00"
+            - text: BTC/USDT
+        - article [ref=f1e74]:
+          - generic [ref=f1e75]:
+            - text: 当前信号
+            - strong [ref=f1e76]: 等待
+            - text: 等待数据
+        - article [ref=f1e79]:
+          - generic [ref=f1e80]:
+            - text: 实盘开关
+            - strong [ref=f1e81]: 影子/观察
+            - text: 自动下单关闭
+        - article [ref=f1e85]:
+          - generic [ref=f1e86]:
+            - text: 策略数量
+            - strong [ref=f1e87]: "3"
+            - text: 1 条可实盘
+      - generic [ref=f1e91]: 正在加载图表...
+    - generic [ref=f1e92]:
+      - generic [ref=f1e93]:
+        - generic [ref=f1e94]:
+          - text: 当前
+          - heading "交易状态" [level=2] [ref=f1e95]
+        - strong [ref=f1e96]: 0 实 / 0 影
+      - generic [ref=f1e97]:
+        - generic [ref=f1e98]: 等待
+        - generic [ref=f1e99]:
+          - strong [ref=f1e100]: 等待数据
+          - generic [ref=f1e101]: 金额 5U / 当前价 0.00
+      - generic [ref=f1e102]:
+        - text: 为什么现在没下单
+        - paragraph [ref=f1e103]: 正在等待策略数据。
+      - generic [ref=f1e104]:
+        - generic [ref=f1e105]:
+          - heading "持仓" [level=3] [ref=f1e106]
+          - generic [ref=f1e107]: 0 单
+        - generic [ref=f1e108]: 当前没有持仓，等待下一次策略信号。

@@ -33,7 +33,7 @@ export default function LoginGate({ onLoginSuccess }) {
     <main className="login-page">
       <form className="login-card" onSubmit={handleSubmit}>
         <div className="login-icon"><LockKeyhole size={22} /></div>
-        <h1>BTC 实盘控制台</h1>
+        <h1>BTC 策略控制台</h1>
         <p>登录后查看策略、数据采集和下单记录。</p>
 
         {error ? <div className="login-error">{error}</div> : null}

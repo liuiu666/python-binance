@@ -273,7 +273,7 @@ echo "[6/8] syntax checks"
 node --check server.js
 node --check auto_btc.js
 . .venv/bin/activate
-python -m py_compile py/liquidity_v2_core.py py/normal_trend_latch_core.py py/multi_normal_hf_stable_core.py py/multiscale_phase_gate_core.py py/backtest_io.py py/run_normal_trend_latch_backtest.py py/signal_btc.py py/signal_health.py py/signal_io.py py/signal_lock.py py/signal_paths.py py/signal_runtime_cache.py py/signal_state.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/collect_orderbook_data.py py/collect_auction_data.py py/backtest_enhanced.py py/run_second_backtest.py py/run_second_research.py py/research_normal_state_v1.py py/research_normal_state_v6.py py/research_yellow_revert_filters.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/dynamic_zone.py py/second_backtest/execution.py py/second_backtest/incident_filter.py py/second_backtest/metrics.py py/second_backtest/strategies.py py/second_backtest/research.py py/second_backtest/normal_state_v11.py
+python -m py_compile py/liquidity_v2_core.py py/current_v2_augmented_v9_core.py py/normal_trend_latch_core.py py/multi_normal_hf_stable_core.py py/multiscale_phase_gate_core.py py/backtest_io.py py/run_normal_trend_latch_backtest.py py/signal_btc.py py/signal_health.py py/signal_io.py py/signal_lock.py py/signal_paths.py py/signal_runtime_cache.py py/signal_state.py py/price_proxy.py py/update_live_data.py py/collect_second_data.py py/collect_orderbook_data.py py/collect_auction_data.py py/backtest_enhanced.py py/run_second_backtest.py py/run_second_research.py py/research_normal_state_v1.py py/research_normal_state_v6.py py/research_yellow_revert_filters.py py/second_backtest/__init__.py py/second_backtest/data.py py/second_backtest/dynamic_zone.py py/second_backtest/execution.py py/second_backtest/incident_filter.py py/second_backtest/metrics.py py/second_backtest/strategies.py py/second_backtest/research.py py/second_backtest/normal_state_v11.py
 
 echo "[7/8] write systemd services"
 NODE_BIN="$(command -v node)"
@@ -415,8 +415,9 @@ Environment=AUCTION_RAW_COMPRESSION=gzip
 Environment=AUCTION_DEPTH_LIMIT=100
 Environment=AUCTION_VIEW_LEVELS=20
 Environment=AUCTION_STATUS_INTERVAL_SEC=2
-Environment=AUCTION_WS_PING_INTERVAL_SEC=60
-Environment=AUCTION_WS_PING_TIMEOUT_SEC=20
+Environment=AUCTION_WS_PING_INTERVAL_SEC=10
+Environment=AUCTION_WS_PING_TIMEOUT_SEC=5
+Environment=AUCTION_STALE_RECONNECT_SEC=12
 Environment=AUCTION_HTTP_TIMEOUT_SEC=8
 ExecStart=$APP_DIR/.venv/bin/python py/collect_auction_data.py
 Restart=always

@@ -1,0 +1,122 @@
+- generic [ref=e19]:
+  - banner [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]: B
+      - generic [ref=e23]:
+        - strong [ref=e24]: BTC 实盘控制台
+        - generic [ref=e25]: 策略、数据、订单分层监控
+    - generic [ref=e26]:
+      - article [ref=e27]:
+        - generic [ref=e28]:
+          - text: BTC
+          - strong [ref=e29]: "63188.00"
+          - text: "-21.27 (-0.03%)"
+      - article [ref=e30]:
+        - generic [ref=e31]:
+          - text: 秒级
+          - strong [ref=e32]: 正常 3s
+      - article [ref=e33]:
+        - generic [ref=e34]:
+          - text: 订单薄
+          - strong [ref=e35]: 正常 2s
+      - article [ref=e36]:
+        - generic [ref=e37]:
+          - text: 1分钟
+          - strong [ref=e38]: 正常 3m 35s
+      - article [ref=e39]:
+        - generic [ref=e40]:
+          - text: 余额
+          - strong [ref=e41]: "4.79"
+          - text: USDT
+      - button "刷新" [ref=e42] [cursor=pointer]
+  - generic [ref=e48]:
+    - generic [ref=e49]:
+      - strong [ref=e51]: 等待触发
+      - generic [ref=e52]: 等待触发
+    - generic [ref=e53]:
+      - generic [ref=e54]: 2026/07/28 22:20:00
+      - generic [ref=e58]: 等待触发
+  - navigation "控制台分页" [ref=e61]:
+    - button "当前交易" [ref=e62] [cursor=pointer]
+    - button "策略" [ref=e65] [cursor=pointer]
+    - button "订单" [ref=e69] [cursor=pointer]
+    - button "数据" [ref=e73] [cursor=pointer]
+    - button "设置" [ref=e78] [cursor=pointer]
+  - main [ref=e82]:
+    - generic [ref=e83]:
+      - generic [ref=e84]:
+        - article [ref=e85]:
+          - generic [ref=e86]:
+            - text: 当前价格
+            - strong [ref=e87]: "63188.00"
+            - text: BTC/USDT
+        - article [ref=e90]:
+          - generic [ref=e91]:
+            - text: 当前信号
+            - strong [ref=e92]: 等待
+            - text: 等待触发
+        - article [ref=e95]:
+          - generic [ref=e96]:
+            - text: 策略模式
+            - strong [ref=e97]: 30m 观察
+            - text: Shadow 已开启
+        - article [ref=e101]:
+          - generic [ref=e102]:
+            - text: 策略数量
+            - strong [ref=e103]: "2"
+            - text: 0 个策略级实盘开关已开
+      - generic [ref=e107]:
+        - generic [ref=e108]:
+          - generic [ref=e109]: BTC / USDT
+          - strong [ref=e110]: 北京时间
+        - table [ref=e113]:
+          - row [ref=e114]:
+            - cell
+            - cell [ref=e115]:
+              - link "Charting by TradingView" [ref=e119] [cursor=pointer]:
+                - /url: https://www.tradingview.com/?utm_medium=lwc-link&utm_campaign=lwc-chart&utm_source=115.190.218.128/
+            - cell [ref=e124]
+          - row [ref=e128]:
+            - cell
+            - cell [ref=e129]
+            - cell [ref=e133]
+    - generic [ref=e136]:
+      - generic [ref=e137]:
+        - generic [ref=e138]:
+          - text: 当前
+          - heading "交易状态" [level=2] [ref=e139]
+        - strong [ref=e140]: 0 实 / 0 影
+      - generic [ref=e141]:
+        - generic [ref=e142]: 等待
+        - generic [ref=e143]:
+          - strong [ref=e144]: 等待触发
+          - generic [ref=e145]: 金额 5U / 当前价 63188.00
+      - generic [ref=e146]:
+        - text: 为什么现在没下单
+        - paragraph [ref=e147]: 等待触发
+      - generic [ref=e148]:
+        - generic [ref=e149]:
+          - generic [ref=e150]: 下一次可能信号
+          - strong [ref=e151]: 等待触发
+        - generic [ref=e152]:
+          - generic [ref=e153]:
+            - text: 做空观察
+            - strong [ref=e154]: "--"
+            - text: 先上破约 +--，再回到区间并有卖压
+          - generic [ref=e155]:
+            - text: 做多观察
+            - strong [ref=e156]: "--"
+            - text: 先下破约 ---，再回到区间并有买盘
+        - generic [ref=e157]:
+          - generic [ref=e158]: 当前价 63068.01
+          - generic [ref=e159]: 位置 -- / 阈值 ±1.2σ
+          - generic [ref=e160]: 订单薄未确认
+        - generic [ref=e161]:
+          - generic [ref=e162]: 订单薄 bid 0.000 / ask 0.000
+          - generic [ref=e163]: imb 0.000
+          - generic [ref=e164]: flow60 0.000
+      - generic [ref=e165]:
+        - generic [ref=e166]:
+          - heading "持仓" [level=3] [ref=e167]
+          - generic [ref=e168]: 0 单
+        - generic [ref=e169]: 当前没有持仓，等待下一次策略信号。

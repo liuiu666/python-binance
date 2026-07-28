@@ -1,0 +1,29 @@
+{
+  "strategyId": "BTC_10min_NORMAL_LIQ_OB_V2_AUGMENTED_V13_SHADOW",
+  "serverStrategyId": "BTC_10min_NORMAL_LIQ_OB_V2_AUGMENTED_V13_FREQ",
+  "serverLabel": "V13 冻结正态反转影子",
+  "shadowCollectionStart": "2026-07-28T13:59:23.041Z",
+  "status": "frozen_shadow_research_not_for_live",
+  "freezeTime": "2026-07-15T11:09:37Z",
+  "tradeEnabledRequired": false,
+  "variantSha256": "0fc6233686632b48a36a5fd556b9c3165baa9affae61cb013cedc8d463fa936a",
+  "sharedCoreSha256": "98f6928a41de83207f40a6bdc467d6dd413a5f6b52b8d107237637b1372dc174",
+  "execution": {
+    "horizonSec": 600,
+    "sharedCooldownSec": 600,
+    "entryDelaysSec": [0, 5, 6, 10],
+    "amountU": 5,
+    "winPnlU": 4,
+    "lossPnlU": -5
+  },
+  "promotionGates": {
+    "minimumIndependentForwardTrades": 20,
+    "minimumForwardWinRatePct": 63,
+    "maximumForwardDrawdownU": 20,
+    "maximumForwardLossStreak": 2,
+    "allFixedEntryDelaysMustBeProfitable": true,
+    "localSecondAndOrderbookCoverageRequired": true
+  },
+  "parameterChangesAllowedDuringForwardCollection": false,
+  "realTradingAllowed": false
+}

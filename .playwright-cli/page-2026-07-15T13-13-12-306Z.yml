@@ -1,0 +1,129 @@
+- generic [ref=f1e3]:
+  - banner [ref=f1e4]:
+    - generic [ref=f1e5]:
+      - generic [ref=f1e6]: B
+      - generic [ref=f1e7]:
+        - strong [ref=f1e8]: BTC 实盘控制台
+        - generic [ref=f1e9]: 策略、数据、订单分层监控
+    - generic [ref=f1e10]:
+      - article [ref=f1e11]:
+        - generic [ref=f1e12]:
+          - text: BTC
+          - strong [ref=f1e13]: "65300.00"
+          - text: "-0.08 (-0.00%)"
+      - article [ref=f1e14]:
+        - generic [ref=f1e15]:
+          - text: 秒级
+          - strong [ref=f1e16]: 正常 45s
+      - article [ref=f1e17]:
+        - generic [ref=f1e18]:
+          - text: 订单薄
+          - strong [ref=f1e19]: 正常 2s
+      - article [ref=f1e20]:
+        - generic [ref=f1e21]:
+          - text: 1分钟
+          - strong [ref=f1e22]: 正常 2m 8s
+      - article [ref=f1e23]:
+        - generic [ref=f1e24]:
+          - text: 余额
+          - strong [ref=f1e25]: "0.38"
+          - text: USDT
+      - button "刷新" [ref=f1e26] [cursor=pointer]
+  - generic [ref=f1e32]:
+    - generic [ref=f1e33]:
+      - strong [ref=f1e35]: 等待重新进入短周期正态震荡；未达标：中线斜率=10.34，要求绝对值 <= 6bp。
+      - generic [ref=f1e36]: 当前卡在：趋势不过强。现在 10.34bp，要求 -6 到 6bp。中线快速上移或下移时，先不做回归。
+    - generic [ref=f1e37]:
+      - generic [ref=f1e38]: 2026/07/15 21:13:11
+      - generic [ref=f1e42]: 等待可交易的震荡区
+  - navigation "控制台分页" [ref=f1e45]:
+    - button "当前交易" [ref=f1e46] [cursor=pointer]
+    - button "策略" [active] [ref=f1e49] [cursor=pointer]
+    - button "订单" [ref=f1e53] [cursor=pointer]
+    - button "数据" [ref=f1e57] [cursor=pointer]
+    - button "设置" [ref=f1e62] [cursor=pointer]
+  - main [ref=f1e159]:
+    - article [ref=f1e161]:
+      - generic [ref=f1e162]:
+        - generic [ref=f1e163]:
+          - text: 策略
+          - heading "当前V2增强 V9（影子观察）" [level=3] [ref=f1e164]
+          - generic [ref=f1e165]: BTC_10min_NORMAL_LIQ_OB_V2_AUGMENTED_V9
+        - generic [ref=f1e166]: 等待
+      - generic [ref=f1e168]:
+        - strong [ref=f1e169]: 等待重新进入短周期正态震荡；未达标：中线斜率=10.34，要求绝对值 <= 6bp。
+        - generic [ref=f1e170]: 状态时间 2026/07/15 21:12:23
+      - generic [ref=f1e174]:
+        - generic [ref=f1e175]: 已监控
+        - generic [ref=f1e176]: 仅观察/影子
+        - generic [ref=f1e177]: 5U
+        - generic [ref=f1e178]: 10分钟
+      - generic [ref=f1e179]: 回测基准：60.87%，6.59单/天，69单，最大连亏 3，样本 251.2h
+      - generic [ref=f1e184]:
+        - generic [ref=f1e185]: 实盘 --
+        - generic [ref=f1e188]: 影子 --
+      - generic [ref=f1e189]:
+        - generic [ref=f1e190]:
+          - generic [ref=f1e191]: 扫描间隔
+          - strong [ref=f1e192]: 1s
+        - generic [ref=f1e193]:
+          - generic [ref=f1e194]: Z值
+          - strong [ref=f1e195]: "-0.9366"
+      - generic [ref=f1e196]:
+        - generic [ref=f1e197]:
+          - strong [ref=f1e198]: 为什么现在没下单
+          - generic [ref=f1e199]: 等待可交易的震荡区
+        - generic [ref=f1e200]:
+          - generic [ref=f1e201]:
+            - generic [ref=f1e202]:
+              - generic [ref=f1e203]: 数据完整
+              - strong [ref=f1e204]: 100.0%
+            - generic [ref=f1e205]: 要求 >= 88%
+            - emphasis [ref=f1e206]: 通过
+          - generic [ref=f1e207]:
+            - generic [ref=f1e208]:
+              - generic [ref=f1e209]: 震荡成型
+              - strong [ref=f1e210]: 70.0%
+            - generic [ref=f1e211]: 要求 >= 55%
+            - emphasis [ref=f1e212]: 通过
+          - generic [ref=f1e213]:
+            - generic [ref=f1e214]:
+              - generic [ref=f1e215]: 趋势不过强
+              - strong [ref=f1e216]: 10.34bp
+            - generic [ref=f1e217]: 要求 -6 到 6bp
+            - emphasis [ref=f1e218]: 中线快速上移或下移时，先不做回归。
+          - generic [ref=f1e219]:
+            - generic [ref=f1e220]:
+              - generic [ref=f1e221]: 波动合适
+              - strong [ref=f1e222]: 6.23bp
+            - generic [ref=f1e223]: 要求 5.8-55bp
+            - emphasis [ref=f1e224]: 通过
+          - generic [ref=f1e225]:
+            - generic [ref=f1e226]:
+              - generic [ref=f1e227]: 没有暴走
+              - strong [ref=f1e228]: 0.50x
+            - generic [ref=f1e229]: 要求 <= 1.9x
+            - emphasis [ref=f1e230]: 通过
+          - generic [ref=f1e231]:
+            - generic [ref=f1e232]:
+              - generic [ref=f1e233]: 订单薄新鲜
+              - strong [ref=f1e234]: 0.0秒
+            - generic [ref=f1e235]: 要求 <= 3秒
+            - emphasis [ref=f1e236]: 通过
+      - generic [ref=f1e237]:
+        - generic [ref=f1e238]:
+          - generic [ref=f1e239]: 当前状态
+          - strong [ref=f1e240]: 当前卡在：趋势不过强。现在 10.34bp，要求 -8 到 8bp。中线快速上移或下移时，先不做回归。
+        - generic [ref=f1e241]:
+          - generic [ref=f1e242]: 预计信号
+          - strong [ref=f1e243]: V2每1秒扫描；价格假突破1.2σ后回到正态区间，且订单薄有被动支撑/压力时触发10分钟影子单。
+        - generic [ref=f1e244]:
+          - generic [ref=f1e245]: 下次扫描
+          - strong [ref=f1e246]: 2026/07/15 21:13:11
+        - generic [ref=f1e247]:
+          - generic [ref=f1e248]: 入场规则
+          - strong [ref=f1e249]: 600秒滚动正态区间 + 假突破回归 + 订单薄被动支撑/压力确认
+        - generic [ref=f1e250]:
+          - generic [ref=f1e251]: 风控规则
+          - strong [ref=f1e252]: 订单薄延迟<=3秒，秒级覆盖>=88%，inside>=55%，sigma=5.8-55bp，扩张<=1.9
+      - generic [ref=f1e253]: 状态：等待可交易的震荡区

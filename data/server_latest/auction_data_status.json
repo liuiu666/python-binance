@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "symbol": "BTCUSDT",
+  "market": "futures",
+  "mode": "websocket_depth_delta",
+  "websocket_url": "wss://fstream.binance.com/stream?streams=btcusdt@trade/btcusdt@depth@100ms/btcusdt@forceOrder",
+  "root": "/opt/btc-binary-options/data/auction/BTCUSDT/futures",
+  "updated_at": "2026-07-16T15:25:36.580000Z",
+  "trades": 12949,
+  "depth_updates": 1753,
+  "force_orders": 0,
+  "book_resyncs": 12,
+  "sequence_gaps": 11,
+  "stale_depth_updates": 328,
+  "reconnects": 12,
+  "error": null,
+  "last_snapshot_time": "2026-07-16T15:25:21.525000Z",
+  "last_event_time": "2026-07-16T15:25:26.507000Z",
+  "event_age_ms": 10073,
+  "last_update_id": 11062738186973,
+  "book_synced": true,
+  "book": {
+    "best_bid": 64682.2,
+    "best_ask": 64682.3,
+    "mid": 64682.25,
+    "spread_bps": 0.015460191939182815,
+    "bid_depth_n": 21.288999999999998,
+    "ask_depth_n": 0.34500000000000003,
+    "imbalance_n": 0.9681057594527134
+  },
+  "streams": {
+    "trades": {
+      "time": "2026-07-16T15:25:26.507000Z",
+      "age_ms": 10074
+    },
+    "depth_updates": {
+      "time": "2026-07-16T15:25:26.440000Z",
+      "age_ms": 10141
+    }
+  }
+}

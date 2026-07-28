@@ -135,6 +135,43 @@ test("liquidity orderbook strategy is preserved as shadow by default", () => {
   assert.equal(publicTradeConfig(cfg).strategyVariants[0].backtest.wr, 77.78);
 });
 
+test("augmented V9 preserves shared-core parameters and stays shadow-only", () => {
+  const cfg = normalizeTradeConfig({
+    strategyVariants: [{
+      id: "BTC_10min_NORMAL_LIQ_OB_V2_AUGMENTED_V9",
+      base: "SECOND_NORMAL_LIQUIDITY_ORDERBOOK_V1",
+      label: "当前V2增强 V9（影子观察）",
+      amount: "5",
+      enabled: true,
+      tradeEnabled: false,
+      v9AugmentedEnabled: true,
+      v9EfficiencyMin: 0.6,
+      v9TrendStrengthMin: 1.25,
+      v9OpposingMinBps: 2,
+      v9Z30Min: 1,
+      v9VolumeRatioMin: 0.8,
+      v9BookCoverageMin: 0.9,
+      v9BookVotesMin: 2,
+      v9MaxEmitAgeSec: 8
+    }],
+    shadowTradingEnabled: true,
+    realTradingEnabled: false,
+    autoTrade_10m: false
+  });
+  const variant = cfg.strategyVariants[0];
+  assert.equal(variant.label, "当前V2增强 V9（影子观察）");
+  assert.equal(variant.v9AugmentedEnabled, true);
+  assert.equal(variant.v9BookVotesMin, 2);
+  assert.equal(variant.tradeEnabled, false);
+  assert.equal(variant.backtest.wr, 60.87);
+  assert.equal(variant.backtest.maxDrawdownU, 18);
+  assert.deepEqual(liveStrategyIds(cfg), []);
+  const params = publicTradeConfig(cfg).strategyParams[variant.id];
+  assert.equal(params.v9AugmentedEnabled, true);
+  assert.equal(params.v9TrendStrengthMin, 1.25);
+  assert.equal(params.v9MaxEmitAgeSec, 8);
+});
+
 test("multi-normal stable strategy preserves dynamic thresholds without extra incident filtering", () => {
   const cfg = normalizeTradeConfig({
     strategyVariants: [{

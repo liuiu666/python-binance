@@ -27,6 +27,7 @@ from signal_paths import (
     SIGNAL_STATE_FILE,
     TAKER_FILE,
 )
+from external_period_data import add_period_available_time
 
 SIGNAL_SCAN_INTERVAL_SEC = max(1.0, float(os.environ.get("SIGNAL_SCAN_INTERVAL_SEC", "1")))
 LIVE_1M_REFRESH_SEC = max(1.0, float(os.environ.get("LIVE_1M_REFRESH_SEC", "5")))
@@ -449,6 +450,13 @@ from liquidity_v2_core import (
     trend_space_mode as core_trend_space_mode,
     trend_space_veto_code,
 )
+from current_v2_augmented_v9_core import (
+    AugmentedV9Rules,
+    latest_confirmed_supplement,
+    original_v2_price_state,
+    original_v2_regime_veto_code,
+    trailing_book_confirmation,
+)
 from normal_trend_latch_core import (
     NormalTrendLatchEngine,
     RouterRules,
@@ -745,14 +753,15 @@ class POCNormalStrategy:
             taker["timestamp"] = pd.to_datetime(taker["timestamp"], utc=True, errors="coerce")
             taker["buySellRatio"] = pd.to_numeric(taker["buySellRatio"], errors="coerce")
             taker = taker.dropna(subset=["timestamp", "buySellRatio"]).sort_values("timestamp")
+            taker = add_period_available_time(taker)
             if taker.empty:
                 return None, False, "taker_empty"
             signal_ts = pd.to_datetime(signal_time, utc=True)
-            rows = taker[taker["timestamp"] <= signal_ts]
+            rows = taker[taker["available_time"] <= signal_ts]
             if rows.empty:
                 return None, False, "taker_no_prior_row"
             row = rows.iloc[-1]
-            age_min = (signal_ts - row["timestamp"]).total_seconds() / 60
+            age_min = (signal_ts - row["available_time"]).total_seconds() / 60
             if age_min > self.taker_max_age_minutes:
                 return float(row["buySellRatio"]), False, "taker_stale"
             return float(row["buySellRatio"]), True, "ok"
@@ -3197,10 +3206,24 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         self.trend_space_short_pos_600_min = float(cfg.get("second_liq_trend_space_short_pos_600_min", 0.65))
         self.mode = str(cfg.get("second_liq_mode", "reclaim")).lower()
         self.core_rules = LiquidityV2Rules.from_config(cfg)
+        self.augmented_v9_enabled = bool(cfg.get("v9_augmented_enabled", False))
+        self.v9_rules = AugmentedV9Rules.from_config(cfg)
         self.trade_enabled = bool(cfg.get("trade_enabled", False))
         self.interval_min = max(1, int(round(self.horizon_sec / 60)))
         self.model_label = str(cfg.get("model_label", "Orderbook V2 quality"))
         self.last_emit_time, self.last_emit_state = load_strategy_window_state(strategy_id)
+        self.last_v2_owner_time = self.last_emit_time
+        if self.augmented_v9_enabled:
+            runtime = load_strategy_runtime_state(strategy_id)
+            raw_owner = runtime.get("v9_last_v2_owner_time")
+            if raw_owner:
+                try:
+                    owner = pd.Timestamp(raw_owner)
+                    if owner.tzinfo is None:
+                        owner = owner.tz_localize("UTC")
+                    self.last_v2_owner_time = owner.tz_convert("UTC")
+                except Exception:
+                    self.last_v2_owner_time = self.last_emit_time
 
     @staticmethod
     def _safe_float(row, key, default=float("nan")):
@@ -3380,6 +3403,63 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         except Exception as exc:
             print(f"[Signal] failed to persist {self.id} window state: {exc}")
 
+    def _mark_v2_owner(self, signal_time):
+        self.last_v2_owner_time = signal_time
+        if not self.augmented_v9_enabled:
+            return
+        try:
+            persist_strategy_runtime_state(
+                self.id,
+                {"v9_last_v2_owner_time": signal_time.strftime("%Y-%m-%dT%H:%M:%SZ")},
+            )
+        except Exception as exc:
+            print(f"[Signal] failed to persist {self.id} V9 owner state: {exc}")
+
+    def _v9_original_gap_active(self, signal_time):
+        if not self.augmented_v9_enabled or self.last_v2_owner_time is None:
+            return False
+        return (signal_time - self.last_v2_owner_time).total_seconds() < self.min_gap_sec
+
+    def _v9_book_confirmation(self, data, signal, signal_time):
+        if not self.augmented_v9_enabled:
+            return {"ok": True, "votes": None}
+        return trailing_book_confirmation(data, signal, signal_time, self.v9_rules)
+
+    def _v9_try_supplement(self, data, signal_time, base, feature_extra=None):
+        if not self.augmented_v9_enabled:
+            return None
+        if self.last_emit_time is not None and (signal_time - self.last_emit_time).total_seconds() < self.min_gap_sec:
+            return None
+        candidate = latest_confirmed_supplement(data, signal_time, self.v9_rules)
+        if candidate is None:
+            return None
+        signal = str(candidate["signal"])
+        reason = str(candidate["reason"])
+        self._mark_window_owner(signal_time, signal, reason, signal, reason, veto=False)
+        confidence = min(95.0, 58.0 + float(candidate.get("votes", 0)) * 8.0)
+        return {
+            **base,
+            **(feature_extra or {}),
+            **self._window_state_payload(signal_time),
+            "signal": signal,
+            "reason": reason,
+            "signal_branch": "exhaustion_orderbook_supplement",
+            "confidence": round(confidence, 1),
+            "high_conf": True,
+            "v9_augmented": True,
+            "v9_candidate_time": pd.Timestamp(candidate["detected_time"]).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "v9_emit_age_sec": round(float(candidate["emit_age_sec"]), 3),
+            "v9_efficiency_10": round(float(candidate["efficiency_10"]), 4),
+            "v9_trend_strength": round(float(candidate["trend_strength"]), 4),
+            "v9_z_30": round(float(candidate["z_30"]), 4),
+            "v9_book_votes": int(candidate["votes"]),
+            "v9_book_coverage": round(float(candidate["coverage"]), 4),
+            "signal_detail": (
+                "V9补充分支：10分钟单边拍卖出现反向分钟，"
+                f"盘口确认{int(candidate['votes'])}/3，记录10分钟影子信号。"
+            ),
+        }
+
     def _window_state_payload(self, signal_time):
         if self.last_emit_time is None:
             return {}
@@ -3395,7 +3475,8 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
     def predict(self, df5=None):
         bars = self._load_seconds()
         trend_warmup = 3600 if self.trend_space_enabled else 0
-        warmup = max(self.normal_window_sec, self.center_slope_sec, self.retest_sec, 900, trend_warmup) + 10
+        v9_warmup = 7200 if self.augmented_v9_enabled else 0
+        warmup = max(self.normal_window_sec, self.center_slope_sec, self.retest_sec, 900, trend_warmup, v9_warmup) + 10
         if bars is None or len(bars) < warmup:
             return None
         recent = bars.tail(warmup + 120).copy()
@@ -3421,6 +3502,7 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
             "z_entry": self.z_entry,
             "z_reclaim": self.z_reclaim,
             "liquidity_mode": self.mode,
+            "v9_augmented": bool(self.augmented_v9_enabled),
             "time": signal_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "price": round(price, 4),
             "entry": round(price, 4),
@@ -3442,15 +3524,20 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
                 "loss_density": "V2 uses orderbook quality vetoes; live trading is controlled by the strategy switches.",
             },
         }
+        signal_mode = "实盘信号" if self.trade_enabled else "影子单"
         base["next_signal_estimate"] = (
             f"V2每{SIGNAL_SCAN_INTERVAL_SEC:g}秒扫描；价格假突破1.2σ后回到正态区间，"
-            "且订单薄有被动支撑/压力时触发10分钟实盘信号。"
+            f"且订单薄有被动支撑/压力时触发10分钟{signal_mode}。"
         )
         base["condition_summary"] = {
             "entry": "600秒滚动正态区间 + 假突破回归 + 订单薄被动支撑/压力确认",
             "risk": f"订单薄延迟<=3秒，秒级覆盖>={self.observed_min_pct:g}%，inside>={self.inside_min * 100.0:g}%，sigma={self.sigma_min_bps:g}-{self.sigma_max_bps:g}bp，扩张<={self.sigma_expand_max:g}",
             "bidwall_trap": "下沿回收做多时，如果5分钟仍下跌且60秒买盘深度突然放大>2倍，改判为DOWN",
-            "live": "当前版本可实盘；是否下单仍受全局自动交易、实盘开关和执行失败保护控制",
+            "live": (
+                "当前配置允许生成实盘信号；实际下单仍受全局自动交易和执行失败保护控制"
+                if self.trade_enabled
+                else "当前为冻结影子观察，只记录模拟结果，不允许真实下单"
+            ),
         }
         if orderbook is None:
             return {
@@ -3516,6 +3603,9 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
             "z_min_retest": None if not np.isfinite(row.get("z_min_retest")) else round(float(row["z_min_retest"]), 4),
         }
         if not self._normal_ready(row):
+            supplement = self._v9_try_supplement(data, signal_time, base, feature_extra)
+            if supplement is not None:
+                return supplement
             not_ready_detail, normal_ready_checks = self._normal_not_ready_detail(row)
             return {
                 **base,
@@ -3526,14 +3616,43 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
                 "signal_detail": not_ready_detail,
             }
 
-        if self.last_emit_time is not None and (signal_time - self.last_emit_time).total_seconds() < self.min_gap_sec:
+        original_gap_active = (
+            self._v9_original_gap_active(signal_time)
+            if self.augmented_v9_enabled
+            else self.last_emit_time is not None
+            and (signal_time - self.last_emit_time).total_seconds() < self.min_gap_sec
+        )
+        if original_gap_active:
+            supplement = self._v9_try_supplement(data, signal_time, base, feature_extra)
+            if supplement is not None:
+                return supplement
+            candidate_gap = self.augmented_v9_enabled and self.last_v2_owner_time is not None
+            candidate_elapsed = (
+                (signal_time - self.last_v2_owner_time).total_seconds()
+                if candidate_gap
+                else None
+            )
             return {
                 **base,
                 **feature_extra,
                 **self._window_state_payload(signal_time),
                 "signal": None,
-                "reason": "liq_strategy_gap",
-                "signal_detail": "V2上一个信号后处于10分钟同策略间隔，避免同一区域重复记录。",
+                "reason": "v9_original_candidate_gap" if candidate_gap else "liq_strategy_gap",
+                "last_candidate_time": (
+                    self.last_v2_owner_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    if candidate_gap
+                    else None
+                ),
+                "candidate_cooldown_remaining_sec": (
+                    max(0, round(float(self.min_gap_sec - candidate_elapsed), 3))
+                    if candidate_gap
+                    else None
+                ),
+                "signal_detail": (
+                    "原V2候选进入10分钟候选冷却，但没有形成影子单；V9补充分支仍继续寻找独立信号。"
+                    if candidate_gap
+                    else "V2上一个信号后处于10分钟同策略间隔，避免同一区域重复记录。"
+                ),
             }
 
         decision = evaluate_liquidity_v2_candidate(row, self.core_rules)
@@ -3543,6 +3662,9 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         raw_reason = decision.get("raw_reason")
         bidwall_trap = bool(decision.get("bidwall_trap"))
         if decision.get("status") == "wait":
+            supplement = self._v9_try_supplement(data, signal_time, base, feature_extra)
+            if supplement is not None:
+                return supplement
             return {
                 **base,
                 **feature_extra,
@@ -3553,7 +3675,13 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
         if decision.get("status") == "veto":
             veto_reason = str(decision.get("reason"))
             blocked_signal = decision.get("blocked_signal")
-            self._mark_window_owner(signal_time, blocked_signal, veto_reason, raw_signal, raw_reason, veto=True)
+            if self.augmented_v9_enabled:
+                self._mark_v2_owner(signal_time)
+                supplement = self._v9_try_supplement(data, signal_time, base, feature_extra)
+                if supplement is not None:
+                    return supplement
+            else:
+                self._mark_window_owner(signal_time, blocked_signal, veto_reason, raw_signal, raw_reason, veto=True)
             common = {
                 **base,
                 **feature_extra,
@@ -3606,6 +3734,44 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
 
         signal = decision["signal"]
         reason = decision["reason"]
+        v9_book = {"ok": True, "votes": None}
+        if self.augmented_v9_enabled:
+            regime_veto = original_v2_regime_veto_code(signal, row, self.v9_rules)
+            if regime_veto is not None:
+                supplement = self._v9_try_supplement(data, signal_time, base, feature_extra)
+                if supplement is not None:
+                    return supplement
+                price_state = original_v2_price_state(row, self.v9_rules)
+                return {
+                    **base,
+                    **feature_extra,
+                    "signal": None,
+                    "reason": regime_veto,
+                    "blocked_signal": signal,
+                    "raw_signal": raw_signal,
+                    "raw_reason": raw_reason,
+                    "v9_original_price_state": price_state,
+                    "signal_detail": (
+                        f"V9原始V2跳过：当前行情状态={price_state}，"
+                        f"原始信号={signal}，该状态历史回测拖累胜率和回撤。"
+                    ),
+                }
+            self._mark_v2_owner(signal_time)
+            v9_book = self._v9_book_confirmation(data, signal, signal_time)
+            if not v9_book.get("ok"):
+                supplement = self._v9_try_supplement(data, signal_time, base, feature_extra)
+                if supplement is not None:
+                    return supplement
+                return {
+                    **base,
+                    **feature_extra,
+                    "signal": None,
+                    "reason": "v9_original_book_confirmation_failed",
+                    "blocked_signal": signal,
+                    "v9_book_votes": int(v9_book.get("votes", 0)),
+                    "v9_book_coverage": v9_book.get("coverage"),
+                    "signal_detail": "V9原V2候选未通过过去60秒盘口2/3确认，本次不记录影子单。",
+                }
         self._mark_window_owner(signal_time, signal, reason, raw_signal, raw_reason, veto=False)
         ob_strength = abs(float(row["imbalance_20"])) + min(1.0, abs(float(row["micro_bps"])) * 500.0)
         confidence = min(95.0, 58.0 + ob_strength * 12.0 + max(0.0, float(row["inside1_ratio"]) - self.inside_min) * 20.0)
@@ -3632,6 +3798,9 @@ class SecondNormalLiquidityOrderbookV1Strategy(SecondNormalStrategy):
             "quality_v2_veto": False,
             "quality_v2_rule": None,
             "reason": reason,
+            "signal_branch": "current_v2_original",
+            "v9_book_votes": v9_book.get("votes"),
+            "v9_book_coverage": v9_book.get("coverage"),
             "confidence": round(float(confidence), 1),
             "high_conf": True,
             "signal_detail": (

@@ -1,8 +1,8 @@
 {
-  "BTC_10min_NORMAL_LIQ_OB_V2_QUALITY": {
+  "BTC_10min_NORMAL_LIQ_OB_V2_AUGMENTED_V9": {
     "enabled": true,
-    "trade_enabled": true,
-    "model_type": "second_normal_trend_orderbook_latch_v2",
+    "trade_enabled": false,
+    "model_type": "second_normal_liquidity_orderbook_v1",
     "symbol": "btcusdt",
     "interval_min": 10,
     "horizon": 10,
@@ -45,6 +45,15 @@
     "second_liq_trend_space_short_ret_600_up_bps": 12,
     "second_liq_trend_space_short_pos_600_min": 0.65,
     "second_liq_mode": "reclaim",
+    "v9_augmented_enabled": true,
+    "v9_efficiency_min": 0.6,
+    "v9_trend_strength_min": 1.25,
+    "v9_opposing_min_bps": 2,
+    "v9_z30_min": 1,
+    "v9_volume_ratio_min": 0.8,
+    "v9_book_coverage_min": 0.9,
+    "v9_book_votes_min": 2,
+    "v9_max_emit_age_sec": 8,
     "router_latch_sec": 6,
     "router_execution_interval_sec": 5,
     "router_execution_phase": 0,
@@ -81,27 +90,6 @@
     "router_band_high_enabled": false,
     "normal_state_loss_density_enabled": false,
     "normal_state_loss_streak_enabled": false,
-    "model_label": "动态正态/趋势订单薄锁存 V2"
-  },
-  "BTC_10min_BRANCH_VOTE_STARTUP_V1": {
-    "enabled": true,
-    "trade_enabled": true,
-    "model_type": "second_branch_vote_startup_v1",
-    "symbol": "btcusdt",
-    "interval_min": 10,
-    "horizon": 10,
-    "second_lookback_sec": 7200,
-    "second_horizon_sec": 600,
-    "second_min_gap_sec": 600,
-    "branch_vote_normal_window_sec": 600,
-    "branch_vote_horizon_sec": 600,
-    "branch_vote_signal_gap_sec": 600,
-    "branch_vote_orderbook_max_age_sec": 3,
-    "branch_vote_min_votes": 2,
-    "branch_vote_startup_skip_threshold": 4,
-    "branch_vote_rule_path": "data/branch_vote_startup_rules.json",
-    "normal_state_loss_density_enabled": false,
-    "normal_state_loss_streak_enabled": false,
-    "model_label": "分支投票趋势启动V1"
+    "model_label": "当前V2增强 V9（影子观察）"
   }
 }

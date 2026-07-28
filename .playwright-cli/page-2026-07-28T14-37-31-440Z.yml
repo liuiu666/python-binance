@@ -1,0 +1,98 @@
+- generic [ref=f3e3]:
+  - banner [ref=f3e4]:
+    - generic [ref=f3e5]:
+      - generic [ref=f3e6]: B
+      - generic [ref=f3e7]:
+        - strong [ref=f3e8]: BTC 策略控制台
+        - generic [ref=f3e9]: 行情、策略、模拟单与数据状态
+    - generic [ref=f3e10]:
+      - article [ref=f3e11]:
+        - generic [ref=f3e12]:
+          - text: BTC
+          - strong [ref=f3e13]: "63321.28"
+          - text: +7.28 (+0.01%)
+      - article [ref=f3e14]:
+        - generic [ref=f3e15]:
+          - text: 秒级
+          - strong [ref=f3e16]: 正常 3s
+      - article [ref=f3e17]:
+        - generic [ref=f3e18]:
+          - text: 订单薄
+          - strong [ref=f3e19]: 正常 0s
+      - article [ref=f3e20]:
+        - generic [ref=f3e21]:
+          - text: 1分钟
+          - strong [ref=f3e22]: 正常 5m 29s
+      - article [ref=f3e23]:
+        - generic [ref=f3e24]:
+          - text: 余额
+          - strong [ref=f3e25]: "4.79"
+          - text: USDT
+      - button "刷新" [ref=f3e26] [cursor=pointer]
+  - generic [ref=f3e32]:
+    - generic [ref=f3e33]:
+      - strong [ref=f3e35]: 等待触发
+      - generic [ref=f3e36]: 等待触发
+    - generic [ref=f3e37]:
+      - generic [ref=f3e38]: 2026/07/28 22:30:00
+      - generic [ref=f3e42]: 等待触发
+  - navigation "控制台分页" [ref=f3e45]:
+    - button "当前交易" [ref=f3e46] [cursor=pointer]
+    - button "策略" [active] [ref=f3e49] [cursor=pointer]
+    - button "订单" [ref=f3e53] [cursor=pointer]
+    - button "数据" [ref=f3e57] [cursor=pointer]
+    - button "设置" [ref=f3e62] [cursor=pointer]
+  - main [ref=f3e138]:
+    - generic [ref=f3e139]:
+      - generic [ref=f3e140]:
+        - generic [ref=f3e141]:
+          - text: 运行状态
+          - heading "启用中的策略" [level=2] [ref=f3e142]
+          - paragraph [ref=f3e143]: 这里只展示正在计算信号的策略；已停用模型仍可在设置中查看和管理。
+        - strong [ref=f3e144]: 1 运行 / 1 停用
+      - article [ref=f3e146]:
+        - generic [ref=f3e147]:
+          - generic [ref=f3e148]:
+            - text: 策略
+            - heading "BTC 30分钟方向影子" [level=3] [ref=f3e149]
+            - generic [ref=f3e150]: BTC_30min_SHADOW_CANDIDATE
+          - generic [ref=f3e151]: 等待
+        - generic [ref=f3e153]:
+          - strong [ref=f3e154]: 等待触发
+          - generic [ref=f3e155]: 状态时间 2026/07/28 22:30:00
+        - generic [ref=f3e159]:
+          - generic [ref=f3e160]: 已监控
+          - generic [ref=f3e161]: 仅观察/影子
+          - generic [ref=f3e162]: 5U
+          - generic [ref=f3e163]: 30分钟
+        - generic [ref=f3e164]: 回测基准：当前参数暂无固定基准
+        - generic [ref=f3e169]:
+          - generic [ref=f3e170]: 实盘 --
+          - generic [ref=f3e173]: 影子 28.6% / 2-5 / -16.50U
+        - generic [ref=f3e174]:
+          - generic [ref=f3e175]:
+            - generic [ref=f3e176]:
+              - generic [ref=f3e177]: 模型均值
+              - strong [ref=f3e178]: 49.7%
+              - generic [ref=f3e179]: 仍在中性区间
+            - paragraph [ref=f3e180]: 看涨需 ≥ 55%，看跌需 ≤ 45%； 当前只做影子观察，不会真实下单。
+          - generic [ref=f3e181]:
+            - generic [ref=f3e182]:
+              - generic [ref=f3e183]: 三模型概率
+              - strong [ref=f3e184]: 48.4% / 54.6% / 46.0%
+            - generic [ref=f3e185]:
+              - generic [ref=f3e186]: 一致规则
+              - strong [ref=f3e187]: majority
+            - generic [ref=f3e188]:
+              - generic [ref=f3e189]: RSI
+              - strong [ref=f3e190]: "46.7"
+            - generic [ref=f3e191]:
+              - generic [ref=f3e192]: 短线趋势
+              - strong [ref=f3e193]: 强下跌
+            - generic [ref=f3e194]:
+              - generic [ref=f3e195]: 高周期评分
+              - strong [ref=f3e196]: "-3"
+            - generic [ref=f3e197]:
+              - generic [ref=f3e198]: 可执行时间
+              - strong [ref=f3e199]: 2026/07/28 22:35:00
+        - generic [ref=f3e200]: 可执行时间：07/28 22:35:00

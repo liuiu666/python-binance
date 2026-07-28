@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "symbol": "BTCUSDT",
+  "market": "futures",
+  "mode": "websocket",
+  "websocket_url": "wss://fstream.binance.com/ws/btcusdt@depth20@500ms",
+  "file": "/opt/btc-binary-options/data/btcusdt_orderbook_1s.csv",
+  "updated_at": "2026-07-16T15:25:36.867030+00:00",
+  "error": null,
+  "last_ts": "2026-07-16T15:25:36.000000Z",
+  "last_event_time": "2026-07-16T15:25:36.361000Z",
+  "rows_written_this_run": 1397,
+  "spread_bps": 0.0155,
+  "imbalance_5": 0.115185,
+  "imbalance_20": 0.120815,
+  "microprice_edge_bps": 0.0009,
+  "bid_wall_bps": 0.0,
+  "ask_wall_bps": 0.0
+}

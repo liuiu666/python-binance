@@ -1,0 +1,44 @@
+{
+  "strategyId": "BTC_10min_EXHAUSTION_OB_CONFIRM_V6_RESEARCH",
+  "status": "frozen_forward_candidate_not_for_live",
+  "frozenAt": "2026-07-15T12:00:00Z",
+  "rules": {
+    "pathEfficiencyWindowMin": 10,
+    "pathEfficiencyMin": 0.6,
+    "trendStrengthMin": 1.25,
+    "finalOpposingMoveMinBps": 2.0,
+    "normalExtremeAbsZ30Min": 1.0,
+    "volumeRatioMin": 0.8,
+    "secondCoverageMinPct": 90,
+    "orderbookCoverageMinPct": 90,
+    "orderbookConfirmation": "at least two of trailing-60s active flow, depth imbalance and microprice align with reclaim",
+    "cooldownSec": 600,
+    "horizonSec": 600,
+    "amountU": 5
+  },
+  "acceptance": {
+    "minimumIndependentSignalsPerDay": 10,
+    "minimumForwardWinRatePct": 55.56,
+    "maximumDrawdownU": 20,
+    "maximumLossStreak": 3,
+    "requiredEntryDelaysSec": [0, 5, 6, 10],
+    "allDelayVariantsMustBeProfitable": true,
+    "minimumNewForwardHours": 48,
+    "minimumNewForwardSignals": 20
+  },
+  "frozenEvidence": {
+    "dataStart": "2026-07-14T00:00:00Z",
+    "dataEnd": "2026-07-15T11:09:37Z",
+    "signals": 15,
+    "signalsPerDay": 10.24,
+    "winRatePct": 60.0,
+    "pnlU": 6,
+    "maxDrawdownU": 17,
+    "maxLossStreak": 3,
+    "warning": "This period was inspected during development and is not untouched proof. Do not deploy from this result."
+  },
+  "sourceHashesSha256": {
+    "py/research_path_exhaustion_reclaim_v2.py": "6C5D4929B06B9A7AF93B3634D1344F9C6A254D100FCECCD44AB5E902C6A32F8F",
+    "py/research_exhaustion_orderbook_confirmation_v6.py": "7FC18800FE2A57869D6F4235B0A6DC9D0362D5F7C363110E242F6A9D55931E6A"
+  }
+}

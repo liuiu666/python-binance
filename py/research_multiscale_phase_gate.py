@@ -20,21 +20,65 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "py"))
 
-from multi_normal_hf_stable_core import MultiNormalHFStableConfig  # noqa: E402
 from multiscale_phase_gate_core import (  # noqa: E402
     MultiscalePhaseGateConfig,
     build_snapshots as build_phase_snapshots,
 )
+from research_normal_liquidity_orderbook import read_orderbook  # noqa: E402
 from research_normal_shape_1m_10m import clean  # noqa: E402
-from research_two_min_guard_recovery import load_research_sources  # noqa: E402
-from run_multi_normal_hf_stable_backtest import metrics, price_at_or_after, utc  # noqa: E402
+from run_multi_normal_hf_stable_backtest import (  # noqa: E402
+    DEFAULT_SOURCES,
+    LoadedSource,
+    SourceSpec,
+    metrics,
+    price_at_or_after,
+    utc,
+)
+from second_backtest.data import load_second_bars  # noqa: E402
 
 
 OUT_JSON = ROOT / "tmp" / "multiscale_phase_gate_latest.json"
 OUT_CSV = ROOT / "tmp" / "multiscale_phase_gate_trades.csv"
 HORIZON_SEC = 600
-DELAY_SEC = 2
+DELAY_SEC = 10
 GAP_SEC = 600
+
+
+def load_live_parity_sources() -> list[LoadedSource]:
+    independent = SourceSpec(
+        "independent_before_today",
+        DEFAULT_SOURCES[3].seconds,
+        DEFAULT_SOURCES[3].orderbook,
+        start=DEFAULT_SOURCES[3].start,
+        end="2026-07-11T16:00:00Z",
+        role="independent",
+    )
+    fresh_root = ROOT / "tmp" / "latest_pull_20260712_migration_fix" / "extracted" / "data"
+    today = SourceSpec(
+        "today",
+        fresh_root / "btcusdt_1s_trades.csv",
+        fresh_root / "btcusdt_orderbook_1s.csv",
+        start="2026-07-11T16:00:00Z",
+        role="today",
+    )
+    loaded: list[LoadedSource] = []
+    for spec in (*DEFAULT_SOURCES[:3], independent, today):
+        bars = load_second_bars(spec.seconds, include_shards=False)
+        orderbook = read_orderbook(spec.orderbook, bars.index)
+        # Live keeps the complete second axis and marks book availability per
+        # row. Never delete missing-book seconds before time-based windows.
+        data = bars.join(orderbook, how="left").sort_index()
+        start = utc(spec.start) if spec.start else utc(data.index.min())
+        end = utc(spec.end) if spec.end else utc(data.index.max())
+        loaded.append(LoadedSource(
+            spec=spec,
+            data=data,
+            snapshots=pd.DataFrame(),
+            test_start=start,
+            test_end=end,
+            hours=max(1.0 / 60.0, (end - start).total_seconds() / 3600.0),
+        ))
+    return loaded
 
 
 def run_source(
@@ -114,7 +158,7 @@ def grouped(frame: pd.DataFrame, hours_by_role: dict[str, float]) -> dict[str, A
 
 
 def main() -> None:
-    sources = load_research_sources(MultiNormalHFStableConfig())
+    sources = load_live_parity_sources()
     frames: list[pd.DataFrame] = []
     phase_counts: dict[str, int] = {}
     hours_by_role: dict[str, float] = {}
@@ -152,6 +196,9 @@ def main() -> None:
         "result": grouped(trades, hours_by_role),
         "delaySensitivity": delay_sensitivity,
         "maturityQuantileSensitivity": quantile_sensitivity,
+        "validationStatus": "invalidated_by_forward_live",
+        "forwardLive": {"trades": 8, "wins": 1, "winRate": 12.5, "pnlU": -62.0},
+        "selectionBias": "The fade direction and phase branches were selected after inspecting the same historical outcomes; prior role labels are not untouched holdouts.",
         "caution": "Near-touch absorption/vacuum is not used because historical sources do not contain those fields.",
     }
     OUT_JSON.write_text(json.dumps(clean(report), ensure_ascii=False, indent=2), encoding="utf-8")

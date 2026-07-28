@@ -14,13 +14,28 @@ function functionBody(name, nextName) {
 }
 
 test("tablet low-latency script keeps one-second polling and guarded touch keepalive", () => {
-  assert.match(script, /SCRIPT_VERSION = "2026-07-11-order-guard-v5-confirm-ready"/);
+  assert.match(script, /SCRIPT_VERSION = "2026-07-28-order-guard-v6-live-safe"/);
   assert.match(script, /POLL_INTERVAL = 1000/);
   assert.match(script, /TOUCH_NUDGE_ENABLED = true/);
   assert.match(script, /POST_TRADE_NUDGE_GUARD_MS = 120000/);
 
   const nudge = functionBody("safeNudgeScreen", "debugDumpUI");
   assert.ok(nudge.indexOf("SCREEN_NUDGE_INTERVAL_MS") < nudge.indexOf("tradeUiBlocksNudge()"));
+});
+
+test("live order guards enforce actionable time, sufficient balance, and at-most-once dispatch", () => {
+  const timing = functionBody("updateOrderTimingAge", "reportHeartbeat");
+  const placeTrade = functionBody("placeTrade", "checkManualTrade");
+
+  assert.match(timing, /localActionableAgeMs < 0/);
+  assert.match(timing, /actionable_time_not_reached/);
+  assert.doesNotMatch(script, /actionableMs > Date\.now\(\) \+ 30000/);
+  assert.match(placeTrade, /hasSufficientBalanceForOrder\(beforeBalance, tradeConfig\.amount\)/);
+  assert.match(placeTrade, /reason: "insufficient_balance"/);
+
+  const persistAt = script.indexOf("rememberPersistedOrder(order);", script.indexOf('reportTradeAudit("signal_tradeable"'));
+  const dispatchAt = script.indexOf("placeTrade(order.signal, order);", persistAt);
+  assert.ok(persistAt > 0 && persistAt < dispatchAt, "signal must be persisted before UI dispatch");
 });
 
 test("tablet critical UI locators avoid serialized long waits", () => {

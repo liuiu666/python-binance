@@ -1,0 +1,10 @@
+[Unit]
+Description=BTC data retention cleanup
+After=btc-app.service btc-second-data.service btc-orderbook.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/btc-binary-options
+Environment=APP_DIR=/opt/btc-binary-options
+Environment=DATA_DIR=/opt/btc-binary-options/data
+ExecStart=/opt/btc-binary-options/.venv/bin/python py/cleanup_data_retention.py --market-days 7 --auction-days 3 --audit-lines 20000 --prediction-lines 20000 --database-days 7

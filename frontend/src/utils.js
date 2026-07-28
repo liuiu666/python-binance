@@ -75,7 +75,10 @@ const STRATEGY_NAMES = {
   BTC_10min_NORMAL_STATE_V19_OB_CONFIRM_HF_G60: "正态V19高频影子",
   BTC_10min_SECOND_VW_STABLE_2700_20_ETA2: "正态成交量确认 稳健",
   BTC_10min_SECOND_VW_FAST_2700_27_ETA3: "正态成交量确认 高频",
-  BTC_10min_MULTISCALE_PHASE_GATE_V1: "多周期迁移阶段 V1"
+  BTC_10min_MULTISCALE_PHASE_GATE_V1: "多周期迁移阶段 V1",
+  BTC_10min_NORMAL_LIQ_OB_V2_AUGMENTED_V13_FREQ: "V13 秒级正态反转",
+  BTC_10min_NORMAL_LIQ_OB_V2_AUGMENTED_V13_SHADOW: "V13 秒级正态反转（影子）",
+  BTC_30min_SHADOW_CANDIDATE: "BTC 30分钟方向影子"
 };
 
 export function payoutForDuration(duration) {
@@ -264,6 +267,7 @@ export function signalReasonText(signal) {
     liq_normal_not_ready: "等待可交易的震荡区",
     liq_wait_reclaim: "震荡区已形成，等待假突破回归",
     liq_strategy_gap: "上一笔信号后冷却中",
+    v9_original_candidate_gap: "原V2候选冷却中",
     liq_orderbook_missing: "订单薄数据缺失",
     liq_orderbook_missing_or_stale: "订单薄数据延迟",
     liq_feature_error: "策略指标计算异常",
@@ -477,7 +481,11 @@ export function signalReadinessItems(signal, variant = {}) {
   const insidePct = inside == null ? null : inside * 100;
   const insideMin = (asNumber(variant.insideMin) ?? 0.55) * 100;
   const slope = asNumber(signal.center_slope_bps);
-  const slopeMax = asNumber(variant.centerSlopeMaxBps) ?? 8;
+  const baseSlopeMax = asNumber(variant.centerSlopeMaxBps) ?? 8;
+  const trendSlopeMax = variant.trendSpaceEnabled
+    ? (asNumber(variant.trendSpaceCenterSlopeAbsMaxBps) ?? 6)
+    : null;
+  const slopeMax = trendSlopeMax == null ? baseSlopeMax : Math.min(baseSlopeMax, trendSlopeMax);
   const sigma = asNumber(signal.sigma_bps ?? signal.sigma10_bps);
   const sigmaMin = asNumber(variant.sigmaMinBps) ?? 5.8;
   const sigmaMax = asNumber(variant.sigmaMaxBps) ?? 55;
@@ -554,6 +562,8 @@ export function signalTriggerPlan(signal) {
   const zEntry = asNumber(signal.z_entry) ?? 1.2;
   const normalLow = asNumber(signal.normal_low);
   const normalHigh = asNumber(signal.normal_high);
+  const hasNormalBand = center != null || normalLow != null || normalHigh != null;
+  if (!hasNormalBand) return null;
   const sigmaPrice = center != null && sigmaBps != null ? center * sigmaBps / 10000 : null;
   const lowerTrigger = center != null && sigmaPrice != null ? center - zEntry * sigmaPrice : normalLow;
   const upperTrigger = center != null && sigmaPrice != null ? center + zEntry * sigmaPrice : normalHigh;
@@ -573,6 +583,10 @@ export function signalTriggerPlan(signal) {
         : "订单薄中性";
   const nextSide = signal.signal
     ? directionText(signal.signal)
+    : upGapBps != null && upGapBps <= 0
+      ? "已上破，等待做空回收确认"
+      : downGapBps != null && downGapBps <= 0
+        ? "已下破，等待做多回收确认"
     : upGapBps != null && downGapBps != null
       ? (upGapBps < downGapBps ? "更接近做空触发" : "更接近做多触发")
       : "等待触发";
@@ -612,6 +626,9 @@ export function signalHumanSummary(signal, variant = {}) {
   }
   if (signal.reason === "liq_strategy_gap") {
     return "上一笔信号后还在10分钟间隔内，避免同一段行情重复下单。";
+  }
+  if (signal.reason === "v9_original_candidate_gap") {
+    return "原V2候选没有通过最终确认，正在候选冷却；V9补充分支仍会继续寻找独立信号。";
   }
   if (signal.reason === "liq_orderbook_missing" || signal.reason === "liq_orderbook_missing_or_stale") {
     return "订单薄数据不够新，暂时不根据流动性下单。";

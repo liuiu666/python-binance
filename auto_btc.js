@@ -8,7 +8,7 @@ var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
 var API_TOKEN = "";
-var SCRIPT_VERSION = "2026-07-11-order-guard-v5-confirm-ready";
+var SCRIPT_VERSION = "2026-07-28-order-guard-v6-live-safe";
 var POLL_INTERVAL = 1000;
 var SIGNAL_MAX_AGE_MS = 60000;
 var STRATEGY_COOLDOWN_MS = 10 * 60 * 1000;
@@ -210,6 +210,9 @@ function updateOrderTimingAge(order) {
     }
     order.actionableTimeMs = actionableMs;
     order.localActionableAgeMs = Date.now() - actionableMs;
+    if (order.localActionableAgeMs < 0) {
+        return { ok: false, reason: "actionable_time_not_reached", actionableMs: actionableMs, ageMs: order.localActionableAgeMs, lagMs: lagMs };
+    }
     if (order.localActionableAgeMs > lagMs) {
         return { ok: false, reason: "stale_actionable_signal", actionableMs: actionableMs, ageMs: order.localActionableAgeMs, lagMs: lagMs };
     }
@@ -1488,6 +1491,13 @@ function waitForBalanceDrop(beforeBalance, amount) {
     };
 }
 
+function hasSufficientBalanceForOrder(balance, amount) {
+    var available = Number(balance);
+    var stake = Number(amount);
+    if (!isFinite(available) || !isFinite(stake) || stake <= 0) return false;
+    return available + 0.000001 >= stake;
+}
+
 function markTradePhase(timing, name, extra) {
     if (!timing) return;
     var at = Date.now();
@@ -1637,6 +1647,19 @@ function placeTrade(dir, order) {
         return false;
     }
     markTradePhase(tradeTiming, "balance_before_ready", { balance: beforeBalance });
+
+    if (!hasSufficientBalanceForOrder(beforeBalance, tradeConfig.amount)) {
+        log(">>> ABORT: insufficient balance " + beforeBalance + " < " + tradeConfig.amount);
+        reportTradeAudit("order_abort", order, {
+            direction: dir,
+            reason: "insufficient_balance",
+            beforeBalance: beforeBalance,
+            requiredAmount: Number(tradeConfig.amount)
+        });
+        tradeConfig.amount = prevAmt;
+        tradeConfig.duration = prevDur;
+        return false;
+    }
 
     var finalTiming = updateOrderTimingAge(order);
     if (!finalTiming.ok) {
@@ -1960,7 +1983,6 @@ function main() {
                         reportTradeAudit("signal_skipped", order, { reason: timing.reason, ageMs: timing.ageMs, maxActionableLagMs: timing.lagMs });
                         continue;
                     }
-                    if (timing.actionableMs > Date.now() + 30000) continue;
                     var key = orderKey(order);
                     var lastKey = lastSignalKeyByStrategy[order.strategyId] || "";
                     var now = Date.now();
@@ -1977,20 +1999,20 @@ function main() {
                     if (now - lastTs < 60000) continue;
                     log("SIGNAL " + order.strategyId + ": " + order.signal + " " + order.confidence + "% RSI=" + order.rsi_value + " amt=" + order.amount + "U dur=" + order.duration + "min");
                     reportTradeAudit("signal_tradeable", order, {});
+                    // Persist before any UI interaction. A failed/uncertain attempt must not
+                    // dispatch the same signal again on the next one-second poll or restart.
+                    lastSignalKeyByStrategy[order.strategyId] = key;
+                    lastTradeTimeByStrategy[order.strategyId] = now;
+                    rememberPersistedOrder(order);
                     lastTradeInteractionMs = Date.now();
                     var ok = placeTrade(order.signal, order);
                     if (ok === true) {
                         previousDoneAt = Date.now();
-                        lastSignalKeyByStrategy[order.strategyId] = key;
-                        lastTradeTimeByStrategy[order.strategyId] = now;
-                        rememberPersistedOrder(order);
                         setStrategyActiveUntil(order);
                         lastTradeTime = now;
                         lastDirection = order.signal;
                         traded = true;
                     } else if (ok === "unverified") {
-                        lastSignalKeyByStrategy[order.strategyId] = key;
-                        lastTradeTimeByStrategy[order.strategyId] = now;
                         traded = true;
                     }
                     if (ok === true && qi < queue.length - 1) {

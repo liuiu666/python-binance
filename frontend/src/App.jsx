@@ -114,6 +114,12 @@ function TriggerPlanPanel({ signal }) {
   const lowerText = plan.lowerTrigger == null ? "--" : fmtPrice(plan.lowerTrigger);
   const upGap = plan.upGapBps == null ? "--" : `${fmt(plan.upGapBps, 1)}bp`;
   const downGap = plan.downGapBps == null ? "--" : `${fmt(plan.downGapBps, 1)}bp`;
+  const upperHint = plan.upGapBps != null && plan.upGapBps <= 0
+    ? "已上破观察线，等待回到区间并确认卖压"
+    : `先上破约 +${upGap}，再回到区间并有卖压`;
+  const lowerHint = plan.downGapBps != null && plan.downGapBps <= 0
+    ? "已下破观察线，等待回到区间并确认买盘"
+    : `先下破约 -${downGap}，再回到区间并有买盘`;
   const zText = plan.z == null ? "--" : `${fmt(plan.z, 2)}σ`;
   return (
     <div className="trigger-plan">
@@ -125,12 +131,12 @@ function TriggerPlanPanel({ signal }) {
         <div className="trigger-price down">
           <span>做空观察</span>
           <strong>{upperText}</strong>
-          <small>先上破约 +{upGap}，再回到区间并有卖压</small>
+          <small>{upperHint}</small>
         </div>
         <div className="trigger-price up">
           <span>做多观察</span>
           <strong>{lowerText}</strong>
-          <small>先下破约 -{downGap}，再回到区间并有买盘</small>
+          <small>{lowerHint}</small>
         </div>
       </div>
       <div className="trigger-state-row">
@@ -210,19 +216,29 @@ function CurrentTradePanel({ history, activeSignal, activeVariant, signalAmount,
   );
 }
 
-function StrategySnapshot({ signalRows, tradeHistory, configDraft, signalPayload }) {
+function StrategySnapshot({ signalRows, tradeHistory, configDraft, signalPayload, disabledCount = 0 }) {
   return (
-    <section className="strategy-snapshot">
-      {signalRows.map(({ variant, signal }) => (
-        <StrategyCard
-          key={variant.id}
-          title={variant.label}
-          signal={signal}
-          amount={amountForSignal(variant.id, signal, signalPayload, configDraft)}
-          variant={variant}
-          stats={strategyStats(tradeHistory, variant.id)}
-        />
-      ))}
+    <section className="strategy-view">
+      <header className="strategy-view-head">
+        <div>
+          <span className="eyebrow">运行状态</span>
+          <h2>启用中的策略</h2>
+          <p>这里只展示正在计算信号的策略；已停用模型仍可在设置中查看和管理。</p>
+        </div>
+        <strong>{signalRows.length} 运行 / {disabledCount} 停用</strong>
+      </header>
+      <div className="strategy-snapshot">
+        {signalRows.length ? signalRows.map(({ variant, signal }) => (
+          <StrategyCard
+            key={variant.id}
+            title={strategyName(variant.id)}
+            signal={signal}
+            amount={amountForSignal(variant.id, signal, signalPayload, configDraft)}
+            variant={variant}
+            stats={strategyStats(tradeHistory, variant.id)}
+          />
+        )) : <div className="empty-state">当前没有启用的策略。</div>}
+      </div>
     </section>
   );
 }
@@ -338,8 +354,8 @@ function TopBar({ currentPrice, priceChange, dataHealth, secondDataHealth, order
       <div className="brand">
         <div className="brand-mark">B</div>
         <div>
-          <strong>BTC 实盘控制台</strong>
-          <span>策略、数据、订单分层监控</span>
+          <strong>BTC 策略控制台</strong>
+          <span>行情、策略、模拟单与数据状态</span>
         </div>
       </div>
       <div className="top-metrics">
@@ -412,9 +428,15 @@ export default function App() {
     window.setTimeout(() => setToasts(items => items.filter(item => item.id !== id)), 2600);
   }, []);
 
-  const visibleVariants = useMemo(() => {
-    return signalPayload?._strategyVariants || configDraft.strategyVariants || DEFAULT_CONFIG.strategyVariants;
-  }, [configDraft.strategyVariants, signalPayload]);
+  const allVariants = useMemo(
+    () => configDraft.strategyVariants || DEFAULT_CONFIG.strategyVariants,
+    [configDraft.strategyVariants]
+  );
+  const visibleVariants = useMemo(
+    () => (signalPayload?._strategyVariants || allVariants).filter(variant => variant.enabled !== false),
+    [allVariants, signalPayload]
+  );
+  const disabledVariantCount = allVariants.filter(variant => variant.enabled === false).length;
 
   const signalRows = useMemo(() => compactSignalRows(signalPayload, visibleVariants), [signalPayload, visibleVariants]);
   const activeSignal = useMemo(() => activeSignalFromPayload(signalPayload), [signalPayload]);
@@ -725,7 +747,13 @@ export default function App() {
                 <MetricCard label="当前价格" value={fmtPrice(currentPrice)} sub="BTC/USDT" tone={priceChange?.diff > 0 ? "up" : priceChange?.diff < 0 ? "down" : "neutral"} icon={BarChart3} />
                 <MetricCard label="当前信号" value={directionText(activeSignal?.signal)} sub={signalLabel(activeSignal)} tone={directionClass(activeSignal?.signal)} icon={Activity} />
                 <MetricCard label="实盘开关" value={configDraft.realTradingEnabled ? "实盘" : "影子/观察"} sub={configDraft.autoTrade_10m ? "自动下单允许" : "自动下单关闭"} tone={configDraft.realTradingEnabled ? "bad" : "warn"} icon={ShieldCheck} />
-                <MetricCard label="策略数量" value={`${visibleVariants.length}`} sub={`${visibleVariants.filter(v => v.enabled !== false && v.tradeEnabled !== false).length} 条可实盘`} tone="ok" icon={ListChecks} />
+                <MetricCard
+                  label="运行策略"
+                  value={`${visibleVariants.length}`}
+                  sub={visibleVariants.some(v => v.tradeEnabled !== false) ? `${visibleVariants.filter(v => v.tradeEnabled !== false).length} 条允许实盘` : "全部仅观察/影子"}
+                  tone={visibleVariants.some(v => v.tradeEnabled !== false) ? "warn" : "ok"}
+                  icon={ListChecks}
+                />
               </div>
               <Suspense fallback={<div className="chart-shell"><div className="chart-empty">正在加载图表...</div></div>}>
                 <MarketChart candles={candles} trades={tradeHistory?.recent || []} />
@@ -748,6 +776,7 @@ export default function App() {
               tradeHistory={tradeHistory}
               configDraft={configDraft}
               signalPayload={signalPayload}
+              disabledCount={disabledVariantCount}
             />
           </main>
         ) : null}
