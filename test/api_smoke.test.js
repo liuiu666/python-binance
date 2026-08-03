@@ -298,6 +298,55 @@ test("shadow-only strategy records a trade while global real trading is disabled
   });
 });
 
+test("shadow engine does not open a trade before its actionable time", async () => {
+  await withServer({}, async ({ baseUrl, dataDir }) => {
+    const now = Date.now();
+    writeFreshMinuteCandles(dataDir, now);
+    fs.writeFileSync(path.join(dataDir, "current_price.json"), JSON.stringify({ price: "100", time: now }), "utf8");
+
+    const current = await requestJson(baseUrl, "/api/config");
+    const strategy = { ...current.json.strategyVariants[0], enabled: true, tradeEnabled: false };
+    const saved = await requestJson(baseUrl, "/api/config", {
+      method: "POST",
+      body: {
+        ...current.json,
+        realTradingEnabled: false,
+        autoTrade_10m: false,
+        shadowTradingEnabled: true,
+        strategyVariants: [strategy]
+      }
+    });
+    assert.equal(saved.status, 200);
+
+    const futureActionableTime = new Date(Date.now() + 45_000).toISOString();
+    fs.writeFileSync(path.join(dataDir, "live_signals.json"), JSON.stringify({
+      [strategy.id]: {
+        strategy_id: strategy.id,
+        time: new Date().toISOString(),
+        actionable_time: futureActionableTime,
+        signal: "UP",
+        price: 100,
+        entry: 100,
+        duration: "10",
+        confidence: 80,
+        bypass_entry_timing: true,
+        shadow_only: true,
+        trade_enabled: false
+      },
+      _snapshot_time_ms: Date.now(),
+      _snapshot_time: new Date().toISOString(),
+      _snapshot_strategy_count: 1
+    }, null, 2), "utf8");
+
+    await new Promise(resolve => setTimeout(resolve, 3300));
+    const audit = await requestJson(baseUrl, "/api/trade-audit?limit=100");
+    const opens = audit.json.items.filter(item => (
+      item.event === "shadow_trade_open" && item.strategyId === strategy.id
+    ));
+    assert.equal(opens.length, 0);
+  });
+});
+
 test("multi-normal config replaces branch vote and writes the shared-core parameters", async () => {
   await withServer({}, async ({ baseUrl, dataDir }) => {
     fs.writeFileSync(path.join(dataDir, "prod_config.json"), JSON.stringify({

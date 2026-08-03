@@ -107,11 +107,22 @@ def metric(frame: pd.DataFrame, delay: int, coverage_hours: float) -> dict[str, 
     return replay.metric(frame, delay, max(coverage_hours, 1e-9))
 
 
+def wilson_lower_pct(wins: int, decided: int, z: float = 1.96) -> float | None:
+    if decided <= 0:
+        return None
+    p = wins / decided
+    z2 = z * z
+    center = p + z2 / (2.0 * decided)
+    margin = z * math.sqrt((p * (1.0 - p) + z2 / (4.0 * decided)) / decided)
+    return 100.0 * (center - margin) / (1.0 + z2 / decided)
+
+
 def write_markdown(report: dict[str, Any]) -> None:
     holdout = report["delayMetrics"]
     combined = report["combinedObservedForward"]
     promotion = report["newFrozenAliasForward"]
     gates = report["holdoutGates"]
+    minimum_trades = gates["minimumNewFrozenAliasTrades"]["required"]
     lines = [
         "# 秒级正态反转冻结审计（2026-07-28）",
         "",
@@ -120,7 +131,7 @@ def write_markdown(report: dict[str, Any]) -> None:
         f"- 状态：`{report['status']}`。",
         "- 真实交易：禁止。当前证据只允许继续研究，尚不允许晋级实盘。",
         f"- 本地冻结后共 `{holdout['6']['frozenHoldout']['trades']}` 单；与 7 月 17 日线上真实影子合并后为 `{combined['trades']}` 单，胜率 `{combined['winRate']}%`。",
-        f"- 晋级只统计本次参数校验后的新冻结影子：当前 `{promotion.get('settled', 0)}/20`；本地回放和旧家族证据不得抵扣。",
+        f"- 晋级只统计本次参数校验后的新冻结影子：当前 `{promotion.get('settled', 0)}/{minimum_trades}`；本地回放和旧家族证据不得抵扣。",
         "",
         "## 固定方法",
         "",
@@ -154,7 +165,7 @@ def write_markdown(report: dict[str, Any]) -> None:
         "",
         "## 新冻结影子采样纪元",
         "",
-        f"- 独立单数：`{promotion.get('settled', 0)}/20`。",
+        f"- 独立单数：`{promotion.get('settled', 0)}/{minimum_trades}`。",
         f"- 胜率：`{promotion.get('winRate') if promotion.get('winRate') is not None else 'N/A'}%`。",
         f"- PnL：`{promotion.get('pnl', 0)}U`；最大回撤：`{promotion.get('maxDrawdown', 0)}U`；最大连亏：`{promotion.get('maxLossStreak', 0)}`。",
         "",
@@ -183,7 +194,7 @@ def write_markdown(report: dict[str, Any]) -> None:
         "",
         "保持 `tradeEnabled=false`。服务器使用清单中登记的 V13 别名运行冻结参数；新采样纪元从 `2026-07-28T13:59:23.041Z` 开始，旧参数产生的历史交易不进入冻结验收。",
         "",
-        "运行 `python py/manage_frozen_second_normal_shadow.py` 必须得到 `ready=true`；当前信号服务为 `shadow_only=true`、`trade_enabled=false`。累计至少 20 个去重后的新前向机会后再按同一冻结规则复核，期间不得依据输赢调整参数。",
+        f"运行 `python py/manage_frozen_second_normal_shadow.py` 必须得到 `ready=true`；当前信号服务为 `shadow_only=true`、`trade_enabled=false`。累计至少 {minimum_trades} 个去重后的新前向机会，并让 Wilson 95% 下限超过安全线后，再按同一冻结规则复核；期间不得依据输赢调整参数。",
         "",
     ])
     OUT_MD.parent.mkdir(parents=True, exist_ok=True)
@@ -292,18 +303,54 @@ def run(reuse_existing: bool = False) -> dict[str, Any]:
         "externalAudit": str(external_path.relative_to(ROOT)) if external_path else None,
     }
     promotion_trades = int(promotion.get("settled") or 0)
+    promotion_wins = int(promotion.get("wins") or 0)
     promotion_win_rate = promotion.get("winRate")
     promotion_drawdown = float(promotion.get("maxDrawdown") or 0)
     promotion_loss_streak = int(promotion.get("maxLossStreak") or 0)
+    promotion_wilson = wilson_lower_pct(promotion_wins, promotion_trades)
+    promotion_rules = manifest.get("promotionGates") or {}
+    minimum_trades = int(promotion_rules.get("minimumIndependentForwardTrades", 500))
+    minimum_win_rate = float(promotion_rules.get("minimumForwardWinRatePct", 60.0))
+    minimum_wilson = float(promotion_rules.get("minimumWilson95LowerPct", 57.0))
+    maximum_drawdown = float(promotion_rules.get("maximumForwardDrawdownU", 100.0))
+    maximum_loss_streak = int(promotion_rules.get("maximumForwardLossStreak", 8))
+    minimum_delay_retention = float(
+        promotion_rules.get("minimumDelayedVsExactEvRetention", 0.6)
+    )
+    exact_holdout = delay_metrics["0"]["frozenHoldout"]
+    exact_holdout_ev = (
+        float(exact_holdout["pnlU"]) / int(exact_holdout["trades"])
+        if int(exact_holdout["trades"] or 0) > 0
+        else None
+    )
+    delayed_holdout_evs = [
+        float(delay_metrics[str(delay)]["frozenHoldout"]["pnlU"])
+        / int(delay_metrics[str(delay)]["frozenHoldout"]["trades"])
+        for delay in DELAYS
+        if delay != 0 and int(delay_metrics[str(delay)]["frozenHoldout"]["trades"] or 0) > 0
+    ]
+    delay_ev_retention = (
+        min(delayed_holdout_evs) / exact_holdout_ev
+        if exact_holdout_ev is not None
+        and exact_holdout_ev > 0.0
+        and delayed_holdout_evs
+        else None
+    )
     gates = {
-        "minimumNewFrozenAliasTrades": {"required": 20, "actual": promotion_trades, "pass": promotion_trades >= 20},
-        "minimumNewFrozenAliasWinRatePct": {"required": 63.0, "actual": promotion_win_rate, "pass": promotion_win_rate is not None and promotion_win_rate >= 63.0},
-        "maximumNewFrozenAliasDrawdownU": {"required": 20.0, "actual": promotion_drawdown, "pass": promotion_drawdown <= 20.0},
-        "maximumNewFrozenAliasLossStreak": {"required": 2, "actual": promotion_loss_streak, "pass": promotion_loss_streak <= 2},
+        "minimumNewFrozenAliasTrades": {"required": minimum_trades, "actual": promotion_trades, "pass": promotion_trades >= minimum_trades},
+        "minimumNewFrozenAliasWinRatePct": {"required": minimum_win_rate, "actual": promotion_win_rate, "pass": promotion_win_rate is not None and promotion_win_rate >= minimum_win_rate},
+        "minimumNewFrozenAliasWilson95LowerPct": {"required": minimum_wilson, "actual": promotion_wilson, "pass": promotion_wilson is not None and promotion_wilson >= minimum_wilson},
+        "maximumNewFrozenAliasDrawdownU": {"required": maximum_drawdown, "actual": promotion_drawdown, "pass": promotion_drawdown <= maximum_drawdown},
+        "maximumNewFrozenAliasLossStreak": {"required": maximum_loss_streak, "actual": promotion_loss_streak, "pass": promotion_loss_streak <= maximum_loss_streak},
         "allDelaysProfitable": {
             "required": True,
             "actual": all(delay_metrics[str(delay)]["frozenHoldout"]["pnlU"] > 0 for delay in DELAYS),
             "pass": all(delay_metrics[str(delay)]["frozenHoldout"]["pnlU"] > 0 for delay in DELAYS),
+        },
+        "minimumDelayedVsExactEvRetention": {
+            "required": minimum_delay_retention,
+            "actual": delay_ev_retention,
+            "pass": delay_ev_retention is not None and delay_ev_retention >= minimum_delay_retention,
         },
     }
     accepted = all(gate["pass"] for gate in gates.values())

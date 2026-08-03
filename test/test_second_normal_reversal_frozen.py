@@ -40,3 +40,12 @@ def test_frozen_manifest_matches_current_shadow_variant_and_core():
     assert variant["tradeEnabled"] is False
     assert research.object_sha256(variant) == manifest["variantSha256"]
     assert research.sha256(root / "py" / "current_v2_augmented_v9_core.py") == manifest["sharedCoreSha256"]
+    gates = manifest["promotionGates"]
+    assert gates["minimumIndependentForwardTrades"] >= 500
+    assert gates["minimumWilson95LowerPct"] > 55.5556
+    assert gates["minimumDelayedVsExactEvRetention"] >= 0.6
+
+
+def test_wilson_gate_rejects_small_apparently_good_samples():
+    assert research.wilson_lower_pct(13, 20) < 55.5556
+    assert research.wilson_lower_pct(330, 500) > 55.5556

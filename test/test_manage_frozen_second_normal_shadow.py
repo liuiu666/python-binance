@@ -42,6 +42,18 @@ def test_deployment_variant_uses_frozen_server_alias_without_enabling_trading():
     assert deployed["tradeEnabled"] is False
 
 
+def test_retired_30m_candidate_is_detected_for_removal():
+    config = {
+        "strategyVariants": [
+            {"id": "BTC_10min_NORMAL_LIQ_OB_V2_AUGMENTED_V13_FREQ"},
+            {"id": "BTC_30min_SHADOW_CANDIDATE", "enabled": False},
+        ]
+    }
+    assert [row["id"] for row in shadow.retired_rows(config)] == [
+        "BTC_30min_SHADOW_CANDIDATE"
+    ]
+
+
 def test_activate_rolls_back_when_server_normalizes_frozen_variant(monkeypatch):
     target = {
         "id": "BTC_10min_NORMAL_LIQ_OB_V2_AUGMENTED_V13_SHADOW",

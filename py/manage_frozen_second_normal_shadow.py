@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "data" / "trade_config.json"
 MANIFEST_PATH = ROOT / "data" / "frozen_second_normal_reversal_v13.json"
 DEFAULT_BASE_URL = "http://115.190.218.128:3000"
+RETIRED_STRATEGY_IDS = {"BTC_30min_SHADOW_CANDIDATE"}
 
 IGNORED_COMPARISON_FIELDS = {"backtest", "label", "role", "observationMode"}
 
@@ -85,6 +86,13 @@ def v13_rows(config: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def retired_rows(config: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        row for row in config.get("strategyVariants", [])
+        if str(row.get("id", "")) in RETIRED_STRATEGY_IDS
+    ]
+
+
 def audit(base_url: str) -> dict[str, Any]:
     target, manifest = load_frozen()
     deployed = deployment_variant(target, manifest)
@@ -92,6 +100,7 @@ def audit(base_url: str) -> dict[str, Any]:
     exact = next((row for row in remote.get("strategyVariants", []) if row.get("id") == deployed["id"]), None)
     mismatches = compare_variant(deployed, exact)
     legacy = [row.get("id") for row in v13_rows(remote) if row.get("id") != deployed["id"]]
+    retired = [row.get("id") for row in retired_rows(remote)]
     safe = remote.get("realTradingEnabled") is False
     trade_enabled_ids = [
         row.get("id") for row in remote.get("strategyVariants", [])
@@ -100,11 +109,12 @@ def audit(base_url: str) -> dict[str, Any]:
     return {
         "strategyId": target["id"],
         "serverStrategyId": deployed["id"],
-        "ready": safe and not trade_enabled_ids and not mismatches and exact.get("enabled") is True and exact.get("tradeEnabled") is False,
+        "ready": safe and not trade_enabled_ids and not mismatches and not retired and exact.get("enabled") is True and exact.get("tradeEnabled") is False,
         "realTradingEnabled": remote.get("realTradingEnabled"),
         "tradeEnabledStrategyIds": trade_enabled_ids,
         "mismatches": mismatches,
         "legacyV13Ids": legacy,
+        "retiredStrategyIds": retired,
         "manifestStatus": manifest.get("status"),
     }
 
@@ -147,7 +157,8 @@ def activate(base_url: str) -> dict[str, Any]:
     previous_variants = list(before.get("strategyVariants") or [])
     preserved = [
         {**row, "tradeEnabled": False}
-        for row in previous_variants if row not in v13_rows(before)
+        for row in previous_variants
+        if row not in v13_rows(before) and row not in retired_rows(before)
     ]
     proposed = [deployed, *preserved]
     token = login_token(base_url)
@@ -159,7 +170,13 @@ def activate(base_url: str) -> dict[str, Any]:
         row.get("id") for row in after.get("strategyVariants", [])
         if row.get("enabled") is not False and row.get("tradeEnabled") is not False
     ]
-    unsafe = after.get("realTradingEnabled") is not False or trade_enabled_ids or mismatches
+    retired_ids = [row.get("id") for row in retired_rows(after)]
+    unsafe = (
+        after.get("realTradingEnabled") is not False
+        or trade_enabled_ids
+        or mismatches
+        or retired_ids
+    )
     if unsafe:
         post_variants(base_url, previous_variants, token)
         rolled_back = request_json(f"{base_url}/api/config")
@@ -176,6 +193,7 @@ def activate(base_url: str) -> dict[str, Any]:
         "realTradingEnabled": after.get("realTradingEnabled"),
         "strategyId": target["id"],
         "serverStrategyId": deployed["id"],
+        "retiredStrategyIds": [],
     }
 
 

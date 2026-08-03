@@ -746,7 +746,7 @@ export default function App() {
               <div className="hero-metrics">
                 <MetricCard label="当前价格" value={fmtPrice(currentPrice)} sub="BTC/USDT" tone={priceChange?.diff > 0 ? "up" : priceChange?.diff < 0 ? "down" : "neutral"} icon={BarChart3} />
                 <MetricCard label="当前信号" value={directionText(activeSignal?.signal)} sub={signalLabel(activeSignal)} tone={directionClass(activeSignal?.signal)} icon={Activity} />
-                <MetricCard label="实盘开关" value={configDraft.realTradingEnabled ? "实盘" : "影子/观察"} sub={configDraft.autoTrade_10m ? "自动下单允许" : "自动下单关闭"} tone={configDraft.realTradingEnabled ? "bad" : "warn"} icon={ShieldCheck} />
+                <MetricCard label="实盘开关" value={configDraft.realTradingEnabled ? "实盘" : "影子/观察"} sub={configDraft.realTradingEnabled ? "允许实盘策略自动下单" : "真实资金下单关闭"} tone={configDraft.realTradingEnabled ? "bad" : "warn"} icon={ShieldCheck} />
                 <MetricCard
                   label="运行策略"
                   value={`${visibleVariants.length}`}

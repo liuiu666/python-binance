@@ -1,0 +1,23 @@
+{
+  "purpose": "V15 causal volatility-regime normal-reversion research",
+  "endpoint": "https://fapi.binance.com/fapi/v1/klines",
+  "symbol": "BTCUSDT",
+  "market": "Binance USD-M Futures",
+  "requestedStart": "2024-01-01T00:00:00+00:00",
+  "requestedEndExclusive": "2026-07-30T00:00:00+00:00",
+  "output": "E:\\python-binance\\data\\btcusdt_futures_1m_20240101_20260730.csv",
+  "sha256": "269fa5b14ee7d9cdea0332c253e36771a8a83bc38a527ce13f26a786d57b5a88",
+  "audit": {
+    "rows": 1355040,
+    "uniqueMinutes": 1355040,
+    "start": "2024-01-01T00:00:00+00:00",
+    "end": "2026-07-29T23:59:00+00:00",
+    "expectedMinutes": 1355040,
+    "missingMinutes": 0,
+    "duplicateMinutes": 0,
+    "maxStepMinutes": 1.0,
+    "marketValues": [
+      "futures"
+    ]
+  }
+}

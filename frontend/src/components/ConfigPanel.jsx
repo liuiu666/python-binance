@@ -419,7 +419,6 @@ export default function ConfigPanel({ draft, dirty, apiToken, onTokenChange, onD
       </div>
 
       <div className="switch-grid global-switches">
-        <Toggle label="允许策略自动下单" checked={!!draft.autoTrade_10m} danger onChange={() => onToggle("autoTrade_10m")} />
         <Toggle label="实盘资金下单" checked={!!draft.realTradingEnabled} danger onChange={() => onToggle("realTradingEnabled")} />
         <Toggle label="记录影子单" checked={!!draft.shadowTradingEnabled} onChange={() => onToggle("shadowTradingEnabled")} />
       </div>

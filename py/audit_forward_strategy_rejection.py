@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import os
 import sys
 import urllib.error
@@ -90,6 +91,16 @@ def fmt_time(value: Any) -> str | None:
     return datetime.fromtimestamp(ms / 1000, SHANGHAI).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def wilson_lower_pct(wins: int, decided: int, z: float = 1.96) -> float | None:
+    if decided <= 0:
+        return None
+    p = wins / decided
+    z2 = z * z
+    center = p + z2 / (2.0 * decided)
+    margin = z * math.sqrt((p * (1.0 - p) + z2 / (4.0 * decided)) / decided)
+    return round(100.0 * (center - margin) / (1.0 + z2 / decided), 4)
+
+
 def summarize_trades(rows: list[dict[str, Any]]) -> dict[str, Any]:
     settled = [r for r in rows if r.get("status") in {"won", "lost", "tie"}]
     wins = sum(1 for r in settled if r.get("status") == "won")
@@ -111,6 +122,7 @@ def summarize_trades(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "losses": losses,
         "ties": ties,
         "winRate": round(wins / decided * 100, 2) if decided else None,
+        "wilson95LowerPct": wilson_lower_pct(wins, decided),
         "pnl": pnl,
         "maxDrawdown": round(max_drawdown, 2),
         "maxLossStreak": max_loss_streak(rows),
@@ -231,6 +243,10 @@ def build_report() -> dict[str, Any]:
     historical = load_json(HISTORICAL_REPORT)
     archived_forward = load_json(ARCHIVED_FORWARD_REPORT)
     manifest = load_json(FROZEN_MANIFEST)
+    promotion_rules = manifest.get("promotionGates") or {}
+    minimum_forward_trades = int(
+        promotion_rules.get("minimumIndependentForwardTrades", 500)
+    )
     alias_start_ms = parse_ms(manifest.get("shadowCollectionStart")) or FORWARD_START_MS
 
     rows = []
@@ -273,8 +289,11 @@ def build_report() -> dict[str, Any]:
         reasons.append(f"cumulative deduped independent forward is 0/{deduped_summary['settled']}")
     if duplicates:
         reasons.append("V9/V13 emitted the same-time same-direction idea, so strategy-family independence failed")
-    if alias_summary["settled"] < 20:
-        reasons.append(f"new frozen-alias forward sample is {alias_summary['settled']}/20")
+    if alias_summary["settled"] < minimum_forward_trades:
+        reasons.append(
+            f"new frozen-alias forward sample is "
+            f"{alias_summary['settled']}/{minimum_forward_trades}"
+        )
 
     target_signals = signal_snapshot(signal)
     all_signals = signal_snapshot(signal, target_only=False)
@@ -297,9 +316,19 @@ def build_report() -> dict[str, Any]:
         "rejectIfForwardDayWinRatePctEqualsZero": True,
         "rejectIfStrategyFamilyDuplicateSignals": True,
         "rejectIfLocalHighFrequencyReplayMissingToday": True,
-        "minimumForwardTradesBeforeRealDeploy": 20,
-        "minimumForwardWinRatePctBeforeRealDeploy": 63,
-        "maximumForwardLossStreakBeforeRealDeploy": 2,
+        "minimumForwardTradesBeforeRealDeploy": minimum_forward_trades,
+        "minimumForwardWinRatePctBeforeRealDeploy": float(
+            promotion_rules.get("minimumForwardWinRatePct", 60.0)
+        ),
+        "minimumWilson95LowerPctBeforeRealDeploy": float(
+            promotion_rules.get("minimumWilson95LowerPct", 57.0)
+        ),
+        "maximumForwardDrawdownUBeforeRealDeploy": float(
+            promotion_rules.get("maximumForwardDrawdownU", 100.0)
+        ),
+        "maximumForwardLossStreakBeforeRealDeploy": int(
+            promotion_rules.get("maximumForwardLossStreak", 8)
+        ),
     }
 
     return {
@@ -372,6 +401,8 @@ def write_markdown(report: dict[str, Any]) -> None:
     deduped = report["forwardDedupedIndependent"]
     alias = report["newFrozenAliasIndependent"]
     verdict = report["verdict"]
+    criteria = report["criteria"]
+    minimum_trades = criteria["minimumForwardTradesBeforeRealDeploy"]
     signal_rows = report["signalSnapshot"]
     live_signal_ids = report.get("liveSignalStrategyIds", [])
     coverage = report["localCoverage"]
@@ -397,7 +428,7 @@ def write_markdown(report: dict[str, Any]) -> None:
         "",
         f"- 原始 shadow：{raw['wins']}/{raw['settled']}，胜率 `{pct(raw['winRate'])}`，PnL `{raw['pnl']}U`，最大连亏 `{raw['maxLossStreak']}`。",
         f"- 去重后独立机会：{deduped['wins']}/{deduped['settled']}，胜率 `{pct(deduped['winRate'])}`，PnL `{deduped['pnl']}U`，最大连亏 `{deduped['maxLossStreak']}`。",
-        f"- 本次参数校验后的新冻结影子：{alias['wins']}/{alias['settled']}，胜率 `{pct(alias['winRate'])}`；晋级门槛按这一栏累计到 20 单。",
+        f"- 本次参数校验后的新冻结影子：{alias['wins']}/{alias['settled']}，胜率 `{pct(alias['winRate'])}`，Wilson 95% 下限 `{pct(alias.get('wilson95LowerPct'))}`；晋级门槛按这一栏累计到 {minimum_trades} 单。",
         "- 去重口径：同一方向、同一期限、同一 actionable/signal 秒级时间，只算一个独立机会。",
         "",
         (
@@ -437,8 +468,9 @@ def write_markdown(report: dict[str, Any]) -> None:
         "## 后续验收标准",
         "",
         "- 不再用历史胜率单独决定上线。",
-        "- 实盘前至少要有 20 笔新的前向 shadow 独立机会。",
-        "- 前向胜率至少 63%，最大前向连亏不超过 2。",
+        f"- 实盘复核前至少要有 {minimum_trades} 笔新的前向 shadow 独立机会。",
+        f"- 前向胜率至少 {criteria['minimumForwardWinRatePctBeforeRealDeploy']}%，Wilson 95% 下限至少 {criteria['minimumWilson95LowerPctBeforeRealDeploy']}%。",
+        f"- 最大前向回撤不超过 {criteria['maximumForwardDrawdownUBeforeRealDeploy']}U，最大前向连亏不超过 {criteria['maximumForwardLossStreakBeforeRealDeploy']}。",
         "- V9/V13 这类同族重复信号必须去重统计，不能把重复信号当频率。",
         "- 本地秒级成交和订单簿必须覆盖被验证日期，否则只能写“线上前向统计”，不能写“本地完整回放”。",
         "",

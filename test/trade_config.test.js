@@ -172,6 +172,27 @@ test("augmented V9 preserves shared-core parameters and stays shadow-only", () =
   assert.equal(params.v9MaxEmitAgeSec, 8);
 });
 
+test("unqualified V9 and V13 presets cannot be normalized into live trading", () => {
+  const cfg = normalizeTradeConfig({
+    strategyVariants: [{
+      id: "BTC_10min_NORMAL_LIQ_OB_V2_AUGMENTED_V13_FREQ",
+      base: "SECOND_NORMAL_LIQUIDITY_ORDERBOOK_V1",
+      enabled: true,
+      tradeEnabled: true,
+      v9AugmentedEnabled: true,
+      v9SupplementLooseShortMigrationReversionEnabled: true,
+      v9SupplementLooseMatureUptrendDownEnabled: true,
+      v9OriginalAllowMatureDowntrendDownFlowMin: -0.2
+    }],
+    realTradingEnabled: true,
+    autoTrade_10m: true
+  });
+
+  assert.equal(cfg.strategyVariants[0].backtest.shadowObservationRequired, true);
+  assert.equal(cfg.strategyVariants[0].tradeEnabled, false);
+  assert.deepEqual(liveStrategyIds(cfg), []);
+});
+
 test("multi-normal stable strategy preserves dynamic thresholds without extra incident filtering", () => {
   const cfg = normalizeTradeConfig({
     strategyVariants: [{

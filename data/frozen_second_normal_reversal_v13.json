@@ -17,11 +17,13 @@
     "lossPnlU": -5
   },
   "promotionGates": {
-    "minimumIndependentForwardTrades": 20,
-    "minimumForwardWinRatePct": 63,
-    "maximumForwardDrawdownU": 20,
-    "maximumForwardLossStreak": 2,
+    "minimumIndependentForwardTrades": 500,
+    "minimumForwardWinRatePct": 60,
+    "minimumWilson95LowerPct": 57,
+    "maximumForwardDrawdownU": 100,
+    "maximumForwardLossStreak": 8,
     "allFixedEntryDelaysMustBeProfitable": true,
+    "minimumDelayedVsExactEvRetention": 0.6,
     "localSecondAndOrderbookCoverageRequired": true
   },
   "parameterChangesAllowedDuringForwardCollection": false,

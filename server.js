@@ -813,6 +813,13 @@ function signalActionableMs(sig) {
   return Number.isFinite(ms) ? ms : 0;
 }
 
+function signalIsActionableNow(sig, now = Date.now()) {
+  const actionableMs = signalActionableMs(sig);
+  if (!actionableMs) return false;
+  const ageMs = now - actionableMs;
+  return ageMs >= 0 && ageMs <= configuredMaxActionableLagMs();
+}
+
 function entryTimingKey(strategyId, sig) {
   return [
     strategyId,
@@ -2366,7 +2373,8 @@ function placeShadowTrade(strategyId, sig, variant, extra = {}) {
   if (!Number.isFinite(amount) || amount <= 0) return null;
   const dur = Math.max(1, Number(sig.duration || sig.interval_min || variant?.duration || tradeConfig.duration || 10));
   const now = Date.now();
-  const signalOpenTime = signalActionableMs(sig) || now;
+  if (!signalIsActionableNow(sig, now)) return null;
+  const signalOpenTime = signalActionableMs(sig);
   const signalStrikePrice = signalReferencePrice(sig) || currentPrice;
   const trade = {
     id: nextShadowTradeId++,
@@ -2491,8 +2499,7 @@ function mirrorTabletSignalsToShadow(signals) {
     const sig = signals && signals[strategyId];
     if (!sig || !sig.signal || shadowSignalAlreadyRecorded(strategyId, sig)) continue;
     if (shadowTrades.some(t => ["pending", "active"].includes(t.status) && t.source === "shadow:" + strategyId)) continue;
-    const sigTime = signalActionableMs(sig);
-    if (!sigTime || Date.now() - sigTime > configuredMaxActionableLagMs()) continue;
+    if (!signalIsActionableNow(sig)) continue;
     const key = shadowSignalKey(strategyId, sig);
     const trade = placeShadowTrade(strategyId, sig, variant, {
       auditFields: {
@@ -2539,8 +2546,7 @@ function checkShadowTrades() {
       if (!sig || !sig.signal) continue;
       if (hasStrategyCooldown(strategyId)) continue;
       if (shadowTrades.some(t => ["pending", "active"].includes(t.status) && t.source === "shadow:" + strategyId)) continue;
-      const sigTime = signalActionableMs(sig);
-      if (!sigTime || Date.now() - sigTime > configuredMaxActionableLagMs()) continue;
+      if (!signalIsActionableNow(sig)) continue;
       const key = [sig.signal, sig.time || "", sig.actionable_time || sig.candle_close_time || ""].join("|");
       if (lastShadowSignals[strategyId] === key) continue;
       const trade = placeShadowTrade(strategyId, sig, variant);
@@ -2578,8 +2584,7 @@ function checkOrderbookShadowTrades() {
       const strategyId = `OB_CONFIRM_${baseStrategyId}`;
       if (hasStrategyCooldown(strategyId)) continue;
       if (shadowTrades.some(t => ["pending", "active"].includes(t.status) && t.source === "shadow:" + strategyId)) continue;
-      const sigTime = signalActionableMs(sig);
-      if (!sigTime || Date.now() - sigTime > configuredMaxActionableLagMs()) continue;
+      if (!signalIsActionableNow(sig)) continue;
       const key = [
         sig.signal,
         sig.time || "",
@@ -2657,8 +2662,7 @@ function checkAutoTrade() {
       if (hasStrategyCooldown(strategyId)) continue;
       if (trades.some(t => t.status === "active" && t.source === "auto:" + strategyId)) continue;
 
-      const sigTime = signalActionableMs(sig);
-      if (!sigTime || Date.now() - sigTime > configuredMaxActionableLagMs()) continue;
+      if (!signalIsActionableNow(sig)) continue;
 
       const last = lastSignals[strategyId];
       if (last && last.signal === sig.signal && last.time === sig.time) continue;
