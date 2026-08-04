@@ -239,6 +239,19 @@ function statusTone(ok) {
 export function signalReasonText(signal) {
   if (!signal) return "等待策略数据";
   const reason = signal?.reason;
+  if (signal?.model_type === "llm_direction") {
+    const map = {
+      order_lifecycle_pending: "上一笔同策略订单等待到期结算",
+      order_duration_pending: "上一笔同策略订单尚未到期",
+      settlement_price_pending: "订单已到期，等待有效结算价格",
+      llm_request_pending: "LLM 正在生成预测",
+      data_insufficient_6500_rows_required: "1分钟源数据不足6500行"
+    };
+    if (String(reason || "").startsWith("taker_buy_vol_incomplete")) return "主动买量数据不完整，停止预测";
+    if (String(reason || "").startsWith("data_stale_")) return "1分钟行情已过期，停止预测";
+    if (String(reason || "").startsWith("llm_error:")) return `LLM 请求失败：${String(reason).slice(10).trim()}`;
+    return map[reason] || signal.signal_detail || (signal.signal ? "LLM 已生成方向" : "等待下一次 LLM 预测");
+  }
   if (signal?.model_type === "second_multi_normal_hf_stable_v1") {
     const map = {
       snapshot_incomplete: "分钟特征或订单薄不完整",

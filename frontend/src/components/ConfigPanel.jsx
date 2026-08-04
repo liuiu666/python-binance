@@ -89,6 +89,39 @@ function StrategySettings({ variant, onChange }) {
   const router = v21 || v22;
   const legacyNormal = isLegacyNormalState(variant);
   const multiNormal = isMultiNormalHF(variant);
+  const llmDirection = variant?.base === "llm_direction" || variant?.id === "BTC_10min_LLM_GLM52";
+
+  if (llmDirection) {
+    return (
+      <article className="strategy-settings">
+        <header>
+          <div>
+            <strong>{variant.label || "GLM-5.2 方向预测"}</strong>
+            <small>{variant.id}</small>
+          </div>
+          <span>10 分钟方向</span>
+        </header>
+        <div className="setting-grid">
+          <Field
+            label="每单金额"
+            value={variant.amount || 5}
+            min={5}
+            max={999}
+            suffix="U"
+            onChange={value => onChange({ amount: String(toInt(value, 5, 5, 999)) })}
+          />
+        </div>
+        <div className="settings-note">
+          预测周期固定 10 分钟；调用间隔和模型连接参数在下方 LLM 配置中管理。
+        </div>
+        <div className="switch-grid">
+          <Toggle label="启用 LLM 预测" checked={variant.enabled !== false} onChange={() => onChange({ enabled: variant.enabled === false })} />
+          <Toggle label="允许 LLM 实盘" checked={variant.tradeEnabled !== false} danger onChange={() => onChange({ tradeEnabled: variant.tradeEnabled === false })} />
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article className="strategy-settings">
       <header>

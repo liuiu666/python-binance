@@ -139,6 +139,50 @@ class TakerBuyVolumeIntegrityTests(unittest.TestCase):
         model_call.assert_not_called()
         self.assertFalse(strategy._runtime["request_in_flight"])
 
+    def test_llm_request_disables_thinking_and_requires_json_object(self):
+        import ast
+        import math
+
+        source = (Path(PY_DIR) / "signal_btc.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        class_node = next(
+            node for node in tree.body
+            if isinstance(node, ast.ClassDef) and node.name == "LLMDirectionStrategy"
+        )
+        namespace = {
+            "os": os,
+            "time": time,
+            "math": math,
+            "json": json,
+            "threading": threading,
+            "HISTORY_1M_FILE": "unused.csv",
+            "ORDER_LIFECYCLE_GATE_FILE": "unused-order-lifecycle.json",
+            "_LLM_DIRECTION_RUNTIME": {},
+            "_LLM_DIRECTION_RUNTIME_LOCK": threading.Lock(),
+        }
+        exec(compile(ast.Module(body=[class_node], type_ignores=[]), "signal_btc.py", "exec"), namespace)
+        strategy = namespace["LLMDirectionStrategy"]("llm-payload-test", {"llm_api_key": "test-key"})
+
+        class Response:
+            def read(self):
+                return json.dumps({
+                    "choices": [{"message": {"content": json.dumps({
+                        "direction": "UP", "confidence": 0.75, "reason": "test"
+                    })}}]
+                }).encode("utf-8")
+
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured.update(json.loads(request.data.decode("utf-8")))
+            return Response()
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            self.assertEqual(strategy._call_llm("test"), ("UP", 0.75, "test"))
+
+        self.assertEqual(captured["thinking"], {"type": "disabled"})
+        self.assertEqual(captured["response_format"], {"type": "json_object"})
+
 
 class ExternalPeriodDataTests(unittest.TestCase):
     def test_period_row_is_available_only_after_bucket_close(self):

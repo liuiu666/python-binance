@@ -5493,6 +5493,7 @@ class LLMDirectionStrategy:
                 "lock": threading.Lock(),
                 "last_call_time": 0.0,
                 "last_result": None,
+                "last_input_snapshot": None,
                 "request_in_flight": False,
             })
 
@@ -5676,6 +5677,105 @@ Respond with ONLY a JSON object:
             vol="\n".join(vol(tf, k) for tf, k in [("1m", k1), ("5m", k5), ("15m", k15), ("1h", k1h)]),
             t5=trend("5M", k5), t15=trend("15M", k15), t1h=trend("1H", k1h))
 
+    def _build_input_snapshot(self, k1m, px, data_time):
+        """保存与提示词同源的结构化输入，供前端核对，不参与预测。"""
+        import datetime
+
+        def num(value, digits=6):
+            try:
+                value = float(value)
+                return round(value, digits) if math.isfinite(value) else None
+            except (TypeError, ValueError):
+                return None
+
+        def nums(values, digits=6):
+            return [num(value, digits) for value in values]
+
+        frames = {
+            "1m": self._indicators(k1m.tail(100)),
+            "5m": self._indicators(self._resample(k1m, "5min").tail(100)),
+            "15m": self._indicators(self._resample(k1m, "15min").tail(100)),
+            "1h": self._indicators(self._resample(k1m, "1h").tail(100)),
+        }
+        timeframes = {}
+        for name, frame in frames.items():
+            latest = frame.iloc[-1]
+            sell = frame["ts"].tail(20)
+            buy = frame["tb"].tail(20)
+            delta_usd_m = frame["dl"].tail(20) * px / 1e6
+            recent_sell = frame["ts"].tail(10).values
+            recent_buy = frame["tb"].tail(10).values
+            recent_ratio = np.divide(
+                recent_buy,
+                recent_sell,
+                out=np.zeros_like(recent_sell, dtype=float),
+                where=recent_sell > 0,
+            )
+            high5 = frame["high"].tail(5)
+            low5 = frame["low"].tail(5)
+            item = {
+                "bars": int(len(frame)),
+                "latest_bar": {
+                    "time": str(latest["t"]),
+                    "open": num(latest["open"], 2),
+                    "high": num(latest["high"], 2),
+                    "low": num(latest["low"], 2),
+                    "close": num(latest["close"], 2),
+                    "volume": num(latest["volume"], 4),
+                    "taker_buy_vol": num(latest["taker_buy_vol"], 4),
+                },
+                "momentum": {
+                    "rsi7": num(latest["rsi7"], 2),
+                    "rsi7_last10": nums(frame["rsi7"].tail(10).values, 2),
+                    "rsi14": num(latest["rsi14"], 2),
+                    "rsi14_last10": nums(frame["rsi14"].tail(10).values, 2),
+                    "macd_hist": num(latest["macd_h"], 4),
+                    "macd_hist_last10": nums(frame["macd_h"].tail(10).values, 4),
+                },
+                "order_flow": {
+                    "taker_buy_20": num(buy.sum(), 4),
+                    "taker_sell_20": num(sell.sum(), 4),
+                    "buy_sell_ratio_20": num(buy.sum() / sell.sum() if sell.sum() > 0 else 0, 4),
+                    "buy_sell_ratio_last10": nums(recent_ratio, 4),
+                    "cvd_usd_m_last10": nums(delta_usd_m.tail(10).values, 4),
+                    "cvd_usd_m_cum20": num(delta_usd_m.sum(), 4),
+                },
+                "volatility": {
+                    "atr14": num(latest["atr"], 4),
+                    "atr20": num(latest["atr20"], 4),
+                    "range_5bar_pct": num((high5.max() - low5.min()) / low5.min() * 100, 4),
+                },
+            }
+            if name != "1m":
+                item["trend"] = {
+                    "ema20": num(latest["e20"], 2),
+                    "ema50": num(latest["e50"], 2),
+                    "ema100": num(latest["e100"], 2),
+                    "ma20": num(latest["ma20"], 2),
+                    "boll_upper": num(latest["bu"], 2),
+                    "boll_middle": num(latest["bm"], 2),
+                    "boll_lower": num(latest["bl"], 2),
+                    "vwap": num(latest["vwap"], 2),
+                    "obv": num(latest["obv"], 2),
+                }
+            timeframes[name] = item
+
+        return {
+            "captured_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "market_data_time": data_time,
+            "current_price": num(px, 2),
+            "source": {
+                "file": "data/btcusdt_1m.csv",
+                "loaded_1m_rows": int(len(k1m)),
+                "required_1m_rows": 6500,
+                "missing_taker_buy_rows": int(k1m["taker_buy_vol"].isna().sum()),
+                "first_1m_time": str(k1m["t"].iloc[0]),
+                "last_1m_time": str(k1m["t"].iloc[-1]),
+            },
+            "objective": "预测 BTCUSDT 未来10分钟方向；UP=未来价格高于当前价，DOWN=未来价格小于等于当前价",
+            "timeframes": timeframes,
+        }
+
     # ---------- LLM 调用 ----------
     def _call_llm(self, prompt):
         import json as _json
@@ -5685,6 +5785,8 @@ Respond with ONLY a JSON object:
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": self.max_tokens,
             "temperature": 0.2,
+            "thinking": {"type": "disabled"},
+            "response_format": {"type": "json_object"},
         }).encode("utf-8")
         req = urllib.request.Request(self.api_url, data=payload, headers={
             "Authorization": "Bearer %s" % self.api_key, "Content-Type": "application/json"})
@@ -5711,6 +5813,9 @@ Respond with ONLY a JSON object:
         """在后台完成提示词构建和模型请求，并原子更新缓存结果。"""
         import datetime
         try:
+            input_snapshot = self._build_input_snapshot(k1m, px, data_time)
+            with self._runtime["lock"]:
+                self._runtime["last_input_snapshot"] = input_snapshot
             prompt = self._build_prompt(k1m, px)
             direction, confidence, reason = self._call_llm(prompt)
             now_str = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -5734,6 +5839,7 @@ Respond with ONLY a JSON object:
                 "rsi_extreme": False,
                 "horizon_min": self.horizon_min,
                 "llm_model": self.model,
+                "llm_input": input_snapshot,
             }
             print("  %s [LLM] %s conf=%.2f %s" % (now_str, direction, confidence, reason[:80]))
         except Exception as e:
@@ -5834,6 +5940,8 @@ Respond with ONLY a JSON object:
             "vol_ok": True,
             "session_gate_ok": True,
             "rsi_extreme": False,
+            "llm_model": self.model,
+            "llm_input": self._runtime.get("last_input_snapshot"),
         }
 
 

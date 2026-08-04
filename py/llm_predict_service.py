@@ -365,6 +365,8 @@ def call_glm(prompt):
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 8000,
         "temperature": 0.2,
+        "thinking": {"type": "disabled"},
+        "response_format": {"type": "json_object"},
     }).encode("utf-8")
     req = urllib.request.Request(GLM_URL, data=payload, headers={
         "Authorization": "Bearer %s" % GLM_KEY, "Content-Type": "application/json"})

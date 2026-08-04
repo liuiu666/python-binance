@@ -14,8 +14,9 @@ function functionBody(name, nextName) {
 }
 
 test("tablet low-latency script keeps one-second polling and guarded touch keepalive", () => {
-  assert.match(script, /SCRIPT_VERSION = "2026-07-28-order-guard-v6-live-safe"/);
+  assert.match(script, /SCRIPT_VERSION = "2026-08-05-llm-3min-live"/);
   assert.match(script, /POLL_INTERVAL = 1000/);
+  assert.match(script, /SIGNAL_MAX_AGE_MS = 3 \* 60 \* 1000/);
   assert.match(script, /TOUCH_NUDGE_ENABLED = true/);
   assert.match(script, /POST_TRADE_NUDGE_GUARD_MS = 120000/);
 

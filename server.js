@@ -103,7 +103,6 @@ const SERVER_SIM_TRADING_ENABLED = process.env.SERVER_SIM_TRADING_ENABLED === "1
 const MANAGED_PROCESSES_ENABLED = process.env.DISABLE_MANAGED_PROCESSES !== "1";
 const ENABLE_ORDERBOOK_SHADOW_TRADES = process.env.ENABLE_ORDERBOOK_SHADOW_TRADES === "1";
 const LLM_STRATEGY_ID = "BTC_10min_LLM_GLM52";
-const LLM_API_KEY_MASK = "********";
 const DATA_UPDATE_INTERVAL_MS = Math.max(
   60 * 1000,
   Number(process.env.DATA_UPDATE_INTERVAL_MS || 5 * 60 * 1000)
@@ -456,9 +455,16 @@ function csvDataHealth(name, spec, now) {
   };
 }
 
-function signalTimeMs(sig) {
+function signalActionableTime(sig) {
   if (!sig || typeof sig !== "object") return null;
-  return parseCsvTimeMs(sig.actionable_time || sig.candle_close_time || sig.time);
+  if (sig.model_type === "llm_direction") {
+    return sig.actionable_time || sig.generated_at || sig.candle_close_time || sig.time || null;
+  }
+  return sig.actionable_time || sig.candle_close_time || sig.time || null;
+}
+
+function signalTimeMs(sig) {
+  return parseCsvTimeMs(signalActionableTime(sig));
 }
 
 function normalizeEpochMs(value) {
@@ -495,7 +501,7 @@ function signalFileMtimeMs() {
 }
 
 function configuredMaxActionableLagMs() {
-  return 60 * 1000;
+  return 3 * 60 * 1000;
 }
 
 function roundNullable(value, digits = 4) {
@@ -847,9 +853,11 @@ function isoTime(ms) {
 function attachDisplayTimes(sig) {
   if (!sig || typeof sig !== "object" || sig.shadow) return sig;
   const signalMs = parseCsvTimeMs(sig.time);
+  const actionableTime = signalActionableTime(sig);
   const actionableMs = signalTimeMs(sig);
   return {
     ...sig,
+    ...(sig.model_type === "llm_direction" ? { actionable_time: actionableTime } : {}),
     time_ms: signalMs,
     time_shanghai: signalMs === null ? null : shanghaiTime(signalMs),
     actionable_time_ms_display: actionableMs,
@@ -859,8 +867,7 @@ function attachDisplayTimes(sig) {
 }
 
 function signalActionableMs(sig) {
-  const t = sig && (sig.actionable_time || sig.candle_close_time || sig.time);
-  const ms = t ? parseCsvTimeMs(t) : NaN;
+  const ms = signalTimeMs(sig);
   return Number.isFinite(ms) ? ms : 0;
 }
 
@@ -1007,7 +1014,7 @@ function applyEntryTimingForSignal(strategyId, sig) {
       referencePrice,
       startedAt: now,
       originalActionableMs: actionableMs,
-      originalActionableTime: sig.actionable_time || sig.candle_close_time || sig.time || null,
+      originalActionableTime: signalActionableTime(sig),
       earliestPullbackAt: actionableMs + Number(policy.minPullbackDelayMs || 0),
       expiresAt: actionableMs + Number(policy.maxWaitMin || 0) * 60000,
       pullbackSeen: false,
@@ -1609,7 +1616,11 @@ function buildSignalResponse(source = "") {
     const tradeable = new Set(liveIds);
     for (const strategyId of observedIds) {
       if (!tradeable.has(strategyId) && signals[strategyId]) {
-        if (signals[strategyId]) signals[strategyId].signal = null;
+        signals[strategyId].signal = null;
+      }
+      // 完整模型输入只供前端核对，平板轮询不需要携带该展示数据。
+      if (signals[strategyId] && Object.prototype.hasOwnProperty.call(signals[strategyId], "llm_input")) {
+        delete signals[strategyId].llm_input;
       }
     }
   }
@@ -2446,7 +2457,7 @@ function placeShadowTrade(strategyId, sig, variant, extra = {}) {
     rsi_value: sig.rsi_value,
     avg_prob: sig.avg_prob,
     signalTime: sig.time,
-    actionableTime: sig.actionable_time || sig.candle_close_time || sig.time || null,
+    actionableTime: signalActionableTime(sig),
     signalEntryPrice: signalStrikePrice,
     executionStrikePrice: null,
     executionOpenTime: null,
@@ -2505,7 +2516,7 @@ function shadowSignalKey(strategyId, sig) {
     strategyId,
     sig && sig.signal || "",
     sig && sig.time || "",
-    sig && (sig.actionable_time || sig.candle_close_time || sig.time) || ""
+    signalActionableTime(sig) || ""
   ].join("|");
 }
 
@@ -2600,7 +2611,7 @@ function checkShadowTrades() {
       if (hasStrategyCooldown(strategyId)) continue;
       if (shadowTrades.some(t => ["pending", "active"].includes(t.status) && t.source === "shadow:" + strategyId)) continue;
       if (!signalIsActionableNow(sig)) continue;
-      const key = [sig.signal, sig.time || "", sig.actionable_time || sig.candle_close_time || ""].join("|");
+      const key = [sig.signal, sig.time || "", signalActionableTime(sig) || ""].join("|");
       if (lastShadowSignals[strategyId] === key) continue;
       const trade = placeShadowTrade(strategyId, sig, variant);
       if (trade) {
@@ -3866,7 +3877,7 @@ function publicLlmDirectionConfig() {
     enabled: variant.enabled === true,
     tradeEnabled: variant.tradeEnabled === true,
     apiUrl: String(current.llm_api_url || "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions"),
-    apiKey: current.llm_api_key ? LLM_API_KEY_MASK : "",
+    apiKey: String(current.llm_api_key || ""),
     apiKeyConfigured: !!current.llm_api_key,
     model: String(current.llm_model || "glm-5.2"),
     intervalSec: normalizeLlmInteger(current.llm_interval_sec, 600, 5, 86400),
@@ -3881,9 +3892,8 @@ app.get("/api/llm-config", (req, res) => {
 app.post("/api/llm-config", requireApiToken, express.json({ limit: "200kb" }), (req, res) => {
   const body = req.body && typeof req.body === "object" ? req.body : {};
   const { current } = readLlmDirectionConfig();
-  const submittedKey = body.apiKey === undefined ? LLM_API_KEY_MASK : String(body.apiKey);
-  // Key 按用户要求明文保存在 prod_config；空值可显式清除，掩码表示保留原值。
-  const nextKey = submittedKey === LLM_API_KEY_MASK ? String(current.llm_api_key || "") : submittedKey.trim();
+  // Key 按用户要求在接口、页面和 prod_config 中均使用完整明文；空值可显式清除。
+  const nextKey = body.apiKey === undefined ? String(current.llm_api_key || "") : String(body.apiKey).trim();
   const prod = readProdConfig();
   prod[LLM_STRATEGY_ID] = {
     ...current,

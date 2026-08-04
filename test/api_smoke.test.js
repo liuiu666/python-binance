@@ -243,6 +243,52 @@ test("tablet signal mirror records one shadow trade for repeated signal polls", 
   });
 });
 
+test("LLM execution freshness uses decision time while preserving market data time", async () => {
+  await withServer({}, async ({ baseUrl, dataDir }) => {
+    const now = Date.now();
+    writeFreshMinuteCandles(dataDir, now);
+    fs.writeFileSync(path.join(dataDir, "current_price.json"), JSON.stringify({ price: "100", time: now }), "utf8");
+
+    const current = await requestJson(baseUrl, "/api/config");
+    const strategy = { ...current.json.strategyVariants[0], enabled: true, tradeEnabled: true };
+    await requestJson(baseUrl, "/api/config", {
+      method: "POST",
+      body: {
+        ...current.json,
+        realTradingEnabled: true,
+        autoTrade_10m: true,
+        forceAutoTrade: true,
+        strategyVariants: [strategy]
+      }
+    });
+
+    const marketTime = new Date(now - 180_000).toISOString();
+    const decisionTime = new Date(now - 1000).toISOString();
+    fs.writeFileSync(path.join(dataDir, "live_signals.json"), JSON.stringify({
+      [strategy.id]: {
+        strategy_id: strategy.id,
+        model_type: "llm_direction",
+        time: marketTime,
+        generated_at: decisionTime,
+        signal: "UP",
+        price: 100,
+        confidence: 70,
+        bypass_entry_timing: true
+      },
+      _snapshot_time_ms: now,
+      _snapshot_time: new Date(now).toISOString(),
+      _snapshot_strategy_count: 1
+    }), "utf8");
+
+    const response = await requestJson(baseUrl, "/api/signal?source=autojs");
+    assert.equal(response.status, 200);
+    assert.equal(response.json[strategy.id].signal, "UP");
+    assert.equal(response.json[strategy.id].time, marketTime);
+    assert.equal(response.json[strategy.id].actionable_time, decisionTime);
+    assert.equal(response.json[strategy.id].execution_blocked, undefined);
+  });
+});
+
 test("shadow-only strategy records a trade while global real trading is disabled", async () => {
   await withServer({}, async ({ baseUrl, dataDir }) => {
     const now = Date.now();

@@ -54,6 +54,12 @@ test("confirmation waits for an on-screen node and dispatches exactly once", () 
   let dispatchedNode = null;
   const transitionNode = { bounds: bounds(4614, 4719), enabled: true, visibleToUser: true };
   const readyNode = { bounds: bounds(2214, 2319), enabled: true, visibleToUser: true };
+  const directionEvidenceNode = {
+    text: "上涨",
+    bounds: { left: 1400, top: 900, right: 1500, bottom: 960, width: 100, height: 60 },
+    enabled: true,
+    visibleToUser: true
+  };
   const context = {
     Date: { now: () => now },
     device: { width: 3392, height: 2400 },
@@ -69,15 +75,15 @@ test("confirmation waits for an on-screen node and dispatches exactly once", () 
     id: value => value,
     findOnceSafe: () => (lookupCount++ === 0 ? transitionNode : readyNode),
     selector: () => ({
-      textMatches: () => ({
+      textMatches: pattern => ({
         clickable: () => ({ find: () => [] }),
-        find: () => []
+        find: () => pattern.test("上涨") ? [directionEvidenceNode] : []
       }),
       descMatches: () => ({ find: () => [] })
     }),
     nodeBoundsSafe: node => node.bounds,
     nodeBoolSafe: (node, key) => node[key],
-    nodeSummary: node => ({ bounds: node.bounds }),
+    nodeSummary: node => ({ text: node.text || "", visible: node.visibleToUser, bounds: node.bounds }),
     log: () => {}
   };
   context.clickNodeOrAncestor = node => {
@@ -90,11 +96,12 @@ test("confirmation waits for an on-screen node and dispatches exactly once", () 
   vm.runInContext(
     `${functionSource("nodeCenterInsideScreen", "confirmNodeReady")}
      ${functionSource("confirmNodeReady", "collectConfirmProbe")}
+     ${functionSource("collectExpectedDirectionEvidence", "handleConfirmStrict")}
      ${functionSource("handleConfirmStrict", "findConfirmationNode")}`,
     context
   );
 
-  assert.equal(context.handleConfirmStrict(), true);
+  assert.equal(context.handleConfirmStrict("UP"), true);
   assert.equal(dispatchCount, 1);
   assert.equal(dispatchedNode, readyNode);
   assert.equal(now, 780);

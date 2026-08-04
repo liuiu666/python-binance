@@ -992,8 +992,73 @@ a {
   grid-column: span 2;
 }
 
-.strategy-card.phase-gate-card {
+.strategy-card.phase-gate-card,
+.strategy-card.llm-direction-card {
   grid-column: span 2;
+}
+
+.llm-input-status,
+.llm-input-details {
+  display: grid;
+  gap: 10px;
+}
+
+.llm-input-details {
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.llm-input-details > summary,
+.llm-timeframe summary {
+  cursor: pointer;
+  color: var(--text-1);
+  font-weight: 700;
+}
+
+.llm-input-details > p,
+.llm-timeframe p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.llm-timeframe-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.llm-timeframe {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+
+.llm-timeframe > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.llm-timeframe > header span {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.llm-timeframe .detail-row {
+  align-items: flex-start;
+}
+
+.llm-timeframe .detail-row strong {
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .phase-gate-status {
@@ -2533,7 +2598,8 @@ a {
     text-align: left;
   }
 
-  .readiness-grid {
+  .readiness-grid,
+  .llm-timeframe-grid {
     grid-template-columns: 1fr;
   }
 

@@ -110,6 +110,81 @@ function ReadinessChecklist({ signal, variant }) {
   );
 }
 
+function LlmDirectionStatus({ signal }) {
+  const input = signal?.llm_input;
+  const source = input?.source || {};
+  const timeframes = input?.timeframes || {};
+  const lifecycle = signal?.order_lifecycle;
+  const reason = signal?.signal_detail || signalReasonText(signal);
+
+  const sequence = values => Array.isArray(values) ? values.map(value => value == null ? "--" : fmt(value, 4)).join(" / ") : "--";
+
+  return (
+    <section className="llm-input-status">
+      <div className="readiness-panel">
+        <div className="readiness-head">
+          <strong>{signal?.signal ? "LLM 最新决策" : "为什么现在没下单"}</strong>
+          <span>{reason}</span>
+        </div>
+        <div className="feature-grid">
+          <div><span>模型</span><strong>{signal?.llm_model || "glm-5.2"}</strong></div>
+          <div><span>预测目标</span><strong>BTCUSDT 未来10分钟 UP / DOWN</strong></div>
+          <div><span>行情时间</span><strong>{dateTimeText(input?.market_data_time || signal?.time)}</strong></div>
+          <div><span>决策时间</span><strong>{dateTimeText(input?.captured_at || signal?.generated_at)}</strong></div>
+          <div><span>输入价格</span><strong>{fmtPrice(input?.current_price ?? signal?.price)}</strong></div>
+          <div><span>1分钟源数据</span><strong>{source.loaded_1m_rows ?? "--"} / {source.required_1m_rows ?? 6500} 行</strong></div>
+          <div><span>主动买量缺失</span><strong>{source.missing_taker_buy_rows ?? "--"} 行</strong></div>
+          <div><span>周期K线</span><strong>1m/5m/15m/1h 各100根</strong></div>
+          {lifecycle?.settleTime ? <div><span>订单预计到期</span><strong>{dateTimeText(lifecycle.settleTime)}</strong></div> : null}
+        </div>
+      </div>
+
+      {input ? (
+        <details className="llm-input-details" open>
+          <summary>模型完整输入明细</summary>
+          <p>{input.objective}</p>
+          <p>源文件 {source.file}；范围 {dateTimeText(source.first_1m_time)} 至 {dateTimeText(source.last_1m_time)}</p>
+          <div className="llm-timeframe-grid">
+            {["1m", "5m", "15m", "1h"].map(name => {
+              const frame = timeframes[name] || {};
+              const bar = frame.latest_bar || {};
+              const momentum = frame.momentum || {};
+              const flow = frame.order_flow || {};
+              const volatility = frame.volatility || {};
+              const trend = frame.trend;
+              return (
+                <article className="llm-timeframe" key={name}>
+                  <header><strong>{name}</strong><span>{frame.bars ?? "--"} 根</span></header>
+                  <div className="detail-list">
+                    <div className="detail-row"><span>最新K线</span><strong>O {fmtPrice(bar.open)} / H {fmtPrice(bar.high)} / L {fmtPrice(bar.low)} / C {fmtPrice(bar.close)}</strong></div>
+                    <div className="detail-row"><span>成交量 / 主动买量</span><strong>{fmt(bar.volume, 4)} / {fmt(bar.taker_buy_vol, 4)}</strong></div>
+                    <div className="detail-row"><span>RSI7 / RSI14</span><strong>{fmt(momentum.rsi7, 2)} / {fmt(momentum.rsi14, 2)}</strong></div>
+                    <div className="detail-row"><span>MACD 柱</span><strong>{fmt(momentum.macd_hist, 4)}</strong></div>
+                    <div className="detail-row"><span>20根主动买 / 卖</span><strong>{fmt(flow.taker_buy_20, 4)} / {fmt(flow.taker_sell_20, 4)}</strong></div>
+                    <div className="detail-row"><span>20根买卖比 / CVD</span><strong>{fmt(flow.buy_sell_ratio_20, 4)}x / {fmt(flow.cvd_usd_m_cum20, 4)}M</strong></div>
+                    <div className="detail-row"><span>ATR14 / ATR20 / 5根范围</span><strong>{fmt(volatility.atr14, 4)} / {fmt(volatility.atr20, 4)} / {fmt(volatility.range_5bar_pct, 4)}%</strong></div>
+                    {trend ? <div className="detail-row"><span>EMA20 / 50 / 100</span><strong>{fmtPrice(trend.ema20)} / {fmtPrice(trend.ema50)} / {fmtPrice(trend.ema100)}</strong></div> : null}
+                    {trend ? <div className="detail-row"><span>布林上 / 中 / 下</span><strong>{fmtPrice(trend.boll_upper)} / {fmtPrice(trend.boll_middle)} / {fmtPrice(trend.boll_lower)}</strong></div> : null}
+                    {trend ? <div className="detail-row"><span>MA20 / VWAP / OBV</span><strong>{fmtPrice(trend.ma20)} / {fmtPrice(trend.vwap)} / {fmt(trend.obv, 2)}</strong></div> : null}
+                  </div>
+                  <details>
+                    <summary>最近10值序列</summary>
+                    <p>RSI7：{sequence(momentum.rsi7_last10)}</p>
+                    <p>RSI14：{sequence(momentum.rsi14_last10)}</p>
+                    <p>MACD：{sequence(momentum.macd_hist_last10)}</p>
+                    <p>买卖比：{sequence(flow.buy_sell_ratio_last10)}</p>
+                    <p>CVD(M)：{sequence(flow.cvd_usd_m_last10)}</p>
+                  </details>
+                </article>
+              );
+            })}
+          </div>
+        </details>
+      ) : <div className="reason-line">首个新版预测完成后，这里会显示与 GLM 提示词同源的完整输入快照。</div>}
+    </section>
+  );
+}
+
 function FeatureGrid({ signal }) {
   const rows = [
     ["路由波动", signal?.route_sigma_bps != null ? `${fmt(signal.route_sigma_bps, 2)}bp` : null],
@@ -551,13 +626,14 @@ export default function StrategyCard({ title, signal, amount, variant, stats }) 
   const active = !!signal?.signal;
   const multiNormal = signal?.model_type === "second_multi_normal_hf_stable_v1";
   const phaseGate = signal?.model_type === "second_multiscale_phase_gate_v1";
+  const llmDirection = signal?.model_type === "llm_direction" || variant?.base === "llm_direction" || variant?.id === "BTC_10min_LLM_GLM52";
   const thirtyMinute = String(signal?.strategy_id || variant?.id || "").startsWith("BTC_30min_");
   const live = variant?.enabled !== false && variant?.tradeEnabled !== false;
   const observed = variant?.enabled !== false;
   const cardTone = active ? directionClass(signal.signal) : "neutral";
 
   return (
-    <article className={`strategy-card ${cardTone} ${multiNormal ? "multi-normal-card" : ""} ${phaseGate ? "phase-gate-card" : ""}`}>
+    <article className={`strategy-card ${cardTone} ${multiNormal ? "multi-normal-card" : ""} ${phaseGate ? "phase-gate-card" : ""} ${llmDirection ? "llm-direction-card" : ""}`}>
       <header className="strategy-card-head">
         <div>
           <span className="eyebrow">策略</span>
@@ -596,7 +672,9 @@ export default function StrategyCard({ title, signal, amount, variant, stats }) 
         <span>影子 {statLine(stats?.shadow)}</span>
       </div>
 
-      {thirtyMinute ? (
+      {llmDirection ? (
+        <LlmDirectionStatus signal={signal} />
+      ) : thirtyMinute ? (
         <ThirtyMinuteStatus signal={signal} />
       ) : phaseGate ? (
         <PhaseGateStatus signal={signal} variant={variant} />
@@ -611,9 +689,9 @@ export default function StrategyCard({ title, signal, amount, variant, stats }) 
         </>
       )}
 
-      {!multiNormal && !phaseGate && signal?.reason ? <div className="reason-line">状态：{signalReasonText(signal)}</div> : null}
+      {!llmDirection && !multiNormal && !phaseGate && signal?.reason ? <div className="reason-line">状态：{signalReasonText(signal)}</div> : null}
       {signal?.error ? <div className="reason-line bad">异常：{signal.error}</div> : null}
-      {!thirtyMinute && signal?.actionable_time ? <div className="reason-line">可执行时间：{dateTimeText(signal.actionable_time)}</div> : null}
+      {!llmDirection && !thirtyMinute && signal?.actionable_time ? <div className="reason-line">可执行时间：{dateTimeText(signal.actionable_time)}</div> : null}
     </article>
   );
 }

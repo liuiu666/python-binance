@@ -8,9 +8,9 @@ var AUDIT_URL = BASE_URL + "/api/trade-audit";
 var BALANCE_URL = BASE_URL + "/api/balance";
 var MANUAL_URL = BASE_URL + "/api/manual";
 var API_TOKEN = "";
-var SCRIPT_VERSION = "2026-07-28-order-guard-v6-live-safe";
+var SCRIPT_VERSION = "2026-08-05-llm-3min-live";
 var POLL_INTERVAL = 1000;
-var SIGNAL_MAX_AGE_MS = 60000;
+var SIGNAL_MAX_AGE_MS = 3 * 60 * 1000;
 var STRATEGY_COOLDOWN_MS = 10 * 60 * 1000;
 var ORDER_VERIFY_TIMEOUT_MS = 12000;
 var ORDER_VERIFY_POLL_MS = 250;
@@ -1131,50 +1131,72 @@ function dismissAmountKeyboard() {
 }
 
 // ========== Direction ==========
-function clickDirectionFast(direction, idValue, fallbackX, fallbackY) {
+function directionClickableAncestor(node, expectedParentId, direction) {
+    var cur = node;
+    for (var depth = 0; cur && depth < 5; depth++) {
+        var summary = nodeSummary(cur);
+        var idValue = summary.id || "";
+        var bounds = summary.bounds;
+        var parentMatches = idValue === expectedParentId || idValue === PACKAGE + ":id/" + expectedParentId;
+        var sideMatches = bounds && (direction === "UP"
+            ? bounds.right <= Math.floor(device.width / 2)
+            : bounds.left >= Math.floor(device.width / 2));
+        if (parentMatches && sideMatches && summary.clickable === true && summary.enabled !== false && summary.visible !== false) {
+            return { node: cur, summary: summary, depth: depth };
+        }
+        try { cur = cur.parent(); } catch (e) { cur = null; }
+    }
+    return null;
+}
+
+function clickDirectionFast(direction, labelPattern, expectedTextId, expectedParentId) {
     var startedAt = Date.now();
-    var candidates = [idValue, PACKAGE + ":id/" + idValue];
     while (Date.now() - startedAt < DIRECTION_FIND_TIMEOUT_MS) {
-        for (var i = 0; i < candidates.length; i++) {
-            var btn = null;
-            try { btn = findOnceSafe(id(candidates[i])); } catch (e1) {}
-            if (!btn) continue;
-            var summary = nodeSummary(btn);
-            if (clickNodeOrAncestor(btn)) {
-                lastDirectionProbe = {
-                    direction: direction,
-                    method: "id:" + candidates[i],
-                    node: summary,
-                    waitedMs: Date.now() - startedAt,
-                    clickedAt: Date.now()
-                };
-                return true;
-            }
+        var nodes = [];
+        try { nodes = selector().textMatches(labelPattern).find(); } catch (e1) {}
+        for (var i = 0; i < nodes.length; i++) {
+            var textSummary = nodeSummary(nodes[i]);
+            var textIdMatches = textSummary.id === expectedTextId || textSummary.id === PACKAGE + ":id/" + expectedTextId;
+            if (!textIdMatches || textSummary.visible === false || textSummary.enabled === false) continue;
+            var target = directionClickableAncestor(nodes[i], expectedParentId, direction);
+            if (!target) continue;
+            var dispatched = false;
+            try { dispatched = target.node.click() === true; } catch (e2) {}
+            lastDirectionProbe = {
+                direction: direction,
+                method: "verified_text_parent",
+                labelNode: textSummary,
+                parentNode: target.summary,
+                ancestorDepth: target.depth,
+                dispatched: dispatched,
+                waitedMs: Date.now() - startedAt,
+                clickedAt: dispatched ? Date.now() : null
+            };
+            if (dispatched) return true;
         }
         sleep(UI_FAST_POLL_MS);
     }
-    click(fallbackX, fallbackY);
     lastDirectionProbe = {
         direction: direction,
-        method: "coordinate_fallback",
-        x: fallbackX,
-        y: fallbackY,
+        method: "verified_node_not_found",
+        expectedTextId: expectedTextId,
+        expectedParentId: expectedParentId,
         waitedMs: Date.now() - startedAt,
-        clickedAt: Date.now()
+        clickedAt: null
     };
-    return true;
+    return false;
 }
 
 function clickUp() {
-    return clickDirectionFast("UP", "2131432526", 1285, 1840);
+    return clickDirectionFast("UP", /^(上涨|看涨|买涨|UP)$/i, "2131452723", "2131432869");
 }
 function clickDown() {
-    return clickDirectionFast("DOWN", "2131432527", 2107, 1840);
+    return clickDirectionFast("DOWN", /^(下跌|看跌|买跌|DOWN)$/i, "2131452729", "2131432870");
 }
 
 // ========== Confirm ==========
-function handleConfirm() {
-    return handleConfirmStrict();
+function handleConfirm(direction) {
+    return handleConfirmStrict(direction);
 }
 
 function nodeSummary(node) {
@@ -1289,12 +1311,44 @@ function collectConfirmProbe(limit) {
     return out;
 }
 
-function handleConfirmStrict() {
+function collectExpectedDirectionEvidence(direction) {
+    var expectedPattern = direction === "UP" ? /^(上涨|看涨|买涨|UP)$/i : /^(下跌|看跌|买跌|DOWN)$/i;
+    var oppositePattern = direction === "UP" ? /^(下跌|看跌|买跌|DOWN)$/i : /^(上涨|看涨|买涨|UP)$/i;
+    var expected = [];
+    var opposite = [];
+    function collect(pattern, target) {
+        var nodes = [];
+        try { nodes = selector().textMatches(pattern).find(); } catch (e) {}
+        for (var i = 0; i < nodes.length; i++) {
+            var summary = nodeSummary(nodes[i]);
+            if (summary.visible === false || !summary.bounds) continue;
+            // 原下单按钮位于屏幕中段；确认弹窗方向证据必须来自其他区域。
+            if (summary.bounds.top >= Math.floor(device.height * 0.48) && summary.bounds.bottom <= Math.floor(device.height * 0.58)) continue;
+            target.push(summary);
+        }
+    }
+    collect(expectedPattern, expected);
+    collect(oppositePattern, opposite);
+    return { direction: direction, expected: expected, opposite: opposite, verified: expected.length === 1 && opposite.length === 0 };
+}
+
+function handleConfirmStrict(direction) {
     var start = Date.now();
     var probe = [];
     lastConfirmProbe = null;
     sleep(CONFIRM_MIN_SETTLE_MS);
     while (Date.now() - start < CONFIRM_FIND_TIMEOUT_MS) {
+        var directionEvidence = collectExpectedDirectionEvidence(direction);
+        if (!directionEvidence.verified) {
+            lastConfirmProbe = {
+                method: "direction_verification_pending",
+                direction: direction,
+                directionEvidence: directionEvidence,
+                waitedMs: Date.now() - start
+            };
+            sleep(UI_FAST_POLL_MS);
+            continue;
+        }
         var btn = null;
         var matchedId = null;
         for (var idIndex = 0; idIndex < CONFIRM_BUTTON_IDS.length && !btn; idIndex++) {
@@ -1314,6 +1368,7 @@ function handleConfirmStrict() {
                 lastConfirmProbe = {
                     method: "id",
                     matchedId: matchedId,
+                    directionEvidence: directionEvidence,
                     dispatch: lastNodeClickProbe,
                     node: idSummary,
                     waitedMs: Date.now() - start,
@@ -1331,6 +1386,7 @@ function handleConfirmStrict() {
             if (textSummary.confirmReady && clickNodeOrAncestor(btns[i])) {
                 lastConfirmProbe = {
                     method: "clickable_text",
+                    directionEvidence: directionEvidence,
                     dispatch: lastNodeClickProbe,
                     node: textSummary,
                     waitedMs: Date.now() - start,
@@ -1348,6 +1404,7 @@ function handleConfirmStrict() {
             if (ancestorTextSummary.confirmReady && clickNodeOrAncestor(textNodes[j])) {
                 lastConfirmProbe = {
                     method: "text_ancestor",
+                    directionEvidence: directionEvidence,
                     dispatch: lastNodeClickProbe,
                     node: ancestorTextSummary,
                     waitedMs: Date.now() - start,
@@ -1365,6 +1422,7 @@ function handleConfirmStrict() {
             if (descSummary.confirmReady && clickNodeOrAncestor(descNodes[k])) {
                 lastConfirmProbe = {
                     method: "desc_ancestor",
+                    directionEvidence: directionEvidence,
                     dispatch: lastNodeClickProbe,
                     node: descSummary,
                     waitedMs: Date.now() - start,
@@ -1376,9 +1434,12 @@ function handleConfirmStrict() {
         }
         sleep(UI_FAST_POLL_MS);
     }
-    log("Confirm button not found");
+    log("Confirm button or verified direction not found");
+    var finalDirectionEvidence = collectExpectedDirectionEvidence(direction);
     lastConfirmProbe = {
-        method: null,
+        method: finalDirectionEvidence.verified ? "confirm_not_found" : "direction_not_verified",
+        direction: direction,
+        directionEvidence: finalDirectionEvidence,
         waitedMs: Date.now() - start,
         candidates: probe.length ? probe.slice(0, 12) : collectConfirmProbe(12)
     };
@@ -1677,7 +1738,24 @@ function placeTrade(dir, order) {
     
     // STEP 5: click direction
     log("step5: click " + dir);
-    if (dir == "UP") clickUp(); else clickDown();
+    var directionClicked = dir == "UP" ? clickUp() : clickDown();
+    if (!directionClicked) {
+        markTradePhase(tradeTiming, "direction_failed", {
+            method: lastDirectionProbe ? lastDirectionProbe.method : null,
+            locatorWaitMs: lastDirectionProbe ? lastDirectionProbe.waitedMs : null
+        });
+        log(">>> ABORT: verified direction node not found");
+        reportTradeAudit("order_abort", order, {
+            direction: dir,
+            reason: "direction_not_verified",
+            beforeBalance: beforeBalance,
+            directionProbe: lastDirectionProbe,
+            uiTiming: tradeTimingSnapshot(tradeTiming)
+        });
+        tradeConfig.amount = prevAmt;
+        tradeConfig.duration = prevDur;
+        return false;
+    }
     markTradePhase(tradeTiming, "direction_clicked", {
         method: lastDirectionProbe ? lastDirectionProbe.method : null,
         locatorWaitMs: lastDirectionProbe ? lastDirectionProbe.waitedMs : null
@@ -1686,7 +1764,7 @@ function placeTrade(dir, order) {
     // STEP 6: confirm
     log("step6: confirm");
     var executionTime = lastDirectionProbe && lastDirectionProbe.clickedAt ? lastDirectionProbe.clickedAt : Date.now();
-    if (!handleConfirm()) {
+    if (!handleConfirm(dir)) {
         markTradePhase(tradeTiming, "confirm_failed", {
             confirmWaitMs: lastConfirmProbe ? lastConfirmProbe.waitedMs : null
         });
