@@ -26,8 +26,25 @@ function Require-Command([string]$Name) {
     }
 }
 
+function Convert-SecureToPlain([Security.SecureString]$SecureValue) {
+    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureValue)
+    try {
+        return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+    }
+}
+
 function Get-PlainPassword {
     if ($Password) { return $Password }
+
+    # 本地明文配置仅用于当前电脑，并由 .gitignore 排除，不进入部署包。
+    $localConfigPath = Join-Path $RepoRoot "tools\deploy_linux.local.json"
+    if (Test-Path $localConfigPath) {
+        $localConfig = Get-Content $localConfigPath -Raw | ConvertFrom-Json
+        if ($localConfig.password) { return [string]$localConfig.password }
+    }
+
     $secure = Read-Host "SSH password for $ServerUser@$ServerHost" -AsSecureString
     $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
     try {

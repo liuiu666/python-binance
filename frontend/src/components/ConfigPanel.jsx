@@ -46,6 +46,20 @@ function Field({ label, value, suffix, min, max, step = 1, onChange }) {
   );
 }
 
+function TextField({ label, value, type = "text", placeholder, onChange }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type={type}
+        value={value ?? ""}
+        placeholder={placeholder}
+        onChange={event => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
 function isV21Router(variant) {
   return variant?.base === "SECOND_NORMAL_ROUTER_V21" || String(variant?.id || "").includes("_V21_");
 }
@@ -355,7 +369,20 @@ function StrategySettings({ variant, onChange }) {
   );
 }
 
-export default function ConfigPanel({ draft, dirty, apiToken, onTokenChange, onDraftChange, onToggle, onSave }) {
+export default function ConfigPanel({
+  draft,
+  dirty,
+  apiToken,
+  llmConfig,
+  llmStatus,
+  onLlmChange,
+  onLlmSave,
+  onLlmPredictNow,
+  onTokenChange,
+  onDraftChange,
+  onToggle,
+  onSave
+}) {
   const variants = Array.isArray(draft.strategyVariants) && draft.strategyVariants.length
     ? draft.strategyVariants
     : DEFAULT_CONFIG.strategyVariants;
@@ -428,6 +455,34 @@ export default function ConfigPanel({ draft, dirty, apiToken, onTokenChange, onD
           <StrategySettings key={variant.id || index} variant={variant} onChange={patch => updateVariant(index, patch)} />
         ))}
       </div>
+
+      <article className="strategy-settings llm-settings">
+        <header>
+          <div>
+            <strong>GLM-5.2 明文连接配置</strong>
+            <small>状态：{llmStatus?.state || "未知"}；Key：{llmStatus?.apiKeyConfigured ? "已配置" : "未配置"}</small>
+          </div>
+          <span>{llmStatus?.signal?.signal || "暂无方向"}</span>
+        </header>
+        <div className="setting-grid llm-setting-grid">
+          <TextField label="接口地址" value={llmConfig?.apiUrl} onChange={value => onLlmChange({ apiUrl: value })} />
+          <TextField label="模型" value={llmConfig?.model} onChange={value => onLlmChange({ model: value })} />
+          <TextField
+            label="API Key（明文保存）"
+            type="text"
+            value={llmConfig?.apiKey}
+            placeholder="输入明文 Key"
+            onChange={value => onLlmChange({ apiKey: value })}
+          />
+          <Field label="调用间隔" value={llmConfig?.intervalSec ?? 600} min={5} max={86400} suffix="秒" onChange={value => onLlmChange({ intervalSec: toInt(value, 600, 5, 86400) })} />
+          <Field label="最大 Token" value={llmConfig?.maxTokens ?? 8000} min={1} max={32768} onChange={value => onLlmChange({ maxTokens: toInt(value, 8000, 1, 32768) })} />
+        </div>
+        {llmStatus?.lastError ? <div className="settings-note">最近错误：{llmStatus.lastError}</div> : null}
+        <div className="llm-actions">
+          <button type="button" onClick={onLlmSave}>保存 LLM 配置</button>
+          <button type="button" onClick={onLlmPredictNow}>立即预测</button>
+        </div>
+      </article>
 
       <label className="field token-field">
         <span>页面密钥</span>

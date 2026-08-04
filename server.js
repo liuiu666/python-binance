@@ -22,6 +22,7 @@ const {
   payoutRateForDuration,
   dayKeyForTime,
   shanghaiDayRange,
+  deriveOrderLifecycleGate,
   buildLiveOrderHistory
 } = require("./lib/trade_history");
 
@@ -94,18 +95,15 @@ const LLM_TRAINING_SAMPLES_FILE = path.join(DATA_DIR, "llm_training_samples.json
 const REAL_BALANCE_FILE = path.join(DATA_DIR, "real_balance.json");
 const AUTO_SCRIPT_FILE = path.join(__dirname, "auto_btc.js");
 const PRICE_TICKS_FILE = path.join(DATA_DIR, "price_ticks.jsonl");
+const ORDER_LIFECYCLE_GATE_FILE = path.join(DATA_DIR, "order_lifecycle_gate.json");
 const SECOND_BACKTEST_REPORT_FILE = path.join(DATA_DIR, "second_backtest_report_latest.json");
 const BASE_STRATEGY_IDS = ["BTC_10min_SAFE", "BTC_10min_TAKER"];
 const PYTHON_EXE = process.env.PYTHON_EXE || "python";
 const SERVER_SIM_TRADING_ENABLED = process.env.SERVER_SIM_TRADING_ENABLED === "1";
 const MANAGED_PROCESSES_ENABLED = process.env.DISABLE_MANAGED_PROCESSES !== "1";
 const ENABLE_ORDERBOOK_SHADOW_TRADES = process.env.ENABLE_ORDERBOOK_SHADOW_TRADES === "1";
-const LLM_STRATEGY_ID = "BTC_10min_LLM_CONSENSUS";
-const LLM_REMOVED_RESPONSE = {
-  removed: true,
-  enabled: false,
-  message: "大模型预测功能已移除"
-};
+const LLM_STRATEGY_ID = "BTC_10min_LLM_GLM52";
+const LLM_API_KEY_MASK = "********";
 const DATA_UPDATE_INTERVAL_MS = Math.max(
   60 * 1000,
   Number(process.env.DATA_UPDATE_INTERVAL_MS || 5 * 60 * 1000)
@@ -304,6 +302,59 @@ function readJsonl(file) {
 function readJsonFile(file, fallback = null) {
   try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : fallback; }
   catch (e) { return fallback; }
+}
+
+function writeJsonAtomic(file, value) {
+  const tempFile = `${file}.${process.pid}.tmp`;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(tempFile, JSON.stringify(value, null, 2), "utf8");
+  fs.renameSync(tempFile, file);
+}
+
+function configuredDurationMap() {
+  return Object.fromEntries(
+    currentStrategyVariants().map(variant => [variant.id, variant.duration || tradeConfig.duration || 10])
+  );
+}
+
+function currentOrderLifecycleGate(now = Date.now()) {
+  // 每次从持久审计和价格事件重新派生，服务重启后无需依赖旧进程内存。
+  const gate = deriveOrderLifecycleGate({
+    auditRows: readJsonl(TRADE_AUDIT_FILE),
+    priceTicks: readJsonl(PRICE_TICKS_FILE),
+    currentPrice,
+    payoutRate: PAYOUT_RATE,
+    now,
+    durationForStrategy: configuredDurationMap(),
+    defaultDuration: tradeConfig.duration || 10
+  });
+  try { writeJsonAtomic(ORDER_LIFECYCLE_GATE_FILE, gate); }
+  catch (e) { console.warn("[OrderLifecycle] gate snapshot write failed:", e.message); }
+  return gate;
+}
+
+function applyOrderLifecycleGate(signals) {
+  const gate = currentOrderLifecycleGate();
+  const out = { ...signals };
+  for (const [strategyId, state] of Object.entries(gate.strategies || {})) {
+    const sig = out[strategyId];
+    if (!sig || typeof sig !== "object") continue;
+    // 仅清空同策略信号，其他策略保持独立可交易。
+    out[strategyId] = {
+      ...sig,
+      signal: null,
+      confidence: null,
+      order_lifecycle_blocked: true,
+      order_lifecycle: state,
+      blocked_signal: sig.blocked_signal || sig.signal || null,
+      blocked_confidence: sig.blocked_confidence ?? sig.confidence ?? null,
+      reason: state.reason,
+      signal_detail: state.reason === "settlement_price_pending"
+        ? "订单已到期，等待有效结算价格"
+        : `同策略订单生命周期未结束，预计到期 ${new Date(state.settleTime).toISOString()}`
+    };
+  }
+  return { signals: out, gate };
 }
 
 function readCsvHeader(file) {
@@ -1519,9 +1570,10 @@ function buildSignalResponse(source = "") {
   const health = applyDataHealthGate(freshSignals, dataHealthGate(freshSignals));
   const lossDensity = applyLossDensityGate(health.signals);
   const executionFailure = applyExecutionFailureGate(lossDensity.signals);
+  const orderLifecycle = applyOrderLifecycleGate(executionFailure.signals);
   const safety = source === "dashboard"
-    ? { signals: executionFailure.signals, gate: autoTradeSafetyGate() }
-    : applyAutoTradeSafetyGate(executionFailure.signals);
+    ? { signals: orderLifecycle.signals, gate: autoTradeSafetyGate() }
+    : applyAutoTradeSafetyGate(orderLifecycle.signals);
   
   // Clone signals to prevent modifying in-memory cache
   const signals = JSON.parse(JSON.stringify(safety.signals));
@@ -1594,6 +1646,7 @@ function buildSignalResponse(source = "") {
     _dataHealthGate: health.gate,
     _lossDensityGate: lossDensity.gate,
     _executionFailureGate: executionFailure.gate,
+    _orderLifecycleGate: orderLifecycle.gate,
     _autoTradeSafetyGate: safety.gate
   };
 }
@@ -3096,6 +3149,11 @@ function runLlmPredictionLoop() {
   });
 }
 
+function normalizeLlmInteger(value, fallback, min, max) {
+  const number = Math.round(Number(value));
+  return Number.isFinite(number) && number >= min && number <= max ? number : fallback;
+}
+
 function readProdConfig() {
   try {
     if (fs.existsSync(PROD_CONFIG_FILE)) {
@@ -3116,6 +3174,25 @@ function applyProdStrategyParams(baseConfig, config) {
   for (const variant of variants) {
     const current = out[variant.id] && typeof out[variant.id] === "object" ? out[variant.id] : {};
     const template = variant.base === "SAFE" ? safeTemplate : takerTemplate;
+    if (variant.base === "llm_direction") {
+      // LLM 密钥和连接参数只保存在 prod_config；常规配置接口不会返回这些字段。
+      out[variant.id] = {
+        ...current,
+        enabled: variant.enabled === true,
+        trade_enabled: variant.tradeEnabled === true,
+        model_type: "llm_direction",
+        symbol: "btcusdt",
+        interval_min: Math.max(1, Math.round(Number(variant.duration || 10))),
+        horizon: Math.max(1, Math.round(Number(variant.duration || 10))),
+        llm_api_url: String(current.llm_api_url || ""),
+        llm_api_key: String(current.llm_api_key || ""),
+        llm_model: String(current.llm_model || ""),
+        llm_interval_sec: normalizeLlmInteger(current.llm_interval_sec, 600, 5, 86400),
+        llm_max_tokens: normalizeLlmInteger(current.llm_max_tokens, 8000, 1, 32768),
+        model_label: variant.label || "GLM-5.2 方向预测"
+      };
+      continue;
+    }
     if (variant.base === "SECOND_VW_CONFIRM") {
       out[variant.id] = {
         ...current,
@@ -3773,33 +3850,87 @@ app.post("/api/config", requireApiToken, express.json(), (req, res) => {
   res.json({ ...publicTradeConfig(tradeConfig), safetyBlocked: result.safetyBlocked, forceAutoTrade: result.forceAutoTrade });
 });
 
+function readLlmDirectionConfig() {
+  const prod = readProdConfig();
+  const current = prod[LLM_STRATEGY_ID] && typeof prod[LLM_STRATEGY_ID] === "object"
+    ? prod[LLM_STRATEGY_ID]
+    : {};
+  const variant = strategyVariants(tradeConfig).find(item => item.id === LLM_STRATEGY_ID) || {};
+  return { current, variant };
+}
+
+function publicLlmDirectionConfig() {
+  const { current, variant } = readLlmDirectionConfig();
+  return {
+    strategyId: LLM_STRATEGY_ID,
+    enabled: variant.enabled === true,
+    tradeEnabled: variant.tradeEnabled === true,
+    apiUrl: String(current.llm_api_url || "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions"),
+    apiKey: current.llm_api_key ? LLM_API_KEY_MASK : "",
+    apiKeyConfigured: !!current.llm_api_key,
+    model: String(current.llm_model || "glm-5.2"),
+    intervalSec: normalizeLlmInteger(current.llm_interval_sec, 600, 5, 86400),
+    maxTokens: normalizeLlmInteger(current.llm_max_tokens, 8000, 1, 32768)
+  };
+}
+
 app.get("/api/llm-config", (req, res) => {
-  res.status(410).json(LLM_REMOVED_RESPONSE);
+  res.json(publicLlmDirectionConfig());
 });
 
 app.post("/api/llm-config", requireApiToken, express.json({ limit: "200kb" }), (req, res) => {
-  writeLlmStatus({ state: "removed", lastSignal: null, activeTrade: null, lastError: null });
-  res.status(410).json(LLM_REMOVED_RESPONSE);
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const { current } = readLlmDirectionConfig();
+  const submittedKey = body.apiKey === undefined ? LLM_API_KEY_MASK : String(body.apiKey);
+  // Key 按用户要求明文保存在 prod_config；空值可显式清除，掩码表示保留原值。
+  const nextKey = submittedKey === LLM_API_KEY_MASK ? String(current.llm_api_key || "") : submittedKey.trim();
+  const prod = readProdConfig();
+  prod[LLM_STRATEGY_ID] = {
+    ...current,
+    llm_api_url: String(body.apiUrl ?? current.llm_api_url ?? "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions").trim(),
+    llm_api_key: nextKey,
+    llm_model: String(body.model ?? current.llm_model ?? "glm-5.2").trim(),
+    llm_interval_sec: normalizeLlmInteger(body.intervalSec, current.llm_interval_sec || 600, 5, 86400),
+    llm_max_tokens: normalizeLlmInteger(body.maxTokens, current.llm_max_tokens || 8000, 1, 32768)
+  };
+  writeJsonAtomic(PROD_CONFIG_FILE, prod);
+  restartSignalService("llm_config_updated");
+  res.json({ ok: true, ...publicLlmDirectionConfig() });
 });
 
 app.get("/api/llm-status", (req, res) => {
-  res.status(410).json({
-    ...LLM_REMOVED_RESPONSE,
-    status: {
-      strategyId: LLM_STRATEGY_ID,
-      state: "removed",
-      activeTrade: null,
-      lastPrediction: null,
-      lastSignal: null,
-      lastError: null
-    },
-    signal: { strategy_id: LLM_STRATEGY_ID, signal: null, confidence: null, reason: "llm_removed" }
+  let signal = null;
+  try {
+    const rows = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {};
+    signal = rows[LLM_STRATEGY_ID] || null;
+  } catch (e) {}
+  const config = publicLlmDirectionConfig();
+  const snapshotMs = Number(signal?._snapshot_time_ms || signal?.generated_at_ms || Date.parse(signal?.generated_at || signal?.time || ""));
+  const stale = !Number.isFinite(snapshotMs) || Date.now() - snapshotMs > Math.max(300000, config.intervalSec * 2000);
+  const reason = String(signal?.reason || "");
+  let state = "running";
+  if (!config.enabled) state = "disabled";
+  else if (!signal) state = "starting";
+  else if (reason.startsWith("llm_error:")) state = "error";
+  else if (stale) state = "stale";
+  else if (!signal.signal) state = "blocked";
+  res.json({
+    strategyId: LLM_STRATEGY_ID,
+    state,
+    signal,
+    lastError: state === "error" ? reason : null,
+    apiKeyConfigured: config.apiKeyConfigured
   });
 });
 
 app.post("/api/llm-predict-now", requireApiToken, (req, res) => {
-  writeLlmStatus({ state: "removed", lastSignal: null, activeTrade: null, lastError: null });
-  res.status(410).json({ ok: false, reason: "llm_removed", ...LLM_REMOVED_RESPONSE });
+  const config = publicLlmDirectionConfig();
+  if (!config.enabled) {
+    res.status(409).json({ ok: false, reason: "llm_disabled" });
+    return;
+  }
+  restartSignalService("llm_predict_now");
+  res.json({ ok: true, reason: "signal_service_restarted" });
 });
 
 

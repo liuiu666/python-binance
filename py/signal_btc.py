@@ -7,6 +7,7 @@ import math
 import os
 import pickle
 import sys
+import threading
 import time
 import warnings
 
@@ -20,6 +21,7 @@ from signal_paths import (
     LOCK_FILE,
     LS_RATIO_FILE,
     ORDERBOOK_FILE,
+    ORDER_LIFECYCLE_GATE_FILE,
     OUT,
     SECOND_TRADES_FILE,
     SIGNAL_AUDIT_FILE,
@@ -486,6 +488,7 @@ from signal_io import (
     append_jsonl,
     csv_tail_rows,
     file_mtime,
+    read_json_file,
     write_json_atomic,
 )
 from signal_runtime_cache import (
@@ -5463,6 +5466,377 @@ def fmt_num(value, default=0.0):
         return float(default)
 
 
+_LLM_DIRECTION_RUNTIME = {}
+_LLM_DIRECTION_RUNTIME_LOCK = threading.Lock()
+
+
+class LLMDirectionStrategy:
+    """LLM 方向预测策略。
+
+    每 llm_interval_sec 秒（默认600=10分钟）调用一次大模型预测 BTC 方向。
+    主循环每秒调 predict，内部节流：未到间隔返回上次缓存结果。
+    数据来源：读 btcusdt_1m.csv（含 taker_buy_vol），聚合出 5m/15m/1h。
+    """
+
+    def __init__(self, strategy_id, cfg):
+        self.id = strategy_id
+        self.cfg = cfg
+        self.interval_sec = int(cfg.get("llm_interval_sec", 600))
+        self.api_url = cfg.get("llm_api_url", "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions")
+        self.api_key = cfg.get("llm_api_key", "")
+        self.model = cfg.get("llm_model", "glm-5.2")
+        self.max_tokens = int(cfg.get("llm_max_tokens", 8000))
+        self.horizon_min = int(cfg.get("horizon_min", cfg.get("horizon", 10)))
+        # 同策略 ID 共享运行状态，配置热重载时新旧实例不会并发重复请求。
+        with _LLM_DIRECTION_RUNTIME_LOCK:
+            self._runtime = _LLM_DIRECTION_RUNTIME.setdefault(strategy_id, {
+                "lock": threading.Lock(),
+                "last_call_time": 0.0,
+                "last_result": None,
+                "request_in_flight": False,
+            })
+
+    # ---------- 数据 ----------
+    def _load_1m(self, n=250):
+        import pandas as pd
+        if not os.path.exists(HISTORY_1M_FILE):
+            return None
+        try:
+            df = pd.read_csv(HISTORY_1M_FILE, parse_dates=["open_time"])
+            df = df.rename(columns={"open_time": "t"})
+            df = df.sort_values("t").tail(n).reset_index(drop=True)
+            for col in ["open", "high", "low", "close", "volume"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+            if "taker_buy_vol" in df.columns:
+                df["taker_buy_vol"] = pd.to_numeric(df["taker_buy_vol"], errors="coerce")
+            else:
+                # 缺列保持为空，由 predict 在调用模型前明确门控，禁止伪造中性订单流。
+                df["taker_buy_vol"] = float("nan")
+            return df
+        except Exception:
+            return None
+
+    @staticmethod
+    def _resample(df, rule):
+        """1m -> Nm 聚合 (rule: '5min'/'15min'/'1h')"""
+        import pandas as pd
+        d = df.set_index("t").copy()
+        agg = {"open": "first", "high": "max", "low": "min", "close": "last",
+               "volume": "sum", "taker_buy_vol": "sum"}
+        agg = {k: v for k, v in agg.items() if k in d.columns}
+        out = d.resample(rule).agg(agg).dropna(subset=["close"])
+        return out.reset_index().rename(columns={"t": "t"})
+
+    @staticmethod
+    def _indicators(df):
+        import numpy as np
+        d = df.copy()
+        c = d["close"]
+        delta = c.diff()
+        def calc_rsi(period):
+            gain = delta.where(delta > 0, 0).rolling(period).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
+            value = 100 - 100 / (1 + gain / loss.replace(0, np.nan))
+            # 标准 RSI 边界：单边上涨为100、单边下跌为0、完全横盘为50。
+            value = value.mask((loss == 0) & (gain > 0), 100.0)
+            value = value.mask((gain == 0) & (loss > 0), 0.0)
+            return value.mask((gain == 0) & (loss == 0), 50.0)
+
+        d["rsi14"] = calc_rsi(14)
+        d["rsi7"] = calc_rsi(7)
+        ema12 = c.ewm(span=12, adjust=False).mean()
+        ema26 = c.ewm(span=26, adjust=False).mean()
+        macd_line = ema12 - ema26
+        d["macd_h"] = macd_line - macd_line.ewm(span=9, adjust=False).mean()
+        d["e20"] = c.ewm(span=20, adjust=False).mean()
+        d["e50"] = c.ewm(span=50, adjust=False).mean()
+        d["e100"] = c.ewm(span=100, adjust=False).mean()
+        d["ma20"] = c.rolling(20).mean()
+        d["bm"] = c.rolling(20).mean()
+        sd = c.rolling(20).std()
+        d["bu"] = d["bm"] + 2 * sd
+        d["bl"] = d["bm"] - 2 * sd
+        pc = c.shift(1)
+        tr = pd.concat([(d["high"] - d["low"]).abs(), (d["high"] - pc).abs(),
+                        (d["low"] - pc).abs()], axis=1).max(axis=1)
+        d["atr"] = tr.rolling(14).mean()
+        d["atr20"] = tr.rolling(20).mean()
+        tp = (d["high"] + d["low"] + d["close"]) / 3
+        d["vwap"] = (tp * d["volume"]).cumsum() / d["volume"].cumsum()
+        d["obv"] = (np.sign(c.diff()) * d["volume"]).cumsum()
+        if "taker_buy_vol" in d.columns:
+            d["tb"] = d["taker_buy_vol"]
+        else:
+            d["tb"] = d["volume"] * 0.5
+        d["ts"] = d["volume"] - d["tb"]
+        d["dl"] = d["tb"] - d["ts"]
+        return d
+
+    # ---------- 提示词 ----------
+    @staticmethod
+    def _jf(a, f=".2f"):
+        return ", ".join(format(float(v), f) for v in a)
+
+    def _build_prompt(self, k1m, px):
+        import pandas as pd
+        k1 = self._indicators(k1m.tail(100))
+        k5 = self._indicators(self._resample(k1m, "5min").tail(100))
+        k15 = self._indicators(self._resample(k1m, "15min").tail(100))
+        k1h = self._indicators(self._resample(k1m, "1h").tail(100))
+
+        now = pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+        def fmt_k(d, n=100):
+            d = d.tail(n)
+            return "\n".join(
+                "{}  O:{:.1f} H:{:.1f} L:{:.1f} C:{:.1f} V:{:.1f} TB:{:.1f}".format(
+                    r["t"], r["open"], r["high"], r["low"], r["close"], r["volume"],
+                    r.get("taker_buy_vol", r.get("tb", 0)))
+                for _, r in d.iterrows())
+
+        def mom(tf, k):
+            return "RSI7 (%s): %.1f | last 10: %s\nRSI14 (%s): %.1f | last 10: %s\nMACD (%s): hist=%+.1f | last 10: %s" % (
+                tf, k["rsi7"].iloc[-1], self._jf(k["rsi7"].tail(10).values, ".1f"),
+                tf, k["rsi14"].iloc[-1], self._jf(k["rsi14"].tail(10).values, ".1f"),
+                tf, k["macd_h"].iloc[-1], self._jf(k["macd_h"].tail(10).values, "+.1f"))
+
+        def oflow(tf, k):
+            cvd = k["dl"].tail(20).values * px / 1e6
+            tb_sum = k["tb"].tail(20).sum()
+            ts_sum = k["ts"].tail(20).sum()
+            ratio = tb_sum / ts_sum if ts_sum > 0 else 0
+            recent_sell = k["ts"].tail(10).values
+            recent_ratio = np.divide(
+                k["tb"].tail(10).values,
+                recent_sell,
+                out=np.zeros_like(recent_sell, dtype=float),
+                where=recent_sell > 0,
+            )
+            return "CVD (%s): %+.2fM | last 10: %sM | Cum20: %+.2fM\nTaker (%s): Buy+%.2fM Sell-%.2fM | Ratio %.2fx | last 10: %sx" % (
+                tf, cvd[-1], self._jf(cvd[-10:], "+.2f"), cvd.sum(),
+                tf, tb_sum * px / 1e6, ts_sum * px / 1e6, ratio,
+                self._jf(recent_ratio, ".2f"))
+
+        def vol(tf, k):
+            h5 = k["high"].tail(5).values
+            l5 = k["low"].tail(5).values
+            vr = (h5.max() - l5.min()) / l5.min() * 100
+            return "ATR14 (%s): %.1f | 20avg: %.1f | 5bar: %.3f%%" % (
+                tf, k["atr"].iloc[-1], k["atr20"].iloc[-1], vr)
+
+        def trend(name, k):
+            arr = "多头" if k["e20"].iloc[-1] > k["e50"].iloc[-1] > k["e100"].iloc[-1] else (
+                "空头" if k["e20"].iloc[-1] < k["e50"].iloc[-1] < k["e100"].iloc[-1] else "交叉")
+            return "=== %s TREND ===\nPrice: $%s | EMA20/50/100: %.0f/%.0f/%.0f (%s)\nMA20: %.0f | BOLL: U%.0f M%.0f L%.0f\nVWAP: %.1f | OBV: %s" % (
+                name, format(float(k["close"].iloc[-1]), ",.1f"),
+                k["e20"].iloc[-1], k["e50"].iloc[-1], k["e100"].iloc[-1], arr,
+                k["ma20"].iloc[-1], k["bu"].iloc[-1], k["bm"].iloc[-1], k["bl"].iloc[-1],
+                k["vwap"].iloc[-1], format(int(k["obv"].iloc[-1]), ","))
+
+        return """=== PREDICTION OBJECTIVE ===
+Predict the price direction of BTCUSDT over the NEXT 10 MINUTES.
+
+Definitions (measured at the close of the 10-minute window):
+- UP:    future price > current price  (price goes up by ANY amount)
+- DOWN:  future price <= current price (price goes down or stays flat)
+
+This is a STRICT binary choice. You MUST choose either UP or DOWN. No FLAT.
+
+=== SESSION CONTEXT ===
+Current UTC time: {now}
+
+=== MARKET DATA ===
+BTC/USDT  |  Price: ${px}
+
+=== K-LINE DATA (1m x100) ===
+{k1str}
+
+=== MOMENTUM (1m + 5m + 15m + 1h) ===
+{mom}
+
+=== ORDER FLOW (1m + 5m + 15m + 1h) ===
+{of}
+
+=== VOLATILITY (1m + 5m + 15m + 1h) ===
+{vol}
+
+{t5}
+
+{t15}
+
+{t1h}
+
+=== OUTPUT FORMAT ===
+Respond with ONLY a JSON object:
+{{"direction":"UP或DOWN","confidence":0.0到1.0,"reason":"一句话理由"}}""".format(
+            now=now, px="{:,.1f}".format(px), k1str=fmt_k(k1, 100),
+            mom="\n".join(mom(tf, k) for tf, k in [("1m", k1), ("5m", k5), ("15m", k15), ("1h", k1h)]),
+            of="\n".join(oflow(tf, k) for tf, k in [("1m", k1), ("5m", k5), ("15m", k15), ("1h", k1h)]),
+            vol="\n".join(vol(tf, k) for tf, k in [("1m", k1), ("5m", k5), ("15m", k15), ("1h", k1h)]),
+            t5=trend("5M", k5), t15=trend("15M", k15), t1h=trend("1H", k1h))
+
+    # ---------- LLM 调用 ----------
+    def _call_llm(self, prompt):
+        import json as _json
+        import urllib.request
+        payload = _json.dumps({
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": self.max_tokens,
+            "temperature": 0.2,
+        }).encode("utf-8")
+        req = urllib.request.Request(self.api_url, data=payload, headers={
+            "Authorization": "Bearer %s" % self.api_key, "Content-Type": "application/json"})
+        resp = urllib.request.urlopen(req, timeout=180)
+        data = _json.loads(resp.read())
+        msg = data["choices"][0]["message"]
+        content = msg.get("content", "")
+        try:
+            parsed = _json.loads(content)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("llm_response_not_json") from exc
+        if not isinstance(parsed, dict) or parsed.get("direction") not in ("UP", "DOWN"):
+            # 必须是完整 JSON 对象，拒绝 Markdown、截断内容和夹杂示例的响应。
+            raise ValueError("llm_direction_missing")
+        pred = parsed["direction"]
+        conf = float(parsed.get("confidence", 0.5))
+        if not math.isfinite(conf):
+            raise ValueError("llm_confidence_invalid")
+        conf = min(max(conf, 0.0), 1.0)
+        reason = str(parsed.get("reason", ""))[:200]
+        return pred, conf, reason
+
+    def _run_prediction(self, k1m, px, data_time):
+        """在后台完成提示词构建和模型请求，并原子更新缓存结果。"""
+        import datetime
+        try:
+            prompt = self._build_prompt(k1m, px)
+            direction, confidence, reason = self._call_llm(prompt)
+            now_str = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            result = {
+                "strategy_id": self.id,
+                "signal": direction,
+                "direction": direction,
+                "confidence": confidence,
+                "model_type": "llm_direction",
+                "reason": reason,
+                # time 表示行情时刻，供下游新鲜度门控；generated_at 表示模型完成时刻。
+                "time": data_time,
+                "generated_at": now_str,
+                "price": px,
+                "avg_prob": 0.5,
+                "rsi_value": None,
+                "high_conf": confidence > 0.6,
+                "agree": True,
+                "vol_ok": True,
+                "session_gate_ok": True,
+                "rsi_extreme": False,
+                "horizon_min": self.horizon_min,
+                "llm_model": self.model,
+            }
+            print("  %s [LLM] %s conf=%.2f %s" % (now_str, direction, confidence, reason[:80]))
+        except Exception as e:
+            result = self._no_signal("llm_error: %s" % str(e)[:200])
+        finally:
+            with self._runtime["lock"]:
+                self._runtime["last_result"] = result
+                self._runtime["request_in_flight"] = False
+
+    def _lifecycle_pending(self):
+        """读取服务端快照；读取失败时由服务端响应门禁继续提供最终保护。"""
+        try:
+            with open(ORDER_LIFECYCLE_GATE_FILE, "r", encoding="utf-8") as handle:
+                gate = json.load(handle)
+        except (OSError, ValueError, TypeError):
+            gate = {}
+        state = gate.get("strategies", {}).get(self.id) if isinstance(gate, dict) else None
+        return state if isinstance(state, dict) and state.get("blocked") else None
+
+    # ---------- predict ----------
+    def predict(self, df5=None):
+        import datetime
+        now_ts = time.time()
+        pending = self._lifecycle_pending()
+        if pending:
+            # pending 期间不复用旧方向，也不推进请求间隔；结算解除后再生成全新预测。
+            with self._runtime["lock"]:
+                self._runtime["last_result"] = self._no_signal("order_lifecycle_pending")
+                return self._runtime["last_result"]
+        # 先在共享状态中占用本轮，数据错误和网络错误都按统一间隔退避。
+        with self._runtime["lock"]:
+            if now_ts - self._runtime["last_call_time"] < self.interval_sec:
+                return self._runtime["last_result"] or self._no_signal("llm_request_pending")
+            if self._runtime["request_in_flight"]:
+                return self._runtime["last_result"] or self._no_signal("llm_request_pending")
+            self._runtime["request_in_flight"] = True
+            self._runtime["last_call_time"] = now_ts
+
+        # 100根1h指标至少需要6000根1m；额外读取500根覆盖分桶边界。
+        k1m = self._load_1m(6500)
+        if k1m is None or len(k1m) < 6500:
+            with self._runtime["lock"]:
+                self._runtime["last_result"] = self._no_signal("data_insufficient_6500_rows_required")
+                self._runtime["request_in_flight"] = False
+                return self._runtime["last_result"]
+
+        # 模型实际接收当前加载窗口聚合出的订单流；任一行缺失都必须停止请求。
+        missing_taker_rows = int(k1m["taker_buy_vol"].isna().sum())
+        if missing_taker_rows:
+            with self._runtime["lock"]:
+                self._runtime["last_result"] = self._no_signal(
+                    "taker_buy_vol_incomplete: %d/%d rows missing" % (missing_taker_rows, len(k1m))
+                )
+                self._runtime["request_in_flight"] = False
+                return self._runtime["last_result"]
+
+        try:
+            last_t = k1m["t"].iloc[-1]
+            if hasattr(last_t, "tzinfo") and last_t.tzinfo is None:
+                last_t = last_t.tz_localize("UTC")
+            age = (datetime.datetime.now(datetime.timezone.utc) - last_t).total_seconds()
+            data_time = last_t.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            px = float(k1m["close"].iloc[-1])
+        except Exception as e:
+            # 数据解析异常也要释放共享占用，下一次按统一间隔再尝试。
+            with self._runtime["lock"]:
+                self._runtime["last_result"] = self._no_signal("data_error: %s" % str(e)[:120])
+                self._runtime["request_in_flight"] = False
+                return self._runtime["last_result"]
+        if age > 600:
+            with self._runtime["lock"]:
+                self._runtime["last_result"] = self._no_signal("data_stale_%ds" % int(age))
+                self._runtime["request_in_flight"] = False
+                return self._runtime["last_result"]
+        with self._runtime["lock"]:
+            self._runtime["last_result"] = self._no_signal("llm_request_pending")
+
+        # 守护线程仅更新共享缓存，不阻塞其他策略的秒级扫描。
+        worker = threading.Thread(target=self._run_prediction, args=(k1m, px, data_time), daemon=True)
+        worker.start()
+        return self._runtime["last_result"]
+
+    def _no_signal(self, reason):
+        import datetime
+        now_str = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        return {
+            "strategy_id": self.id,
+            "signal": None,
+            "direction": None,
+            "confidence": 0,
+            "model_type": "llm_direction",
+            "reason": reason,
+            "time": now_str,
+            "avg_prob": 0.5,
+            "rsi_value": None,
+            "high_conf": False,
+            "agree": True,
+            "vol_ok": True,
+            "session_gate_ok": True,
+            "rsi_extreme": False,
+        }
+
+
 def _make_strategy(sid, cfg):
     if cfg.get("model_type") == "poc_normal":
         return POCNormalStrategy(sid, cfg)
@@ -5494,6 +5868,8 @@ def _make_strategy(sid, cfg):
         return SecondValueAreaSmartStrategy(sid, cfg)
     if cfg.get("model_type") == "second_trend_pullback_down":
         return SecondTrendPullbackDownStrategy(sid, cfg)
+    if cfg.get("model_type") == "llm_direction":
+        return LLMDirectionStrategy(sid, cfg)
     return Strategy(sid, cfg)
 
 def build_strategies(config_map):
@@ -5501,7 +5877,7 @@ def build_strategies(config_map):
     return [
         _make_strategy(k, v)
         for k, v in config_map.items()
-        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal", "second_normal_router_v21", "second_normal_lowvol_v22", "second_normal_liquidity_orderbook_v1", "second_normal_trend_orderbook_latch_v2", "second_branch_vote_startup_v1", MULTI_NORMAL_HF_MODEL_TYPE, MULTISCALE_PHASE_GATE_MODEL_TYPE, "second_normal_vw_confirm", "normal_state_v11", "second_chip", "second_range_breakout_confirm", "second_value_area_smart", "second_trend_pullback_down") or k not in live_two_minute_ids)
+        if v.get("enabled", True) and (v.get("model_type") in ("poc_normal", "second_normal", "second_normal_router_v21", "second_normal_lowvol_v22", "second_normal_liquidity_orderbook_v1", "second_normal_trend_orderbook_latch_v2", "second_branch_vote_startup_v1", MULTI_NORMAL_HF_MODEL_TYPE, MULTISCALE_PHASE_GATE_MODEL_TYPE, "second_normal_vw_confirm", "normal_state_v11", "second_chip", "second_range_breakout_confirm", "second_value_area_smart", "second_trend_pullback_down", "llm_direction") or k not in live_two_minute_ids)
     ]
 
 

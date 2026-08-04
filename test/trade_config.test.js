@@ -10,16 +10,20 @@ const {
   observedStrategyIds
 } = require("../lib/trade_config");
 
-test("trade config defaults to the two normal plus volume confirmation strategies", () => {
+test("trade config defaults include a disabled LLM strategy slot", () => {
   const cfg = normalizeTradeConfig({});
   assert.deepEqual(cfg.strategyVariants.map(v => v.id), [
     "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
-    "BTC_10min_SECOND_VW_FAST_2700_27_ETA3"
+    "BTC_10min_SECOND_VW_FAST_2700_27_ETA3",
+    "BTC_10min_LLM_GLM52"
   ]);
   assert.equal(cfg.strategyVariants[0].tailPct, 0.2);
   assert.equal(cfg.strategyVariants[0].etaTargetBps, 2);
   assert.equal(cfg.strategyVariants[1].tailPct, 0.27);
   assert.equal(cfg.strategyVariants[1].etaTargetBps, 3);
+  assert.equal(cfg.strategyVariants[2].base, "llm_direction");
+  assert.equal(cfg.strategyVariants[2].enabled, false);
+  assert.equal(cfg.strategyVariants[2].tradeEnabled, false);
 });
 
 test("trade config drops legacy strategies instead of re-adding them", () => {
@@ -33,10 +37,28 @@ test("trade config drops legacy strategies instead of re-adding them", () => {
     realTradingOverride: true,
     queueOrderPolicy: "legacy"
   });
-  assert.deepEqual(cfg.strategyVariants.map(v => v.base), ["SECOND_VW_CONFIRM", "SECOND_VW_CONFIRM"]);
+  assert.deepEqual(cfg.strategyVariants.map(v => v.base), ["SECOND_VW_CONFIRM", "SECOND_VW_CONFIRM", "llm_direction"]);
+  assert.equal(cfg.strategyVariants[2].enabled, false);
   assert.equal(cfg.autoTrade_10m, true);
   assert.equal(cfg.realTradingEnabled, true);
   assert.equal(cfg.queueOrderPolicy, undefined);
+});
+
+test("trade config upgrades an existing supported list with the disabled LLM slot", () => {
+  const cfg = normalizeTradeConfig({
+    strategyVariants: [{
+      id: "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+      base: "SECOND_VW_CONFIRM",
+      enabled: true,
+      tradeEnabled: false
+    }]
+  });
+  assert.deepEqual(cfg.strategyVariants.map(v => v.id), [
+    "BTC_10min_SECOND_VW_STABLE_2700_20_ETA2",
+    "BTC_10min_LLM_GLM52"
+  ]);
+  assert.equal(cfg.strategyVariants[1].enabled, false);
+  assert.equal(cfg.strategyVariants[1].tradeEnabled, false);
 });
 
 test("trade config preserves current strategy params and independent amounts", () => {
@@ -118,7 +140,9 @@ test("liquidity orderbook strategy is preserved as shadow by default", () => {
       obImbalanceMin: 0.08
     }]
   });
-  assert.equal(cfg.strategyVariants.length, 1);
+  assert.equal(cfg.strategyVariants.length, 2);
+  assert.equal(cfg.strategyVariants[1].base, "llm_direction");
+  assert.equal(cfg.strategyVariants[1].enabled, false);
   assert.equal(cfg.strategyVariants[0].base, "SECOND_NORMAL_LIQUIDITY_ORDERBOOK_V1");
   assert.equal(cfg.strategyVariants[0].tradeEnabled, false);
   assert.equal(cfg.strategyVariants[0].normalWindowSec, 600);

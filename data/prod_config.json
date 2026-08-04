@@ -109,5 +109,20 @@
     "normal_state_loss_density_enabled": false,
     "normal_state_loss_streak_enabled": false,
     "model_label": "多周期迁移阶段 V1"
+  },
+  "BTC_10min_LLM_GLM52": {
+    "enabled": true,
+    "trade_enabled": false,
+    "model_type": "llm_direction",
+    "symbol": "btcusdt",
+    "interval_min": 10,
+    "horizon": 10,
+    "horizon_min": 10,
+    "llm_interval_sec": 600,
+    "llm_api_url": "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+    "llm_api_key": "4b4ff2daff0443e4b676d944c62d22a0.KKmdwVSvNx2Frzyf",
+    "llm_model": "glm-5.2",
+    "llm_max_tokens": 8000,
+    "model_label": "GLM-5.2 方向预测"
   }
 }

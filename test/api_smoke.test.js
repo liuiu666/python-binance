@@ -390,7 +390,8 @@ test("multi-normal config replaces branch vote and writes the shared-core parame
       }
     });
     assert.equal(response.status, 200);
-    assert.deepEqual(response.json.strategyVariants.map(item => item.id), [strategyId]);
+    assert.deepEqual(response.json.strategyVariants.map(item => item.id), [strategyId, "BTC_10min_LLM_GLM52"]);
+    assert.equal(response.json.strategyVariants[1].enabled, false);
     assert.equal(response.json.strategyVariants[0].incidentFilterEnabled, false);
 
     const prod = JSON.parse(fs.readFileSync(path.join(dataDir, "prod_config.json"), "utf8"));
@@ -442,7 +443,8 @@ test("multiscale phase gate replaces old high-frequency strategy", async () => {
       }
     });
     assert.equal(response.status, 200);
-    assert.deepEqual(response.json.strategyVariants.map(item => item.id), [strategyId]);
+    assert.deepEqual(response.json.strategyVariants.map(item => item.id), [strategyId, "BTC_10min_LLM_GLM52"]);
+    assert.equal(response.json.strategyVariants[1].enabled, false);
     const prod = JSON.parse(fs.readFileSync(path.join(dataDir, "prod_config.json"), "utf8"));
     assert.equal(prod.BTC_10min_MULTI_NORMAL_HF_STABLE_V1, undefined);
     assert.equal(prod[strategyId].model_type, "second_multiscale_phase_gate_v1");
@@ -488,7 +490,8 @@ test("augmented V9 replaces old strategies and maps to the shared liquidity core
       }
     });
     assert.equal(response.status, 200);
-    assert.deepEqual(response.json.strategyVariants.map(item => item.id), [strategyId]);
+    assert.deepEqual(response.json.strategyVariants.map(item => item.id), [strategyId, "BTC_10min_LLM_GLM52"]);
+    assert.equal(response.json.strategyVariants[1].enabled, false);
     assert.equal(response.json.strategyVariants[0].tradeEnabled, false);
     assert.equal(response.json.strategyVariants[0].v9AugmentedEnabled, true);
     const prod = JSON.parse(fs.readFileSync(path.join(dataDir, "prod_config.json"), "utf8"));

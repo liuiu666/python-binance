@@ -22,6 +22,8 @@ SYMBOLS = [
 ]
 BACKFILL_DAYS = max(1, int(os.environ.get("LIVE_UPDATE_BACKFILL_DAYS", "7")))
 GAP_BACKFILL_DAYS = max(1, int(os.environ.get("LIVE_UPDATE_GAP_BACKFILL_DAYS", "30")))
+# LLM 构造 100 根小时线最多读取 6500 根分钟线，该窗口的主动买量必须全部真实可用。
+LLM_TAKER_WINDOW_ROWS = max(6500, int(os.environ.get("LLM_TAKER_WINDOW_ROWS", "6500")))
 HTTP_TIMEOUT = float(os.environ.get("LIVE_UPDATE_HTTP_TIMEOUT", "15"))
 SPOT_BASES = [
     base.strip().rstrip("/")
@@ -206,18 +208,18 @@ def fetch_klines(symbol, existing):
                 "ignore",
             ],
         )
-        df = df[["open_time", "open", "high", "low", "close", "volume"]]
+        df = df[["open_time", "open", "high", "low", "close", "volume", "taker_buy_vol"]]
         df["open_time"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
-        for col in ["open", "high", "low", "close", "volume"]:
+        for col in ["open", "high", "low", "close", "volume", "taker_buy_vol"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     else:
-        df = pd.DataFrame(columns=["open_time", "open", "high", "low", "close", "volume"])
+        df = pd.DataFrame(columns=["open_time", "open", "high", "low", "close", "volume", "taker_buy_vol"])
     return merge_and_write(
         existing,
         df,
         path,
         "open_time",
-        ["open_time", "open", "high", "low", "close", "volume"],
+        ["open_time", "open", "high", "low", "close", "volume", "taker_buy_vol"],
     )
 
 
@@ -245,7 +247,7 @@ def fetch_kline_range(symbol, start_ms, end_ms):
         cursor = next_cursor
         time.sleep(0.08)
     if not rows:
-        return pd.DataFrame(columns=["open_time", "open", "high", "low", "close", "volume"])
+        return pd.DataFrame(columns=["open_time", "open", "high", "low", "close", "volume", "taker_buy_vol"])
     df = pd.DataFrame(
         rows,
         columns=[
@@ -263,11 +265,84 @@ def fetch_kline_range(symbol, start_ms, end_ms):
             "ignore",
         ],
     )
-    df = df[["open_time", "open", "high", "low", "close", "volume"]]
+    df = df[["open_time", "open", "high", "low", "close", "volume", "taker_buy_vol"]]
     df["open_time"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
-    for col in ["open", "high", "low", "close", "volume"]:
+    for col in ["open", "high", "low", "close", "volume", "taker_buy_vol"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
+
+
+def fetch_taker_buy_range(symbol, start_ms, end_ms):
+    """读取与主 CSV 相同的现货分钟线主动买量，保证总量和主动买量口径一致。"""
+    rows = []
+    cursor = int(start_ms)
+    while cursor <= end_ms:
+        params = {
+            "symbol": symbol.upper(),
+            "interval": "1m",
+            "startTime": cursor,
+            "endTime": end_ms,
+            "limit": 1000,
+        }
+        batch = request_json("/api/v3/klines", params, bases=SPOT_BASES)
+        if not batch:
+            break
+        rows.extend(batch)
+        next_cursor = int(batch[-1][0]) + 60000
+        if next_cursor <= cursor:
+            break
+        cursor = next_cursor
+        time.sleep(0.08)
+    if not rows:
+        return pd.DataFrame(columns=["open_time", "taker_buy_vol"])
+    frame = pd.DataFrame({
+        "open_time": [row[0] for row in rows],
+        "taker_buy_vol": [row[9] for row in rows],
+    })
+    frame["open_time"] = pd.to_datetime(frame["open_time"], unit="ms", utc=True)
+    frame["taker_buy_vol"] = pd.to_numeric(frame["taker_buy_vol"], errors="coerce")
+    return frame.dropna(subset=["open_time", "taker_buy_vol"]).drop_duplicates("open_time", keep="last")
+
+
+def backfill_recent_taker_buy_vol(symbol, window_rows=LLM_TAKER_WINDOW_ROWS):
+    """只回填近期缺失的主动买量，不用期货数据覆盖原 CSV 的 OHLCV。"""
+    path = os.path.join(OUT, f"{symbol}_1m.csv")
+    existing = read_existing(path, "open_time")
+    if existing.empty:
+        return {"required_rows": 0, "missing_before": 0, "filled": 0, "missing_after": 0}
+
+    if "taker_buy_vol" not in existing.columns:
+        existing["taker_buy_vol"] = float("nan")
+    existing["taker_buy_vol"] = pd.to_numeric(existing["taker_buy_vol"], errors="coerce")
+    required_index = existing.tail(int(window_rows)).index
+    missing_index = required_index[existing.loc[required_index, "taker_buy_vol"].isna()]
+    missing_before = int(len(missing_index))
+    if missing_before == 0:
+        return {
+            "required_rows": int(len(required_index)),
+            "missing_before": 0,
+            "filled": 0,
+            "missing_after": 0,
+        }
+
+    missing_times = existing.loc[missing_index, "open_time"]
+    fetched = fetch_taker_buy_range(
+        symbol,
+        int(missing_times.min().timestamp() * 1000),
+        int(missing_times.max().timestamp() * 1000),
+    )
+    values = fetched.set_index("open_time")["taker_buy_vol"] if not fetched.empty else pd.Series(dtype=float)
+    # map 仅赋值给原本为空的目标行，确保价格、总量及扩展字段原样保留。
+    repaired = existing.loc[missing_index, "open_time"].map(values)
+    existing.loc[missing_index, "taker_buy_vol"] = repaired.to_numpy()
+    missing_after = int(existing.loc[required_index, "taker_buy_vol"].isna().sum())
+    atomic_write_csv(existing, path)
+    return {
+        "required_rows": int(len(required_index)),
+        "missing_before": missing_before,
+        "filled": missing_before - missing_after,
+        "missing_after": missing_after,
+    }
 
 
 def backfill_kline_gaps(symbol, first_result):
@@ -297,7 +372,8 @@ def backfill_kline_gaps(symbol, first_result):
             gap_df,
             path,
             "open_time",
-            ["open_time", "open", "high", "low", "close", "volume"],
+            # 缺口回补必须保留主动买量列，否则会在原子重写时删除整列。
+            ["open_time", "open", "high", "low", "close", "volume", "taker_buy_vol"],
         )
     else:
         final = first_result
@@ -420,6 +496,8 @@ def update_symbol(symbol):
     try:
         first = fetch_klines(symbol, read_existing(kline_path, "open_time"))
         result["klines_1m"] = backfill_kline_gaps(symbol, first)
+        # 时间连续并不代表字段完整，尾部更新和缺口修复后仍须检查 LLM 所需窗口。
+        result["klines_1m"]["taker_buy_vol_backfill"] = backfill_recent_taker_buy_vol(symbol)
     except Exception as e:
         result["klines_1m_error"] = str(e)
         errors.append({"dataset": "klines_1m", "error": str(e)})

@@ -402,6 +402,14 @@ export default function App() {
   const [realBalance, setRealBalance] = useState(null);
   const [configDraft, setConfigDraft] = useState(DEFAULT_CONFIG);
   const [configDirty, setConfigDirty] = useState(false);
+  const [llmConfig, setLlmConfig] = useState({
+    apiUrl: "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+    apiKey: "",
+    model: "glm-5.2",
+    intervalSec: 600,
+    maxTokens: 8000
+  });
+  const [llmStatus, setLlmStatus] = useState(null);
   const [apiToken, setApiToken] = useState(() => window.localStorage.getItem("btcApiToken") || "");
   const [toasts, setToasts] = useState([]);
   const dirtyRef = useRef(false);
@@ -464,6 +472,8 @@ export default function App() {
   }), [configDirty, dataHealth, orderbookHealth, secondDataHealth, signalRows, tradeHistory]);
 
   const loadSignals = useCallback(() => loadJson("/api/signal?source=dashboard", setSignalPayload), [loadJson]);
+  const loadLlmStatus = useCallback(() => loadJson("/api/llm-status", setLlmStatus), [loadJson]);
+  const loadLlmConfig = useCallback(() => loadJson("/api/llm-config", setLlmConfig), [loadJson]);
   const loadRuntime = useCallback(() => loadJson("/api/runtime", setRuntime), [loadJson]);
   const loadTablet = useCallback(() => loadJson("/api/tablet-diagnostics", setTablet), [loadJson]);
   const loadBalance = useCallback(() => loadJson("/api/balance", setRealBalance), [loadJson]);
@@ -532,9 +542,11 @@ export default function App() {
     loadHealth();
     loadBalance();
     loadConfig(true);
+    loadLlmConfig();
+    loadLlmStatus();
     loadPriceFallback();
     notify("已刷新", "success");
-  }, [loadBalance, loadConfig, loadHealth, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory, notify]);
+  }, [loadBalance, loadConfig, loadHealth, loadLlmConfig, loadLlmStatus, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory, notify]);
 
   const markDraft = useCallback(patch => {
     dirtyRef.current = true;
@@ -553,18 +565,48 @@ export default function App() {
     window.localStorage.setItem("btcApiToken", value);
   }, []);
 
+  const saveLlmConfig = useCallback(() => {
+    apiFetch("/api/llm-config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(llmConfig)
+    })
+      .then(async res => {
+        const body = await res.json();
+        if (!res.ok || body.ok !== true) throw new Error(body.error || body.message || "llm_config_save_failed");
+        return body;
+      })
+      .then(body => {
+        setLlmConfig(body);
+        loadLlmStatus();
+        notify("LLM 配置已明文保存并重启策略服务", "success");
+      })
+      .catch(() => notify("LLM 配置保存失败", "error"));
+  }, [apiFetch, llmConfig, loadLlmStatus, notify]);
+
+  const predictLlmNow = useCallback(() => {
+    apiFetch("/api/llm-predict-now", { method: "POST" })
+      .then(res => res.json())
+      .then(body => {
+        if (!body.ok) throw new Error(body.reason || "predict_failed");
+        notify("LLM 策略服务已重启并请求预测", "success");
+        window.setTimeout(loadLlmStatus, 1500);
+      })
+      .catch(() => notify("LLM 未启用或预测触发失败", "error"));
+  }, [apiFetch, loadLlmStatus, notify]);
+
   const saveConfig = useCallback(() => {
     const variants = Array.isArray(configDraft.strategyVariants)
       ? configDraft.strategyVariants
       : DEFAULT_CONFIG.strategyVariants;
-    const hasLiveStrategy = variants.some(variant => variant.enabled !== false && variant.tradeEnabled !== false);
     const payload = {
       ...configDraft,
       strategyVariants: variants,
       amount: String(configDraft.amount || DEFAULT_CONFIG.amount),
       duration: String(configDraft.duration || DEFAULT_CONFIG.duration),
-      realTradingEnabled: hasLiveStrategy,
-      autoTrade_10m: hasLiveStrategy
+      // 全局资金开关尊重用户选择；策略允许实盘不等于自动打开真实资金。
+      realTradingEnabled: !!configDraft.realTradingEnabled,
+      autoTrade_10m: !!configDraft.realTradingEnabled
     };
     apiFetch("/api/config", {
       method: "POST",
@@ -640,8 +682,10 @@ export default function App() {
     loadHealth();
     loadBalance();
     loadConfig();
+    loadLlmConfig();
+    loadLlmStatus();
     loadPriceFallback();
-  }, [loadBalance, loadConfig, loadHealth, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory]);
+  }, [loadBalance, loadConfig, loadHealth, loadLlmConfig, loadLlmStatus, loadPriceFallback, loadRuntime, loadSignals, loadTablet, loadTradeHistory]);
 
   useEffect(() => {
     const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -699,6 +743,7 @@ export default function App() {
   useInterval(loadRuntime, 30000);
   useInterval(loadBalance, 30000);
   useInterval(loadConfig, 10000);
+  useInterval(loadLlmStatus, 10000);
 
   const routePath = window.location.pathname.replace(/\/+$/, "");
   if (routePath === "/dashboard/normal-visual") {
@@ -810,6 +855,11 @@ export default function App() {
               draft={configDraft}
               dirty={configDirty}
               apiToken={apiToken}
+              llmConfig={llmConfig}
+              llmStatus={llmStatus}
+              onLlmChange={patch => setLlmConfig(current => ({ ...current, ...patch }))}
+              onLlmSave={saveLlmConfig}
+              onLlmPredictNow={predictLlmNow}
               onTokenChange={handleTokenChange}
               onDraftChange={markDraft}
               onToggle={toggleDraft}

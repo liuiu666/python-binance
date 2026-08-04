@@ -2,6 +2,7 @@ const assert = require("node:assert");
 const test = require("node:test");
 const {
   buildLiveOrderHistory,
+  deriveOrderLifecycleGate,
   fallbackSettlePrice,
   payoutRateForDuration,
   priceAtOrAfter,
@@ -108,6 +109,101 @@ test("expired orders settle with current price when tick history is missing", ()
   assert.equal(history.summary.real.wins, 1);
   assert.equal(history.summary.shadow.wins, 1);
   assert.equal(history.summary.pending, 0);
+});
+
+test("order lifecycle gate locks done and unverified orders by corrected confirmation time", () => {
+  const gate = deriveOrderLifecycleGate({
+    now: 500_000,
+    auditRows: [
+      {
+        event: "order_done",
+        serverTime: 8_000,
+        clientTime: 9_000,
+        confirmProbe: { dispatchedAt: 6_000 },
+        duration: 10,
+        direction: "UP",
+        price: 100,
+        strategyId: "DONE"
+      },
+      {
+        event: "order_unverified",
+        serverTime: 20_000,
+        duration: 30,
+        direction: "DOWN",
+        price: 100,
+        strategyId: "UNVERIFIED"
+      }
+    ]
+  });
+
+  assert.equal(gate.strategies.DONE.openTime, 5_000);
+  assert.equal(gate.strategies.DONE.settleTime, 605_000);
+  assert.equal(gate.strategies.DONE.reason, "order_duration_pending");
+  assert.equal(gate.strategies.UNVERIFIED.settleTime, 1_820_000);
+});
+
+test("order lifecycle gate remains locked after expiry until a valid settlement tick exists", () => {
+  const order = {
+    event: "order_done",
+    serverTime: 1_000,
+    duration: 10,
+    direction: "UP",
+    price: 100,
+    strategyId: "WAIT_PRICE"
+  };
+  const expired = deriveOrderLifecycleGate({
+    now: 700_000,
+    auditRows: [order],
+    priceTicks: [{ time: 650_000, price: 101 }],
+    currentPrice: 102
+  });
+  assert.equal(expired.strategies.WAIT_PRICE.expired, true);
+  assert.equal(expired.strategies.WAIT_PRICE.reason, "settlement_price_pending");
+
+  const settled = deriveOrderLifecycleGate({
+    now: 700_000,
+    auditRows: [order],
+    priceTicks: [{ time: 601_000, price: 101 }]
+  });
+  assert.equal(settled.strategies.WAIT_PRICE, undefined);
+});
+
+test("order lifecycle gate does not revive an older order after the latest order settled", () => {
+  const gate = deriveOrderLifecycleGate({
+    now: 2_000_000,
+    auditRows: [
+      { event: "order_done", serverTime: 1_000, duration: 10, direction: "UP", price: 100, strategyId: "SAME" },
+      { event: "order_done", serverTime: 1_000_000, duration: 10, direction: "UP", price: 100, strategyId: "SAME" }
+    ],
+    // 价格日志只保留最新订单的结算点；旧订单不应因此被重新锁定。
+    priceTicks: [{ time: 1_600_000, price: 101 }]
+  });
+
+  assert.equal(gate.strategies.SAME, undefined);
+});
+
+test("order lifecycle gate restores from persisted rows and isolates strategies", () => {
+  const auditRows = [{
+    event: "order_unverified",
+    serverTime: 1_000,
+    direction: "DOWN",
+    price: 100,
+    strategyId: "RESTORED"
+  }];
+  const options = {
+    now: 100_000,
+    auditRows: JSON.parse(JSON.stringify(auditRows)),
+    durationForStrategy: { RESTORED: 15 }
+  };
+  const firstProcess = deriveOrderLifecycleGate(options);
+  const restartedProcess = deriveOrderLifecycleGate({
+    ...options,
+    auditRows: JSON.parse(JSON.stringify(auditRows))
+  });
+
+  assert.deepEqual(restartedProcess, firstProcess);
+  assert.equal(restartedProcess.strategies.RESTORED.duration, "15");
+  assert.equal(restartedProcess.strategies.OTHER, undefined);
 });
 
 test("settle status and pnl match binary option rules", () => {

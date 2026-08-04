@@ -1,8 +1,12 @@
 node_modules/
 .env.local
+# 本机部署凭据由 Windows DPAPI 加密，仅供当前用户读取。
+tools/*.local.json
 var/
 tmp/
 btc-binary-options-deploy.tar.gz
+# 本机部署凭据：允许明文保存，但禁止提交和打包。
+tools/deploy_linux.local.json
 *.sqlite
 *.db
 *.db-shm

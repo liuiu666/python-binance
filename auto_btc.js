@@ -2013,6 +2013,8 @@ function main() {
                         lastDirection = order.signal;
                         traded = true;
                     } else if (ok === "unverified") {
+                        // 确认动作可能已成功发送，本地也按完整订单周期锁定，服务端结算门禁仍是最终依据。
+                        setStrategyActiveUntil(order);
                         traded = true;
                     }
                     if (ok === true && qi < queue.length - 1) {

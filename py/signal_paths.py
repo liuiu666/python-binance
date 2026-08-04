@@ -10,6 +10,8 @@ SIGNAL_FILE = os.path.join(OUT, "live_signals.json")
 CONFIG_FILE = os.path.join(OUT, "prod_config.json")
 SIGNAL_AUDIT_FILE = os.path.join(OUT, "signal_audit.jsonl")
 SIGNAL_STATE_FILE = os.path.join(OUT, "signal_state.json")
+# Node 服务端写入该快照，供 LLM 策略在发起模型请求前读取订单生命周期门禁。
+ORDER_LIFECYCLE_GATE_FILE = os.path.join(OUT, "order_lifecycle_gate.json")
 LOCK_FILE = os.path.join(OUT, "signal_btc.lock")
 LOCK_DIR = os.path.join(OUT, "signal_btc.lockdir")
 

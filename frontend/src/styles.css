@@ -1867,6 +1867,24 @@ a {
   padding: 0 10px;
 }
 
+.llm-setting-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.llm-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.llm-actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text-1);
+  background: var(--surface-2);
+}
+
 .primary-action {
   min-height: 44px;
   display: inline-flex;

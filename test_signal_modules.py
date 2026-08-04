@@ -34,6 +34,112 @@ import collect_second_data as second_data_collector
 import update_live_data
 
 
+class TakerBuyVolumeIntegrityTests(unittest.TestCase):
+    @staticmethod
+    def _minute_frame(rows, include_taker=True):
+        import numpy as np
+        import pandas as pd
+
+        frame = pd.DataFrame({
+            "open_time": pd.date_range("2026-07-10T00:00:00Z", periods=rows, freq="min"),
+            "open": np.arange(rows, dtype=float) + 100.0,
+            "high": np.arange(rows, dtype=float) + 101.0,
+            "low": np.arange(rows, dtype=float) + 99.0,
+            "close": np.arange(rows, dtype=float) + 100.5,
+            "volume": np.arange(rows, dtype=float) + 10.0,
+        })
+        if include_taker:
+            frame["taker_buy_vol"] = frame["volume"] * 0.4
+        return frame
+
+    def test_old_six_column_csv_is_backfilled_without_overwriting_price_fields(self):
+        import pandas as pd
+
+        with tempfile.TemporaryDirectory(prefix="taker-backfill-test-") as temp_dir:
+            original = self._minute_frame(8, include_taker=False)
+            path = os.path.join(temp_dir, "btcusdt_1m.csv")
+            original.to_csv(path, index=False)
+            fetched = pd.DataFrame({
+                "open_time": original["open_time"],
+                "taker_buy_vol": [1.0 + i for i in range(len(original))],
+            })
+            with patch.object(update_live_data, "OUT", temp_dir), patch.object(
+                update_live_data, "fetch_taker_buy_range", return_value=fetched
+            ):
+                result = update_live_data.backfill_recent_taker_buy_vol("btcusdt", window_rows=8)
+            repaired = pd.read_csv(path)
+
+        self.assertEqual(result["filled"], 8)
+        self.assertEqual(result["missing_after"], 0)
+        self.assertEqual(list(repaired["close"]), list(original["close"]))
+        self.assertEqual(list(repaired["taker_buy_vol"]), [1.0 + i for i in range(8)])
+        self.assertEqual(len(repaired), len(original))
+
+    def test_only_nan_rows_in_recent_window_are_repaired(self):
+        import numpy as np
+        import pandas as pd
+
+        with tempfile.TemporaryDirectory(prefix="taker-partial-test-") as temp_dir:
+            original = self._minute_frame(10)
+            original.loc[[7, 9], "taker_buy_vol"] = np.nan
+            original["custom_field"] = range(10)
+            path = os.path.join(temp_dir, "btcusdt_1m.csv")
+            original.to_csv(path, index=False)
+            fetched = pd.DataFrame({
+                "open_time": original.loc[[7, 9], "open_time"],
+                "taker_buy_vol": [77.0, 99.0],
+            })
+            with patch.object(update_live_data, "OUT", temp_dir), patch.object(
+                update_live_data, "fetch_taker_buy_range", return_value=fetched
+            ):
+                result = update_live_data.backfill_recent_taker_buy_vol("btcusdt", window_rows=5)
+            repaired = pd.read_csv(path)
+
+        self.assertEqual(result["missing_before"], 2)
+        self.assertEqual(result["missing_after"], 0)
+        self.assertEqual(float(repaired.loc[7, "taker_buy_vol"]), 77.0)
+        self.assertEqual(float(repaired.loc[9, "taker_buy_vol"]), 99.0)
+        self.assertEqual(list(repaired["custom_field"]), list(range(10)))
+
+    def test_llm_missing_taker_data_returns_no_signal_without_model_call(self):
+        import ast
+        import math
+
+        frame = self._minute_frame(6500)
+        frame.loc[6499, "taker_buy_vol"] = float("nan")
+        frame = frame.rename(columns={"open_time": "t"})
+
+        # signal_btc 是常驻服务脚本，测试只加载目标类，避免触发生产配置和无限循环。
+        source = (Path(PY_DIR) / "signal_btc.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        class_node = next(
+            node for node in tree.body
+            if isinstance(node, ast.ClassDef) and node.name == "LLMDirectionStrategy"
+        )
+        namespace = {
+            "os": os,
+            "time": time,
+            "math": math,
+            "json": __import__("json"),
+            "threading": threading,
+            "HISTORY_1M_FILE": "unused.csv",
+            "ORDER_LIFECYCLE_GATE_FILE": "unused-order-lifecycle.json",
+            "_LLM_DIRECTION_RUNTIME": {},
+            "_LLM_DIRECTION_RUNTIME_LOCK": threading.Lock(),
+        }
+        exec(compile(ast.Module(body=[class_node], type_ignores=[]), "signal_btc.py", "exec"), namespace)
+        strategy = namespace["LLMDirectionStrategy"]("llm-taker-gate-test", {"llm_interval_sec": 600})
+        with patch.object(strategy, "_load_1m", return_value=frame), patch.object(
+            strategy, "_call_llm"
+        ) as model_call:
+            result = strategy.predict()
+
+        self.assertIsNone(result["signal"])
+        self.assertEqual(result["reason"], "taker_buy_vol_incomplete: 1/6500 rows missing")
+        model_call.assert_not_called()
+        self.assertFalse(strategy._runtime["request_in_flight"])
+
+
 class ExternalPeriodDataTests(unittest.TestCase):
     def test_period_row_is_available_only_after_bucket_close(self):
         import pandas as pd

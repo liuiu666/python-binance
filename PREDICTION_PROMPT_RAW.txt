@@ -1,0 +1,153 @@
+=== PREDICTION OBJECTIVE ===
+Predict the price direction of BTCUSDT over the NEXT 10 MINUTES.
+
+Definitions (measured at the close of the 10-minute window):
+- UP:    future price >= current price * 1.001  (+0.1% or more)
+- DOWN:  future price <= current price * 0.999  (-0.1% or more)
+- FLAT:  price moves within -0.1% to +0.1%
+
+Decision rules:
+- Base your prediction on order flow > price momentum > open interest > technical indicators.
+- Order flow (CVD / TAKER) is the PRIMARY driver of short-term direction. Price-only signals are secondary.
+- A spike in volume without a corresponding CVD push is NOT a directional signal.
+- Open Interest changes validate the sustainability of a move:
+    price up + OI up   = new longs entering, trend credible
+    price up + OI down = short covering, move may fade
+    price down + OI up = new shorts entering
+    price down + OI down = long stop-outs / liquidations
+- If conflicting or weak signals, choose FLAT rather than guessing.
+- Confidence should reflect signal agreement across order flow, OI, and momentum.
+
+=== SESSION CONTEXT ===
+Current UTC time: {current_time_utc}
+
+=== MARKET DATA ===
+{BTC_market_data}
+
+=== K-LINE DATA ===
+{BTC_klines_1m}(60)
+{BTC_klines_5m}(100)
+
+=== MOMENTUM ===
+{BTC_RSI7_1m}
+{BTC_RSI14_5m}
+{BTC_MACD_1m}
+{BTC_MACD_5m}
+
+=== ORDER FLOW (PRIMARY SIGNAL) ===
+{BTC_CVD_1m}
+{BTC_CVD_5m}
+{BTC_TAKER_1m}
+{BTC_TAKER_5m}
+{BTC_OI_DELTA_5m}
+
+=== ORDER BOOK ===
+{BTC_DEPTH_5m}
+{BTC_IMBALANCE_5m}
+
+=== VOLATILITY ===
+{BTC_ATR14_5m}
+{BTC_VOLATILITY_5m}
+
+=== TREND BACKGROUND ===
+{BTC_EMA_5m}
+{BTC_BOLL_5m}
+{BTC_VWAP_5m}
+{BTC_OBV_5m}
+
+=== FUNDING / SENTIMENT ===
+{BTC_FUNDING_5m}
+
+=== OUTPUT FORMAT ===
+Respond with ONLY a JSON object using this schema (always emitting the `decisions` array even if it is empty):
+{{
+  "decisions": [
+    {{
+      "operation": "buy" | "sell" | "hold" | "close",
+      "direction": "UP" | "DOWN" | "FLAT",
+      "direction_confidence": <float 0.0-1.0>,
+      "prediction_horizon_minutes": 10,
+      "symbol": "<BTC>",
+      "target_portion_of_balance": <float 0.0-1.0>,
+      "leverage": <integer 1-20>,
+      "max_price": <number, required for "buy" operations>,
+      "min_price": <number, required for "sell"/"close" operations>,
+      "time_in_force": "Ioc" | "Gtc" | "Alo",
+      "take_profit_price": <number, optional>,
+      "stop_loss_price": <number, optional>,
+      "tp_execution": "market" | "limit",
+      "sl_execution": "market" | "limit",
+      "reason": "<string explaining primary signals>",
+      "trading_strategy": "<string covering thesis, risk controls, and exit plan>"
+    }}
+  ]
+}}
+
+CRITICAL OUTPUT REQUIREMENTS:
+- Output MUST be a single, valid JSON object only
+- NO markdown code blocks (no ```json``` wrappers)
+- NO explanatory text before or after the JSON
+- NO comments or additional content outside the JSON object
+- Ensure all JSON fields are properly quoted and formatted
+- Double-check JSON syntax before responding
+
+Example output with multiple simultaneous orders:
+{{
+  "decisions": [
+    {{
+      "operation": "buy",
+      "direction": "UP",
+      "direction_confidence": 0.72,
+      "prediction_horizon_minutes": 10,
+      "symbol": "BTC",
+      "target_portion_of_balance": 0.3,
+      "leverage": 3,
+      "max_price": 49500,
+      "time_in_force": "Ioc",
+      "take_profit_price": 52000,
+      "stop_loss_price": 47500,
+      "tp_execution": "limit",
+      "sl_execution": "market",
+      "reason": "Strong bullish momentum with support holding at $48k, RSI recovering from oversold",
+      "trading_strategy": "Opening 3x leveraged long position with 30% balance. Take profit at $52k resistance (+5%), stop loss below $47.5k swing low (-4%). Using IOC for immediate execution."
+    }},
+    {{
+      "operation": "sell",
+      "symbol": "ETH",
+      "target_portion_of_balance": 0.2,
+      "leverage": 2,
+      "min_price": 3125,
+      "reason": "ETH perp funding flipped elevated negative while momentum weakens",
+      "trading_strategy": "Initiating small short hedge until ETH regains strength vs BTC pair. Stop if ETH closes back above $3.2k structural pivot."
+    }}
+  ]
+}}
+
+FIELD TYPE REQUIREMENTS:
+- decisions: array (one entry per supported symbol; include HOLD entries with zero allocation when you choose not to act)
+- operation: string ("buy" for long, "sell" for short, "hold", or "close")
+- direction: string ("UP", "DOWN", or "FLAT") - your 10-minute price direction prediction. REQUIRED when prediction objective is active.
+- direction_confidence: number (0.0-1.0) - confidence in the direction prediction. REQUIRED when direction is set.
+- symbol: string (exactly one of: BTC)
+- target_portion_of_balance: number (float between 0.1 and 1.0)
+- leverage: integer (between 1 and 20, REQUIRED field)
+- max_price: number (required for "buy" operations and closing SHORT positions. This is the maximum price you are willing to pay.)
+- min_price: number (required for "sell" operations and closing LONG positions. This is the minimum price you are willing to receive.)
+- time_in_force: string (optional, default "Ioc") - Order time in force: "Ioc" (immediate or cancel, taker-focused), "Gtc" (good til canceled, may become maker), "Alo" (add liquidity only, maker-only)
+- take_profit_price: number (optional but recommended, trigger price for profit taking)
+- stop_loss_price: number (optional but recommended, trigger price for loss protection)
+- tp_execution: string (optional, default "limit") - TP execution mode: "limit" (attempts maker with 0.05% offset, may save fees but has fill risk), "market" (immediate execution, guarantees fill)
+- sl_execution: string (optional, default "limit") - SL execution mode: "limit" (may save fees), "market" (guarantees stop loss execution)
+- reason: string explaining the key catalyst, risk, or signal (no strict length limit, but stay focused)
+- trading_strategy: string covering entry thesis, leverage reasoning, liquidation awareness, and exit plan
+
+FIELD CLASSIFICATION:
+- ALWAYS REQUIRED: operation, symbol, reason, trading_strategy
+- REQUIRED FOR buy/sell: target_portion_of_balance, leverage, max_price (buy) or min_price (sell)
+- REQUIRED FOR close: target_portion_of_balance, max_price (close short) or min_price (close long)
+- OPTIONAL WITH DEFAULTS: time_in_force (default "Ioc"), tp_execution (default "limit"), sl_execution (default "limit")
+- OPTIONAL BUT RECOMMENDED: take_profit_price, stop_loss_price
+
+FIELD DEPENDENCIES:
+- tp_execution only applies when take_profit_price is set (ignored otherwise)
+- sl_execution only applies when stop_loss_price is set (ignored otherwise)
