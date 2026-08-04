@@ -2080,6 +2080,106 @@ a {
   align-items: center;
   padding: 12px;
   box-shadow: none;
+  cursor: pointer;
+}
+
+.trade-row:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.trade-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 8, 14, 0.78);
+}
+
+.trade-detail {
+  width: min(1100px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.trade-detail > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.trade-detail > header h3 {
+  margin: 4px 0 0;
+}
+
+.trade-detail > header button {
+  min-width: 64px;
+}
+
+.trade-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.trade-detail-grid > div {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.trade-detail-grid span,
+.trade-detail-grid strong {
+  display: block;
+}
+
+.trade-detail-grid span,
+.trade-detail-id {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.trade-detail-id {
+  overflow-wrap: anywhere;
+}
+
+.trade-llm-log {
+  display: grid;
+  gap: 10px;
+}
+
+.trade-llm-log details {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.trade-llm-log summary {
+  padding: 12px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.trade-llm-log pre {
+  max-height: 420px;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-2);
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
 .trade-main {
@@ -2795,6 +2895,21 @@ a {
   .active-trade small,
   .active-trade b {
     display: none;
+  }
+
+  .trade-detail-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .trade-detail {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .trade-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .trade-row {

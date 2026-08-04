@@ -267,6 +267,65 @@ test("live order history restores amount from signal payload when audit amount i
   assert.match(history.recent[0].amountReason, /12U/);
 });
 
+test("live order history preserves the exact LLM prompt and response for the order", () => {
+  const prompt = "=== MARKET DATA ===\nBTC/USDT | Price: $64000\n=== OUTPUT FORMAT ===";
+  const response = '{"direction":"UP","confidence":0.72,"reason":"订单流增强"}';
+  const history = buildLiveOrderHistory({
+    now: 1710000000000,
+    limit: 10,
+    auditRows: [{
+      event: "order_done",
+      serverTime: 1000,
+      duration: 10,
+      direction: "UP",
+      amount: 5,
+      price: 100,
+      strategyId: "BTC_10min_LLM_GLM52",
+      llm_decision_id: "decision-1",
+      llm_model: "glm-5.2",
+      llm_prompt: prompt,
+      llm_response: response
+    }],
+    priceTicks: [{ time: 601000, price: 101 }]
+  });
+
+  assert.equal(history.recent[0].llm_decision_id, "decision-1");
+  assert.equal(history.recent[0].llm_model, "glm-5.2");
+  assert.equal(history.recent[0].llm_prompt, prompt);
+  assert.equal(history.recent[0].llm_response, response);
+  assert.equal(JSON.stringify(history).includes("Authorization"), false);
+});
+
+test("live order history fills a missing shadow LLM log from its immutable decision id", () => {
+  const history = buildLiveOrderHistory({
+    now: 1710000000000,
+    kind: "shadow",
+    llmLogsByDecisionId: {
+      "shadow-decision": {
+        llm_model: "glm-5.2",
+        llm_prompt: "archived prompt",
+        llm_response: '{"direction":"UP"}'
+      }
+    },
+    auditRows: [{
+      event: "shadow_trade_open",
+      serverTime: 1000,
+      tradeId: 1,
+      source: "shadow:BTC_10min_LLM_GLM52",
+      strategyId: "BTC_10min_LLM_GLM52",
+      direction: "UP",
+      amount: 5,
+      duration: 10,
+      openTime: 1000,
+      strikePrice: 100,
+      llm_decision_id: "shadow-decision"
+    }]
+  });
+
+  assert.equal(history.recent[0].llm_prompt, "archived prompt");
+  assert.equal(history.recent[0].llm_response, '{"direction":"UP"}');
+});
+
 test("live order history exposes open and settlement amounts", () => {
   const history = buildLiveOrderHistory({
     now: 1710000000000,
@@ -466,7 +525,11 @@ test("shadow audit rows expose strategy and execution prices separately", () => 
         signalEntryPrice: 62393.4,
         executionStrikePrice: 62452,
         executionOpenTime,
-        executionDelayMs: 20000
+        executionDelayMs: 20000,
+        llm_decision_id: "shadow-decision-1",
+        llm_model: "glm-5.2",
+        llm_prompt: "shadow prompt",
+        llm_response: '{"direction":"UP"}'
       },
       {
         event: "shadow_trade_settle",
@@ -490,6 +553,10 @@ test("shadow audit rows expose strategy and execution prices separately", () => 
   assert.equal(history.recent[0].signalEntryPrice, 62393.4);
   assert.equal(history.recent[0].executionStrikePrice, 62452);
   assert.equal(history.recent[0].executionDelayMs, 20000);
+  assert.equal(history.recent[0].llm_decision_id, "shadow-decision-1");
+  assert.equal(history.recent[0].llm_model, "glm-5.2");
+  assert.equal(history.recent[0].llm_prompt, "shadow prompt");
+  assert.equal(history.recent[0].llm_response, '{"direction":"UP"}');
   assert.equal(history.recent[0].status, "won");
 });
 

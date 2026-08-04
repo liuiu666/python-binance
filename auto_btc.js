@@ -18,7 +18,7 @@ var ORDER_BALANCE_TOLERANCE_USDT = 0.25;
 var TOUCH_NUDGE_ENABLED = true;
 var POST_TRADE_NUDGE_GUARD_MS = 120000;
 var CONFIRM_TEXT_PATTERN = /.*Confirm.*|.*Submit.*|.*Place\s+Order.*|.*\u786e\u8ba4.*|.*\u786e\u5b9a.*|.*\u63d0\u4ea4.*|.*\u4e0b\u5355\u786e\u8ba4.*/i;
-var CONFIRM_BUTTON_IDS = ["2131448753", "2131448374"];
+var CONFIRM_BUTTON_IDS = ["2131450034", "2131448753", "2131448374"];
 var UI_FAST_POLL_MS = 80;
 var AMOUNT_FIND_TIMEOUT_MS = 900;
 var DIRECTION_FIND_TIMEOUT_MS = 450;
@@ -1336,14 +1336,20 @@ function handleConfirmStrict(direction) {
     var start = Date.now();
     var probe = [];
     lastConfirmProbe = null;
+    // #region debug-point A-E:confirm-entry
+    try { http.postJson(BASE_URL + "/api/debug-autojs-confirm-button/event", { sessionId: "autojs-confirm-button", runId: "post-fix", hypothesisId: "A-E", location: "auto_btc.js:handleConfirmStrict:entry", msg: "[DEBUG] Confirm flow entered", data: { direction: direction, packageName: currentPackage(), activity: currentActivity(), directionProbe: lastDirectionProbe, screen: { width: device.width, height: device.height } }, ts: Date.now() }, { timeout: 1500 }); } catch (debugError1) {}
+    // #endregion
     sleep(CONFIRM_MIN_SETTLE_MS);
     while (Date.now() - start < CONFIRM_FIND_TIMEOUT_MS) {
         var directionEvidence = collectExpectedDirectionEvidence(direction);
-        if (!directionEvidence.verified) {
+        var directionClickVerified = lastDirectionProbe && lastDirectionProbe.direction === direction && lastDirectionProbe.method === "verified_text_parent" && lastDirectionProbe.dispatched === true;
+        var confirmDirectionVerified = directionEvidence.verified || directionClickVerified;
+        if (!confirmDirectionVerified) {
             lastConfirmProbe = {
                 method: "direction_verification_pending",
                 direction: direction,
                 directionEvidence: directionEvidence,
+                directionClickVerified: directionClickVerified,
                 waitedMs: Date.now() - start
             };
             sleep(UI_FAST_POLL_MS);
@@ -1369,14 +1375,23 @@ function handleConfirmStrict(direction) {
                     method: "id",
                     matchedId: matchedId,
                     directionEvidence: directionEvidence,
+                    directionClickVerified: directionClickVerified,
                     dispatch: lastNodeClickProbe,
                     node: idSummary,
                     waitedMs: Date.now() - start,
                     dispatchedAt: Date.now()
                 };
                 log("Confirm action dispatched by id/accessibility in " + (Date.now() - start) + "ms");
+                // #region debug-point A-E:confirm-dispatched
+                try { http.postJson(BASE_URL + "/api/debug-autojs-confirm-button/event", { sessionId: "autojs-confirm-button", runId: "post-fix", hypothesisId: "A-E", location: "auto_btc.js:handleConfirmStrict:dispatched", msg: "[DEBUG] Confirm action dispatched", data: { direction: direction, matchedId: matchedId, waitedMs: Date.now() - start, directionEvidence: directionEvidence, directionClickVerified: directionClickVerified, node: idSummary, dispatch: lastNodeClickProbe }, ts: Date.now() }, { timeout: 1500 }); } catch (debugError3) {}
+                // #endregion
                 return true;
             }
+        }
+        // 通用文字/描述匹配仍要求弹窗自身暴露唯一方向；链式方向验证只授权已知确认按钮 ID。
+        if (!directionEvidence.verified) {
+            sleep(UI_FAST_POLL_MS);
+            continue;
         }
         var btns = selector().textMatches(CONFIRM_TEXT_PATTERN).clickable(true).find();
         for (var i = 0; i < btns.length; i++) {
@@ -1436,6 +1451,9 @@ function handleConfirmStrict(direction) {
     }
     log("Confirm button or verified direction not found");
     var finalDirectionEvidence = collectExpectedDirectionEvidence(direction);
+    // #region debug-point A-E:confirm-timeout
+    try { http.postJson(BASE_URL + "/api/debug-autojs-confirm-button/event", { sessionId: "autojs-confirm-button", runId: "post-fix", hypothesisId: "A-E", location: "auto_btc.js:handleConfirmStrict:timeout", msg: "[DEBUG] Confirm search timed out", data: { direction: direction, waitedMs: Date.now() - start, packageName: currentPackage(), activity: currentActivity(), directionEvidence: finalDirectionEvidence, candidates: probe.length ? probe.slice(0, 20) : collectConfirmProbe(20) }, ts: Date.now() }, { timeout: 1500 }); } catch (debugError2) {}
+    // #endregion
     lastConfirmProbe = {
         method: finalDirectionEvidence.verified ? "confirm_not_found" : "direction_not_verified",
         direction: direction,

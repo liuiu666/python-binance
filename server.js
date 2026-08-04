@@ -91,6 +91,7 @@ const LLM_STATUS_FILE = path.join(DATA_DIR, "llm_status.json");
 const LLM_ONCE_SCRIPT_FILE = path.join(__dirname, "py", "llm_consensus_once.py");
 const PROD_CONFIG_FILE = path.join(DATA_DIR, "prod_config.json");
 const TRADE_AUDIT_FILE = path.join(DATA_DIR, "trade_audit.jsonl");
+const SIGNAL_AUDIT_FILE = path.join(DATA_DIR, "signal_audit.jsonl");
 const LLM_TRAINING_SAMPLES_FILE = path.join(DATA_DIR, "llm_training_samples.jsonl");
 const REAL_BALANCE_FILE = path.join(DATA_DIR, "real_balance.json");
 const AUTO_SCRIPT_FILE = path.join(__dirname, "auto_btc.js");
@@ -1557,6 +1558,25 @@ function applyExecutionFailureGate(signals) {
   return { signals: out, gate: { strategies: states } };
 }
 
+function llmLogSnapshotForDecision(decisionId) {
+  if (!decisionId || !fs.existsSync(SIGNAL_FILE)) return null;
+  try {
+    const signals = JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8"));
+    for (const sig of Object.values(signals)) {
+      if (!sig || typeof sig !== "object" || sig.llm_decision_id !== decisionId) continue;
+      return {
+        llm_decision_id: sig.llm_decision_id,
+        llm_model: sig.llm_model || null,
+        llm_prompt: typeof sig.llm_prompt === "string" ? sig.llm_prompt : null,
+        llm_response: typeof sig.llm_response === "string" ? sig.llm_response : null
+      };
+    }
+  } catch (error) {
+    console.warn("[LLM Log] Failed to read signal snapshot:", error.message);
+  }
+  return null;
+}
+
 function buildSignalResponse(source = "") {
   const rawSignals = fs.existsSync(SIGNAL_FILE) ? JSON.parse(fs.readFileSync(SIGNAL_FILE, "utf8")) : {};
   const observedIds = currentObservedStrategyIds();
@@ -1618,9 +1638,11 @@ function buildSignalResponse(source = "") {
       if (!tradeable.has(strategyId) && signals[strategyId]) {
         signals[strategyId].signal = null;
       }
-      // 完整模型输入只供前端核对，平板轮询不需要携带该展示数据。
-      if (signals[strategyId] && Object.prototype.hasOwnProperty.call(signals[strategyId], "llm_input")) {
+      // 完整模型数据只供服务器归档和前端核对；平板仅携带轻量 decision_id 用于订单关联。
+      if (signals[strategyId]) {
         delete signals[strategyId].llm_input;
+        delete signals[strategyId].llm_prompt;
+        delete signals[strategyId].llm_response;
       }
     }
   }
@@ -2014,6 +2036,16 @@ function liveOrderHistory(options = {}) {
   const availableDays = mode === "day"
     ? [...new Set(eventStore.readTradeAuditTimes(10000).map(time => dayKeyForTime(time)))].sort((a, b) => b.localeCompare(a))
     : undefined;
+  const llmLogsByDecisionId = Object.fromEntries(
+    readJsonl(SIGNAL_AUDIT_FILE)
+      .filter(row => row && row.llm_decision_id && (row.llm_prompt || row.llm_response))
+      .map(row => [row.llm_decision_id, {
+        llm_decision_id: row.llm_decision_id,
+        llm_model: row.llm_model || null,
+        llm_prompt: row.llm_prompt || null,
+        llm_response: row.llm_response || null
+      }])
+  );
   return buildLiveOrderHistory({
     auditRows,
     priceTicks,
@@ -2023,6 +2055,7 @@ function liveOrderHistory(options = {}) {
     mode,
     day: dayRange ? dayRange.day : opts.day,
     availableDays,
+    llmLogsByDecisionId,
     ...opts
   });
 }
@@ -2045,6 +2078,18 @@ app.get("/api/signal-service", (req, res) => {
 app.get("/api/tablet-diagnostics", (req, res) => {
   res.json(tabletDiagnostics());
 });
+
+// #region debug-point A-E:autojs-confirm-proxy
+app.post("/api/debug-autojs-confirm-button/event", express.json({ limit: "200kb" }), (req, res) => {
+  const body = JSON.stringify(req.body && typeof req.body === "object" ? req.body : {});
+  const forward = http.request({ hostname: "127.0.0.1", port: 7777, path: "/event", method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) } }, upstream => {
+    upstream.resume();
+    res.status(upstream.statusCode || 202).json({ ok: true });
+  });
+  forward.on("error", error => res.status(503).json({ ok: false, error: error.message }));
+  forward.end(body);
+});
+// #endregion
 
 app.post("/api/tablet-page-ping", express.json({ limit: "20kb" }), (req, res) => {
   const item = {
@@ -2433,6 +2478,7 @@ function placeTrade(direction, amount, source, durationMin) {
 
 function placeShadowTrade(strategyId, sig, variant, extra = {}) {
   if (!currentPrice || !sig || !sig.signal) return null;
+  const llmLog = llmLogSnapshotForDecision(sig.llm_decision_id) || {};
   const amount = Number(amountForStrategy(strategyId, sig));
   if (!Number.isFinite(amount) || amount <= 0) return null;
   const dur = Math.max(1, Number(sig.duration || sig.interval_min || variant?.duration || tradeConfig.duration || 10));
@@ -2504,6 +2550,10 @@ function placeShadowTrade(strategyId, sig, variant, extra = {}) {
       avg_prob: trade.avg_prob,
       signalTime: trade.signalTime,
       actionableTime: trade.actionableTime,
+      llm_decision_id: sig.llm_decision_id || llmLog.llm_decision_id || null,
+      llm_model: sig.llm_model || llmLog.llm_model || null,
+      llm_prompt: typeof sig.llm_prompt === "string" ? sig.llm_prompt : llmLog.llm_prompt || null,
+      llm_response: typeof sig.llm_response === "string" ? sig.llm_response : llmLog.llm_response || null,
       ...extra.auditFields
     });
     broadcastTradeUpdate(trade);
@@ -4072,10 +4122,13 @@ app.post('/api/trade-audit', requireApiToken, (req, res) => {
       return;
     }
     updateRealBalanceFromPayload(payload, 'trade-audit');
+    const llmDecisionId = payload.llm_decision_id || payload.signal?.llm_decision_id || null;
+    const llmLog = llmLogSnapshotForDecision(llmDecisionId);
     const item = {
       serverTime: Date.now(),
       price: currentPrice,
       ...payload,
+      ...(llmLog || {}),
       realBalance
     };
     const written = appendJsonl(TRADE_AUDIT_FILE, item);

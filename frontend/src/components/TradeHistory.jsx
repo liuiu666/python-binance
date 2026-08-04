@@ -67,7 +67,50 @@ function StatBlock({ title, data }) {
   );
 }
 
-function TradeRow({ row }) {
+function TradeDetail({ row, onClose }) {
+  if (!row) return null;
+  const time = timeParts(row.openTime);
+  const settle = timeParts(row.settleTime);
+  const hasLlmLog = Boolean(row.llm_prompt || row.llm_response);
+  return (
+    <div className="trade-detail-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="trade-detail" role="dialog" aria-modal="true" aria-label="订单详情" onMouseDown={event => event.stopPropagation()}>
+        <header>
+          <div>
+            <span className="eyebrow">订单详情</span>
+            <h3>{strategyName(row.strategyId)} · {DIRECTION_TEXT[row.direction] || "等待"}</h3>
+          </div>
+          <button type="button" onClick={onClose}>关闭</button>
+        </header>
+        <div className="trade-detail-grid">
+          <div><span>状态</span><strong>{STATUS_TEXT[row.status] || row.status || "等待"}</strong></div>
+          <div><span>模型</span><strong>{row.llm_model || "非 LLM 订单"}</strong></div>
+          <div><span>下单时间</span><strong>{time.date} {time.time}</strong></div>
+          <div><span>到期时间</span><strong>{settle.date} {settle.time}</strong></div>
+          <div><span>金额</span><strong>{moneyText(openAmount(row))}</strong></div>
+          <div><span>价格</span><strong>{fmtPrice(row.openPrice)} {"->"} {fmtPrice(row.closePrice)}</strong></div>
+        </div>
+        {row.llm_decision_id ? <p className="trade-detail-id">决策 ID：{row.llm_decision_id}</p> : null}
+        {hasLlmLog ? (
+          <div className="trade-llm-log">
+            <details open>
+              <summary>LLM 请求数据（实际提示词）</summary>
+              <pre>{row.llm_prompt || "未记录请求原文"}</pre>
+            </details>
+            <details open>
+              <summary>LLM 原始回复</summary>
+              <pre>{row.llm_response || "未记录回复原文"}</pre>
+            </details>
+          </div>
+        ) : (
+          <div className="empty-state compact">该订单生成时尚未启用 LLM 输入/回复日志。</div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function TradeRow({ row, onSelect }) {
   const cls = statusClass(row.status);
   const time = timeParts(row.openTime);
   const settle = timeParts(row.settleTime);
@@ -78,8 +121,20 @@ function TradeRow({ row }) {
     row.amountReason
   ].filter(Boolean);
 
+  const openDetail = () => onSelect?.(row);
   return (
-    <article className={`trade-row ${cls}`}>
+    <article
+      className={`trade-row ${cls}`}
+      role="button"
+      tabIndex={0}
+      onClick={openDetail}
+      onKeyDown={event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openDetail();
+        }
+      }}
+    >
       <div className="trade-result">
         <span className={`status-pill ${cls}`}>{STATUS_TEXT[row.status] || "等待"}</span>
         <strong className={directionClass(row.direction)}>{DIRECTION_TEXT[row.direction] || "等待"}</strong>
@@ -158,6 +213,7 @@ function todayKey() {
 
 export default function TradeHistory({ history, pageState, onPageChange }) {
   const [kind, setKind] = useState(pageState?.kind || "real");
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const summary = history?.summary || {};
   const breakdown = history?.breakdown || {};
   const recent = history?.recent || [];
@@ -215,7 +271,7 @@ export default function TradeHistory({ history, pageState, onPageChange }) {
             <h3>持仓中</h3>
             <span>{activeRows.length} 单</span>
           </div>
-          {activeRows.length ? activeRows.map(row => <TradeRow row={row} key={row.id || `${row.openTime}-${row.strategyId}`} />) : (
+          {activeRows.length ? activeRows.map(row => <TradeRow row={row} onSelect={setSelectedOrder} key={row.id || `${row.openTime}-${row.strategyId}`} />) : (
             <div className="empty-state compact">当前没有持仓</div>
           )}
 
@@ -240,7 +296,7 @@ export default function TradeHistory({ history, pageState, onPageChange }) {
             </div>
           </div>
 
-          {recent.length ? recent.map(row => <TradeRow row={row} key={row.id || `${row.openTime}-${row.strategyId}`} />) : (
+          {recent.length ? recent.map(row => <TradeRow row={row} onSelect={setSelectedOrder} key={row.id || `${row.openTime}-${row.strategyId}`} />) : (
             <div className="empty-state">这一天暂无历史记录</div>
           )}
         </div>
@@ -250,6 +306,7 @@ export default function TradeHistory({ history, pageState, onPageChange }) {
           <Breakdown title="日期胜率" rows={viewBreakdown?.byDay} />
         </aside>
       </div>
+      <TradeDetail row={selectedOrder} onClose={() => setSelectedOrder(null)} />
     </section>
   );
 }

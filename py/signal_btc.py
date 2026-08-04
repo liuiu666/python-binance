@@ -5807,7 +5807,7 @@ Respond with ONLY a JSON object:
             raise ValueError("llm_confidence_invalid")
         conf = min(max(conf, 0.0), 1.0)
         reason = str(parsed.get("reason", ""))[:200]
-        return pred, conf, reason
+        return pred, conf, reason, content
 
     def _run_prediction(self, k1m, px, data_time):
         """在后台完成提示词构建和模型请求，并原子更新缓存结果。"""
@@ -5817,8 +5817,9 @@ Respond with ONLY a JSON object:
             with self._runtime["lock"]:
                 self._runtime["last_input_snapshot"] = input_snapshot
             prompt = self._build_prompt(k1m, px)
-            direction, confidence, reason = self._call_llm(prompt)
+            direction, confidence, reason, raw_response = self._call_llm(prompt)
             now_str = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            decision_id = "%s|%s|%s" % (self.id, data_time, now_str)
             result = {
                 "strategy_id": self.id,
                 "signal": direction,
@@ -5839,6 +5840,9 @@ Respond with ONLY a JSON object:
                 "rsi_extreme": False,
                 "horizon_min": self.horizon_min,
                 "llm_model": self.model,
+                "llm_decision_id": decision_id,
+                "llm_prompt": prompt,
+                "llm_response": raw_response,
                 "llm_input": input_snapshot,
             }
             print("  %s [LLM] %s conf=%.2f %s" % (now_str, direction, confidence, reason[:80]))

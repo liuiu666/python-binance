@@ -62,7 +62,7 @@ test("tablet confirmation and queue guards cannot treat generic trade controls a
 });
 
 test("tablet confirmation dispatch uses the current button id and accessibility action", () => {
-  assert.match(script, /CONFIRM_BUTTON_IDS = \["2131448753", "2131448374"\]/);
+  assert.match(script, /CONFIRM_BUTTON_IDS = \["2131450034", "2131448753", "2131448374"\]/);
   assert.match(script, /CONFIRM_MIN_SETTLE_MS = 700/);
 
   const clickNode = functionBody("clickNodeOrAncestor", "collectConfirmProbe");
