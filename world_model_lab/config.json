@@ -1,0 +1,28 @@
+{
+  "data_files": [
+    "../data/btcusdt_futures_1m_20200101_20240101.csv",
+    "../data/btcusdt_futures_1m_20240101_20260730.csv"
+  ],
+  "development_start": "2020-01-01T00:00:00Z",
+  "development_end_exclusive": "2026-02-01T00:00:00Z",
+  "frozen_start": "2026-02-01T00:00:00Z",
+  "sample_step_minutes": 10,
+  "horizon_minutes": 10,
+  "payout_rate": 0.8,
+  "stake": 5.0,
+  "random_seed": 7,
+  "train_lookback_months": 0,
+  "state_count": 8,
+  "state_fit_max_rows": 100000,
+  "min_train_rows": 50000,
+  "planner_min_ev_grid": [0.0, 0.03, 0.06, 0.09],
+  "planner_uncertainty_penalty": 0.02,
+  "planner_sparse_state_penalty": 0.01,
+  "success": {
+    "min_win_rate_pct": 58.0,
+    "min_trades": 300,
+    "min_pnl": 0.0,
+    "require_majority_positive_months": true,
+    "require_world_model_beats_logistic": true
+  }
+}

@@ -2079,18 +2079,6 @@ app.get("/api/tablet-diagnostics", (req, res) => {
   res.json(tabletDiagnostics());
 });
 
-// #region debug-point A-E:autojs-confirm-proxy
-app.post("/api/debug-autojs-confirm-button/event", express.json({ limit: "200kb" }), (req, res) => {
-  const body = JSON.stringify(req.body && typeof req.body === "object" ? req.body : {});
-  const forward = http.request({ hostname: "127.0.0.1", port: 7777, path: "/event", method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) } }, upstream => {
-    upstream.resume();
-    res.status(upstream.statusCode || 202).json({ ok: true });
-  });
-  forward.on("error", error => res.status(503).json({ ok: false, error: error.message }));
-  forward.end(body);
-});
-// #endregion
-
 app.post("/api/tablet-page-ping", express.json({ limit: "20kb" }), (req, res) => {
   const item = {
     serverTime: Date.now(),

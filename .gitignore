@@ -50,3 +50,11 @@ data/parallel_portfolio_report.json
 data/optimize_10min_filters.json
 data/session_filter_validation.json
 data/walkforward_strategy_search.json
+
+# GPU JEPA derived artifacts
+world_model_lab/jepa_gpu/cache/*
+!world_model_lab/jepa_gpu/cache/.gitkeep
+world_model_lab/jepa_gpu/checkpoints/*
+!world_model_lab/jepa_gpu/checkpoints/.gitkeep
+world_model_lab/jepa_gpu/reports/*
+!world_model_lab/jepa_gpu/reports/.gitkeep
