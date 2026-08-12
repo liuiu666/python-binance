@@ -1629,6 +1629,14 @@ function forceWakeForTrade() {
     return final;
 }
 
+function abortTrade(order, dir, reason, extra) {
+    var details = extra || {};
+    details.direction = dir;
+    details.reason = reason;
+    reportTradeAudit("order_abort", order, details);
+    return false;
+}
+
 function placeTrade(dir, order) {
     lastTradeInteractionMs = Date.now();
     tradeInteractionActive = true;
@@ -1654,10 +1662,7 @@ function placeTrade(dir, order) {
     // STEP 1: ensure screen is on (clicks won't work otherwise)
     if (!forceWakeForTrade()) {
         log(">>> ABORT: cannot wake screen");
-        reportTradeAudit("order_abort", order, { direction: dir, reason: "cannot_wake_screen" });
-        tradeConfig.amount = prevAmt;
-        tradeConfig.duration = prevDur;
-        return false;
+        return abortTrade(order, dir, "cannot_wake_screen");
     }
     markTradePhase(tradeTiming, "screen_ready");
     
@@ -1674,12 +1679,9 @@ function placeTrade(dir, order) {
     log("step3: setDuration");
     if (!ensureDuration()) {
         log(">>> ABORT: duration failed");
-        reportTradeAudit("order_abort", order, { direction: dir, reason: "duration_failed" });
-        tradeConfig.amount = prevAmt;
-        tradeConfig.duration = prevDur;
         durationSet = false;
         durationSetTarget = "";
-        return false;
+        return abortTrade(order, dir, "duration_failed");
     }
     markTradePhase(tradeTiming, "duration_ready");
     
@@ -1687,14 +1689,9 @@ function placeTrade(dir, order) {
     log("step4: setAmount " + tradeConfig.amount);
     if (!setAmount(tradeConfig.amount)) {
         log(">>> ABORT: amount failed");
-        reportTradeAudit("order_abort", order, {
-            direction: dir,
-            reason: "amount_failed",
+        return abortTrade(order, dir, "amount_failed", {
             amountInputProbe: lastAmountInputProbe
         });
-        tradeConfig.amount = prevAmt;
-        tradeConfig.duration = prevDur;
-        return false;
     }
     markTradePhase(tradeTiming, "amount_ready", {
         findMs: lastAmountInputProbe ? lastAmountInputProbe.findMs : null,
@@ -1711,38 +1708,27 @@ function placeTrade(dir, order) {
     var beforeBalance = readBalanceForOrder("before");
     if (beforeBalance == null) {
         log(">>> ABORT: balance before click unavailable");
-        reportTradeAudit("order_abort", order, { direction: dir, reason: "balance_before_unavailable" });
-        tradeConfig.amount = prevAmt;
-        tradeConfig.duration = prevDur;
-        return false;
+        return abortTrade(order, dir, "balance_before_unavailable");
     }
     markTradePhase(tradeTiming, "balance_before_ready", { balance: beforeBalance });
 
     if (!hasSufficientBalanceForOrder(beforeBalance, tradeConfig.amount)) {
         log(">>> ABORT: insufficient balance " + beforeBalance + " < " + tradeConfig.amount);
-        reportTradeAudit("order_abort", order, {
-            direction: dir,
+        return abortTrade(order, dir, "insufficient_balance", {
+            // 显式保留原因字段，便于静态安全检查和审计阅读。
             reason: "insufficient_balance",
             beforeBalance: beforeBalance,
             requiredAmount: Number(tradeConfig.amount)
         });
-        tradeConfig.amount = prevAmt;
-        tradeConfig.duration = prevDur;
-        return false;
     }
 
     var finalTiming = updateOrderTimingAge(order);
     if (!finalTiming.ok) {
         log(">>> ABORT: " + finalTiming.reason + " before click ageMs=" + finalTiming.ageMs);
-        reportTradeAudit("order_abort", order, {
-            direction: dir,
-            reason: finalTiming.reason + "_before_click",
+        return abortTrade(order, dir, finalTiming.reason + "_before_click", {
             ageMs: finalTiming.ageMs,
             maxActionableLagMs: finalTiming.lagMs
         });
-        tradeConfig.amount = prevAmt;
-        tradeConfig.duration = prevDur;
-        return false;
     }
     
     // STEP 5: click direction
@@ -1754,16 +1740,11 @@ function placeTrade(dir, order) {
             locatorWaitMs: lastDirectionProbe ? lastDirectionProbe.waitedMs : null
         });
         log(">>> ABORT: verified direction node not found");
-        reportTradeAudit("order_abort", order, {
-            direction: dir,
-            reason: "direction_not_verified",
+        return abortTrade(order, dir, "direction_not_verified", {
             beforeBalance: beforeBalance,
             directionProbe: lastDirectionProbe,
             uiTiming: tradeTimingSnapshot(tradeTiming)
         });
-        tradeConfig.amount = prevAmt;
-        tradeConfig.duration = prevDur;
-        return false;
     }
     markTradePhase(tradeTiming, "direction_clicked", {
         method: lastDirectionProbe ? lastDirectionProbe.method : null,
@@ -1779,9 +1760,7 @@ function placeTrade(dir, order) {
         });
         log(">>> ABORT: confirm failed");
         var confirmRecovery = recoverTradeUiAfterFailure();
-        reportTradeAudit("order_abort", order, {
-            direction: dir,
-            reason: "confirm_not_found",
+        return abortTrade(order, dir, "confirm_not_found", {
             beforeBalance: beforeBalance,
             executionTime: executionTime,
             directionProbe: lastDirectionProbe,
@@ -1789,9 +1768,6 @@ function placeTrade(dir, order) {
             uiRecovery: confirmRecovery,
             uiTiming: tradeTimingSnapshot(tradeTiming)
         });
-        tradeConfig.amount = prevAmt;
-        tradeConfig.duration = prevDur;
-        return false;
     }
     markTradePhase(tradeTiming, "confirm_action_dispatched", {
         method: lastConfirmProbe ? lastConfirmProbe.method : null,
@@ -2001,6 +1977,119 @@ function releaseLock() {
     try { if (files.exists(LOCK_FILE)) files.remove(LOCK_FILE); } catch (e) {}
 }
 
+function attachQueueAuditContext(order, index, queue, batchId, batchStart, previousDoneAt) {
+    order.queueBatchId = batchId;
+    order.queuePosition = index + 1;
+    order.queueLength = queue.length;
+    order.queueOrderPolicy = "actionable_time_config_order";
+    order.queueBatchStartClientTime = batchStart;
+    order.previousOrderDoneClientTime = previousDoneAt || null;
+    order.sincePreviousDoneMs = previousDoneAt ? Date.now() - previousDoneAt : null;
+    order.sinceQueueBatchStartMs = Date.now() - batchStart;
+}
+
+function signalSkipReason(order) {
+    var timing = updateOrderTimingAge(order);
+    if (!timing.ok) {
+        return timing.reason == "signal_time_parse_failed"
+            ? { reason: timing.reason, actionableTime: order.actionableTime }
+            : { reason: timing.reason, ageMs: timing.ageMs, maxActionableLagMs: timing.lagMs };
+    }
+    var key = orderKey(order);
+    if (lastSignalKeyByStrategy[order.strategyId] == key) return { silent: true };
+    if (hasPersistedOrder(order)) return { reason: "duplicate_after_restart" };
+    if (isStrategyOverlapping(order)) {
+        return { reason: "strategy_overlap_guard", activeUntil: activeUntilByStrategy[order.strategyId] };
+    }
+    if (Date.now() - (lastTradeTimeByStrategy[order.strategyId] || 0) < 60000) return { silent: true };
+    return null;
+}
+
+function executeTradeQueue(queue) {
+    if (!tradeConfig.autoTrade || queue.length === 0) return false;
+    var traded = false;
+    var batchStart = Date.now();
+    var batchId = "q|" + batchStart + "|" + (queue[0].actionableTime || queue[0].time || "unknown");
+    var previousDoneAt = 0;
+
+    for (var i = 0; i < queue.length; i++) {
+        var order = queue[i];
+        if (!order || !order.signal) continue;
+        attachQueueAuditContext(order, i, queue, batchId, batchStart, previousDoneAt);
+        var skipped = signalSkipReason(order);
+        if (skipped) {
+            if (!skipped.silent) reportTradeAudit("signal_skipped", order, skipped);
+            continue;
+        }
+
+        var now = Date.now();
+        var key = orderKey(order);
+        log("SIGNAL " + order.strategyId + ": " + order.signal + " " + order.confidence + "% RSI=" + order.rsi_value + " amt=" + order.amount + "U dur=" + order.duration + "min");
+        reportTradeAudit("signal_tradeable", order, {});
+        // 必须先持久化再操作 UI，失败或状态不确定时也不能重复真实下单。
+        lastSignalKeyByStrategy[order.strategyId] = key;
+        lastTradeTimeByStrategy[order.strategyId] = now;
+        rememberPersistedOrder(order);
+        lastTradeInteractionMs = Date.now();
+
+        var result = placeTrade(order.signal, order);
+        if (result === true) {
+            previousDoneAt = Date.now();
+            setStrategyActiveUntil(order);
+            lastTradeTime = now;
+            lastDirection = order.signal;
+            traded = true;
+        } else if (result === "unverified") {
+            // 确认动作可能已发出，仍按完整订单周期锁定，服务端生命周期门禁是最终保护。
+            setStrategyActiveUntil(order);
+            traded = true;
+        }
+        if (result === true && i < queue.length - 1) {
+            log("queue: wait before next strategy order");
+            sleep(5000);
+        }
+    }
+    return traded;
+}
+
+function logSignalBeat(payload, queue, traded) {
+    if (traded || Date.now() - lastLogTime <= 15000) return;
+    if (!payload) {
+        if (Date.now() - lastLogTime > 30000) {
+            log("Beat | no signal yet");
+            lastLogTime = Date.now();
+        }
+        return;
+    }
+    if (queue.length === 0) {
+        log("Beat | no strategy payload | bal=" + (lastBalanceValue || "--"));
+        lastLogTime = Date.now();
+        return;
+    }
+    var parts = [];
+    var variants = payload._strategyVariants || tradeConfig.strategyVariants || [];
+    for (var i = 0; i < variants.length; i++) {
+        var signal = payload[variants[i].id];
+        parts.push(variants[i].id + "=" + (signal && signal.signal ? signal.signal : "--"));
+    }
+    log("Beat | " + parts.join(" | ") + " | bal=" + (lastBalanceValue || "--"));
+    lastLogTime = Date.now();
+}
+
+function processSignalPoll() {
+    var payload = getSignalPayload();
+    reportHeartbeat(payload);
+    var queue = filterConflictQueue(buildTradeQueue(payload));
+    if (queue.length === 0) safeNudgeScreen(false);
+    if (!tradeConfig.autoTrade && Date.now() % 60000 < POLL_INTERVAL) log("AutoTrade OFF");
+    var traded = executeTradeQueue(queue);
+    if (Date.now() - lastWakeLock > 60000) {
+        try { device.keepScreenOn(); } catch (e) {}
+        lastWakeLock = Date.now();
+    }
+    logSignalBeat(payload, queue, traded);
+}
+
 function main() {
     acquireLock();
     loadOrderHistory();
@@ -2030,108 +2119,7 @@ function main() {
             ensureRuntimeAlive(false);
             if (checkManualTrade()) { sleep(POLL_INTERVAL); continue; }
             
-            var payload = getSignalPayload();
-            reportHeartbeat(payload);
-            var queue = buildTradeQueue(payload);
-            queue = filterConflictQueue(queue);
-            var hasTradeableOrder = false;
-            for (var nq = 0; nq < queue.length; nq++) {
-                if (queue[nq] && queue[nq].signal) {
-                    hasTradeableOrder = true;
-                    break;
-                }
-            }
-            if (!hasTradeableOrder) safeNudgeScreen(false);
-            
-            if (!tradeConfig.autoTrade) {
-                if (Date.now() % 60000 < POLL_INTERVAL) log("AutoTrade OFF");
-            } else if (queue.length > 0) {
-                var traded = false;
-                var queueBatchId = "q|" + Date.now() + "|" + (queue[0].actionableTime || queue[0].time || "unknown");
-                var queueBatchStart = Date.now();
-                var previousDoneAt = 0;
-                for (var qi = 0; qi < queue.length; qi++) {
-                    var order = queue[qi];
-                    if (!order.signal) continue;
-                    order.queueBatchId = queueBatchId;
-                    order.queuePosition = qi + 1;
-                    order.queueLength = queue.length;
-                    order.queueOrderPolicy = "actionable_time_config_order";
-                    order.queueBatchStartClientTime = queueBatchStart;
-                    order.previousOrderDoneClientTime = previousDoneAt || null;
-                    order.sincePreviousDoneMs = previousDoneAt ? Date.now() - previousDoneAt : null;
-                    order.sinceQueueBatchStartMs = Date.now() - queueBatchStart;
-                    var timing = updateOrderTimingAge(order);
-                    if (!timing.ok && timing.reason == "signal_time_parse_failed") {
-                        reportTradeAudit("signal_skipped", order, { reason: "signal_time_parse_failed", actionableTime: order.actionableTime });
-                        continue;
-                    }
-                    if (!timing.ok) {
-                        reportTradeAudit("signal_skipped", order, { reason: timing.reason, ageMs: timing.ageMs, maxActionableLagMs: timing.lagMs });
-                        continue;
-                    }
-                    var key = orderKey(order);
-                    var lastKey = lastSignalKeyByStrategy[order.strategyId] || "";
-                    var now = Date.now();
-                    var lastTs = lastTradeTimeByStrategy[order.strategyId] || 0;
-                    if (lastKey == key) continue;
-                    if (hasPersistedOrder(order)) {
-                        reportTradeAudit("signal_skipped", order, { reason: "duplicate_after_restart" });
-                        continue;
-                    }
-                    if (isStrategyOverlapping(order)) {
-                        reportTradeAudit("signal_skipped", order, { reason: "strategy_overlap_guard", activeUntil: activeUntilByStrategy[order.strategyId] });
-                        continue;
-                    }
-                    if (now - lastTs < 60000) continue;
-                    log("SIGNAL " + order.strategyId + ": " + order.signal + " " + order.confidence + "% RSI=" + order.rsi_value + " amt=" + order.amount + "U dur=" + order.duration + "min");
-                    reportTradeAudit("signal_tradeable", order, {});
-                    // Persist before any UI interaction. A failed/uncertain attempt must not
-                    // dispatch the same signal again on the next one-second poll or restart.
-                    lastSignalKeyByStrategy[order.strategyId] = key;
-                    lastTradeTimeByStrategy[order.strategyId] = now;
-                    rememberPersistedOrder(order);
-                    lastTradeInteractionMs = Date.now();
-                    var ok = placeTrade(order.signal, order);
-                    if (ok === true) {
-                        previousDoneAt = Date.now();
-                        setStrategyActiveUntil(order);
-                        lastTradeTime = now;
-                        lastDirection = order.signal;
-                        traded = true;
-                    } else if (ok === "unverified") {
-                        // 确认动作可能已成功发送，本地也按完整订单周期锁定，服务端结算门禁仍是最终依据。
-                        setStrategyActiveUntil(order);
-                        traded = true;
-                    }
-                    if (ok === true && qi < queue.length - 1) {
-                        log("queue: wait before next strategy order");
-                        sleep(5000);
-                    }
-                }
-            if (Date.now() - lastWakeLock > 60000) {
-                try { device.keepScreenOn(); } catch (e) {}
-                lastWakeLock = Date.now();
-            }
-                if (!traded && Date.now() - lastLogTime > 15000) {
-                    var parts = [];
-                    var variants = (payload && payload._strategyVariants) || tradeConfig.strategyVariants || [];
-                    for (var vi = 0; vi < variants.length; vi++) {
-                        var item = variants[vi];
-                        var sig = payload && payload[item.id] ? payload[item.id] : null;
-                        parts.push(item.id + "=" + (sig && sig.signal ? sig.signal : "--"));
-                    }
-                    log("Beat | " + parts.join(" | ") + " | bal=" + (lastBalanceValue || "--"));
-                    lastLogTime = Date.now();
-                }
-            } else if (payload) {
-                if (Date.now() - lastLogTime > 15000) {
-                    log("Beat | no strategy payload | bal=" + (lastBalanceValue || "--"));
-                    lastLogTime = Date.now();
-                }
-            } else {
-                if (Date.now() - lastLogTime > 30000) { log("Beat | no signal yet"); lastLogTime = Date.now(); }
-            }
+            processSignalPoll();
             // Periodic balance report (every ~30s) even without trades
             if (Date.now() - lastBalanceReport >= BALANCE_INTERVAL_MS) {
                 reportBalance();
