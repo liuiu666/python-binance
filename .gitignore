@@ -1,5 +1,15 @@
 node_modules/
 .env.local
+
+# 临时调试快照与工具产物
+tmp_*
+tmp_*/*
+.playwright-cli/
+output/
+.zcode/
+
+# 前端构建产物（可由 npm run frontend:build 重新生成）
+public/dashboard/
 # 本机部署凭据由 Windows DPAPI 加密，仅供当前用户读取。
 tools/*.local.json
 var/

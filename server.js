@@ -3064,6 +3064,12 @@ function runLlmPredictionLoop() {
     scheduleLlmPrediction();
     return;
   }
+  // 防御：LLM 一次性预测脚本不存在时跳过，避免 spawn 报错
+  if (!fs.existsSync(LLM_ONCE_SCRIPT_FILE)) {
+    writeLlmStatus({ state: "error", lastSignal: null, lastError: "llm_consensus_once.py not found" });
+    scheduleLlmPrediction();
+    return;
+  }
   llmPredictRunning = true;
   const predictionStartedAt = Date.now();
   const intervalMs = Math.max(3000, Number(llmConfig.predictionIntervalSec || 5) * 1000);
